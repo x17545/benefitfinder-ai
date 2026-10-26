@@ -1,0 +1,535 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>청년 정책 매니저 · 시안</title>
+<meta property="og:title" content="청년 정책 매니저">
+<meta property="og:description" content="받을 수 있는 지원금, 가장 이득인 조합으로 찾아 드려요">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+/* 화면·기능 명세 v0.2 클릭 시안. 해시 주소(#/result 등)로 화면 전환, 데이터는 전부 가상 */
+:root {
+  --primary: #3B424C;
+  --primary-press: #2C323A;
+  --gold: #C9963A;
+  --gold-soft: #F4E9D2;
+  --gold-ink: #8A6418;
+  --bg: #F4F4F2;
+  --card: #FFFFFF;
+  --sub: #EBEBE8;
+  --ink: #191C21;
+  --muted: #6B7079;
+  --line: #E7E7E3;
+  --ok: #1E7B45;   --ok-soft: #E3F2E8;
+  --no: #C0392B;   --no-soft: #F8E3E0;
+  --ck: #C46A00;   --ck-soft: #FBEBD6;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; background: #E4E1DB; }
+body { font-family: Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; color: var(--ink); font-size: 16px; line-height: 1.55; letter-spacing: -0.01em; }
+button { font: inherit; color: inherit; }
+.app { max-width: 430px; min-height: 100vh; margin: 0 auto; background: var(--bg); position: relative; display: flex; flex-direction: column; }
+.proto { background: var(--gold-soft); color: var(--gold-ink); font-size: 11px; text-align: center; padding: 4px 8px; font-weight: 600; }
+header.bar { display: flex; align-items: center; gap: 8px; height: 52px; padding: 0 12px; position: sticky; top: 0; background: var(--bg); z-index: 5; }
+header.bar .back { border: 0; background: none; font-size: 22px; width: 36px; height: 36px; border-radius: 10px; cursor: pointer; }
+header.bar .back:active { background: var(--sub); }
+header.bar .title { font-weight: 700; font-size: 17px; flex: 1; }
+header.bar .step { font-size: 13px; color: var(--muted); }
+.progress { height: 4px; background: var(--line); margin: 0 20px; border-radius: 99px; overflow: hidden; }
+.progress i { display: block; height: 100%; background: var(--primary); border-radius: 99px; transition: width .3s; }
+main { flex: 1; padding: 20px 20px 150px; display: flex; flex-direction: column; gap: 14px; }
+h1 { font-size: 26px; line-height: 1.35; margin: 4px 0 0; letter-spacing: -0.02em; }
+h2 { font-size: 22px; line-height: 1.4; margin: 8px 0 0; letter-spacing: -0.02em; }
+h3 { font-size: 17px; margin: 10px 0 0; }
+p { margin: 0; }
+.muted { color: var(--muted); }
+.small { font-size: 13px; }
+.card { background: var(--card); border-radius: 18px; padding: 18px; display: flex; flex-direction: column; gap: 8px; }
+.card.sub { background: var(--sub); }
+.card.tap { cursor: pointer; transition: transform .1s; }
+.card.tap:active { transform: scale(.985); }
+.row { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.cta { position: fixed; left: 50%; transform: translateX(-50%); bottom: 0; width: 100%; max-width: 430px; padding: 12px 20px 22px; background: linear-gradient(to top, var(--bg) 70%, rgba(244,244,242,0)); z-index: 6; }
+/* S3 조합 비교: 조합 카드(총액 + 구성 + 비율 막대) → 고른 조합의 지원금 목록 */
+.combos { display: flex; flex-direction: column; gap: 10px; }
+.combo { border: 2px solid transparent; background: var(--card); border-radius: 20px; padding: 16px 18px; text-align: left; cursor: pointer; display: flex; flex-direction: column; gap: 8px; }
+.combo.on { border-color: var(--primary); }
+.combo .badge { font-size: 13px; font-weight: 700; color: var(--muted); background: var(--sub); border-radius: 8px; padding: 3px 9px; }
+.combo .badge.best { background: var(--primary); color: #fff; }
+.combo .ctotal { font-size: 22px; font-weight: 800; letter-spacing: -0.03em; }
+.combo .cname { font-size: 14px; color: var(--muted); line-height: 1.45; }
+.combo.on .cname { color: var(--ink); }
+.segbar { display: flex; height: 8px; border-radius: 99px; overflow: hidden; gap: 2px; }
+.segbar i { display: block; }
+.why p { font-size: 14px; }
+.emtr .emeter { height: 10px; border-radius: 99px; background: var(--sub); overflow: hidden; }
+.emtr .emeter i { display: block; height: 100%; background: var(--no); }
+.combo .cgive { font-size: 12.5px; color: var(--no); }
+.pvt { background: var(--card); border-radius: 16px; padding: 14px 16px; }
+.list { background: var(--card); border-radius: 20px; padding: 4px 18px; }
+.item { padding: 18px 0; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
+.item:last-child { border-bottom: 0; }
+.itop { display: flex; gap: 12px; align-items: center; cursor: pointer; }
+.ico { width: 44px; height: 44px; border-radius: 14px; background: var(--bg); display: grid; place-items: center; font-size: 21px; flex: none; }
+.imid { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.imid b { font-size: 16px; }
+.iamt { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.iamt b { font-size: 17px; white-space: nowrap; }
+.iact { display: flex; gap: 8px; margin-top: 2px; }
+.btn.sm { padding: 11px 12px; font-size: 14px; border-radius: 12px; flex: 1; text-align: center; text-decoration: none; }
+.btn.ghost2 { background: var(--sub); color: var(--ink); }
+.btn { display: block; width: 100%; border: 0; border-radius: 16px; padding: 17px; font-size: 17px; font-weight: 700; background: var(--primary); color: #fff; cursor: pointer; }
+.btn:active { background: var(--primary-press); }
+.btn[disabled] { background: #C9C6C0; cursor: default; }
+.btn.ghost { background: var(--card); color: var(--ink); }
+.btn.line { background: transparent; color: var(--primary); border: 1.5px solid var(--primary); }
+.link { border: 0; background: none; color: var(--muted); text-decoration: underline; font-size: 13px; cursor: pointer; padding: 0; }
+.check { display: flex; gap: 12px; align-items: flex-start; cursor: pointer; }
+.check .box { flex: none; width: 24px; height: 24px; border-radius: 8px; border: 2px solid #C9C6C0; display: grid; place-items: center; color: #fff; font-size: 14px; font-weight: 700; margin-top: 1px; }
+.check.on .box { background: var(--primary); border-color: var(--primary); }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { border: 0; background: var(--card); border-radius: 14px; padding: 13px 16px; font-size: 16px; font-weight: 500; cursor: pointer; }
+.chip.on { background: var(--primary); color: #fff; font-weight: 700; }
+.chip.sm { padding: 8px 14px; font-size: 14px; border-radius: 99px; }
+.options { display: flex; flex-direction: column; gap: 10px; }
+.option { border: 0; text-align: left; background: var(--card); border-radius: 16px; padding: 18px; font-size: 17px; font-weight: 500; cursor: pointer; display: flex; justify-content: space-between; }
+.option.on { background: var(--primary); color: #fff; font-weight: 700; }
+.option.on::after { content: "✓"; }
+.field { display: flex; align-items: center; gap: 10px; background: var(--card); border-radius: 16px; padding: 6px 18px; }
+.field input, .field select { flex: 1; border: 0; background: none; font: inherit; font-size: 22px; font-weight: 700; padding: 12px 0; outline: none; color: var(--ink); min-width: 0; }
+.field select { font-size: 18px; }
+.field span { color: var(--muted); font-size: 17px; }
+.note { background: var(--gold-soft); color: var(--gold-ink); border-radius: 14px; padding: 12px 14px; font-size: 14px; }
+.ai { display: inline-block; font-size: 11px; font-weight: 700; color: var(--gold-ink); background: var(--gold-soft); border-radius: 6px; padding: 1px 6px; margin-right: 6px; vertical-align: 1px; }
+.hero { background: var(--primary); color: #fff; border-radius: 22px; padding: 22px 20px; display: flex; flex-direction: column; gap: 4px; }
+.hero small { opacity: .8; font-size: 14px; }
+.hero strong { font-size: 34px; line-height: 1.2; letter-spacing: -0.03em; }
+.hero .gold { color: #E9C27A; font-weight: 600; font-size: 14px; }
+.tabs { display: flex; background: var(--sub); border-radius: 14px; padding: 4px; }
+.tabs button { flex: 1; border: 0; background: none; padding: 10px 0; border-radius: 11px; font-size: 15px; font-weight: 600; color: var(--muted); cursor: pointer; }
+.tabs button.on { background: var(--card); color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+.pcard .rank { color: var(--gold); font-weight: 800; margin-right: 6px; }
+.pcard .name { font-weight: 700; font-size: 17px; }
+.pcard .amt { font-weight: 700; font-size: 17px; white-space: nowrap; }
+.tag { font-size: 12px; font-weight: 700; border-radius: 99px; padding: 3px 9px; white-space: nowrap; background: var(--sub); color: var(--muted); }
+.tag.open { background: var(--ok-soft); color: var(--ok); }
+.tag.due { background: var(--ck-soft); color: var(--ck); }
+.st { display: flex; flex-wrap: wrap; gap: 6px; }
+.s { font-size: 13px; font-weight: 700; border-radius: 8px; padding: 3px 8px; }
+.s.met { background: var(--ok-soft); color: var(--ok); }
+.s.not_met { background: var(--no-soft); color: var(--no); }
+.s.need_check { background: var(--ck-soft); color: var(--ck); }
+.src { font-size: 12px; color: var(--muted); }
+.fold { background: var(--card); border-radius: 18px; overflow: hidden; }
+.fold > button { width: 100%; border: 0; background: none; text-align: left; padding: 16px 18px; font-size: 15px; font-weight: 600; cursor: pointer; display: flex; justify-content: space-between; }
+.fold .body { padding: 0 18px 16px; display: none; flex-direction: column; gap: 10px; font-size: 14px; }
+.fold.open .body { display: flex; }
+.fold.open > button .arr { transform: rotate(90deg); }
+.arr { transition: transform .2s; color: var(--muted); }
+.warnbox { background: var(--ck-soft); color: #8A4B00; border-radius: 16px; padding: 14px 16px; font-size: 14px; display: flex; flex-direction: column; gap: 4px; }
+.steps { display: flex; flex-direction: column; gap: 18px; margin-top: 24px; }
+.steps div { display: flex; gap: 12px; align-items: center; font-size: 17px; color: #B3B0AA; }
+.steps .ic { width: 28px; height: 28px; border-radius: 50%; border: 2px solid #D5D2CC; display: grid; place-items: center; font-size: 14px; flex: none; }
+.steps .done { color: var(--ink); }
+.steps .done .ic { background: var(--primary); border-color: var(--primary); color: #fff; }
+.steps .now { color: var(--ink); font-weight: 700; }
+.steps .now .ic { border-color: var(--gold); border-top-color: transparent; animation: spin .8s linear infinite; }
+.steps small { display: block; font-size: 12px; color: var(--muted); font-weight: 400; font-family: ui-monospace, Consolas, monospace; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.diff { display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; font-size: 15px; }
+.diff b { text-align: right; }
+.minus { color: var(--no); }
+.plus { color: var(--ok); }
+.kv { display: grid; grid-template-columns: 84px 1fr; gap: 8px 12px; font-size: 15px; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; }
+blockquote { margin: 4px 0 0; padding: 8px 12px; border-left: 3px solid var(--line); color: var(--muted); font-size: 13px; background: var(--bg); border-radius: 0 8px 8px 0; }
+footer.foot { padding: 20px 20px 130px; font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px 14px; }
+footer.foot button { border: 0; background: none; padding: 0; color: var(--muted); font-size: 12px; cursor: pointer; text-decoration: underline; }
+.disclaimer { font-size: 12px; color: var(--muted); text-align: center; padding: 6px 4px 0; }
+.toast { position: fixed; left: 50%; bottom: 100px; transform: translateX(-50%); background: rgba(28,31,36,.92); color: #fff; padding: 11px 18px; border-radius: 12px; font-size: 14px; z-index: 20; opacity: 0; transition: opacity .2s; pointer-events: none; white-space: nowrap; }
+.toast.show { opacity: 1; }
+.empty { text-align: center; padding: 40px 0 10px; display: flex; flex-direction: column; gap: 10px; align-items: center; }
+.empty .big { font-size: 44px; }
+.saved { background: var(--card); border-radius: 18px; padding: 16px 18px; display: flex; flex-direction: column; gap: 8px; border: 1.5px solid var(--gold); }
+.logo { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 15px; color: var(--primary); }
+.logo i { width: 26px; height: 26px; border-radius: 8px; background: var(--primary); display: grid; place-items: center; color: var(--gold); font-style: normal; font-size: 14px; }
+.how { display: flex; flex-direction: column; gap: 10px; }
+.how div { display: flex; gap: 12px; align-items: center; background: var(--card); border-radius: 16px; padding: 14px 16px; font-size: 15px; }
+.how b { width: 28px; height: 28px; border-radius: 50%; background: var(--gold-soft); color: var(--gold-ink); display: grid; place-items: center; flex: none; font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="app" id="app"></div>
+<div class="toast" id="toast"></div>
+<script>
+// ===== 가상 데이터 (형식 예시용, 실제 정책·금액 아님) =====
+const POLICIES = {
+  P1: { title: "청년 월세 지원", org: "국토교통부", cat: "주거", tag: ["open", "모집 중"], type: "monthly", span: 12,
+        amountText: "월 최대 20만 원 · 12개월", amt: { "1y": 240, "2y": 240, "all": 240 }, source: "온통청년", verified: "10/26",
+        elig: [["met", "나이"], ["met", "무주택"], ["need_check", "부모님 소득"]],
+        reason: "혼자 자취 중이고 주거에 관심 있다고 해서 추천했어요" },
+  P2: { title: "청년 자산형성 통장", org: "지방자치단체", cat: "자산형성", tag: ["due", "마감 D-12"], type: "maturity",
+        amountText: "월 10만 원 저축 시 같은 금액 매칭 · 만기 시 지급", amt: { "1y": 120, "2y": 240, "all": 360 }, source: "보조금24", verified: "10/25",
+        elig: [["met", "나이"], ["met", "지역"], ["need_check", "가구 소득"]],
+        reason: "목돈 마련을 함께 할 수 있어 조합 총액을 키워요" },
+  P3: { title: "구직활동 지원금", org: "고용노동부", cat: "취업", tag: ["open", "모집 중"], type: "monthly", span: 6,
+        amountText: "월 50만 원 · 6개월", amt: { "1y": 300, "2y": 300, "all": 300 }, source: "온통청년", verified: "10/26",
+        elig: [["met", "나이"], ["met", "구직 상태"], ["met", "소득"]],
+        reason: "취업 준비 중이라 받을 수 있는 금액이 가장 커요" },
+  P4: { title: "청년 대중교통비 환급", org: "지방자치단체", cat: "생활", tag: ["open", "상시"], type: "monthly",
+        amountText: "월 최대 1만 원 환급", amt: { "1y": 12, "2y": 24, "all": 24 }, source: "보조금24", verified: "10/14",
+        elig: [["met", "나이"], ["met", "지역"]], stale: true,
+        reason: "다른 정책과 함께 받을 수 있는 생활비 혜택이에요" },
+  P6: { title: "청년 전세대출 이자 지원", org: "지방자치단체", cat: "주거", tag: ["open", "모집 중"], type: "interest",
+        amountText: "대출 이자 연 최대 150만 원", amt: { "1y": 150, "2y": 300, "all": 300 }, source: "보조금24", verified: "10/26",
+        elig: [["met", "나이"], ["need_check", "전세 계약"]],
+        reason: "전세로 옮길 계획이 있다면 월세 지원 대신 고를 수 있어요" },
+};
+// 정책 이름은 가상이라 링크는 출처 포털로 연결한다. 실서비스에서는 정책별 공식 신청 URL(source_url)
+const SRC_URL = { "온통청년": "https://www.youthcenter.go.kr", "보조금24": "https://www.gov.kr/portal/rcvfvrSvc/main" };
+const CAT_ICON = { "주거": "🏠", "취업": "💼", "자산형성": "🐷", "생활": "🚌", "교육·장학": "🎓" };
+// 함께 받을 수 없는 쌍 (공고 원문 근거) — 조합 계산에서 같은 조합에 넣지 않는다
+const CONFLICTS = [["P1", "P6", "청년 월세 지원과 청년 전세대출 이자 지원은 함께 받을 수 없어요"], ["P3", "P4", "구직활동 지원금과 청년 대중교통비 환급은 함께 받을 수 없어요"]];
+const PORTFOLIOS = [
+  { ids: ["P3", "P1", "P2"], unverified: ["P1", "P2"] },
+  { ids: ["P3", "P6", "P2"], unverified: [] },
+  { ids: ["P1", "P2", "P4"], unverified: ["P1", "P2"] },
+  { ids: ["P6", "P2", "P4"], unverified: [] },
+];
+// 현재가치: 나중에 받는 돈을 할인율로 깎아 지금 가치로 바꾼다. 할인율은 기준금리 가정 (실서비스는 한국은행 ECOS에서 매일 받음)
+const RATE = 0.025;
+const HORIZON = { "1y": 12, "2y": 24, "all": 36 };
+function pvOf(id, per) {
+  const x = POLICIES[id], H = HORIZON[per], a = x.amt[per], d = (m) => Math.pow(1 + RATE, -m / 12);
+  if (x.type === "maturity") return a * d(H);                                   // 만기에 한 번에 받음
+  if (x.type === "interest") { let s = 0; for (let k = 1; k <= Math.round(a / 150); k++) s += 150 * d(12 * k); return s; } // 해마다 이자 지원
+  const n = Math.min(x.span || H, H); let s = 0; for (let m = 1; m <= n; m++) s += a / n * d(m); return s;        // 매달 받음
+}
+const val = (id, per) => S.pv ? Math.round(pvOf(id, per)) : POLICIES[id].amt[per];
+const SEG = ["#3B424C", "#C9963A", "#9AA0A8", "#E2C68E"];
+const EXCLUDED = [["청년 전세대출 이자 지원", "청년 월세 지원과 함께 받을 수 없음 (공고 원문 근거)"]];
+const NOT_ELIGIBLE = [["국가장학금형 생활비 지원", "재학 중인 학생만 받을 수 있음"], ["청년 창업 정착 지원", "사업자 등록이 필요함"], ["신혼부부 주거 지원", "혼인 조건"]];
+// 전국 17개 시·도와 시·군·구 (2026-10 기준, 인천 2026-07 행정체제 개편 반영). 실서비스에서는 백엔드가 행정표준코드 기준으로 내려준다
+const REGIONS = {
+  "서울특별시": ["강남구", "강동구", "강북구", "강서구", "관악구", "광진구", "구로구", "금천구", "노원구", "도봉구", "동대문구", "동작구", "마포구", "서대문구", "서초구", "성동구", "성북구", "송파구", "양천구", "영등포구", "용산구", "은평구", "종로구", "중구", "중랑구"],
+  "부산광역시": ["강서구", "금정구", "기장군", "남구", "동구", "동래구", "부산진구", "북구", "사상구", "사하구", "서구", "수영구", "연제구", "영도구", "중구", "해운대구"],
+  "대구광역시": ["군위군", "남구", "달서구", "달성군", "동구", "북구", "서구", "수성구", "중구"],
+  "인천광역시": ["강화군", "검단구", "계양구", "남동구", "미추홀구", "부평구", "서구", "연수구", "영종구", "옹진군", "제물포구"],
+  "광주광역시": ["광산구", "남구", "동구", "북구", "서구"],
+  "대전광역시": ["대덕구", "동구", "서구", "유성구", "중구"],
+  "울산광역시": ["남구", "동구", "북구", "울주군", "중구"],
+  "세종특별자치시": ["세종특별자치시"],
+  "경기도": ["가평군", "고양시", "과천시", "광명시", "광주시", "구리시", "군포시", "김포시", "남양주시", "동두천시", "부천시", "성남시", "수원시", "시흥시", "안산시", "안성시", "안양시", "양주시", "양평군", "여주시", "연천군", "오산시", "용인시", "의왕시", "의정부시", "이천시", "파주시", "평택시", "포천시", "하남시", "화성시"],
+  "강원특별자치도": ["강릉시", "고성군", "동해시", "삼척시", "속초시", "양구군", "양양군", "영월군", "원주시", "인제군", "정선군", "철원군", "춘천시", "태백시", "평창군", "홍천군", "화천군", "횡성군"],
+  "충청북도": ["괴산군", "단양군", "보은군", "영동군", "옥천군", "음성군", "제천시", "증평군", "진천군", "청주시", "충주시"],
+  "충청남도": ["계룡시", "공주시", "금산군", "논산시", "당진시", "보령시", "부여군", "서산시", "서천군", "아산시", "예산군", "천안시", "청양군", "태안군", "홍성군"],
+  "전북특별자치도": ["고창군", "군산시", "김제시", "남원시", "무주군", "부안군", "순창군", "완주군", "익산시", "임실군", "장수군", "전주시", "정읍시", "진안군"],
+  "전라남도": ["강진군", "고흥군", "곡성군", "광양시", "구례군", "나주시", "담양군", "목포시", "무안군", "보성군", "순천시", "신안군", "여수시", "영광군", "영암군", "완도군", "장성군", "장흥군", "진도군", "함평군", "해남군", "화순군"],
+  "경상북도": ["경산시", "경주시", "고령군", "구미시", "김천시", "문경시", "봉화군", "상주시", "성주군", "안동시", "영덕군", "영양군", "영주시", "영천시", "예천군", "울릉군", "울진군", "의성군", "청도군", "청송군", "칠곡군", "포항시"],
+  "경상남도": ["거제시", "거창군", "고성군", "김해시", "남해군", "밀양시", "사천시", "산청군", "양산시", "의령군", "진주시", "창녕군", "창원시", "통영시", "하동군", "함안군", "함양군", "합천군"],
+  "제주특별자치도": ["서귀포시", "제주시"],
+};
+
+// ===== 상태 =====
+const demo = { age: 25, military: "", sido: "경기도", sigungu: "수원시", status: "취업 준비", school: "대학 졸업", married: "미혼", housing: "혼자 살아요", owner: "없어요 (무주택)", head: "세대주", contract: "월세", deposit: "5천만 원 이하", rent: "40만 ~ 60만 원",
+               income: "없음", asset: "1억 2천만 원 이하", special: ["해당 없음"], interests: ["주거", "생활"], received: ["없음"], hh: null, pIncome: "모름", pAsset: "모름" };
+const S = { consent: false, remember: false, saved: false, cond: { age: "", military: "", sido: "", sigungu: "", status: "", school: "", married: "", housing: "", owner: "", head: "", contract: "", deposit: "", rent: "", income: "", asset: "", special: [], interests: [], received: [], hh: null, pIncome: "", pAsset: "" },
+            period: "1y", pv: false, tab: 0, open: {}, whatif: "취업하면" };
+const won = (man) => "약 " + man.toLocaleString() + "만 원";
+const toast = (t) => { const el = document.getElementById("toast"); el.textContent = t; el.classList.add("show"); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove("show"), 1800); };
+const go = (h) => { location.hash = h; };
+const ensureDemo = () => { if (!S.cond.age) S.cond = JSON.parse(JSON.stringify(demo)); };
+
+// ===== 공통 조각 =====
+const bar = (title, back, right = "") => `<div class="proto">시안 · 모든 정책 이름과 금액은 가상의 값</div>
+  <header class="bar">${back ? `<button class="back" onclick="history.back()" aria-label="뒤로">‹</button>` : ""}<span class="title">${title}</span>${right}</header>`;
+const foot = () => `<footer class="foot"><button onclick="go('#/about')">이용 안내</button><button onclick="go('#/privacy')">개인정보 처리방침</button><button onclick="clearMine()">내 정보 지우기</button><span>데이터 출처 온통청년 · 보조금24 · 매일 새벽 3시 갱신</span></footer>`;
+const cta = (label, onclick, disabled = false, extra = "") => `<div class="cta">${extra}<button class="btn" ${disabled ? "disabled" : ""} onclick="${onclick}">${label}</button></div>`;
+const statusChip = ([s, label]) => `<span class="s ${s}">${{ met: "✓", not_met: "✕", need_check: "?" }[s]} ${label}</span>`;
+function clearMine() { S.saved = false; S.remember = false; toast("이 기기에 저장된 내 정보를 지웠어요"); render(); }
+
+// ===== S1 시작 =====
+function s1() {
+  return bar(`<span class="logo"><i>₩</i>청년 정책 매니저</span>`, false) + `<main>
+    ${S.saved ? `<div class="saved"><div class="row"><b>지난번 조건으로 바로 보기</b><button class="link" onclick="clearMine()">내 정보 지우기</button></div>
+      <span class="muted small">만 25세 · 경기도 수원시 · 취업 준비 · 혼자 자취</span>
+      <button class="btn line" onclick="ensureDemo(); go('#/loading')">이 조건으로 다시 보기</button></div>` : ""}
+    <h1>받을 수 있는 지원금,<br>가장 이득인 조합으로<br>찾아 드려요</h1>
+    <p class="muted">함께 받을 수 없는 정책은 빼고, 총액이 가장 큰 조합을 계산해요.</p>
+    <div class="how">
+      <div><b>1</b>내 조건을 골라요 (약 3분)</div>
+      <div><b>2</b>함께 받을 수 있는 조합과 총액을 봐요</div>
+      <div><b>3</b>신청 방법과 준비 서류까지 확인해요</div>
+    </div>
+    <div class="card sub small"><p><span class="ai">AI</span>이 서비스는 생성형 AI를 사용해요. 결과는 참고용이며 최종 자격은 신청 기관에서 확인해야 해요. <button class="link" onclick="go('#/about')">자세히</button></p></div>
+    <div class="check ${S.consent ? "on" : ""}" onclick="S.consent=!S.consent; render()"><span class="box">${S.consent ? "✓" : ""}</span>
+      <span><b>(필수)</b> 선택한 조건은 정책 분석에만 사용돼요 <button class="link" onclick="event.stopPropagation(); go('#/privacy')">개인정보 처리방침</button></span></div>
+    <div class="check ${S.remember ? "on" : ""}" onclick="S.remember=!S.remember; render()"><span class="box">${S.remember ? "✓" : ""}</span>
+      <span>(선택) 이 기기에 내 조건 기억하기 <span class="muted small">30일 동안, 언제든 지울 수 있어요</span></span></div>
+  </main>${foot()}${cta("시작하기", "go('#/conditions/1')", !S.consent)}`;
+}
+
+// ===== S2 조건 선택 =====
+// 질문 구성은 기획/04_정책조건_분석.md 기준 (온통청년 API 혼인·취업·학력·특화 코드와 실제 정책 5개 자격 조건)
+const N = 13;
+const PICK = (key, v) => `S.cond['${key}']='${v}'; render()`;
+function opts(key, list) { return `<div class="options">${list.map(v => `<button class="option ${S.cond[key] === v ? "on" : ""}" onclick="${PICK(key, v)}">${v}</button>`).join("")}</div>`; }
+function chips(key, list) { return `<div class="chips">${list.map(v => `<button class="chip sm ${S.cond[key] === v ? "on" : ""}" onclick="${PICK(key, v)}">${v}</button>`).join("")}</div>`; }
+// 여러 개 고르기. none(예: '해당 없음')을 고르면 나머지는 풀린다
+function multi(key, list, none) { const a = S.cond[key]; return `<div class="chips">${list.map(v => `<button class="chip ${a.includes(v) ? "on" : ""}" onclick="toggleMulti('${key}','${v}','${none}')">${v}</button>`).join("")}</div>`; }
+function toggleMulti(key, v, none) { let a = S.cond[key]; if (v === none) a = a.includes(v) ? [] : [v]; else { a = a.filter(x => x !== none); a = a.includes(v) ? a.filter(x => x !== v) : [...a, v]; } S.cond[key] = a; render(); }
+const ageNote = (a) => (a && (a < 19 || a > 39) ? "n" : "") + (a >= 35 ? "m" : "");
+function s2(step) {
+  const c = S.cond; let body = "", ok = true;
+  if (step === 1) { body = `<h2>나이가 어떻게 되나요?</h2><p class="muted">만 나이로 적어 주세요</p>
+      <div class="field"><input id="age" inputmode="numeric" value="${c.age}" placeholder="25" oninput="S.cond.age=this.value.replace(/\\D/g,''); this.value=S.cond.age; refreshCta()"><span>세</span></div>
+      ${c.age && (c.age < 19 || c.age > 39) ? `<div class="note">청년(만 19 ~ 39세) 정책 위주라 받을 수 있는 게 적을 수 있어요. 그래도 계속 볼 수 있어요.</div>` : ""}
+      ${c.age >= 35 ? `<h3>군 복무를 마쳤나요?</h3><p class="muted small">복무한 기간만큼 나이 기준을 늘려 주는 정책이 있어요 (최대 6년)</p>` + chips("military", ["해당 없음", "1년 6개월 이하", "1년 6개월 ~ 2년", "2년 초과"]) : ""}`;
+    ok = !!c.age && (c.age < 35 || !!c.military); }
+  if (step === 2) { body = `<h2>어디에 살아요?</h2><p class="muted">주민등록상 주소 기준이에요</p>
+      <div class="field"><select onchange="S.cond.sido=this.value; const l=REGIONS[this.value]||[]; S.cond.sigungu=l.length===1?l[0]:''; render()"><option value="">시·도 선택</option>${Object.keys(REGIONS).map(r => `<option ${c.sido === r ? "selected" : ""}>${r}</option>`).join("")}</select></div>
+      <div class="field"><select ${c.sido ? "" : "disabled"} onchange="S.cond.sigungu=this.value; render()"><option value="">시·군·구 선택</option>${(REGIONS[c.sido] || []).map(r => `<option ${c.sigungu === r ? "selected" : ""}>${r}</option>`).join("")}</select></div>`; ok = !!c.sigungu; }
+  if (step === 3) { body = `<h2>지금 상황은요?</h2><p class="muted">가장 가까운 것 하나를 골라 주세요</p>` + opts("status", ["고등학생", "대학생 (휴학 포함)", "대학원생", "취업 준비", "재직 (정규·계약)", "단기·일용 근로", "자영업", "프리랜서", "(예비) 창업", "농업·어업", "기타"]); ok = !!c.status; }
+  if (step === 4) { body = `<h2>최종 학력은요?</h2>` + opts("school", ["고졸 미만", "고등학교 재학", "고등학교 졸업", "대학 재학·휴학", "대학 졸업 예정", "대학 졸업", "석·박사"]); ok = !!c.school; }
+  if (step === 5) { body = `<h2>결혼했나요?</h2><p class="muted">신혼부부 기준이 따로 있거나, 결혼하면 부모님 소득을 안 보는 정책이 있어요</p>` + opts("married", ["미혼", "기혼", "결혼 예정 (3개월 안)"]); ok = !!c.married; }
+  if (step === 6) { body = `<h2>어떻게 살고 있어요?</h2>` + opts("housing", ["혼자 살아요", "부모님과 함께 살아요", "배우자·가족과 살아요", "기숙사·고시원", "기타"]) +
+      `<h3>내 이름(또는 배우자)으로 된 집이 있나요?</h3><p class="muted small">분양권·입주권도 포함이에요</p>` + chips("owner", ["없어요 (무주택)", "있어요", "모름"]) +
+      `<h3>주민등록상 세대주인가요?</h3>` + chips("head", ["세대주", "세대원", "모름"]);
+    ok = !!(c.housing && c.owner && c.head); }
+  if (step === 7) { const rent = c.contract === "월세", lease = rent || c.contract === "전세";
+    body = `<h2>지금 사는 집 계약은요?</h2><p class="muted">주거 정책은 보증금·월세 금액에 상한이 있어요</p>` + opts("contract", ["월세", "전세", "자가", "계약 없음 (부모님 집 등)"]) +
+      (lease ? `<h3>보증금</h3>` + chips("deposit", ["5천만 원 이하", "5천만 ~ 1억 원", "1억 ~ 3억 원", "3억 원 초과"]) : "") +
+      (rent ? `<h3>월세</h3>` + chips("rent", ["40만 원 이하", "40만 ~ 60만 원", "60만 ~ 70만 원", "70만 원 초과"]) : "");
+    ok = !!c.contract && (!lease || !!c.deposit) && (!rent || !!c.rent); }
+  if (step === 8) { body = `<h2>본인 소득과 재산은요?</h2><p class="muted">구간만 골라요. 몰라도 괜찮아요</p>
+      <h3>연 소득 (세전)</h3>` + chips("income", ["없음", "1,500만 원 미만", "1,500만 ~ 3,000만 원", "3,000만 ~ 5,000만 원", "5,000만 원 이상", "모름"]) +
+      `<h3>재산</h3><p class="muted small">예금·보증금·자동차 등을 더하고 대출은 빼요</p>` + chips("asset", ["1억 2천만 원 이하", "1억 2천만 ~ 3억 4,500만 원", "3억 4,500만 원 초과", "모름"]);
+    ok = !!(c.income && c.asset); }
+  if (step === 9) { body = `<h2>해당하는 게 있나요?</h2><p class="muted">이런 분만 받을 수 있는 정책이 따로 있어요. 여러 개 고를 수 있어요</p>` +
+      multi("special", ["기초생활수급자", "차상위계층", "한부모가정", "장애인", "중소기업 재직", "농업인·어업인", "군 복무 중", "해당 없음"], "해당 없음") +
+      `<p class="muted small">이 정보는 AI에게 보내지 않고 자격 계산에만 써요. 서버에 저장하지 않아요</p>`; ok = c.special.length > 0; }
+  if (step === 10) { body = `<h2>어떤 지원에 관심 있어요?</h2><p class="muted">여러 개 고를 수 있어요</p>` + multi("interests", ["주거", "취업", "생활", "자산형성", "교육·장학"], ""); ok = c.interests.length > 0; }
+  if (step === 11) { body = `<h2>이미 받고 있거나 받았던 게 있나요?</h2><p class="muted">한 번만 받을 수 있거나 함께 가입할 수 없는 정책은 조합에서 빼요</p>` +
+      multi("received", ["청년월세 지원", "청년도약계좌·청년미래적금", "청년내일저축계좌", "국민취업지원제도", "버팀목 전세대출", "없음"], "없음"); ok = c.received.length > 0; }
+  if (step === 12) { body = c.married === "기혼"
+      ? `<h2>부모님 정보는 필요 없어요</h2><p class="muted">결혼한 청년은 부모님 소득·재산 대신 본인 가구 기준으로 봐요</p>`
+      : `<h2>더 정확하게 볼까요?</h2><p class="muted">일부 정책은 부모님(원가구) 소득·재산을 봐요. 모르면 '확인 필요'로 표시돼요${c.age >= 30 ? ". 만 30세 이상이면 안 보는 정책도 있어요" : ""}</p>
+      <h3>가구원 수</h3>` + chips("hh", ["1명", "2명", "3명", "4명 이상", "모름"]) +
+      `<h3>부모님 집 한 달 소득 (세전, 가구 전체)</h3>` + chips("pIncome", ["300만 원 이하", "300만 ~ 500만 원", "500만 ~ 700만 원", "700만 원 초과", "모름"]) +
+      `<h3>부모님 재산 구간</h3>` + chips("pAsset", ["3억 원 이하", "3억 ~ 5억 원", "5억 원 초과", "모름"]); }
+  if (step === N) { ensureDemoFill(); const L = (a) => a.join(", ");
+    const rows = [["나이", "만 " + c.age + "세" + (c.military && c.military !== "해당 없음" ? " · 군필 " + c.military : ""), 1], ["지역", c.sido + " " + c.sigungu, 2], ["지금 상황", c.status, 3], ["최종 학력", c.school, 4], ["결혼", c.married, 5],
+      ["사는 형태", c.housing, 6], ["집 소유", c.owner, 6], ["세대주", c.head, 6], ["집 계약", c.contract + (c.deposit ? " · 보증금 " + c.deposit : "") + (c.rent ? " · 월세 " + c.rent : ""), 7],
+      ["본인 소득", c.income, 8], ["본인 재산", c.asset, 8], ["해당 조건", L(c.special), 9], ["관심 분야", L(c.interests), 10], ["받은 정책", L(c.received), 11],
+      ...(c.married === "기혼" ? [] : [["가구원 수", c.hh || "건너뜀", 12], ["부모님 소득", c.pIncome || "건너뜀", 12], ["부모님 재산", c.pAsset || "건너뜀", 12]])];
+    body = `<h2>이 조건으로 찾을까요?</h2><p class="muted">항목을 누르면 고칠 수 있어요</p><div class="card" style="gap:0;padding:6px 18px">${rows.map(([k, v, s]) => `<div class="row" style="padding:13px 0;border-bottom:1px solid var(--line);cursor:pointer;gap:12px" onclick="go('#/conditions/${s}')"><span class="muted" style="flex:none">${k}</span><b style="text-align:right">${v} <span class="arr">›</span></b></div>`).join("")}</div>`; }
+  const last = step === N, skip = step === 12 && c.married !== "기혼";
+  const right = (skip ? `<button class="link" style="font-size:14px;margin-right:10px" onclick="go('#/conditions/${N}')">건너뛰기</button>` : "") + `<span class="step">${step} / ${N}</span>`;
+  return bar("조건 고르기", true, right) + `<div class="progress"><i style="width:${step / N * 100}%"></i></div><main>${body}</main>` +
+    cta(last ? "내 조합 찾기" : "다음", last ? "go('#/loading')" : `go('#/conditions/${step + 1}')`, !ok);
+}
+function ensureDemoFill() { const c = S.cond; for (const k in demo) if (c[k] === "" || c[k] == null || (Array.isArray(c[k]) && !c[k].length)) if (!["hh", "military", "deposit", "rent"].includes(k)) c[k] = JSON.parse(JSON.stringify(demo[k])); }
+// 나이를 칠 때마다 다시 그리면 입력이 끊기므로, 안내문·군 복무 질문이 바뀔 때만 다시 그린다
+function refreshCta() { const a = +S.cond.age; if (ageNote(a) !== refreshCta.k) { refreshCta.k = ageNote(a); render(); const i = document.getElementById("age"); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } return; }
+  const b = document.querySelector(".cta .btn"); if (b) b.disabled = !a || (a >= 35 && !S.cond.military); }
+
+// ===== 로딩 =====
+const LOAD = [["내 조건에 맞는 정책 찾는 중", "128개 찾음", "search_policies"], ["자격 조건 비교", "", "check_eligibility"], ["함께 받을 수 있는 조합 계산", "", "optimize_portfolio"], ["추천 이유 정리", "", "AI 설명"]];
+function loading(frozen) {
+  const k = frozen ? 2 : (loading.k || 0);
+  return bar("분석 중", false) + `<main><h2>가장 이득인 조합을<br>계산하고 있어요</h2><p class="muted">AI가 아래 순서대로 도구를 쓰고 있어요</p>
+    <div class="steps">${LOAD.map(([t, d, tool], i) => `<div class="${i < k ? "done" : i === k ? "now" : ""}"><span class="ic">${i < k ? "✓" : ""}</span><span>${t}${i < k && d ? ` (${d})` : ""}<small>${tool}</small></span></div>`).join("")}</div></main>`;
+}
+function runLoading() { ensureDemo(); loading.k = 0; const tick = () => { if (location.hash !== "#/loading") return; loading.k++; render(); if (loading.k < LOAD.length) setTimeout(tick, 700); else setTimeout(() => { if (S.remember) S.saved = true; go("#/result"); }, 500); }; setTimeout(tick, 700); }
+
+// ===== S3 결과 =====
+function s3() {
+  ensureDemo(); const per = S.period, perLabel = { "1y": "1년", "2y": "2년", "all": "전체 기간" }[per];
+  // 기간마다 총액이 달라지므로 그 기간 총액 순으로 다시 정렬한다 (계산은 코드, 순위도 코드)
+  const ranked = PORTFOLIOS.map(p => ({ ...p, total: p.ids.reduce((s, id) => s + val(id, per), 0) })).sort((a, b) => b.total - a.total).slice(0, 3);
+  const RL = ["추천 조합", "대안 1", "대안 2"], max = ranked[0].total;
+  const sel = Math.min(S.tab, ranked.length - 1), p = ranked[sel];
+  const fold = (key, title, inner) => `<div class="fold ${S.open[key] ? "open" : ""}"><button onclick="S.open['${key}']=!S.open['${key}']; render()"><span>${title}</span><span class="arr">›</span></button><div class="body">${inner}</div></div>`;
+  // 1위가 왜 1위인지: 2위와의 차이 + 함께 못 받는 쌍 때문에 갈린 지점
+  const top = ranked[0], second = ranked[1];
+  const conflict = CONFLICTS.find(([a, b]) => (top.ids.includes(a) && second.ids.includes(b)) || (top.ids.includes(b) && second.ids.includes(a)));
+  // 기회비용: 이 조합을 고르면 함께 받을 수 없어 포기하는 지원금
+  const given = (r) => CONFLICTS.filter(([a, b]) => r.ids.includes(a) !== r.ids.includes(b)).map(([a, b]) => r.ids.includes(a) ? b : a);
+  const c = S.cond;
+  return bar("내 지원금 조합", true, `<button class="link" onclick="go('#/conditions/13')">조건 수정</button>`) + `<main>
+    <p class="muted small">만 ${c.age}세 · ${c.sido} ${c.sigungu} · ${c.status} · ${c.housing}</p>
+    <h2 style="margin-top:0">함께 받을 수 있는 조합<br>${ranked.length}개를 찾았어요</h2>
+    <div class="tabs">${[["1y", "1년"], ["2y", "2년"], ["all", "전체 기간"]].map(([v, l]) => `<button class="${per === v ? "on" : ""}" onclick="S.period='${v}'; S.tab=0; render()">${l} 기준</button>`).join("")}</div>
+    <div class="check pvt ${S.pv ? "on" : ""}" onclick="S.pv=!S.pv; S.tab=0; render()"><span class="box">${S.pv ? "✓" : ""}</span>
+      <span><b>현재가치로 보기</b> <span class="muted small">나중에 받는 돈을 지금 가치로 바꿔 비교해요 (할인율 연 ${(RATE * 100).toFixed(1)}%)</span></span></div>
+
+    <div class="combos">${ranked.map((r, i) => `<button class="combo ${i === sel ? "on" : ""}" onclick="S.tab=${i}; render()">
+      <div class="row"><span class="badge ${i === 0 ? "best" : ""}">${RL[i]}</span><span class="ctotal">${won(r.total)}</span></div>
+      <div class="cname">${r.ids.map(id => POLICIES[id].title).join(" + ")}</div>
+      ${given(r).length ? `<div class="cgive">포기하는 지원금 · ${given(r).map(id => `${POLICIES[id].title} ${val(id, per)}만 원`).join(", ")}</div>` : ""}
+      <div class="segbar" style="width:${Math.round(r.total / max * 100)}%">${r.ids.map((id, k) => `<i style="flex:${val(id, per)};background:${SEG[k]}"></i>`).join("")}</div>
+    </button>`).join("")}</div>
+
+    <div class="card sub why"><b>왜 이 순서인가요?</b>
+      <p>추천 조합은 ${RL[1]}보다 ${perLabel} 동안 <b>${top.total - second.total}만 원</b> 더 받아요${S.pv ? " (현재가치 기준)" : ""}.</p>
+      <p>추천 조합을 고르는 <b>기회비용</b>은 다음으로 좋은 ${RL[1]}의 ${won(second.total)}이에요. 그보다 커서 1위예요.</p>
+      ${conflict ? `<p>${conflict[2]}. 그래서 둘 중 총액이 커지는 쪽을 골랐어요.</p>` : ""}
+      ${per !== "1y" ? `<p class="muted small">기간을 바꾸면 매달·만기 지급 금액이 달라져 순위가 바뀔 수 있어요.</p>` : ""}
+      ${S.pv ? `<p class="muted small">현재가치: 만기에 한꺼번에 받는 적금 매칭금은 지금 받는 돈보다 가치가 작아요. 예) ${POLICIES.P2.title} ${POLICIES.P2.amt[per]}만 원 → 지금 가치 약 ${val("P2", per)}만 원</p>` : ""}
+    </div>
+
+    <h3>${RL[sel]}에 들어 있는 지원금 ${p.ids.length}개</h3>
+    <div class="list">${p.ids.map((id, k) => { const x = POLICIES[id]; return `<div class="item">
+      <div class="itop" onclick="go('#/policy/${id}')">
+        <span class="ico" style="box-shadow: inset 0 0 0 2px ${SEG[k]}">${CAT_ICON[x.cat] || "•"}</span>
+        <div class="imid"><b>${x.title}</b><span class="muted small">${x.amountText}</span></div>
+        <div class="iamt"><b>${val(id, per)}만 원</b>${S.pv && val(id, per) !== x.amt[per] ? `<span class="muted small" style="text-decoration:line-through">${x.amt[per]}만 원</span>` : ""}<span class="tag ${x.tag[0]}">${x.tag[1]}</span></div>
+      </div>
+      ${x.type === "maturity" ? `<span class="small" style="color:var(--gold-ink)">만기 시 지급</span>` : ""}
+      <div class="st">${x.elig.map(statusChip).join("")}</div>
+      <p class="small"><span class="ai">AI</span>${x.reason}</p>
+      <span class="src">출처 ${x.source} · ${x.verified} 확인${x.stale ? ` · <span style="color:var(--ck)">⚠ 최신 내용은 공식 페이지에서 확인</span>` : ""}</span>
+      <div class="iact"><button class="btn sm ghost2" onclick="go('#/policy/${id}')">자세히 보기</button><a class="btn sm" href="${SRC_URL[x.source]}" target="_blank" rel="noopener">신청하러 가기 ↗</a></div>
+    </div>`; }).join("")}</div>
+
+    ${p.unverified.length ? `<div class="warnbox"><b>? 이 조합에서 확인이 필요한 부분</b><span>'${POLICIES[p.unverified[0]].title}'과 '${POLICIES[p.unverified[1]].title}'은 함께 받을 수 있는지 공식 자료로 확인되지 않았어요. (${val(p.unverified[1], per)}만 원이 총액에 포함돼 있어요)</span></div>` : ""}
+    ${(() => { const ex = CONFLICTS.filter(([a, b]) => p.ids.includes(a) !== p.ids.includes(b)).map(([a, b]) => { const out = p.ids.includes(a) ? b : a, inn = p.ids.includes(a) ? a : b; return [POLICIES[out].title, `${POLICIES[inn].title}과 함께 받을 수 없어 빠졌어요 (공고 원문 근거). 이 조합의 기회비용 ${val(out, per)}만 원`]; });
+      return ex.length ? fold("ex", `이 조합에서 빠진 정책 ${ex.length}개`, ex.map(([n, r]) => `<div><b>${n}</b><br><span class="muted">${r}</span></div>`).join("")) : ""; })()}
+    ${fold("cl", "지금은 모집이 끝난 정책 1개", `<p class="muted">다음 모집 때 받을 수 있어요.</p><div><b>청년 이사비 지원</b><br><span class="muted">지난 모집 2026.03.30 ~ 05.29 · 다음 모집 미정</span></div>`)}
+    ${fold("ne", "조건이 맞지 않는 정책 3개", NOT_ELIGIBLE.map(([n, r]) => `<div><b>${n}</b><br><span class="s not_met">✕ 미충족</span> <span class="muted">${r}</span></div>`).join(""))}
+    ${fold("nr", "아직 조합 계산 전인 정책 12개", `<p class="muted">금액·중복 여부를 검수 중이에요. 정책별 자격 진단은 볼 수 있어요.</p><div><b>청년 마음건강 지원</b> <span class="s met">✓ 자격 충족</span></div><div><b>청년 문화예술 패스</b> <span class="s need_check">? 확인 필요</span></div>`)}
+    <button class="btn line" onclick="go('#/what-if')">상황이 바뀌면 어떻게 될까?</button>
+    <button class="btn ghost" onclick="toast('결과 이미지를 저장했어요 (시안: 실제 저장 생략)')">결과 이미지로 저장</button>
+    <p class="disclaimer">AI가 계산을 돕는 참고 결과예요. 최종 자격은 신청 기관에서 확인해 주세요.</p>
+  </main>${foot()}`;
+}
+
+// ===== S4 절벽 =====
+const WHATIF = {
+  "취업하면": { after: 480, income: [0, 2400], lose: [["구직활동 지원금", "재직하면 대상이 아니에요", 300]], add: [["재직 청년 자산형성 지원", "재직 청년 대상 (+120만 원)", 120]], warn: "연 소득 3,000만 원을 넘으면 청년 월세 지원도 끊겨요", todo: "취업 전에 청년 자산형성 통장을 신청해 두면 재직 후에도 계속 받을 수 있어요" },
+  "연 소득이 오르면": { after: 420, income: [2900, 3100], lose: [["청년 월세 지원", "연 소득 3,000만 원 기준 초과", 240]], add: [], warn: "연 소득 5,000만 원을 넘으면 자산형성 매칭도 줄어요", todo: "소득 기준선 전 달까지 받은 지원금은 돌려주지 않아도 돼요 (공고 원문 근거)" },
+  "독립하면": { after: 660, lose: [], add: [], warn: "이미 혼자 살고 있어서 바뀌는 게 없어요", todo: "" },
+  "나이가 1살 많아지면": { after: 660, lose: [], add: [], warn: "만 34세가 지나면 청년 월세 지원 대상에서 빠져요 (9년 남음, 군 복무 기간만큼 늘어날 수 있어요)", todo: "" },
+};
+function s4() {
+  const w = WHATIF[S.whatif], now = 660, d = w.after - now;
+  return bar("상황이 바뀌면?", true) + `<main><h2>지금 조건에서<br>무엇이 바뀌나요?</h2>
+    <div class="chips">${Object.keys(WHATIF).map(k => `<button class="chip sm ${S.whatif === k ? "on" : ""}" onclick="S.whatif='${k}'; render()">${k}</button>`).join("")}</div>
+    <div class="card"><div class="diff"><span class="muted">현재 추천 조합 (1년)</span><b>${won(now)}</b><span class="muted">바뀐 뒤 추천 조합</span><b>${won(w.after)} ${d ? `<span class="${d < 0 ? "minus" : "plus"}">(${d > 0 ? "+" : ""}${d}만)</span>` : ""}</b></div></div>
+    ${w.income ? (() => { const [a, b] = w.income, dy = b - a, lost = w.lose.reduce((s, x) => s + x[2], 0) - w.add.reduce((s, x) => s + x[2], 0), net = dy - lost, emtr = Math.round(lost / dy * 100);
+      return `<div class="card emtr"><b>실제로 늘어나는 돈</b>
+        <div class="diff"><span class="muted">연 소득</span><b>${a.toLocaleString()} → ${b.toLocaleString()}만 원 <span class="plus">(+${dy.toLocaleString()}만)</span></b>
+        <span class="muted">줄어드는 지원금</span><b><span class="minus">−${lost}만 원</span></b>
+        <span class="muted">실제 순증가</span><b class="${net < 0 ? "minus" : ""}">${net > 0 ? "+" : ""}${net.toLocaleString()}만 원</b></div>
+        <div class="emeter"><i style="width:${Math.min(emtr, 100)}%"></i></div>
+        <p>더 번 돈 100원 중 <b>${emtr}원</b>이 지원금 감소로 사라져요 <span class="muted small">(실효한계세율 ${emtr}%)</span></p>
+        ${emtr >= 100 ? `<p class="minus small">기준선 바로 위에서는 소득이 올라도 손에 쥐는 돈이 줄어요 (혜택 절벽)</p>` : ""}</div>`; })() : ""}
+    ${w.lose.map(([n, r]) => `<div class="card"><span class="s not_met" style="align-self:flex-start">✕ 끊기는 정책</span><b>${n}</b><span class="muted small">${r}</span></div>`).join("")}
+    ${w.add.map(([n, r]) => `<div class="card"><span class="s met" style="align-self:flex-start">＋ 새로 받는 정책</span><b>${n}</b><span class="muted small">${r}</span></div>`).join("")}
+    <div class="card"><span class="s need_check" style="align-self:flex-start">! 기준선 주의</span><span>${w.warn}</span></div>
+    ${w.todo ? `<div class="card sub"><b>지금 할 일</b><p><span class="ai">AI</span>${w.todo}</p><span class="src">근거: 공고 원문 '지원 대상' · '지원 중단' 조항</span></div>` : ""}
+    <p class="disclaimer">계산은 바뀐 조건으로 조합을 다시 계산한 결과예요. AI는 '지금 할 일' 설명만 써요. 세금·4대 보험은 빼고 지원금 변화만 계산했어요.</p>
+  </main>${foot()}`;
+}
+
+// ===== S5 상세 =====
+function s5(id) {
+  const x = POLICIES[id];
+  if (!x) return notFound("찾는 정책이 없어요", "마감됐거나 주소가 바뀌었을 수 있어요");
+  const hasCond = !!S.cond.age, met = x.elig.filter(e => e[0] === "met").length;
+  return bar(x.title, true) + `<main>
+    <div class="row"><span class="muted">${x.org}</span><span class="tag ${x.tag[0]}">${x.tag[1]}</span></div>
+    <h2 style="margin-top:0">${x.title}</h2>
+    ${hasCond ? `<div class="card"><b>조건 ${x.elig.length}개 중 ${met}개 충족${x.elig.length - met ? `, ${x.elig.length - met}개 확인 필요` : ""}</b>
+      ${x.elig.map(e => `<div>${statusChip(e)}<blockquote>「지원 대상」 공고 원문 조항이 그대로 인용되는 자리</blockquote></div>`).join("")}</div>`
+      : `<div class="card sub"><b>내 조건을 고르면 자격을 진단해 드려요</b><button class="btn" onclick="go('#/conditions/1')">조건 고르기</button></div>`}
+    <div class="card"><b>지원 내용</b><p>${x.amountText}</p><blockquote>「지원 내용」 원문 문장</blockquote></div>
+    ${id === "P1" ? `<div class="card"><b>함께 받을 수 없는 정책</b><p>청년 전세대출 이자 지원</p><span class="src">근거: 공고 원문 '중복 지원 제한' 조항</span></div>` : ""}
+    <div class="card"><b>신청 방법</b><dl class="kv"><dt>신청 기간</dt><dd>2026.10.01 ~ 2026.12.31</dd><dt>방법</dt><dd>온라인 신청</dd><dt>접수 기관</dt><dd>${x.org}</dd></dl></div>
+    <div class="card"><b>준비 서류</b><p class="muted">공식 자료에 서류 안내가 없어요. 신청 페이지에서 확인해 주세요.</p></div>
+    <div class="card sub"><b>확인이 필요한 것</b>${x.elig.filter(e => e[0] === "need_check").map(e => `<p>? ${e[1]}: 입력하지 않았거나 공식 기준이 불명확해요</p>`).join("") || "<p class='muted'>없어요</p>"}</div>
+    <span class="src">출처 ${x.source} · 마지막 확인 ${x.verified} · https://...</span>
+    <p class="disclaimer">AI가 계산을 돕는 참고 결과예요. 최종 자격과 최신 조건은 신청 기관에서 확인해 주세요.</p>
+  </main>${foot()}${cta("신청하러 가기 ↗", `window.open('${SRC_URL[x.source]}', '_blank', 'noopener')`)}`;
+}
+
+// ===== 공통 페이지 =====
+function about() { return bar("이용 안내", true) + `<main><h2>청년 정책 매니저는<br>이렇게 만들어졌어요</h2>
+  <div class="card"><b>AI가 하는 일</b><p>정책 원문에서 근거를 찾고(RAG), 필요한 도구를 골라 쓰고(Agent), 추천 이유를 설명해요.</p></div>
+  <div class="card"><b>AI가 하지 않는 일</b><p>자격 판정, 금액 계산, 조합 계산은 코드가 해요. AI는 숫자를 바꾸지 않아요. 최종 자격을 확정하지 않아요.</p></div>
+  <div class="card"><b>데이터</b><p>온통청년 청년정책 API, 공공데이터포털 공공서비스(보조금24) API. 매일 새벽 3시에 갱신해요.</p></div>
+  <div class="card"><b>한계</b><p>두 API에 없는 정책은 다루지 않아요. 금액·중복 여부를 검수한 정책만 조합에 들어가요.</p></div></main>${foot()}`; }
+function privacy() { return bar("개인정보 처리방침", true) + `<main><h2>개인정보 처리방침 (시안)</h2>
+  <div class="card"><dl class="kv"><dt>받는 정보</dt><dd>선택한 조건 (나이, 지역, 상황, 소득·재산 구간 등)</dd><dt>저장 위치</dt><dd>'기억하기'를 켠 경우 사용자 브라우저에만 30일. 서버에는 저장하지 않아요</dd><dt>외부 전달</dt><dd>정책 분석을 위해 AI API에 조건을 전달해요. 장애·수급 여부 같은 민감한 조건은 보내지 않아요</dd><dt>이용 통계</dt><dd>구글 애널리틱스 (쿠키 사용, 조건 값은 보내지 않아요)</dd><dt>지우기</dt><dd>하단 '내 정보 지우기'를 누르면 바로 지워져요</dd></dl></div></main>${foot()}`; }
+function notFound(t = "페이지를 찾을 수 없어요", d = "주소를 다시 확인해 주세요") { return bar("", true) + `<main><div class="empty"><span class="big">🔎</span><h2>${t}</h2><p class="muted">${d}</p></div></main>${cta("처음으로", "go('#/')")}`; }
+function emptyResult() { return bar("추천 조합", true) + `<main><div class="empty"><span class="big">📭</span><h2>지금 다루는 정책 중엔<br>맞는 게 없어요</h2><p class="muted">주거·취업·생활·자산형성·교육장학 분야를 다뤄요</p></div>
+  <button class="btn line" onclick="go('#/conditions/13')">조건 바꾸기</button><button class="btn ghost" onclick="toast('온통청년으로 이동 (시안)')">온통청년에서 더 찾아보기 ↗</button><button class="btn ghost" onclick="toast('복지로로 이동 (시안)')">복지로에서 더 찾아보기 ↗</button></main>${foot()}`; }
+
+// ===== 화면설계서용 번호 표시 =====
+// ?annot 를 붙이면 요소마다 빨간 번호를 붙인다. 번호는 기획서(README) 1부의 요소 표 번호와 같다
+const ANNOT = {
+  s1: [[".bar .logo"], ["main h1"], [".how"], ["main .card.sub"], [".check", 0], [".check", 1], [".cta .btn"], [".foot"]],
+  s2_1: [[".bar .back"], [".bar .step"], [".progress"], ["main h2"], ["main .field"], ["main .note"], ["main .chips"], [".cta .btn"]],
+  s2_6: [[".bar .back"], [".bar .step"], [".progress"], ["main h2"], ["main .options"], ["main .chips", 0], ["main .chips", 1], [".cta .btn"]],
+  s2_9: [["main h2"], ["main .chips"], ["main p.small"], [".cta .btn"]],
+  s2_12: [[".bar .link"], ["main h2"], ["main .chips", 0], ["main .chips", 1], ["main .chips", 2], [".cta .btn"]],
+  s2_13: [["main h2"], ["main .card .row", 0], [".cta .btn"]],
+  load: [["main h2"], [".steps > div", 0], [".steps > div", 2], [".steps small", 0]],
+  s3: [["main > p.muted"], [".bar .link"], ["main > .tabs"], [".pvt"], [".combo", 0], [".cgive", 0], [".segbar", 0], [".why"], [".item", 0], [".item .st", 0], [".item p.small", 0], [".iact a", 0], [".warnbox"], [".fold", 0], ["main > .btn.line"], ["main > .btn.ghost"], ["main > .disclaimer"]],
+  s4: [["main .chips"], ["main > .card", 0], [".emtr"], [".emtr .emeter"], [".s.not_met"], [".s.need_check"], ["main > .card.sub"], ["main > .disclaimer"]],
+  s5: [["main > .row"], ["main > h2"], ["main > .card", 0], ["blockquote", 0], ["main > .card", 1], ["main > .card", 2], ["main > .card", 3], ["main > .card", 4], ["main > .card", 5], ["main > .src"], [".cta .btn"]],
+  empty: [["main .empty h2"], ["main > .btn.line"], ["main > .btn.ghost", 0]],
+};
+function annotKey() {
+  const h = location.hash || "#/", m = h.match(/^#\/conditions\/(\d+)$/);
+  if (h === "#/") return "s1";
+  if (m) return ANNOT["s2_" + m[1]] ? "s2_" + m[1] : null;
+  return { "#/loading-static": "load", "#/result": "s3", "#/what-if": "s4", "#/result-empty": "empty" }[h] || (h.startsWith("#/policy/") ? "s5" : null);
+}
+function annotate() {
+  if (!location.search.includes("annot")) return;
+  document.querySelectorAll(".anb").forEach(e => e.remove());
+  const list = ANNOT[annotKey()] || [];
+  list.forEach(([sel, n], i) => {
+    const el = document.querySelectorAll(sel)[n || 0]; if (!el) return;
+    const fixed = !!el.closest(".cta"), r = el.getBoundingClientRect(), x = r.left + (fixed ? 0 : scrollX), y = r.top + (fixed ? 0 : scrollY), pos = fixed ? "fixed" : "absolute";
+    const box = document.createElement("div"); box.className = "anb";
+    box.style.cssText = `position:${pos};left:${x - 3}px;top:${y - 3}px;width:${r.width + 6}px;height:${r.height + 6}px;border:2px dashed #E5484D;border-radius:10px;pointer-events:none;z-index:50`;
+    const b = document.createElement("div"); b.className = "anb"; b.textContent = i + 1;
+    b.style.cssText = `position:${pos};left:${x - 12}px;top:${y - 12}px;min-width:22px;height:22px;padding:0 5px;border-radius:11px;background:#E5484D;color:#fff;font:700 12px/22px Pretendard,sans-serif;text-align:center;z-index:51;pointer-events:none;box-shadow:0 0 0 2px #fff`;
+    // 화면 아래 고정 버튼은 아래쪽 기준으로 붙여야 캡처 때 어긋나지 않는다
+    if (fixed) { box.style.top = b.style.top = "auto"; box.style.bottom = (innerHeight - r.bottom - 3) + "px"; b.style.bottom = (innerHeight - r.top + 12 - 22) + "px";
+      const cx = innerWidth / 2; box.style.left = `calc(50% + ${r.left - cx - 3}px)`; b.style.left = `calc(50% + ${r.left - cx - 12}px)`; }
+    document.body.append(box, b);
+  });
+}
+
+// ===== 라우터 =====
+function render() {
+  const h = location.hash || "#/", app = document.getElementById("app"); let m;
+  if (h === "#/") app.innerHTML = s1();
+  else if ((m = h.match(/^#\/conditions\/(\d+)$/)) && +m[1] >= 1 && +m[1] <= N) app.innerHTML = s2(+m[1]);
+  else if (h === "#/loading") app.innerHTML = loading(false);
+  else if (h === "#/loading-static") app.innerHTML = loading(true);
+  else if (h === "#/result") app.innerHTML = s3();
+  else if (h === "#/result-empty") app.innerHTML = emptyResult();
+  else if (h === "#/what-if") { ensureDemo(); app.innerHTML = s4(); }
+  else if ((m = h.match(/^#\/policy\/(\w+)$/))) app.innerHTML = s5(m[1]);
+  else if (h === "#/about") app.innerHTML = about();
+  else if (h === "#/privacy") app.innerHTML = privacy();
+  else app.innerHTML = notFound();
+  if (location.search.includes("annot")) document.fonts.ready.then(() => setTimeout(annotate, 600));
+}
+// 시안 그림용 미리 채우기: ?demo 를 붙이면 조건이 채워진 상태로 시작
+if (location.search.includes("pv")) S.pv = true;
+if (location.search.includes("cliff")) S.whatif = "연 소득이 오르면";
+if (location.search.includes("demo")) { S.cond = JSON.parse(JSON.stringify(demo)); S.consent = true; S.remember = true; }
+if (location.search.includes("old")) S.cond.age = 41;
+if (location.search.includes("open")) { S.open = { ex: true, ne: true }; }
+window.addEventListener("hashchange", () => { window.scrollTo(0, 0); render(); if (location.hash === "#/loading") runLoading(); });
+render(); if (location.hash === "#/loading") runLoading();
+</script>
+</body>
+</html>
