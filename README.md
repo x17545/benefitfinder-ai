@@ -102,3 +102,4 @@ python scripts/check.py
 - [프론트엔드 구조](apps/web/README.md)
 - [백엔드 구조](backend/README.md)
 - [기존 프로젝트 기획서](docs/PROJECT_PLAN.md)
+- [기능 요구 명세서 초안](docs/REQUIREMENTS.md)

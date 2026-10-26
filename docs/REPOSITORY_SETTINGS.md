@@ -58,7 +58,7 @@ CI는 PR의 합성 merge commit 대신 실제 head를 검사한다. 합성 commi
 
 ## 4. GitHub에서 관리자가 별도로 적용할 설정
 
-아래는 설정안이며 이번 로컬 문서·설정 파일 작성만으로 원격에 적용되지 않는다. 실제 저장소 권한과 요금제의 지원 범위를 확인한 후 관리자가 설정한다.
+문서·설정 파일 작성만으로 원격에 적용되지 않는다. 실제 저장소 권한과 요금제의 지원 범위를 확인한 후 관리자가 설정한다.
 
 1. 기본 브랜치는 `main`으로 유지한다.
 2. main 변경은 PR을 거치도록 하고 작성자 외 승인 1개 이상을 요구한다.
@@ -67,6 +67,21 @@ CI는 PR의 합성 merge commit 대신 실제 head를 검사한다. 합성 commi
 5. 미해결 리뷰 대화를 해결하도록 하고, main 강제 푸시·삭제를 허용하지 않는다. 관리자·봇의 불필요한 우회도 제한한다.
 6. PR 반영 방식은 squash merge를 기본으로 하고, 승인 없는 자동 병합이나 배포는 활성화하지 않는다.
 7. 코드 소유자 검토를 운영할 때는 팀원의 실제 GitHub ID와 권한을 확인해 `.github/CODEOWNERS`를 만들고 소유자 승인을 필수로 설정한다.
+
+관리자용 [main 보호 설정 파일](../.github/main-branch-protection.json)을 제공한다. 승인 1개, 새 push 시 승인 재검토, 마지막 push 작성자 외 승인, 최신 main 반영·필수 CI, 리뷰 대화 해결, 관리자에게도 규칙 적용, 강제 push·삭제 금지, 선형 이력을 설정한다. 선형 이력을 위해 PR은 squash merge로 반영한다. CODEOWNERS 승인은 실제 소유자 지정 전이므로 켜지 않는다.
+
+CI가 한 번 실행되어 `repository-checks`가 표시된 뒤, 저장소 소유자 또는 관리자가 다음 명령을 실행한다. 단순 push 권한만 있는 계정으로는 적용할 수 없다.
+
+```bash
+gh api --method PUT repos/x17545/benefitfinder-ai/branches/main/protection \
+  --input .github/main-branch-protection.json
+```
+
+적용 응답과 다음 조회에서 `strict`, `repository-checks`, 승인 수, 관리자 적용·대화 해결이 켜져 있고 강제 push·삭제가 꺼져 있는지 확인한다. 설정 파일의 존재나 API 요청 시도만으로 적용됐다고 보고하지 않는다.
+
+```bash
+gh api repos/x17545/benefitfinder-ai/branches/main/protection
+```
 
 소유자 우선 지정 대상은 `AGENTS.md`와 도구별 지침, `.github/`, `scripts/`, `contracts/`, 공통 `domain/`이다. ID가 확인되지 않아 가짜 소유자가 들어간 CODEOWNERS 파일은 만들지 않았다. 사람 이름을 GitHub ID라고 가정하지 않는다.
 
