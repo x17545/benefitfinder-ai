@@ -1,0 +1,105 @@
+{
+  "request_id": "example-request-001",
+  "domain": "youth",
+  "recommendations": [
+    {
+      "benefit": {
+        "id": "youth:example:housing-001",
+        "domain": "youth",
+        "title": "[가상] 청년 주거 지원",
+        "summary": "협업용 가상 정책입니다. 실제 지원금액·모집상태를 의미하지 않습니다.",
+        "provider": "가상 정책기관",
+        "categories": [
+          "housing"
+        ],
+        "application": {
+          "status": "unknown",
+          "starts_on": null,
+          "ends_on": null,
+          "url": null
+        },
+        "eligibility_conditions": [
+          {
+            "id": "age",
+            "description": "[가상] 만 19세 이상 34세 이하",
+            "evidence": [
+              {
+                "quote": "[가상 예제] 신청 연령은 만 19세 이상 34세 이하입니다.",
+                "location": "가상 공고: 지원 대상",
+                "source": {
+                  "url": "https://policy.example/youth/sample-housing",
+                  "checked_at": "2026-10-26T09:00:00+09:00",
+                  "document_version": "fictional-v1"
+                }
+              }
+            ]
+          },
+          {
+            "id": "income",
+            "description": "[가상] 가구 유형별 소득 기준 확인",
+            "evidence": [
+              {
+                "quote": "[가상 예제] 가구 유형별 소득 기준을 별도로 확인해야 합니다.",
+                "location": "가상 공고: 소득 조건",
+                "source": {
+                  "url": "https://policy.example/youth/sample-housing",
+                  "checked_at": "2026-10-26T09:00:00+09:00",
+                  "document_version": "fictional-v1"
+                }
+              }
+            ]
+          }
+        ],
+        "source": {
+          "url": "https://policy.example/youth/sample-housing",
+          "checked_at": "2026-10-26T09:00:00+09:00",
+          "document_version": "fictional-v1"
+        },
+        "domain_data": {}
+      },
+      "reason": "[가상 설명] 관심 분야가 주거이며 예제의 연령 조건에 해당합니다. 실제 신청 자격을 의미하지 않습니다.",
+      "condition_results": [
+        {
+          "condition_id": "age",
+          "status": "met",
+          "reason": "[가상] 입력한 나이 25세가 예제의 연령 범위에 포함됩니다.",
+          "evidence": [
+            {
+              "quote": "[가상 예제] 신청 연령은 만 19세 이상 34세 이하입니다.",
+              "location": "가상 공고: 지원 대상",
+              "source": {
+                "url": "https://policy.example/youth/sample-housing",
+                "checked_at": "2026-10-26T09:00:00+09:00",
+                "document_version": "fictional-v1"
+              }
+            }
+          ]
+        },
+        {
+          "condition_id": "income",
+          "status": "needs_review",
+          "reason": "소득과 가구 정보가 없어 확인이 필요합니다.",
+          "evidence": [
+            {
+              "quote": "[가상 예제] 가구 유형별 소득 기준을 별도로 확인해야 합니다.",
+              "location": "가상 공고: 소득 조건",
+              "source": {
+                "url": "https://policy.example/youth/sample-housing",
+                "checked_at": "2026-10-26T09:00:00+09:00",
+                "document_version": "fictional-v1"
+              }
+            }
+          ]
+        }
+      ],
+      "missing_fields": [
+        "profile.income_band",
+        "profile.household_type"
+      ]
+    }
+  ],
+  "follow_up_questions": [
+    "소득 구간과 가구 형태를 확인해 주실 수 있나요?"
+  ],
+  "ai_generated": true
+}

@@ -1,0 +1,7 @@
+{
+  "request_id": "example-request-empty",
+  "domain": "youth",
+  "recommendations": [],
+  "follow_up_questions": [],
+  "ai_generated": true
+}

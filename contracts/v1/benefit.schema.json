@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benefitfinder.example/contracts/v1/benefit.schema.json",
+  "title": "Normalized benefit",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "domain", "title", "summary", "provider", "categories", "application", "eligibility_conditions", "source", "domain_data"],
+  "properties": {
+    "id": {"type": "string", "minLength": 1},
+    "domain": {"$ref": "common.schema.json#/$defs/domain_id"},
+    "title": {"type": "string", "minLength": 1},
+    "summary": {"type": "string", "minLength": 1},
+    "provider": {"type": "string", "minLength": 1},
+    "categories": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+    "application": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "starts_on", "ends_on", "url"],
+      "properties": {
+        "status": {"enum": ["open", "closed", "upcoming", "unknown"]},
+        "starts_on": {"type": ["string", "null"], "format": "date"},
+        "ends_on": {"type": ["string", "null"], "format": "date"},
+        "url": {"type": ["string", "null"], "format": "uri", "pattern": "^https?://"}
+      }
+    },
+    "eligibility_conditions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "description", "evidence"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "description": {"type": "string", "minLength": 1},
+          "evidence": {"type": "array", "minItems": 1, "items": {"$ref": "common.schema.json#/$defs/evidence"}}
+        }
+      }
+    },
+    "source": {"$ref": "common.schema.json#/$defs/source"},
+    "domain_data": {"type": "object"}
+  }
+}
