@@ -187,6 +187,14 @@ class GitWorkflowTests(unittest.TestCase):
                 msg="\n".join(errors),
             )
 
+    def test_mixed_package_manager_lockfiles_are_rejected(self) -> None:
+        for name in ("package-lock.json", "yarn.lock", "poetry.lock", "Pipfile.lock"):
+            with self.subTest(path=name):
+                target = self.root / name
+                target.write_text("{}\n", encoding="utf-8")
+                self.assertTrue(any(name in error and "잠금 파일" in error for error in file_errors(self.root)))
+                target.unlink()
+
     def test_allow_main_rejects_non_main_branch(self) -> None:
         required = (
             "tests/test_contracts.py",

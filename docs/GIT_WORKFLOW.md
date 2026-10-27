@@ -162,13 +162,13 @@ git status
 로컬 전체 검사는 아래 명령이다.
 
 ```bash
-python scripts/check.py
+uv run --locked python scripts/check.py
 ```
 
 PR 전 검사는 아래 명령이다. 작업트리 clean 여부와 origin/main이 HEAD의 조상인지도 확인한다.
 
 ```bash
-python scripts/check.py --pr
+uv run --locked python scripts/check.py --pr
 ```
 
 --pr은 fetch하지 않는다. 그래서 직전에 git fetch origin이 필수다.

@@ -5,7 +5,7 @@
 
 ## 1. 언어와 형식
 
-### Python 기본 (공통 검사 최소 3.11+)
+### Python 기본 (3.12 · uv)
 
 - 파일·함수·변수·모듈은 snake_case, 클래스·예외는 PascalCase, 상수는 UPPER_SNAKE_CASE를 쓴다.
 - 새로 작성하거나 수정하는 함수와 public interface에는 타입 정보를 적는다. 인자·반환·공개 속성형을 생략하지 않는다. 관련 없는 기존 코드를 일괄 변경하지 않는다.
@@ -17,10 +17,10 @@
 
 - 앱 코드는 TypeScript strict를 사용한다. React 컴포넌트와 JSX는 `.tsx`, 비UI 로직·타입은 `.ts`에 둔다.
 - 컴포넌트·컴포넌트 파일·타입 이름은 PascalCase, 함수·변수는 camelCase, 훅은 `use`로 시작한다. 기존 파일의 이름을 무관한 작업에서 일괄 변경하지 않는다.
-- 웹 코드는 공백 2칸을 사용한다. 초기화 시 formatter·lint 설정을 명시하고 자동 수정으로 관계없는 파일을 바꾸지 않는다.
+- 웹 코드는 공백 2칸을 사용한다. ESLint 설정을 따르고 자동 수정으로 관계없는 파일을 바꾸지 않는다.
 - `any`, `@ts-ignore`, lint 비활성화로 타입 오류를 숨기지 않는다. 외부 입력은 `unknown`에서 검사하고 필요한 타입으로 좁힌다.
-- 계약 타입은 `contracts/v1/`을 원본으로 생성한다. `shared/types`에는 화면 전용 공용 타입을 두며 같은 API 요청·응답을 수기로 다시 정의하지 않는다.
-- npm과 `package-lock.json`을 함께 사용한다. 초기화 후 CI·깨끗한 설치는 `npm ci`로 재현하고 다른 패키지 관리자의 lockfile을 추가하지 않는다.
+- 계약 타입은 `contracts/v1/`을 원본으로 `pnpm types:generate`로 생성하고 생성물도 커밋한다. `shared/types`에는 화면 전용 공용 타입을 두며 같은 API 요청·응답을 수기로 다시 정의하지 않는다.
+- pnpm 11.25.0·Node.js 24와 `pnpm-lock.yaml`을 함께 사용한다. CI·깨끗한 설치는 `pnpm install --frozen-lockfile`로 재현한다. Python은 루트 `pyproject.toml`·`uv.lock`과 `uv sync --locked`를 사용한다. pip·npm·npx·yarn·Poetry를 섞지 않는다.
 
 ## 2. 의존성과 모듈 분리
 

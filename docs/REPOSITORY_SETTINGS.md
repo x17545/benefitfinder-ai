@@ -30,7 +30,7 @@
 
 ## 3. 현재 공통 검사의 범위
 
-`python scripts/check.py`는 다음을 확인하며 Git 상태를 변경하거나 네트워크를 호출하지 않는다.
+`uv run --locked python scripts/check.py`는 다음을 확인하며 Git 상태를 변경하지 않는다. 의존성 설치는 먼저 완료해야 하며, uv의 환경 동기화 과정은 필요 시 네트워크를 사용할 수 있다.
 
 - 허용 브랜치 이름, 미완료 merge/rebase와 충돌 상태
 - 대응하는 텍스트 형식의 UTF-8·LF·끝 개행·줄 끝 공백, 일반·diff3 충돌 마커, JSON/Python 문법, 로컬 문서 링크
@@ -39,6 +39,8 @@
 - 백엔드의 직접 import 방향과 순수 업무 모듈의 표준 라이브러리 제한
 - `tests/`와 `backend/tests/`에서 발견되는 unittest 테스트
 - 계약·ignore·Git 작업 절차·기획용 가상 계산 정답의 필수 회귀 테스트 파일 4개 유지
+- 다른 패키지 관리자 lockfile 유입·기본 프로젝트 파일 누락
+- Ruff, 생성된 계약 타입의 최신 여부, 웹 lint·타입·테스트·빌드
 
 기획용 계산 검사는 가상 정책의 정답·기간 변경·군복무 구간·조합 누락·현재가치의 기준을 확인한다. 제품 계산기나 실제 정책 판정의 구현·검증을 뜻하지 않는다.
 
@@ -46,17 +48,17 @@
 
 직접 import 검사는 동적 import·실제 호출의 의미·모든 외부 SDK 사용을 판별하지 못한다. 표준 라이브러리 안의 네트워크 호출까지 차단하는 샌드박스도 아니다. 파일 검사도 모든 비밀값·개인정보를 찾아내는 보안 검사를 대신하지 않는다.
 
-`.gitignore`는 환경 변수·자격 증명, 개발 캐시·빌드 결과, 로컬 데이터·DB 볼륨·덤프·로그를 제외한다. `data/`는 `README.md`만 공유하고 가상 자료는 `contracts/fixtures/`에 둔다. `.env.example`·npm lockfile·마이그레이션·공용 에이전트 지침은 계속 포함한다. JSON·SQL·CSV 전체를 제외해 소스나 예제를 숨기지 않는다.
+`.gitignore`는 환경 변수·자격 증명, 개발 캐시·빌드 결과, 로컬 데이터·DB 볼륨·덤프·로그를 제외한다. `data/`는 `README.md`만 공유하고 가상 자료는 `contracts/fixtures/`에 둔다. `.env.example`·`uv.lock`·`pnpm-lock.yaml`·마이그레이션·공용 에이전트 지침은 계속 포함한다. JSON·SQL·CSV 전체를 제외해 소스나 예제를 숨기지 않는다.
 
 이미 추적 중인 파일에는 `.gitignore`가 소급 적용되지 않으므로 공통 검사는 저장소의 제외 규칙에 걸리는 추적 파일도 실패로 처리한다. 검사 시 파일 내용을 출력하지 않으며, 사용자의 전역 ignore 설정은 이 차단 기준에 포함하지 않는다. 발견 시 소유와 노출 범위를 확인하고 필요한 파일만 처리한다. 이 검사는 커밋 자체를 가로막는 Git hook이 아니므로, 원격 병합 차단은 아래의 필수 CI 설정과 함께 적용한다.
 
 공식 참고: [Git의 ignore 규칙과 이미 추적 중인 파일](https://git-scm.com/docs/gitignore).
 
-React·TypeScript·Vite, FastAPI, PostgreSQL은 확정됐지만 실행 프로젝트는 아직 없다. 프론트엔드 빌드·타입·접근성 검사, 실제 API/LLM·PostgreSQL 통합과 정책 사실 검증은 아직 없다. 초기화 시 웹의 npm lockfile·`npm ci`·lint·typecheck·build와 필요한 API 검증을 공통 명령·CI에 연결한다. DB 구현 시 테스트용 PostgreSQL과 마이그레이션 검증도 연결한다. 검증 결과를 이 범위 밖의 기능 완료로 해석하지 않는다.
+React·TypeScript·Vite 개발 화면과 FastAPI 생존 확인·공통 오류 API가 있다. 설치는 `uv sync --locked`·`pnpm install --frozen-lockfile`이며 CI도 같은 도구를 쓴다. 실제 PostgreSQL·LLM 연동, 접근성 자동 검사, 정책 사실 검증은 아직 없다. DB 구현 시 테스트용 PostgreSQL과 마이그레이션 검증도 연결한다. 검증 결과를 이 범위 밖의 기능 완료로 해석하지 않는다.
 
 CI는 PR의 합성 merge commit 대신 실제 head를 검사한다. 합성 commit을 쓰면 작업자가 main을 반영하지 않아도 조상 검사를 통과할 수 있기 때문이다. PR 또는 작업 브랜치의 수동 검사 직전에 main을 다시 fetch하고 `--pr`을 실행한다. `--allow-main`은 main의 CI에서만 사용한다. 검사 이후 main이 바뀌는 상황은 아래의 최신 브랜치 필수 설정과 재검증 절차로 처리한다.
 
-공식 참고: [GitHub PR 이벤트와 merge ref](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request), [checkout](https://github.com/actions/checkout), [setup-python](https://github.com/actions/setup-python).
+공식 참고: [GitHub PR 이벤트와 merge ref](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request), [checkout](https://github.com/actions/checkout), [setup-uv](https://github.com/astral-sh/setup-uv), [pnpm setup](https://github.com/pnpm/action-setup), [setup-node](https://github.com/actions/setup-node).
 
 ## 4. 향후 관리자에게 전달할 GitHub 설정 참고
 

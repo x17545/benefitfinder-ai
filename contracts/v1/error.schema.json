@@ -2,13 +2,13 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://benefitfinder.example/contracts/v1/error.schema.json",
   "title": "Public error response",
-  "description": "코드 명명 lower_snake_case. HTTP: invalid_request=422, unsupported_domain=400, not_found=404, dependency_unavailable=503, internal_error=500, daily_limit_exceeded=429, calculation_limit_exceeded=503.",
+  "description": "코드 명명 lower_snake_case. HTTP: http_error=그 외 명시적인 HTTP 오류의 원래 상태, invalid_request=422, unsupported_domain=400, not_found=404, method_not_allowed=405, dependency_unavailable=503, internal_error=500, daily_limit_exceeded=429, calculation_limit_exceeded=503.",
   "type": "object",
   "additionalProperties": false,
   "required": ["request_id", "code", "message"],
   "properties": {
     "request_id": {"type": "string", "minLength": 1},
-    "code": {"enum": ["invalid_request", "unsupported_domain", "not_found", "dependency_unavailable", "internal_error", "daily_limit_exceeded", "calculation_limit_exceeded"]},
+    "code": {"enum": ["http_error", "invalid_request", "unsupported_domain", "not_found", "method_not_allowed", "dependency_unavailable", "internal_error", "daily_limit_exceeded", "calculation_limit_exceeded"]},
     "message": {"type": "string", "minLength": 1}
   }
 }

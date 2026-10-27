@@ -1,0 +1,26 @@
+{
+  "name": "benefitfinder-ai",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.25.0",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "preinstall": "node scripts/check-package-manager.mjs",
+    "dev": "concurrently --kill-others --names api,web \"pnpm dev:api\" \"pnpm dev:web\"",
+    "dev:api": "uv run --locked uvicorn benefitfinder.main:app --reload --reload-dir backend/src --host 127.0.0.1 --port 8000",
+    "dev:web": "pnpm --filter @benefitfinder/web dev",
+    "lint": "pnpm --filter @benefitfinder/web lint",
+    "typecheck": "pnpm --filter @benefitfinder/web typecheck",
+    "build": "pnpm --filter @benefitfinder/web build",
+    "test": "pnpm --filter @benefitfinder/web test",
+    "types:generate": "node scripts/generate-contract-types.mjs",
+    "types:check": "node scripts/generate-contract-types.mjs --check",
+    "check:web": "pnpm types:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build"
+  },
+  "devDependencies": {
+    "concurrently": "10.0.6",
+    "json-schema-to-typescript": "16.0.0"
+  }
+}

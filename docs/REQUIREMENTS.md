@@ -3,7 +3,7 @@
 
 - 문서 상태: 현행 진입점 (2026-10-28 데이터 Agent 역할 보충 설명 반영)
 - 기획 원본 작성자: 이현서 / 채택 근거: 2026-10-27 사용자의 v2 기획 유지 요청
-- 현행 상세 기준: [REQUIREMENTS_v2.md](../REQUIREMENTS_v2.md) v2.4 (데이터 Agent의 규칙 추출·검수와 사용자 코드 계산 구분)
+- 현행 상세 기준: [REQUIREMENTS_v2.md](../REQUIREMENTS_v2.md) v2.5 (데이터 Agent의 규칙 추출·검수와 사용자 코드 계산 구분)
 - 현행 기획: [PROJECT_PLAN.md](PROJECT_PLAN.md)
 - 기록 보존: 2026-10-26 이전 요구명세 원문은 [REQUIREMENTS_v1_ARCHIVE.md](REQUIREMENTS_v1_ARCHIVE.md)에 그대로 둔다. 아카이브는 현행 결정이 아니다.
 

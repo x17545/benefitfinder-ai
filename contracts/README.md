@@ -1,6 +1,6 @@
 # 공용 데이터 계약 v1 초안
 
-프론트엔드·백엔드·AI·데이터 담당자가 공유하는 JSON 교환 형식이다. `v1/`의 JSON Schema가 필드·자료형의 기준이며, `fixtures/`는 독립 개발을 위한 가상 예제다. 2026-10-27 추가 회의에 따라 초기 MVP의 수집·검색·진단·조합·상황 변화·상세는 청년 취업·주거 혜택만 다룬다. 생활·자산형성·교육·장학 등은 확장 단계다. F01~F11과 13단계 입력은 두 분야에 유지하지만, 실행 API는 아직 없고 6장 필드명/형식과 11.2 기본값(동점 순서, 취업 가정 연 소득 2,400만, 기준선 ±100만 등)은 회의 논의 초안이다. 원초안의 상위 20개 절단은 최적값을 누락할 수 있어 이번 계산 규칙 정리에서 제거했다.
+프론트엔드·백엔드·AI·데이터 담당자가 공유하는 JSON 교환 형식이다. `v1/`의 JSON Schema가 필드·자료형의 기준이며, `fixtures/`는 독립 개발을 위한 가상 예제다. 2026-10-27 추가 회의에 따라 초기 MVP의 수집·검색·진단·조합·상황 변화·상세는 청년 취업·주거 혜택만 다룬다. 생활·자산형성·교육·장학 등은 확장 단계다. F01~F11과 13단계 입력은 두 분야에 유지하지만, 정책 API는 아직 없고 6장 필드명/형식과 11.2 기본값(동점 순서, 취업 가정 연 소득 2,400만, 기준선 ±100만 등)은 회의 논의 초안이다. 원초안의 상위 20개 절단은 최적값을 누락할 수 있어 이번 계산 규칙 정리에서 제거했다.
 
 ## 파일
 
@@ -17,6 +17,7 @@
 | `options.schema.json` | `options.json` | 지역·구간 선택지 |
 | `sse-progress.schema.json` | `sse-progress.json` | SSE 진행 이벤트 data |
 | `error.schema.json` | `error.json` | 오류 응답 |
+| `health.schema.json` | - | GET /health 생존 확인 응답 |
 | `common.schema.json` | 위 예제에 포함 | 분야 식별자·출처·인용 근거 |
 
 모든 파일은 JSON Schema Draft 2020-12를 사용한다. `$id`의 `benefitfinder.example` 주소는 로컬 참조 식별자이며 실제 서버 주소가 아니다. 검증 시 스키마를 로컬 레지스트리에 등록하므로 원격 문서를 조회하지 않는다.
@@ -66,40 +67,43 @@
 
 이 규칙은 기능 구현 시 애플리케이션·분야 테스트로 검증한다. 구조 검증 통과를 자격 판정의 정확성으로 해석하지 않는다.
 
-## 예정 HTTP 매핑
+## HTTP 매핑 (현재 구현: GET /health, 나머지는 예정)
 
 | 방식 | 주소 | 하는 일 | 응답 |
 |---|---|---|---|
 | GET | `/api/v1/meta` | 갱신 시각·기준금리·남은 횟수 | `meta` |
 | GET | `/api/v1/options` | 지역·구간 선택지 | `options` |
 | POST | `/api/v1/recommendations` | 분석 시작. SSE `progress` 여러 번 후 최종 `result` 한 번(또는 `error`) | `recommendation-response` |
-
-SSE 오류 규칙: HTTP 헤더를 보내기 전 오류는 해당 상태코드+`error` 스키마로 응답하고 스트림을 열지 않는다. 스트림 시작 후 오류는 SSE `error` 이벤트 1회로 알리고 스트림을 종료하며, 그 뒤에 `result`를 보내지 않는다.
 | POST | `/api/v1/simulations` | 상황 변화 계산 | `simulation-response` |
 | GET | `/api/v1/benefits/{benefit_id}` | 정책 상세 | `benefit` |
-| GET | `/health` | 생존 확인 | 200 |
+| GET | `/health` | 생존 확인(liveness 전용, DB-ready 보장 안 함) | `health` |
+
+SSE 오류 규칙: HTTP 헤더를 보내기 전 오류는 해당 상태코드+`error` 스키마로 응답하고 스트림을 열지 않는다. 스트림 시작 후 오류는 SSE `error` 이벤트 1회로 알리고 스트림을 종료하며, 그 뒤에 `result`를 보내지 않는다.
 
 | `code` | 상태 | 언제 |
 |---|---|---|
+| `http_error` | 원래 HTTP 상태 | 아래 기본 매핑에 없는 명시적 HTTP 오류(400·401·403·418·429·502 등) |
 | `invalid_request` | 422 | 필수 값 없음, 범위 밖 값 |
 | `unsupported_domain` | 400 | 미지원 분야 |
-| `not_found` | 404 | 없는 정책 ID |
+| `not_found` | 404 | 없는 경로·정책 ID |
+| `method_not_allowed` | 405 | 지원하지 않는 HTTP 메서드 |
 | `daily_limit_exceeded` | 429 | 하루 100회 초과 |
 | `dependency_unavailable` | 503 | LLM·임베딩·외부 API 실패 |
 | `calculation_limit_exceeded` | 503 | 계산 상한 초과 |
 | `internal_error` | 500 | 계산·DB 등 내부 오류 |
 
-웹 프레임워크의 기본 오류 형식도 위 공통 오류로 변환한다. 아직 이 경로와 상태 매핑은 구현하지 않았다.
+웹 프레임워크의 기본 오류 형식도 위 공통 오류로 변환한다. FastAPI 부트스트랩은 명시적인 `HTTPException`의 상태코드와 `Retry-After`·`WWW-Authenticate`·`Allow` 등 응답 헤더를 보존한다. 본문을 JSON으로 교체하므로 Content-Type·Content-Length는 재생성하고 기존 Content-Encoding·Transfer-Encoding은 전달하지 않는다. 기본 코드는 404→`not_found`, 405→`method_not_allowed`, 422→`invalid_request`, 500→`internal_error`, 503→`dependency_unavailable`, 나머지는 `http_error`다. HTTP 상태만으로 미지원 분야·하루 사용량 초과·계산 상한 초과를 추정하지 않으며, 이 업무 오류는 기능 구현 시 명시적으로 분류한다. 요청 검증 오류는 422, 예기치 않은 일반 예외는 500으로 반환한다. 오류마다 UUID `request_id`를 부여하고 입력값·예외 원문을 포함하지 않는다.
 
 ## 변경과 검증
 
 같은 PR에서 스키마·가상 예제·관련 소비자 코드를 수정하고 영향받는 담당자와 검토한다. 필수 필드 추가, 필드 제거·의미 변경, 열거형 변경은 호환성 영향을 확인한다. 공개 후 호환이 깨지는 변경은 새 버전으로 관리한다.
 
-이번 정리(v1 초안 내, 배포된 소비자·실행 API 없음 — 미배포 형식 변경): 미배포 `request.limit` 호환 필드 삭제, 지역 중복 제거(`region_code` SSOT, `domain_data.region`은 `sido_code`만), 요청 `message` 필드 삭제(문장 입력 없음, 13단계 단일 계약), 응답 `follow_up_questions` 필드 삭제(결과 추가 질문 없음, 빈 배열 포함 전부 거부), 기간+현재가치 옵션은 `request.options` 단일 위치로 정리(`domain_data.options` 삭제, 시뮬레이션 요청에도 동일 `options`), 탭별 계산 가능 표시(`calculation_status`+`unavailable_reason`, 스키마 강제; `portfolio.total_status` 삭제, 합계 미상은 `unavailable` 분기로), 시뮬레이션 응답은 선택 기간 카드합(`before/after_total_won`)+연간 환산(`annual`) 분리 및 `income_change.assumption_note` 필수, 시뮬레이션 `todo`는 `evidence` 1개 이상 필수, 조합 목록(`fallback_list`)은 6.3 예시처럼 선택 탭별 `result_view` 안으로 이동(전역 `view`는 초기 기준), 오류 코드 2종(`daily_limit_exceeded`, `calculation_limit_exceeded`) 추가. 기존 `profile` 공통 필드, `source`/`evidence`, `met`/`not_met` 근거 필수, `needs_review`, 오프라인 `$ref` 검증은 유지된다. `ai_generated` boolean(템플릿 false 기본)+`ai_reason` 설명 일반화, SSE `step` 일반 처리 단계 예시.
+이번 정리(v1 초안 내, 배포된 소비자·정책 API 없음 — 미배포 형식 변경): 미배포 `request.limit` 호환 필드 삭제, 지역 중복 제거(`region_code` SSOT, `domain_data.region`은 `sido_code`만), 요청 `message` 필드 삭제(문장 입력 없음, 13단계 단일 계약), 응답 `follow_up_questions` 필드 삭제(결과 추가 질문 없음, 빈 배열 포함 전부 거부), 기간+현재가치 옵션은 `request.options` 단일 위치로 정리(`domain_data.options` 삭제, 시뮬레이션 요청에도 동일 `options`), 탭별 계산 가능 표시(`calculation_status`+`unavailable_reason`, 스키마 강제; `portfolio.total_status` 삭제, 합계 미상은 `unavailable` 분기로), 시뮬레이션 응답은 선택 기간 카드합(`before/after_total_won`)+연간 환산(`annual`) 분리 및 `income_change.assumption_note` 필수, 시뮬레이션 `todo`는 `evidence` 1개 이상 필수, 조합 목록(`fallback_list`)은 6.3 예시처럼 선택 탭별 `result_view` 안으로 이동(전역 `view`는 초기 기준), 오류 코드 2종(`daily_limit_exceeded`, `calculation_limit_exceeded`) 추가. 기존 `profile` 공통 필드, `source`/`evidence`, `met`/`not_met` 근거 필수, `needs_review`, 오프라인 `$ref` 검증은 유지된다. `ai_generated` boolean(템플릿 false 기본)+`ai_reason` 설명 일반화, SSE `step` 일반 처리 단계 예시.
 
 ```bash
-python -m pip install -r requirements-dev.txt
-python -m unittest discover -s tests -v
+uv sync --locked
+uv run --locked python scripts/check.py
+pnpm types:generate  # 스키마 변경 후 생성 타입도 커밋
 ```
 
 명령은 저장소 루트와 개발 가상환경에서 실행한다. 검증은 스키마 참조, 예제 형식, 미확인값·근거·확장 분야의 회귀 사례를 다룬다. 예제의 정책·기관·주소·조건·문서 버전은 모두 가상값이다.
