@@ -1,4 +1,4 @@
-> 이 파일은 2026-10-27 기준 PROJECT_PLAN v1.1 원문의 기록 보존용 아카이브다. 현행 결정이 아니다. 현행 기획은 [PROJECT_PLAN.md](PROJECT_PLAN.md), 현행 요구명세 진입점은 [REQUIREMENTS.md](REQUIREMENTS.md), 상세 기준은 [REQUIREMENTS_v2.md](../REQUIREMENTS_v2.md)를 본다. 이 파일 본문은 원문 그대로 둔다.
+> 이 파일은 2026-10-27 기준 PROJECT_PLAN v1.1 원문의 기록 보존용 아카이브다. 현행 결정이 아니다. 현행 기획은 [PROJECT_PLAN.md](../product/OVERVIEW.md), 현행 요구명세 진입점은 [REQUIREMENTS.md](../README.md), 상세 기준은 [REQUIREMENTS_v2.md](../product/REQUIREMENTS.md)를 본다. 이 파일 본문은 원문 그대로 둔다.
 >
 
 # AI 혜택 코치 (BenefitFinder AI)
@@ -12,7 +12,7 @@
 - 제출 마감일: 2026-11-25
 - 문서 상태: 팀 회의 의견 반영 초안 (MVP 대상·역할 분담·기술 스택 반영, 세부 범위 추가 검토 예정)
 
-> 2026-10-27 반영: 첫 MVP는 청년정책·청년 대상 혜택에 집중하고, 다른 분야의 혜택은 scale up 단계에서 추가한다. 팀 역할은 11장에 반영했다. React + TypeScript + Vite, Python + FastAPI, PostgreSQL을 확정했으며, 아래의 세부 기능·지원 지역·정책 수와 나머지 도구는 검토안이다. 현재 기술 결정과 구조는 [아키텍처](ARCHITECTURE.md), 작업 경계는 [협업 규칙](CONTRIBUTING.md)을 참고한다.
+> 2026-10-27 반영: 첫 MVP는 청년정책·청년 대상 혜택에 집중하고, 다른 분야의 혜택은 scale up 단계에서 추가한다. 팀 역할은 11장에 반영했다. React + TypeScript + Vite, Python + FastAPI, PostgreSQL을 확정했으며, 아래의 세부 기능·지원 지역·정책 수와 나머지 도구는 검토안이다. 현재 기술 결정과 구조는 [아키텍처](../architecture/ARCHITECTURE.md), 작업 경계는 [협업 규칙](../../CONTRIBUTING.md)을 참고한다.
 
 ---
 
@@ -969,7 +969,7 @@ Must 기능별로 최소 1개 이상의 정상 테스트를
 
 ### 10.2 확정 기술 스택과 추가 선택 사항
 
-2026-10-27 React + TypeScript + Vite, Python + FastAPI, PostgreSQL 조합을 확정했다. 상세 결정은 [아키텍처 9장](ARCHITECTURE.md#9-기술-선택과-검증-범위)을 기준으로 한다. 스택 확정은 실행 프로젝트 초기화 완료를 뜻하지 않는다.
+2026-10-27 React + TypeScript + Vite, Python + FastAPI, PostgreSQL 조합을 확정했다. 상세 결정은 [아키텍처 9장](../architecture/ARCHITECTURE.md#9-기술-선택과-검증-범위)을 기준으로 한다. 스택 확정은 실행 프로젝트 초기화 완료를 뜻하지 않는다.
 
 | 영역 | 선택 | 상태 |
 |---|---|---|
@@ -1153,7 +1153,7 @@ RAG 검색에 사용할 정책 설명을 저장한다.
 | 윤정찬 | 데이터 수집, 정제 | 공식 정책 데이터 수집·정제, 자격 조건과 출처 관리, 백엔드와 DB 데이터 구조 협의 |
 
 역할별 주 작업 경계와 공통 영역 변경 절차는
-[협업 규칙](CONTRIBUTING.md)을 따른다.
+[협업 규칙](../../CONTRIBUTING.md)을 따른다.
 
 각 팀원은 담당 기능의 코드, 데이터,
 테스트 결과 및 관련 문서를 관리한다.
@@ -1187,7 +1187,7 @@ GitHub Issue, Commit, Pull Request 등으로 기록한다.
 
 PR 전에는 작업 브랜치에서 최신 `origin/main`을 merge하고,
 충돌 해결·검증을 마친다. 상태별 명령과 완료 기준은
-[Git 작업 절차](GIT_WORKFLOW.md)를 따른다.
+[Git 작업 절차](../development/GIT_WORKFLOW.md)를 따른다.
 
 ### 11.4 개발 일정
 

@@ -112,7 +112,7 @@ git add <명시-경로-1> <명시-경로-2>
 git commit -m "type(scope): 한국어 설명"
 ```
 
-명시 경로는 실제 파일 경로로 바꾼다(예: git add docs/GIT_WORKFLOW.md).
+명시 경로는 실제 파일 경로로 바꾼다(예: git add docs/development/GIT_WORKFLOW.md).
 커밋 전 `git diff --cached`로 실제 포함 내용을 읽고, 전후 `git status`로 범위를 확인한다. 남의 파일이 섞였으면 해당 경로만 unstage하고 보존한다. `git add .`, `git add -A`, `git commit -a`는 사용하지 않는다.
 
 ## 8. 완료 전 main 동기화
@@ -235,4 +235,4 @@ git branch -d feat/ai-policy-search
 
 PR을 올린 뒤에는 CI·리뷰 결과를 확인해 문제를 해결하고, 작성자 외 최소 1명의 리뷰가 끝나면 main 병합을 요청한다. 명시적 병합 승인 전에는 에이전트가 직접 병합하지 않는다.
 
-관련 문서: [개발 시작](../README.md), [협업 규칙](CONTRIBUTING.md), [운영 설정](REPOSITORY_SETTINGS.md).
+관련 문서: [개발 시작](../../README.md), [협업 규칙](../../CONTRIBUTING.md), [운영 설정](REPOSITORY_SETTINGS.md).

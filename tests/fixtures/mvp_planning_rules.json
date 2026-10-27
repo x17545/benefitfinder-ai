@@ -1,6 +1,6 @@
 {
   "meta": {
-    "source": "REQUIREMENTS_v2.md 8.3 v2.2",
+    "source": "docs/product/REQUIREMENTS.md 8.3",
     "unit": "won",
     "note": "All amounts are integers in KRW (won). Planning tables state values in man-won; this fixture stores won = man_won * 10000. Virtual planning data for first-MVP answer regression only, not real policy data. No personal, customer, or key material.",
     "planning_scope": "First MVP: youth employment and housing only (P1, P3, P6). Life, asset, and education expansion excluded from MVP ranking. F01-F11, 13-step choice input maintained. Existing 5-policy fixture (tests/fixtures/planning_rules.json) is retained as history and expansion regression data."

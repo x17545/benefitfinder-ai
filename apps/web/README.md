@@ -1,8 +1,10 @@
 # 프론트엔드
 
+작업 전에는 루트 지침과 이 경로의 [추가 에이전트 지침](AGENTS.md)을 함께 읽는다.
+
 주 담당은 기획·프론트엔드다. 다른 영역 기여는 협업 규칙에 따라 조율한다.
 
-화면·문구·동작의 원본은 [기획 명세 v2](../../REQUIREMENTS_v2.md)다. 선택지 13단계, 진행 상태, 조합·현재가치·상황 변화, 상세·빈 결과·오류, 기억하기·이미지 저장·이용 통계를 구현 대상으로 한다. [HTML 시안](../../docs/prototype/index.html)과 설계 이미지는 가상 데이터를 쓰는 화면 자료이며 제품 코드는 React로 작성한다.
+화면·문구·동작의 원본은 [기획 명세 v2](../../docs/product/REQUIREMENTS.md)다. 선택지 13단계, 진행 상태, 조합·현재가치·상황 변화, 상세·빈 결과·오류, 기억하기·이미지 저장·이용 통계를 구현 대상으로 한다. [HTML 시안](../../docs/prototype/index.html)과 설계 이미지는 가상 데이터를 쓰는 화면 자료이며 제품 코드는 React로 작성한다.
 
 ## 확정 스택
 
@@ -58,7 +60,7 @@ pnpm --filter @benefitfinder/web preview        # 빌드 결과 미리보기
 pnpm --filter @benefitfinder/web test           # vitest run
 ```
 
-첫 설치는 루트에서 `pnpm install --frozen-lockfile`로 한다. 계약 타입은 이미 포함돼 있다. 계약 변경 후 `pnpm types:generate`를 실행하고 결과도 커밋한다. `pnpm check:web`로 전체 웹 검사를 실행한다. 설치·의존성 추가는 [시작 안내](../../docs/GETTING_STARTED.md)를 따른다.
+첫 설치는 루트에서 `pnpm install --frozen-lockfile`로 한다. 계약 타입은 이미 포함돼 있다. 계약 변경 후 `pnpm types:generate`를 실행하고 결과도 커밋한다. `pnpm check:web`로 전체 웹 검사를 실행한다. 설치·의존성 추가는 [시작 안내](../../docs/development/GETTING_STARTED.md)를 따른다.
 
 ## 실행 주소와 개발 시작 화면
 
@@ -98,6 +100,6 @@ pnpm --filter @benefitfinder/web test           # vitest run
 - `test`는 `vitest run`이며 `tests/` 아래 health client의 실패·응답 검증 테스트를 둔다.
 - 기능과 회귀 테스트는 필요해졌을 때 추가한다. 문서 변경에는 더미 테스트를 쓰지 않는다.
 
-상세 설계는 [아키텍처 문서](../../docs/ARCHITECTURE.md)를 참고한다.
+상세 설계는 [아키텍처 문서](../../docs/architecture/ARCHITECTURE.md)를 참고한다.
 
-추가 회의에 따라 초기 MVP의 관심 선택·결과·상세는 취업·주거 두 분류만 노출한다. 설계 PNG는 이전 범위를 포함한 화면 이력이며 현재 문구와 가상 금액은 명세 v2.2 및 클릭 시안을 따른다.
+추가 회의에 따라 초기 MVP의 관심 선택·결과·상세는 취업·주거 두 분류만 노출한다. 설계 PNG는 이전 범위를 포함한 화면 이력이며 현재 문구와 가상 금액은 [현행 기능 명세](../../docs/product/REQUIREMENTS.md)를 따른다. 클릭 시안도 참고 자료이며 명세와 다르면 명세를 기준으로 맞춘다.

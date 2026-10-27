@@ -1,6 +1,6 @@
 # 아키텍처 설계
 
-설계 갱신일: 2026-10-28. **React + TypeScript + Vite, Python + FastAPI, PostgreSQL**을 확정했다. 기능·화면은 [기획 명세 v2](../REQUIREMENTS_v2.md)를 따른다. 이 문서는 그 기획을 구현할 위치와 경계를 정하며, React/Vite 개발 화면과 FastAPI 생존 확인·공통 오류를 초기화했다. 정책 기능·DB·수집/Agent 구현은 후속 작업이다. 기술 결정의 원본은 9장이다.
+설계 갱신일: 2026-10-28. **React + TypeScript + Vite, Python + FastAPI, PostgreSQL**을 확정했다. 기능·화면은 [기획 명세 v2](../product/REQUIREMENTS.md)를 따른다. 이 문서는 그 기획을 구현할 위치와 경계를 정하며, React/Vite 개발 화면과 FastAPI 생존 확인·공통 오류를 초기화했다. 정책 기능·DB·수집/Agent 구현은 후속 작업이다. 기술 결정의 원본은 9장이다.
 
 ## 1. 설계 기준
 
@@ -11,6 +11,8 @@
 - 핵심은 사용자 조건과 정책 간 중복 수급 제한을 반영해 지원금 조합을 총액순으로 비교하는 것이다. 데이터 준비에는 Agent를 활용한 원문 분석·규칙 후보 추출을 계획하며, 검수 후 게시된 규칙으로 사용자 요청의 검색·판정·계산을 수행한다. 구체 모델·Agent 도구는 미정이고 RAG·벡터 검색은 별도 필요에 따라 정한다.
 
 ## 2. 구성과 실행 흐름
+
+아래는 목표 구조다. 현재 실행 가능한 부분과 후속 구현은 [구현 상태](../README.md#구현-상태)에서 구분한다.
 
 ```mermaid
 flowchart TD
@@ -67,7 +69,7 @@ flowchart TD
 
 취업(`employment`)·주거(`housing`)는 `youth` 안의 정책 분류다. 활성 분류를 청년 모듈의 설정·검수 기준으로 관리하고 수집·검색·판정·조합·상황 변화·상세·입력 선택에 일관되게 적용한다. 다른 청년 분류를 추가할 때는 같은 모듈과 공용 모델을 확장한다. 공식 분류 매핑이나 복합 정책의 포함 여부가 불명확하면 검수로 확인하고, 이름에 취업·주거 단어가 있다는 이유만으로 범위에 넣지 않는다.
 
-실제 하위 경로는 [프론트엔드 구조](../apps/web/README.md)와 [백엔드 구조](../backend/README.md)를 따른다. 현재는 빈 패키지·자리표시자와 안내 문서이며, `main.tsx`·`vite.config.ts`·FastAPI `main.py`·DB 연결 코드는 초기화할 때 추가한다.
+실제 하위 경로는 [프론트엔드 구조](../../apps/web/README.md)와 [백엔드 구조](../../backend/README.md)를 따른다. `main.tsx`·`vite.config.ts`·FastAPI `main.py`·`bootstrap.py`와 생존 확인·공통 오류 처리는 구현했다. 정책 기능용 패키지는 경계·자리표시자가 중심이며 DB 연결 코드는 아직 없다.
 
 ## 4. 의존성 규칙
 
@@ -76,7 +78,7 @@ flowchart TD
 3. `application/`은 공통 `domain/`과 자기 모듈의 인터페이스로 흐름을 조율한다. 분야별 구체 구현·DB·LLM 클래스는 import하지 않고 조립 지점에서 주입받는다.
 4. `ai/`, `ingestion/`, `infrastructure/`는 공통 모델과 `application/`의 인터페이스에 맞춰 구현한다. 서로의 내부 파일을 직접 호출하지 않는다.
 5. `api/`는 사용 사례를 호출한다. FastAPI 라우터 안에 추천, 프롬프트, 수집 로직이나 SQL을 넣지 않는다. 요청 의존성 함수는 이미 조립된 객체를 꺼내 연결하고, 구체 DB·LLM 어댑터를 직접 import하거나 생성하지 않는다.
-6. 구체 구현의 연결은 향후 `backend/src/benefitfinder/bootstrap.py`에서 수행한다. 이 파일과 실행 진입점만 조립을 위해 여러 구현 모듈을 참조한다.
+6. 구체 구현의 연결은 `backend/src/benefitfinder/bootstrap.py`에서 수행한다. 현재는 FastAPI 앱·생존 확인·공통 오류를 조립하며, 정책·DB·Agent 구현은 이 경계 안에서 추가한다. 이 파일과 실행 진입점만 조립을 위해 여러 구현 모듈을 참조한다.
 7. `jobs/`는 수집 흐름을 실행한다. 출처별 파싱이나 데이터 정제 로직은 `ingestion/`에 둔다.
 
 사용자 요청의 검색·상세 조회·판정은 일반 application 사용 사례로 조율한다. 데이터 준비의 Agent는 추출 인터페이스를 통해 연결하고 ingestion이 ai 내부를 직접 import하지 않는다. AI 모듈이 API 라우터나 애플리케이션 전체를 재호출하지 않게 해 순환 의존을 피한다. AI 초안을 검수 없이 게시하거나 판정 코드가 정한 결과를 덮어쓰지 않는다.
@@ -126,13 +128,13 @@ flowchart TD
 
 DB 스키마 변경은 `backend/migrations/versions/`에 이력으로 관리한다. 애플리케이션 import·서버 시작 시 자동 테이블 생성으로 마이그레이션을 대신하지 않는다. DB 연결 설정은 백엔드 환경 변수로만 전달하며 프론트엔드 `VITE_*`·번들·공개 파일에 넣지 않는다. PostgreSQL 연동은 별도 테스트 DB로 검증하고 실제 사용자·운영 DB를 테스트에 사용하지 않는다.
 
-## 7. 예정 API 경계
+## 7. API 경계와 구현 상태
 
-아래는 기획 명세 v2를 기존 버전 경계에 맞춘 API 설계이며 아직 구현하지 않았다. 현재 개발용 필드·자료형과 이벤트 데이터의 원본은 `contracts/v1/`이다. 6장의 필드·형식과 11.2의 임시 기본값은 다음 회의에서 확인할 초안으로 유지한다.
+`GET /health`는 구현했다. 아래 `/api/v1` 정책 경로는 기획 명세를 버전 경계에 맞춘 설계이며 아직 구현하지 않았다. 현재 개발용 필드·자료형과 이벤트 데이터의 원본은 `contracts/v1/`이다. 6장의 필드·형식과 11.2의 임시 기본값은 다음 회의에서 확인할 초안으로 유지한다.
 
 | Method | 경로 | 용도 |
 |---|---|---|
-| GET | `/health` | 서버 동작 확인 |
+| GET | `/health` | 서버 동작 확인 (구현됨, DB 준비 확인 아님) |
 | GET | `/api/v1/meta` | 마지막 갱신·기준금리·분석 이용량 정보 |
 | GET | `/api/v1/options` | 지역 코드와 선택지·금액 구간 |
 | POST | `/api/v1/recommendations` | 선택 조건으로 분석, SSE 진행·조합 결과 |
@@ -141,7 +143,7 @@ DB 스키마 변경은 `backend/migrations/versions/`에 이력으로 관리한�
 
 지원 분야는 초기 `youth` 하나다. 계약이 다른 분야 식별자를 허용하더라도, 서버는 아직 지원하지 않는 분야에 `unsupported_domain` 오류를 반환해야 한다. 입력 오류는 `invalid_request`, 의존 서비스 장애는 `dependency_unavailable`처럼 구분한다. 상세 HTTP 상태는 `contracts/README.md`를 따른다.
 
-분석은 JSON 본문의 선택 조건과 `Accept: text/event-stream`을 받는 POST로 설계한다. 브라우저는 `fetch` 응답 스트림을 읽고 UTF-8 SSE 메시지의 `progress`·최종 `result` 또는 `error`를 처리한다. native `EventSource`의 URL에 프로필을 넣지 않는다. 마지막 이벤트 한 번 후 종료하며 청크 경계와 이벤트 경계가 같다고 가정하지 않는다. 취소·최대 60초 타임아웃·재시도에 따른 사용량 처리는 서버 초기화 시 검증한다. [SSE 형식](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events), [Fetch 응답 스트리밍](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch#streaming_the_response_body)을 참고한다.
+분석은 JSON 본문의 선택 조건과 `Accept: text/event-stream`을 받는 POST로 설계한다. 브라우저는 `fetch` 응답 스트림을 읽고 UTF-8 SSE 메시지의 `progress`·최종 `result` 또는 `error`를 처리한다. native `EventSource`의 URL에 프로필을 넣지 않는다. 마지막 이벤트 한 번 후 종료하며 청크 경계와 이벤트 경계가 같다고 가정하지 않는다. 취소·최대 60초 타임아웃·재시도에 따른 사용량 처리는 정책 API 구현 시 검증한다. [SSE 형식](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events), [Fetch 응답 스트리밍](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch#streaming_the_response_body)을 참고한다.
 
 상세 GET은 정책의 공개 정보만 반환한다. 서버에 프로필을 저장하지 않으므로 선택 후의 진단은 현재 분석 응답에서 연결하고, 조건 없는 직접 상세 접근에는 조건 입력 안내를 보여 준다. 사용자 조건을 URL·쿼리 문자열에 싣지 않는다.
 
@@ -198,10 +200,10 @@ pgvector는 PostgreSQL에서 의미 검색이 필요해질 때 검토하는 선�
 
 ### 구현·검증 상태
 
-- `pnpm dev`가 Vite(5173)와 FastAPI(8000)를 함께 실행한다. `bootstrap.create_app()`에서 서버를 조립하고 `main:app`을 ASGI 진입점으로 쓴다. `/health`와 `/docs`만 기본 제공하며 정책 API·DB 연결·마이그레이션·Agent는 아직 없다.
-- `pyproject.toml`·`uv.lock`은 Python, 루트/웹 `package.json`·`pnpm-workspace.yaml`·`pnpm-lock.yaml`은 웹 실행·의존성을 정의한다. 공유 의존성은 담당 영역과 조율한다. `pip`·`npm` 설치나 별도 lockfile을 추가하지 않는다. 실행 안내는 [처음 개발 시작하기](GETTING_STARTED.md)를 따른다.
+- `pnpm dev`가 Vite(5173)와 FastAPI(8000)를 함께 실행한다. `bootstrap.create_app()`에서 서버를 조립하고 `main:app`을 ASGI 진입점으로 쓴다. 생존 확인(`/health`)과 FastAPI 문서(`/docs`·`/redoc`·`/openapi.json`), 공통 오류 처리를 기본 제공하며 정책 API·DB 연결·마이그레이션·Agent는 아직 없다.
+- `pyproject.toml`·`uv.lock`은 Python, 루트/웹 `package.json`·`pnpm-workspace.yaml`·`pnpm-lock.yaml`은 웹 실행·의존성을 정의한다. 공유 의존성은 담당 영역과 조율한다. `pip`·`npm` 설치나 별도 lockfile을 추가하지 않는다. 실행 안내는 [처음 개발 시작하기](../development/GETTING_STARTED.md)를 따른다.
 - `contracts/v1/*.schema.json`에서 `json-schema-to-typescript`로 `apps/web/src/shared/api/generated/*.ts`를 생성한다. `pnpm types:generate` 후 생성물을 커밋한다. `pnpm types:check`는 최신 여부를 검사하며 실제 HTTP의 Pydantic 모델과 JSON Schema 일치는 API 테스트로 확인한다.
-- `uv run --locked python scripts/check.py`는 Git·파일·직접 import·계약·가상 계산 정답·API HTTP·Ruff·웹 lint/타입/테스트/빌드를 검사한다. PR 준비 검사는 `--pr`이며 자세한 범위는 [저장소 운영 설정](REPOSITORY_SETTINGS.md)을 따른다. CI는 두 lockfile로 설치한 뒤 같은 검사를 실행한다.
+- `uv run --locked python scripts/check.py`는 Git·파일·직접 import·계약·가상 계산 정답·API HTTP·Ruff·웹 lint/타입/테스트/빌드를 검사한다. PR 준비 검사는 `--pr`이며 자세한 범위는 [저장소 운영 설정](../development/REPOSITORY_SETTINGS.md)을 따른다. CI는 두 lockfile로 설치한 뒤 같은 검사를 실행한다.
 - PostgreSQL 저장소 구현 후에는 테스트 DB에서 마이그레이션·읽기·쓰기를 검증한다. `/health` 성공을 DB 준비 완료나 정책 계산 검증으로 해석하지 않는다.
 - 기능 구현 후에는 판정·설명·원문 근거 일치 검증, 수집·정제 데이터 품질 검사, 필요한 웹 통합 테스트를 각 영역에 추가한다. 현재 공통 검사 통과가 이 검증들을 대신하지 않는다.
 

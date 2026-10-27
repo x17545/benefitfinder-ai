@@ -1,10 +1,12 @@
+> 과거 기록: 문서 정리 전 요구명세 진입 안내 v2.5 전체 본문이다. 구현 기준으로 사용하지 않는다. 현행 기준은 [문서 지도](../README.md)에서 확인한다. 아래 본문의 경로·구현 상태·결정 문구는 당시 기록이며, Markdown 링크만 이동 후 위치에 맞췄다.
+
 # AI 혜택 코치 (BenefitFinder AI)
 ## 기능 요구 명세서 (현행 진입점)
 
 - 문서 상태: 현행 진입점 (2026-10-28 데이터 Agent 역할 보충 설명 반영)
 - 기획 원본 작성자: 이현서 / 채택 근거: 2026-10-27 사용자의 v2 기획 유지 요청
-- 현행 상세 기준: [REQUIREMENTS_v2.md](../REQUIREMENTS_v2.md) v2.5 (데이터 Agent의 규칙 추출·검수와 사용자 코드 계산 구분)
-- 현행 기획: [PROJECT_PLAN.md](PROJECT_PLAN.md)
+- 현행 상세 기준: [REQUIREMENTS_v2.md](../product/REQUIREMENTS.md) v2.5 (데이터 Agent의 규칙 추출·검수와 사용자 코드 계산 구분)
+- 현행 기획: [PROJECT_PLAN.md](../product/OVERVIEW.md)
 - 기록 보존: 2026-10-26 이전 요구명세 원문은 [REQUIREMENTS_v1_ARCHIVE.md](REQUIREMENTS_v1_ARCHIVE.md)에 그대로 둔다. 아카이브는 현행 결정이 아니다.
 
 이 문서는 결정이 아니라 안내이다. 두 요구명세가 권한 경쟁을 하지 않도록, 구현과 검증의 기준은 REQUIREMENTS_v2.md 하나로 둔다. 화면과 데이터 형식, 기능별 처리 규칙을 이 문서에서 따로 정의하지 않는다.
@@ -17,13 +19,13 @@
 
 | 사람 | 먼저 읽을 곳 |
 |---|---|
-| 전체 흐름 파악 | [PROJECT_PLAN.md](PROJECT_PLAN.md) 1장부터 5장 |
-| 화면 설계와 문구 | [REQUIREMENTS_v2.md](../REQUIREMENTS_v2.md) 4장 |
-| 기능별 처리 규칙과 완료 기준 | [REQUIREMENTS_v2.md](../REQUIREMENTS_v2.md) 5장 |
-| 데이터 형식과 API | [REQUIREMENTS_v2.md](../REQUIREMENTS_v2.md) 6장 (필드 이름과 자료형은 다음 회의 확정 대상, 현재 개발 초안 기준) |
-| 품질과 안전, 테스트 | [REQUIREMENTS_v2.md](../REQUIREMENTS_v2.md) 7장과 8장 |
-| 담당과 협업 | [REQUIREMENTS_v2.md](../REQUIREMENTS_v2.md) 9장, [CONTRIBUTING.md](CONTRIBUTING.md) |
-| 사용자 테스트 진행 | [USER_TEST.md](USER_TEST.md) |
+| 전체 흐름 파악 | [PROJECT_PLAN.md](../product/OVERVIEW.md) 1장부터 5장 |
+| 화면 설계와 문구 | [REQUIREMENTS_v2.md](../product/REQUIREMENTS.md) 4장 |
+| 기능별 처리 규칙과 완료 기준 | [REQUIREMENTS_v2.md](../product/REQUIREMENTS.md) 5장 |
+| 데이터 형식과 API | [REQUIREMENTS_v2.md](../product/REQUIREMENTS.md) 6장 (필드 이름과 자료형은 다음 회의 확정 대상, 현재 개발 초안 기준) |
+| 품질과 안전, 테스트 | [REQUIREMENTS_v2.md](../product/REQUIREMENTS.md) 7장과 8장 |
+| 담당과 협업 | [REQUIREMENTS_v2.md](../product/REQUIREMENTS.md) 9장, [CONTRIBUTING.md](../../CONTRIBUTING.md) |
+| 사용자 테스트 진행 | [USER_TEST.md](../product/USER_TEST.md) |
 
 ---
 
@@ -71,15 +73,15 @@
 
 | 내용 | 원본 |
 |---|---|
-| 현행 기획 | [PROJECT_PLAN.md](PROJECT_PLAN.md) |
-| 현행 상세 요구 | [REQUIREMENTS_v2.md](../REQUIREMENTS_v2.md) |
-| 아키텍처와 모듈 경계 | [ARCHITECTURE.md](ARCHITECTURE.md) |
-| 협업과 리뷰 절차 | [CONTRIBUTING.md](CONTRIBUTING.md), [GIT_WORKFLOW.md](GIT_WORKFLOW.md) |
-| 교환 형식과 가상 예제 | [데이터 계약](../contracts/README.md) |
-| 사용자 테스트 진행 | [USER_TEST.md](USER_TEST.md) |
+| 현행 기획 | [PROJECT_PLAN.md](../product/OVERVIEW.md) |
+| 현행 상세 요구 | [REQUIREMENTS_v2.md](../product/REQUIREMENTS.md) |
+| 아키텍처와 모듈 경계 | [ARCHITECTURE.md](../architecture/ARCHITECTURE.md) |
+| 협업과 리뷰 절차 | [CONTRIBUTING.md](../../CONTRIBUTING.md), [GIT_WORKFLOW.md](../development/GIT_WORKFLOW.md) |
+| 교환 형식과 가상 예제 | [데이터 계약](../../contracts/README.md) |
+| 사용자 테스트 진행 | [USER_TEST.md](../product/USER_TEST.md) |
 | 옛 기획서와 요구명세 | [PROJECT_PLAN_v1.1_ARCHIVE.md](PROJECT_PLAN_v1.1_ARCHIVE.md), [REQUIREMENTS_v1_ARCHIVE.md](REQUIREMENTS_v1_ARCHIVE.md) |
 
-계약과 기술 정렬 상태는 현재 개발 초안 기준이며 기획자 최종 승인으로 쓰지 않는다. 6장 필드 이름과 자료형, 11.2 임시 기본값, 복잡한 중복 규칙의 표현·코드 지원 범위와 데이터 Agent의 모델·도구·평가·검수 기준은 다음 회의 검토 항목이다. 데이터 Agent는 공식 원문의 중복 제한·예외를 추출·정제하는 방향이며 서윤의 역할 이동도 이 작업에 집중한다는 뜻이다. F02·F03은 검수·게시된 데이터와 일반 백엔드로 구현하고 설명은 근거 템플릿을 기본으로 한다. 상세는 [정책 데이터 분석·정제](POLICY_DATA_PIPELINE.md)를 따른다.
+계약과 기술 정렬 상태는 현재 개발 초안 기준이며 기획자 최종 승인으로 쓰지 않는다. 6장 필드 이름과 자료형, 11.2 임시 기본값, 복잡한 중복 규칙의 표현·코드 지원 범위와 데이터 Agent의 모델·도구·평가·검수 기준은 다음 회의 검토 항목이다. 데이터 Agent는 공식 원문의 중복 제한·예외를 추출·정제하는 방향이며 서윤의 역할 이동도 이 작업에 집중한다는 뜻이다. F02·F03은 검수·게시된 데이터와 일반 백엔드로 구현하고 설명은 근거 템플릿을 기본으로 한다. 상세는 [정책 데이터 분석·정제](../architecture/POLICY_DATA_PIPELINE.md)를 따른다.
 
 ---
 
