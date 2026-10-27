@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://benefitfinder.example/contracts/v1/benefit.schema.json",
   "title": "Normalized benefit",
+  "description": "정규화 혜택. 기존 필수(id/domain/title/summary/provider/categories/application/eligibility_conditions/source/domain_data) 유지. benefit_amount/reviewed/conflicts/lifetime_once는 조합 계산용 선택 확장. application.status에 always 값을 두지 않고 상시는 open+공식 상시 근거로 표현한다. 날짜 null을 open으로 추정하지 않는다.",
   "type": "object",
   "additionalProperties": false,
   "required": ["id", "domain", "title", "summary", "provider", "categories", "application", "eligibility_conditions", "source", "domain_data"],
@@ -36,6 +37,33 @@
         }
       }
     },
+    "benefit_amount": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {"type": ["string", "null"], "enum": ["monthly", "lump_sum", "maturity", "interest", null]},
+        "amount_won": {"type": ["integer", "null"], "minimum": 0, "description": "원 단위 정수. 미상은 null."},
+        "period_months": {"type": ["integer", "null"], "minimum": 1},
+        "max_total_won": {"type": ["integer", "null"], "minimum": 0},
+        "pay_timing": {"type": ["string", "null"], "enum": ["monthly_from_start", "at_maturity", "yearly", "once", null], "description": "현재가치 계산용 지급 시점. 불명확하면 null로 두고 needs_review로 표시한다."},
+        "amount_text": {"type": ["string", "null"]},
+        "amount_status": {"enum": ["verified", "unknown"]}
+      }
+    },
+    "reviewed": {"type": ["boolean", "null"], "description": "금액/중복/지급시점 검수 완료. true만 조합 계산에 사용."},
+    "conflicts": {
+      "type": ["array", "null"],
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["policy_id", "evidence"],
+        "properties": {
+          "policy_id": {"type": "string", "minLength": 1},
+          "evidence": {"type": "array", "minItems": 1, "items": {"$ref": "common.schema.json#/$defs/evidence"}}
+        }
+      }
+    },
+    "lifetime_once": {"type": ["boolean", "null"]},
     "source": {"$ref": "common.schema.json#/$defs/source"},
     "domain_data": {"type": "object"}
   }

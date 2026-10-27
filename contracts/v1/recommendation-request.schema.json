@@ -2,13 +2,57 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://benefitfinder.example/contracts/v1/recommendation-request.schema.json",
   "title": "Recommendation request",
+  "description": "POST /api/v1/recommendations 요청. 13단계 선택지 단일 계약이며 문장 입력 필드는 없다. domain/profile/options가 원본이다.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["domain", "message", "profile"],
+  "required": [
+    "domain",
+    "profile"
+  ],
   "properties": {
-    "domain": {"$ref": "common.schema.json#/$defs/domain_id"},
-    "message": {"type": "string", "minLength": 1, "maxLength": 4000},
-    "profile": {"$ref": "profile.schema.json"},
-    "limit": {"type": "integer", "minimum": 1, "maximum": 10, "default": 5}
-  }
+    "domain": {
+      "$ref": "common.schema.json#/$defs/domain_id"
+    },
+    "profile": {
+      "$ref": "profile.schema.json"
+    },
+    "options": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "period": {
+          "enum": [
+            "1y",
+            "2y",
+            "all"
+          ]
+        },
+        "present_value": {
+          "type": "boolean"
+        }
+      },
+      "description": "기간+현재가치 공통 옵션(단일 위치). 서버는 응답에 3기간×PV on/off 6가지를 모두 담는다."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "domain": {
+            "const": "youth"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "profile": {
+            "$ref": "youth-profile.schema.json"
+          }
+        }
+      }
+    }
+  ]
 }

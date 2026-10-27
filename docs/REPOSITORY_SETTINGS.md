@@ -38,7 +38,9 @@
 - 저장소 `.gitignore`로 제외한 파일의 강제 추가·기존 추적, 제외·공유 경로의 회귀 검증
 - 백엔드의 직접 import 방향과 순수 업무 모듈의 표준 라이브러리 제한
 - `tests/`와 `backend/tests/`에서 발견되는 unittest 테스트
-- 계약·ignore·Git 작업 절차의 필수 회귀 테스트 파일 3개 유지
+- 계약·ignore·Git 작업 절차·기획용 가상 계산 정답의 필수 회귀 테스트 파일 4개 유지
+
+기획용 계산 검사는 가상 정책의 정답·기간 변경·군복무 구간·조합 누락·현재가치의 기준을 확인한다. 제품 계산기나 실제 정책 판정의 구현·검증을 뜻하지 않는다.
 
 `--pr`은 추가로 **로컬에서 마지막으로 갱신한 origin/main이 HEAD의 조상인지**와 **검증 전후 작업 트리가 깨끗한지** 확인한다. 원격이 최신인지 직접 확인하지 않으므로 먼저 `git fetch origin`이 필요하다. `--branch`는 detached HEAD인 CI가 실제 head 브랜치를 전달하는 용도다. `--allow-main`은 main의 CI 검사 전용이며 작업 브랜치 규칙을 피하려고 사용하지 않는다.
 
@@ -56,9 +58,9 @@ CI는 PR의 합성 merge commit 대신 실제 head를 검사한다. 합성 commi
 
 공식 참고: [GitHub PR 이벤트와 merge ref](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request), [checkout](https://github.com/actions/checkout), [setup-python](https://github.com/actions/setup-python).
 
-## 4. GitHub에서 관리자가 별도로 적용할 설정
+## 4. 향후 관리자에게 전달할 GitHub 설정 참고
 
-문서·설정 파일 작성만으로 원격에 적용되지 않는다. 실제 저장소 권한과 요금제의 지원 범위를 확인한 후 관리자가 설정한다.
+현재 계정에는 push 권한만 있어 사용자의 결정으로 main 보호 설정 적용은 이번 작업에서 제외했다. 아래 목록과 JSON은 향후 관리자용 참고 자료다. 브랜치·PR·사람의 검토 절차와 CI는 계속 사용하지만, 원격 설정으로 병합을 강제 차단한다고 가정하지 않는다. 문서·설정 파일 작성만으로 원격에 적용되지 않는다.
 
 1. 기본 브랜치는 `main`으로 유지한다.
 2. main 변경은 PR을 거치도록 하고 작성자 외 승인 1개 이상을 요구한다.

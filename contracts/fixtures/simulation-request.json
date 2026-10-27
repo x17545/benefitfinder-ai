@@ -1,0 +1,40 @@
+{
+  "domain": "youth",
+  "profile": {
+    "age": 27,
+    "region_code": "41110",
+    "employment_status": "employed",
+    "income_band": "between_15m_30m",
+    "household_type": null,
+    "domain_data": {
+      "marital": "single",
+      "housing": {
+        "living": "alone",
+        "home_ownership": "homeless",
+        "household_head": "head"
+      },
+      "contract": {
+        "type": "monthly_rent",
+        "deposit_band": "under_50m",
+        "rent_band": "between_40_60"
+      },
+      "special": [
+        "none"
+      ],
+      "household": {
+        "household_size": null,
+        "parent_income_band": null,
+        "parent_asset_band": null
+      }
+    }
+  },
+  "scenario": "income_up",
+  "income_change": {
+    "from_won": 29000000,
+    "to_won": 31000000
+  },
+  "options": {
+    "period": "1y",
+    "present_value": false
+  }
+}

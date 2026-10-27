@@ -1,0 +1,544 @@
+{
+  "meta": {
+    "source": "REQUIREMENTS_v2.md 8.3",
+    "unit": "won",
+    "note": "All amounts are integers in KRW (won). Planning tables state values in man-won; this fixture stores won = man_won * 10000. Virtual planning data for answer regression only, not real policy data.",
+    "planning_scope": "F01-F11, 13-step choice input, ages 19-39, best combination / present value / effective rate, memory/storage/GA/SSE/auto-refresh retained Existing 5-policy answers retained as history and expansion regression; first-MVP employment-housing answers live in tests/fixtures/mvp_planning_rules.json."
+  },
+  "policies": [
+    {
+      "id": "P1",
+      "name": "virtual youth monthly rent support",
+      "age": {
+        "min": 19,
+        "max": 34,
+        "military_extension": true
+      },
+      "amounts_won": {
+        "y1": 2400000,
+        "y2": 2400000,
+        "full": 2400000
+      },
+      "benefit_type": "monthly",
+      "pay_timing": "monthly_from_start",
+      "cashflow": {
+        "monthly_amount_won": 200000,
+        "months": 12,
+        "first_month": 1
+      },
+      "recruit_status": "open",
+      "reviewed": true
+    },
+    {
+      "id": "P2",
+      "name": "virtual youth asset account",
+      "age": {
+        "min": 19,
+        "max": 34,
+        "military_extension": false
+      },
+      "amounts_won": {
+        "y1": 1200000,
+        "y2": 2400000,
+        "full": 3600000
+      },
+      "benefit_type": "maturity",
+      "pay_timing": "at_maturity",
+      "cashflow": {
+        "monthly_accrual_won": 100000,
+        "total_months": 36,
+        "maturity_month": 36
+      },
+      "accrual_note": "Period amount is the expected accrued amount; cash is paid only at maturity month. Do not confuse expected accrual with cash timing.",
+      "recruit_status": "open",
+      "reviewed": true
+    },
+    {
+      "id": "P3",
+      "name": "virtual job-seeking grant",
+      "age": {
+        "min": 19,
+        "max": 34,
+        "military_extension": true
+      },
+      "amounts_won": {
+        "y1": 3000000,
+        "y2": 3000000,
+        "full": 3000000
+      },
+      "benefit_type": "monthly",
+      "pay_timing": "monthly_from_start",
+      "cashflow": {
+        "monthly_amount_won": 500000,
+        "months": 6,
+        "first_month": 1
+      },
+      "recruit_status": "open",
+      "reviewed": true
+    },
+    {
+      "id": "P4",
+      "name": "virtual youth transit refund",
+      "age": {
+        "min": 19,
+        "max": 39,
+        "military_extension": false
+      },
+      "amounts_won": {
+        "y1": 120000,
+        "y2": 240000,
+        "full": 240000
+      },
+      "benefit_type": "monthly",
+      "pay_timing": "monthly_from_start",
+      "cashflow": {
+        "monthly_amount_won": 10000,
+        "months": 24,
+        "first_month": 1
+      },
+      "recruit_status": "open",
+      "reviewed": true
+    },
+    {
+      "id": "P6",
+      "name": "virtual youth jeonse interest support",
+      "age": {
+        "min": 19,
+        "max": 39,
+        "military_extension": false
+      },
+      "amounts_won": {
+        "y1": 1500000,
+        "y2": 3000000,
+        "full": 3000000
+      },
+      "benefit_type": "interest",
+      "pay_timing": "yearly",
+      "cashflow": {
+        "annual_amount_won": 1500000,
+        "years": 2,
+        "months": [
+          12,
+          24
+        ]
+      },
+      "recruit_status": "open",
+      "reviewed": true
+    }
+  ],
+  "conflicts": [
+    [
+      "P1",
+      "P6"
+    ],
+    [
+      "P3",
+      "P4"
+    ]
+  ],
+  "periods": [
+    "y1",
+    "y2",
+    "full"
+  ],
+  "scenarios": [
+    {
+      "id": "A",
+      "period": "y1",
+      "eligible": [
+        "P1",
+        "P2",
+        "P3",
+        "P4",
+        "P6"
+      ],
+      "closed": [],
+      "expected": [
+        {
+          "rank": 1,
+          "members": [
+            "P1",
+            "P2",
+            "P3"
+          ],
+          "total_won": 6600000
+        },
+        {
+          "rank": 2,
+          "members": [
+            "P2",
+            "P3",
+            "P6"
+          ],
+          "total_won": 5700000
+        },
+        {
+          "rank": 3,
+          "members": [
+            "P1",
+            "P2",
+            "P4"
+          ],
+          "total_won": 3720000
+        }
+      ],
+      "gap_won": 900000,
+      "given_up": [
+        {
+          "policy_id": "P6",
+          "amount_won": 1500000
+        },
+        {
+          "policy_id": "P4",
+          "amount_won": 120000
+        }
+      ]
+    },
+    {
+      "id": "A_2y",
+      "period": "y2",
+      "eligible": [
+        "P1",
+        "P2",
+        "P3",
+        "P4",
+        "P6"
+      ],
+      "closed": [],
+      "expected": [
+        {
+          "rank": 1,
+          "members": [
+            "P2",
+            "P3",
+            "P6"
+          ],
+          "total_won": 8400000
+        },
+        {
+          "rank": 2,
+          "members": [
+            "P1",
+            "P2",
+            "P3"
+          ],
+          "total_won": 7800000
+        },
+        {
+          "rank": 3,
+          "members": [
+            "P2",
+            "P4",
+            "P6"
+          ],
+          "total_won": 5640000
+        }
+      ]
+    },
+    {
+      "id": "B",
+      "period": "y1",
+      "eligible": [
+        "P2",
+        "P4",
+        "P6"
+      ],
+      "closed": [],
+      "expected": [
+        {
+          "rank": 1,
+          "members": [
+            "P2",
+            "P4",
+            "P6"
+          ],
+          "total_won": 2820000
+        }
+      ]
+    },
+    {
+      "id": "C",
+      "period": "y1",
+      "eligible": [
+        "P1",
+        "P3",
+        "P4",
+        "P6"
+      ],
+      "closed": [],
+      "expected": [
+        {
+          "rank": 1,
+          "members": [
+            "P1",
+            "P3"
+          ],
+          "total_won": 5400000
+        },
+        {
+          "rank": 2,
+          "members": [
+            "P3",
+            "P6"
+          ],
+          "total_won": 4500000
+        },
+        {
+          "rank": 3,
+          "members": [
+            "P1",
+            "P4"
+          ],
+          "total_won": 2520000
+        }
+      ]
+    },
+    {
+      "id": "D",
+      "period": "y1",
+      "eligible": [
+        "P2",
+        "P3",
+        "P4",
+        "P6"
+      ],
+      "closed": [],
+      "expected": [
+        {
+          "rank": 1,
+          "members": [
+            "P2",
+            "P3",
+            "P6"
+          ],
+          "total_won": 5700000
+        },
+        {
+          "rank": 2,
+          "members": [
+            "P2",
+            "P4",
+            "P6"
+          ],
+          "total_won": 2820000
+        }
+      ]
+    },
+    {
+      "id": "E",
+      "period": "y1",
+      "eligible": [
+        "P2",
+        "P3",
+        "P4",
+        "P6"
+      ],
+      "closed": [
+        "P1"
+      ],
+      "expected": [
+        {
+          "rank": 1,
+          "members": [
+            "P2",
+            "P3",
+            "P6"
+          ],
+          "total_won": 5700000
+        },
+        {
+          "rank": 2,
+          "members": [
+            "P2",
+            "P4",
+            "P6"
+          ],
+          "total_won": 2820000
+        }
+      ]
+    },
+    {
+      "id": "F_before",
+      "period": "y1",
+      "eligible": [
+        "P1",
+        "P2",
+        "P4",
+        "P6"
+      ],
+      "closed": [],
+      "expected": [
+        {
+          "rank": 1,
+          "members": [
+            "P1",
+            "P2",
+            "P4"
+          ],
+          "total_won": 3720000
+        },
+        {
+          "rank": 2,
+          "members": [
+            "P2",
+            "P4",
+            "P6"
+          ],
+          "total_won": 2820000
+        }
+      ]
+    },
+    {
+      "id": "F_after",
+      "period": "y1",
+      "eligible": [
+        "P2",
+        "P4",
+        "P6"
+      ],
+      "closed": [],
+      "expected": [
+        {
+          "rank": 1,
+          "members": [
+            "P2",
+            "P4",
+            "P6"
+          ],
+          "total_won": 2820000
+        }
+      ]
+    },
+    {
+      "id": "G_before",
+      "period": "y1",
+      "eligible": [
+        "P1",
+        "P2",
+        "P3",
+        "P4",
+        "P6"
+      ],
+      "closed": [],
+      "expected": [
+        {
+          "rank": 1,
+          "members": [
+            "P1",
+            "P2",
+            "P3"
+          ],
+          "total_won": 6600000
+        },
+        {
+          "rank": 2,
+          "members": [
+            "P2",
+            "P3",
+            "P6"
+          ],
+          "total_won": 5700000
+        },
+        {
+          "rank": 3,
+          "members": [
+            "P1",
+            "P2",
+            "P4"
+          ],
+          "total_won": 3720000
+        }
+      ]
+    },
+    {
+      "id": "G_after",
+      "period": "y1",
+      "eligible": [
+        "P1",
+        "P2",
+        "P4",
+        "P6"
+      ],
+      "closed": [],
+      "expected": [
+        {
+          "rank": 1,
+          "members": [
+            "P1",
+            "P2",
+            "P4"
+          ],
+          "total_won": 3720000
+        },
+        {
+          "rank": 2,
+          "members": [
+            "P2",
+            "P4",
+            "P6"
+          ],
+          "total_won": 2820000
+        }
+      ]
+    }
+  ],
+  "income_change": {
+    "F": {
+      "from_won": 29000000,
+      "to_won": 31000000,
+      "before_won": 3720000,
+      "after_won": 2820000,
+      "lost_won": 900000,
+      "net_gain_won": 1100000,
+      "rate_percent": 45
+    },
+    "G": {
+      "from_won": 0,
+      "to_won": 24000000,
+      "before_won": 6600000,
+      "after_won": 3720000,
+      "lost_won": 2880000,
+      "rate_percent": 12
+    }
+  },
+  "truncation_regression": {
+    "note": "20 policies of 100 won pairwise mutually exclusive plus one 99 won policy compatible with all. Global optimum is 199; naive top-20-by-amount truncation keeps only the twenty 100s and reports 100.",
+    "clique_amount_won": 100,
+    "clique_size": 20,
+    "universal_amount_won": 99,
+    "expected_global_max_won": 199,
+    "naive_top20_max_won": 100
+  },
+  "military_regression": {
+    "base_max": 34,
+    "age": 36,
+    "exact_20_months": "not_met",
+    "exact_24_months": "met",
+    "range_months_low": 19,
+    "range_months_high": 24,
+    "range_verdict": "needs_review",
+    "unknown_verdict": "needs_review",
+    "no_extension_basis_verdict": "not_met",
+    "cap_years": 6,
+    "cap_note": "cap_years is per-policy evidence supplied by the caller; no global default. Unclear cap cannot confirm an extension-dependent pass.",
+    "unknown_note": "Unknown service with age<=base is met by the lower bound; unknown service past base+cap is not_met; otherwise needs_review."
+  },
+  "range_rules": {
+    "min_gt_max": "reject",
+    "band_judgement": "whole band strictly under threshold is met, whole band strictly over is not_met, boundary-inclusive/straddling/unknown/open is needs_review",
+    "open_upper_with_known_cap": "minimal extension decides met and base+cap decides not_met; unclear cap stays needs_review",
+    "never_estimate": "open bounds are never filled in with guessed values"
+  },
+  "effective_rate_rule": {
+    "formula": "(before_annual_total - after_annual_total) / (income_to - income_from) * 100",
+    "denominator": "annual income increase in won",
+    "existence": "the rate exists only when annual income strictly increases; flat or falling income yields null",
+    "wrong_numerator_example": "Using a 2-year support total change as the numerator over the annual income gap is wrong"
+  },
+  "present_value_rule": {
+    "formula": "A / (1 + r)^(m / 12)",
+    "monthly": "discount each monthly payment at its own month m",
+    "maturity": "discount the lump sum at the maturity month",
+    "unknown_rate": "return null; never assert zero"
+  }
+}

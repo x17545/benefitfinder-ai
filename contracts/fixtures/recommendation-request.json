@@ -1,13 +1,51 @@
 {
   "domain": "youth",
-  "message": "[가상 사용자] 25살 취업준비생이고 주거비 지원을 찾고 있어요.",
   "profile": {
     "age": 25,
-    "region_code": null,
-    "employment_status": "job_seeking",
-    "income_band": null,
+    "region_code": "41110",
+    "employment_status": "job_seeker",
+    "income_band": "none",
     "household_type": null,
-    "domain_data": {}
+    "domain_data": {
+      "military_months_range": {
+        "min": 0,
+        "max": 0
+      },
+      "region": {
+        "sido_code": "41"
+      },
+      "school": "university_graduate",
+      "marital": "single",
+      "housing": {
+        "living": "alone",
+        "home_ownership": "homeless",
+        "household_head": "head"
+      },
+      "contract": {
+        "type": "monthly_rent",
+        "deposit_band": "under_50m",
+        "rent_band": "between_40_60"
+      },
+      "asset_band": "under_122m",
+      "special": [
+        "none"
+      ],
+      "interests": [
+        "housing",
+        "employment"
+      ],
+      "received": [
+        "none"
+      ],
+      "household": {
+        "household_size": null,
+        "parent_income_band": null,
+        "parent_asset_band": null
+      }
+    }
   },
-  "limit": 5
+  "options": {
+    "period": "1y",
+    "present_value": false
+  }
 }

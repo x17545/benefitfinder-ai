@@ -4,51 +4,19 @@
   "title": "[가상] 청년 주거 지원",
   "summary": "협업용 가상 정책입니다. 실제 지원금액·모집상태를 의미하지 않습니다.",
   "provider": "가상 정책기관",
-  "categories": [
-    "housing"
-  ],
-  "application": {
-    "status": "unknown",
-    "starts_on": null,
-    "ends_on": null,
-    "url": null
-  },
+  "categories": ["housing"],
+  "application": {"status": "unknown", "starts_on": null, "ends_on": null, "url": null},
   "eligibility_conditions": [
     {
       "id": "age",
       "description": "[가상] 만 19세 이상 34세 이하",
-      "evidence": [
-        {
-          "quote": "[가상 예제] 신청 연령은 만 19세 이상 34세 이하입니다.",
-          "location": "가상 공고: 지원 대상",
-          "source": {
-            "url": "https://policy.example/youth/sample-housing",
-            "checked_at": "2026-10-26T09:00:00+09:00",
-            "document_version": "fictional-v1"
-          }
-        }
-      ]
-    },
-    {
-      "id": "income",
-      "description": "[가상] 가구 유형별 소득 기준 확인",
-      "evidence": [
-        {
-          "quote": "[가상 예제] 가구 유형별 소득 기준을 별도로 확인해야 합니다.",
-          "location": "가상 공고: 소득 조건",
-          "source": {
-            "url": "https://policy.example/youth/sample-housing",
-            "checked_at": "2026-10-26T09:00:00+09:00",
-            "document_version": "fictional-v1"
-          }
-        }
-      ]
+      "evidence": [{"quote": "[가상 예제] 신청 연령은 만 19세 이상 34세 이하입니다.", "location": "가상 공고: 지원 대상", "source": {"url": "https://policy.example/youth/sample-housing", "checked_at": "2026-10-26T09:00:00+09:00", "document_version": "fictional-v1"}}]
     }
   ],
-  "source": {
-    "url": "https://policy.example/youth/sample-housing",
-    "checked_at": "2026-10-26T09:00:00+09:00",
-    "document_version": "fictional-v1"
-  },
+  "benefit_amount": {"type": "monthly", "amount_won": 200000, "period_months": 12, "max_total_won": 2400000, "pay_timing": "monthly_from_start", "amount_text": "[가상] 월 최대 20만 원, 최장 12개월", "amount_status": "verified"},
+  "reviewed": true,
+  "conflicts": [{"policy_id": "youth:example:jeonse-006", "evidence": [{"quote": "[가상 예제] 월세 지원과 전세 이자 지원은 함께 받을 수 없습니다.", "location": "가상 공고: 중복 지원", "source": {"url": "https://policy.example/youth/sample-housing", "checked_at": "2026-10-26T09:00:00+09:00", "document_version": "fictional-v1"}}]}],
+  "lifetime_once": true,
+  "source": {"url": "https://policy.example/youth/sample-housing", "checked_at": "2026-10-26T09:00:00+09:00", "document_version": "fictional-v1"},
   "domain_data": {}
 }

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benefitfinder.example/contracts/v1/meta.schema.json",
+  "title": "Service meta",
+  "description": "GET /api/v1/meta 응답. base_rate가 null이면 현재가치 0 할인율로 확정하지 않고 discount 상태를 unknown으로 둔다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["data_updated_at", "base_rate", "base_rate_status", "daily_remaining"],
+  "properties": {
+    "data_updated_at": {"type": "string", "format": "date-time"},
+    "base_rate": {"type": ["number", "null"], "minimum": 0},
+    "base_rate_status": {"enum": ["verified", "unknown"]},
+    "daily_remaining": {"type": "integer", "minimum": 0}
+  }
+}

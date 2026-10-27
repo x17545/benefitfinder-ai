@@ -1,46 +1,205 @@
 {
   "request_id": "example-request-001",
   "domain": "youth",
-  "recommendations": [
-    {
-      "benefit": {
-        "id": "youth:example:housing-001",
-        "domain": "youth",
-        "title": "[가상] 청년 주거 지원",
-        "summary": "협업용 가상 정책입니다. 실제 지원금액·모집상태를 의미하지 않습니다.",
-        "provider": "가상 정책기관",
-        "categories": [
-          "housing"
-        ],
-        "application": {
-          "status": "unknown",
-          "starts_on": null,
-          "ends_on": null,
-          "url": null
-        },
-        "eligibility_conditions": [
+  "view": "portfolio",
+  "results": {
+    "1y": {
+      "pv_off": {
+        "calculation_status": "available",
+        "unavailable_reason": null,
+        "portfolios": [
           {
-            "id": "age",
-            "description": "[가상] 만 19세 이상 34세 이하",
-            "evidence": [
+            "rank": 1,
+            "total_won": 5400000,
+            "present_value_applied": false,
+            "policies": [
               {
-                "quote": "[가상 예제] 신청 연령은 만 19세 이상 34세 이하입니다.",
-                "location": "가상 공고: 지원 대상",
+                "policy_id": "youth:example:P1",
+                "amount_in_period_won": 2400000,
+                "original_amount_won": 2400000,
+                "amount_status": "verified",
+                "eligibility": [
+                  {
+                    "condition_id": "parent_income",
+                    "status": "needs_review",
+                    "reason": "부모님 소득 미입력으로 확인이 필요합니다.",
+                    "evidence": []
+                  }
+                ],
+                "ai_reason": "[가상] 월세 부담을 덜어주는 조합입니다.",
                 "source": {
                   "url": "https://policy.example/youth/sample-housing",
                   "checked_at": "2026-10-26T09:00:00+09:00",
                   "document_version": "fictional-v1"
                 }
+              },
+              {
+                "policy_id": "youth:example:P3",
+                "amount_in_period_won": 3000000,
+                "original_amount_won": 3000000,
+                "amount_status": "verified",
+                "eligibility": [
+                  {
+                    "condition_id": "age",
+                    "status": "met",
+                    "reason": "[가상] 25세가 예제 연령 범위에 포함됩니다.",
+                    "evidence": [
+                      {
+                        "quote": "[가상 예제] 신청 연령은 만 19세 이상 34세 이하입니다.",
+                        "location": "가상 공고: 지원 대상",
+                        "source": {
+                          "url": "https://policy.example/youth/sample-p3",
+                          "checked_at": "2026-10-26T09:00:00+09:00",
+                          "document_version": "fictional-v1"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "condition_id": "employment",
+                    "status": "met",
+                    "reason": "[가상] 취업 준비 상태가 조건에 해당합니다.",
+                    "evidence": [
+                      {
+                        "quote": "[가상 예제] 미취업 청년이 대상입니다.",
+                        "location": "가상 공고: 대상",
+                        "source": {
+                          "url": "https://policy.example/youth/sample-p3",
+                          "checked_at": "2026-10-26T09:00:00+09:00",
+                          "document_version": "fictional-v1"
+                        }
+                      }
+                    ]
+                  }
+                ],
+                "ai_reason": "[가상] 구직 중 조건에 맞는 지원금입니다.",
+                "source": {
+                  "url": "https://policy.example/youth/sample-p3",
+                  "checked_at": "2026-10-26T09:00:00+09:00",
+                  "document_version": "fictional-v1"
+                }
+              }
+            ],
+            "given_up": [
+              {
+                "policy_id": "youth:example:P6",
+                "amount_won": 1500000
+              }
+            ],
+            "unverified_pairs": [
+              {
+                "a": "youth:example:P1",
+                "b": "youth:example:P3",
+                "note": "[가상] 중복 수혜 여부 공식 자료 없음"
               }
             ]
           },
           {
-            "id": "income",
-            "description": "[가상] 가구 유형별 소득 기준 확인",
+            "rank": 2,
+            "total_won": 4500000,
+            "present_value_applied": false,
+            "policies": [
+              {
+                "policy_id": "youth:example:P3",
+                "amount_in_period_won": 3000000,
+                "original_amount_won": 3000000,
+                "amount_status": "verified",
+                "eligibility": [
+                  {
+                    "condition_id": "age",
+                    "status": "met",
+                    "reason": "[가상] 25세가 예제 연령 범위에 포함됩니다.",
+                    "evidence": [
+                      {
+                        "quote": "[가상 예제] 신청 연령은 만 19세 이상 34세 이하입니다.",
+                        "location": "가상 공고: 지원 대상",
+                        "source": {
+                          "url": "https://policy.example/youth/sample-p3",
+                          "checked_at": "2026-10-26T09:00:00+09:00",
+                          "document_version": "fictional-v1"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "condition_id": "employment",
+                    "status": "met",
+                    "reason": "[가상] 취업 준비 상태가 조건에 해당합니다.",
+                    "evidence": [
+                      {
+                        "quote": "[가상 예제] 미취업 청년이 대상입니다.",
+                        "location": "가상 공고: 대상",
+                        "source": {
+                          "url": "https://policy.example/youth/sample-p3",
+                          "checked_at": "2026-10-26T09:00:00+09:00",
+                          "document_version": "fictional-v1"
+                        }
+                      }
+                    ]
+                  }
+                ],
+                "ai_reason": "[가상] 구직 중 조건에 맞는 지원금입니다.",
+                "source": {
+                  "url": "https://policy.example/youth/sample-p3",
+                  "checked_at": "2026-10-26T09:00:00+09:00",
+                  "document_version": "fictional-v1"
+                }
+              },
+              {
+                "policy_id": "youth:example:P6",
+                "amount_status": "verified",
+                "eligibility": [
+                  {
+                    "condition_id": "age",
+                    "status": "met",
+                    "reason": "[가상] 예제 연령 조건에 해당합니다.",
+                    "evidence": [
+                      {
+                        "quote": "[가상 예제] 만 19~39세 대상입니다.",
+                        "source": {
+                          "url": "https://policy.example/youth/sample-p6",
+                          "checked_at": "2026-10-26T09:00:00+09:00",
+                          "document_version": "fictional-v1"
+                        }
+                      }
+                    ]
+                  }
+                ],
+                "ai_reason": null,
+                "source": {
+                  "url": "https://policy.example/youth/sample-p6",
+                  "checked_at": "2026-10-26T09:00:00+09:00",
+                  "document_version": "fictional-v1"
+                },
+                "amount_in_period_won": 1500000,
+                "original_amount_won": 1500000
+              }
+            ],
+            "given_up": [
+              {
+                "policy_id": "youth:example:P1",
+                "amount_won": 2400000
+              }
+            ],
+            "unverified_pairs": []
+          }
+        ],
+        "why": {
+          "gap_won": 900000,
+          "second_total_won": 4500000,
+          "deciding_conflict": [
+            "youth:example:P1",
+            "youth:example:P6"
+          ]
+        },
+        "excluded": [
+          {
+            "policy_id": "youth:example:P6",
+            "reason": "[가상] P1과 중복 수혜 불가",
             "evidence": [
               {
-                "quote": "[가상 예제] 가구 유형별 소득 기준을 별도로 확인해야 합니다.",
-                "location": "가상 공고: 소득 조건",
+                "quote": "[가상 예제] 월세 지원과 전세 이자 지원은 함께 받을 수 없습니다.",
+                "location": "가상 공고: 중복 지원",
                 "source": {
                   "url": "https://policy.example/youth/sample-housing",
                   "checked_at": "2026-10-26T09:00:00+09:00",
@@ -50,56 +209,1171 @@
             ]
           }
         ],
-        "source": {
-          "url": "https://policy.example/youth/sample-housing",
-          "checked_at": "2026-10-26T09:00:00+09:00",
-          "document_version": "fictional-v1"
-        },
-        "domain_data": {}
+        "not_eligible": [
+          {
+            "policy_id": "youth:example:P5",
+            "failed": [
+              "age"
+            ]
+          }
+        ],
+        "not_yet_reviewed": [
+          {
+            "policy_id": "youth:example:P120",
+            "eligibility_summary": "needs_review"
+          }
+        ],
+        "closed_now": [
+          {
+            "policy_id": "youth:example:P9",
+            "last_period": "2026-03-30 ~ 2026-05-29",
+            "next_expected": null
+          }
+        ]
       },
-      "reason": "[가상 설명] 관심 분야가 주거이며 예제의 연령 조건에 해당합니다. 실제 신청 자격을 의미하지 않습니다.",
-      "condition_results": [
-        {
-          "condition_id": "age",
-          "status": "met",
-          "reason": "[가상] 입력한 나이 25세가 예제의 연령 범위에 포함됩니다.",
-          "evidence": [
-            {
-              "quote": "[가상 예제] 신청 연령은 만 19세 이상 34세 이하입니다.",
-              "location": "가상 공고: 지원 대상",
-              "source": {
-                "url": "https://policy.example/youth/sample-housing",
-                "checked_at": "2026-10-26T09:00:00+09:00",
-                "document_version": "fictional-v1"
+      "pv_on": {
+        "calculation_status": "available",
+        "unavailable_reason": null,
+        "portfolios": [
+          {
+            "rank": 1,
+            "total_won": 5346663,
+            "present_value_applied": true,
+            "policies": [
+              {
+                "policy_id": "youth:example:P1",
+                "amount_in_period_won": 2368173,
+                "original_amount_won": 2400000,
+                "amount_status": "verified",
+                "eligibility": [
+                  {
+                    "condition_id": "parent_income",
+                    "status": "needs_review",
+                    "reason": "부모님 소득 미입력으로 확인이 필요합니다.",
+                    "evidence": []
+                  }
+                ],
+                "ai_reason": "[가상] 월세 부담을 덜어주는 조합입니다.",
+                "source": {
+                  "url": "https://policy.example/youth/sample-housing",
+                  "checked_at": "2026-10-26T09:00:00+09:00",
+                  "document_version": "fictional-v1"
+                }
+              },
+              {
+                "policy_id": "youth:example:P3",
+                "amount_in_period_won": 2978490,
+                "original_amount_won": 3000000,
+                "amount_status": "verified",
+                "eligibility": [
+                  {
+                    "condition_id": "age",
+                    "status": "met",
+                    "reason": "[가상] 25세가 예제 연령 범위에 포함됩니다.",
+                    "evidence": [
+                      {
+                        "quote": "[가상 예제] 신청 연령은 만 19세 이상 34세 이하입니다.",
+                        "location": "가상 공고: 지원 대상",
+                        "source": {
+                          "url": "https://policy.example/youth/sample-p3",
+                          "checked_at": "2026-10-26T09:00:00+09:00",
+                          "document_version": "fictional-v1"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "condition_id": "employment",
+                    "status": "met",
+                    "reason": "[가상] 취업 준비 상태가 조건에 해당합니다.",
+                    "evidence": [
+                      {
+                        "quote": "[가상 예제] 미취업 청년이 대상입니다.",
+                        "location": "가상 공고: 대상",
+                        "source": {
+                          "url": "https://policy.example/youth/sample-p3",
+                          "checked_at": "2026-10-26T09:00:00+09:00",
+                          "document_version": "fictional-v1"
+                        }
+                      }
+                    ]
+                  }
+                ],
+                "ai_reason": "[가상] 구직 중 조건에 맞는 지원금입니다.",
+                "source": {
+                  "url": "https://policy.example/youth/sample-p3",
+                  "checked_at": "2026-10-26T09:00:00+09:00",
+                  "document_version": "fictional-v1"
+                }
               }
-            }
+            ],
+            "given_up": [
+              {
+                "policy_id": "youth:example:P6",
+                "amount_won": 1463415
+              }
+            ],
+            "unverified_pairs": [
+              {
+                "a": "youth:example:P1",
+                "b": "youth:example:P3",
+                "note": "[가상] 중복 수혜 여부 공식 자료 없음"
+              }
+            ]
+          },
+          {
+            "rank": 2,
+            "total_won": 4441905,
+            "present_value_applied": true,
+            "policies": [
+              {
+                "policy_id": "youth:example:P3",
+                "amount_in_period_won": 2978490,
+                "original_amount_won": 3000000,
+                "amount_status": "verified",
+                "eligibility": [
+                  {
+                    "condition_id": "age",
+                    "status": "met",
+                    "reason": "[가상] 25세가 예제 연령 범위에 포함됩니다.",
+                    "evidence": [
+                      {
+                        "quote": "[가상 예제] 신청 연령은 만 19세 이상 34세 이하입니다.",
+                        "location": "가상 공고: 지원 대상",
+                        "source": {
+                          "url": "https://policy.example/youth/sample-p3",
+                          "checked_at": "2026-10-26T09:00:00+09:00",
+                          "document_version": "fictional-v1"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "condition_id": "employment",
+                    "status": "met",
+                    "reason": "[가상] 취업 준비 상태가 조건에 해당합니다.",
+                    "evidence": [
+                      {
+                        "quote": "[가상 예제] 미취업 청년이 대상입니다.",
+                        "location": "가상 공고: 대상",
+                        "source": {
+                          "url": "https://policy.example/youth/sample-p3",
+                          "checked_at": "2026-10-26T09:00:00+09:00",
+                          "document_version": "fictional-v1"
+                        }
+                      }
+                    ]
+                  }
+                ],
+                "ai_reason": "[가상] 구직 중 조건에 맞는 지원금입니다.",
+                "source": {
+                  "url": "https://policy.example/youth/sample-p3",
+                  "checked_at": "2026-10-26T09:00:00+09:00",
+                  "document_version": "fictional-v1"
+                }
+              },
+              {
+                "policy_id": "youth:example:P6",
+                "amount_status": "verified",
+                "eligibility": [
+                  {
+                    "condition_id": "age",
+                    "status": "met",
+                    "reason": "[가상] 예제 연령 조건에 해당합니다.",
+                    "evidence": [
+                      {
+                        "quote": "[가상 예제] 만 19~39세 대상입니다.",
+                        "source": {
+                          "url": "https://policy.example/youth/sample-p6",
+                          "checked_at": "2026-10-26T09:00:00+09:00",
+                          "document_version": "fictional-v1"
+                        }
+                      }
+                    ]
+                  }
+                ],
+                "ai_reason": null,
+                "source": {
+                  "url": "https://policy.example/youth/sample-p6",
+                  "checked_at": "2026-10-26T09:00:00+09:00",
+                  "document_version": "fictional-v1"
+                },
+                "amount_in_period_won": 1463415,
+                "original_amount_won": 1500000
+              }
+            ],
+            "given_up": [
+              {
+                "policy_id": "youth:example:P1",
+                "amount_won": 2368173
+              }
+            ],
+            "unverified_pairs": []
+          }
+        ],
+        "why": {
+          "gap_won": 904758,
+          "second_total_won": 4441905,
+          "deciding_conflict": [
+            "youth:example:P1",
+            "youth:example:P6"
           ]
         },
-        {
-          "condition_id": "income",
-          "status": "needs_review",
-          "reason": "소득과 가구 정보가 없어 확인이 필요합니다.",
-          "evidence": [
-            {
-              "quote": "[가상 예제] 가구 유형별 소득 기준을 별도로 확인해야 합니다.",
-              "location": "가상 공고: 소득 조건",
-              "source": {
-                "url": "https://policy.example/youth/sample-housing",
-                "checked_at": "2026-10-26T09:00:00+09:00",
-                "document_version": "fictional-v1"
+        "excluded": [
+          {
+            "policy_id": "youth:example:P6",
+            "reason": "[가상] P1과 중복 수혜 불가",
+            "evidence": [
+              {
+                "quote": "[가상 예제] 월세 지원과 전세 이자 지원은 함께 받을 수 없습니다.",
+                "location": "가상 공고: 중복 지원",
+                "source": {
+                  "url": "https://policy.example/youth/sample-housing",
+                  "checked_at": "2026-10-26T09:00:00+09:00",
+                  "document_version": "fictional-v1"
+                }
               }
-            }
+            ]
+          }
+        ],
+        "not_eligible": [
+          {
+            "policy_id": "youth:example:P5",
+            "failed": [
+              "age"
+            ]
+          }
+        ],
+        "not_yet_reviewed": [
+          {
+            "policy_id": "youth:example:P120",
+            "eligibility_summary": "needs_review"
+          }
+        ],
+        "closed_now": [
+          {
+            "policy_id": "youth:example:P9",
+            "last_period": "2026-03-30 ~ 2026-05-29",
+            "next_expected": null
+          }
+        ]
+      }
+    },
+    "2y": {
+      "pv_off": {
+        "calculation_status": "available",
+        "unavailable_reason": null,
+        "portfolios": [
+          {
+            "rank": 1,
+            "total_won": 6000000,
+            "present_value_applied": false,
+            "policies": [
+              {
+                "policy_id": "youth:example:P3",
+                "amount_in_period_won": 3000000,
+                "original_amount_won": 3000000,
+                "amount_status": "verified",
+                "eligibility": [
+                  {
+                    "condition_id": "age",
+                    "status": "met",
+                    "reason": "[가상] 25세가 예제 연령 범위에 포함됩니다.",
+                    "evidence": [
+                      {
+                        "quote": "[가상 예제] 신청 연령은 만 19세 이상 34세 이하입니다.",
+                        "location": "가상 공고: 지원 대상",
+                        "source": {
+                          "url": "https://policy.example/youth/sample-p3",
+                          "checked_at": "2026-10-26T09:00:00+09:00",
+                          "document_version": "fictional-v1"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "condition_id": "employment",
+                    "status": "met",
+                    "reason": "[가상] 취업 준비 상태가 조건에 해당합니다.",
+                    "evidence": [
+                      {
+                        "quote": "[가상 예제] 미취업 청년이 대상입니다.",
+                        "location": "가상 공고: 대상",
+                        "source": {
+                          "url": "https://policy.example/youth/sample-p3",
+                          "checked_at": "2026-10-26T09:00:00+09:00",
+                          "document_version": "fictional-v1"
+                        }
+                      }
+                    ]
+                  }
+                ],
+                "ai_reason": "[가상] 구직 중 조건에 맞는 지원금입니다.",
+                "source": {
+                  "url": "https://policy.example/youth/sample-p3",
+                  "checked_at": "2026-10-26T09:00:00+09:00",
+                  "document_version": "fictional-v1"
+                }
+              },
+              {
+                "policy_id": "youth:example:P6",
+                "amount_status": "verified",
+                "eligibility": [
+                  {
+                    "condition_id": "age",
+                    "status": "met",
+                    "reason": "[가상] 예제 연령 조건에 해당합니다.",
+                    "evidence": [
+                      {
+                        "quote": "[가상 예제] 만 19~39세 대상입니다.",
+                        "source": {
+                          "url": "https://policy.example/youth/sample-p6",
+                          "checked_at": "2026-10-26T09:00:00+09:00",
+                          "document_version": "fictional-v1"
+                        }
+                      }
+                    ]
+                  }
+                ],
+                "ai_reason": null,
+                "source": {
+                  "url": "https://policy.example/youth/sample-p6",
+                  "checked_at": "2026-10-26T09:00:00+09:00",
+                  "document_version": "fictional-v1"
+                },
+                "amount_in_period_won": 3000000,
+                "original_amount_won": 3000000
+              }
+            ],
+            "given_up": [
+              {
+                "policy_id": "youth:example:P1",
+                "amount_won": 2400000
+              }
+            ],
+            "unverified_pairs": []
+          },
+          {
+            "rank": 2,
+            "total_won": 5400000,
+            "present_value_applied": false,
+            "policies": [
+              {
+                "policy_id": "youth:example:P1",
+                "amount_in_period_won": 2400000,
+                "original_amount_won": 2400000,
+                "amount_status": "verified",
+                "eligibility": [
+                  {
+                    "condition_id": "parent_income",
+                    "status": "needs_review",
+                    "reason": "부모님 소득 미입력으로 확인이 필요합니다.",
+                    "evidence": []
+                  }
+                ],
+                "ai_reason": "[가상] 월세 부담을 덜어주는 조합입니다.",
+                "source": {
+                  "url": "https://policy.example/youth/sample-housing",
+                  "checked_at": "2026-10-26T09:00:00+09:00",
+                  "document_version": "fictional-v1"
+                }
+              },
+              {
+                "policy_id": "youth:example:P3",
+                "amount_in_period_won": 3000000,
+                "original_amount_won": 3000000,
+                "amount_status": "verified",
+                "eligibility": [
+                  {
+                    "condition_id": "age",
+                    "status": "met",
+                    "reason": "[가상] 25세가 예제 연령 범위에 포함됩니다.",
+                    "evidence": [
+                      {
+                        "quote": "[가상 예제] 신청 연령은 만 19세 이상 34세 이하입니다.",
+                        "location": "가상 공고: 지원 대상",
+                        "source": {
+                          "url": "https://policy.example/youth/sample-p3",
+                          "checked_at": "2026-10-26T09:00:00+09:00",
+                          "document_version": "fictional-v1"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "condition_id": "employment",
+                    "status": "met",
+                    "reason": "[가상] 취업 준비 상태가 조건에 해당합니다.",
+                    "evidence": [
+                      {
+                        "quote": "[가상 예제] 미취업 청년이 대상입니다.",
+                        "location": "가상 공고: 대상",
+                        "source": {
+                          "url": "https://policy.example/youth/sample-p3",
+                          "checked_at": "2026-10-26T09:00:00+09:00",
+                          "document_version": "fictional-v1"
+                        }
+                      }
+                    ]
+                  }
+                ],
+                "ai_reason": "[가상] 구직 중 조건에 맞는 지원금입니다.",
+                "source": {
+                  "url": "https://policy.example/youth/sample-p3",
+                  "checked_at": "2026-10-26T09:00:00+09:00",
+                  "document_version": "fictional-v1"
+                }
+              }
+            ],
+            "given_up": [
+              {
+                "policy_id": "youth:example:P6",
+                "amount_won": 3000000
+              }
+            ],
+            "unverified_pairs": [
+              {
+                "a": "youth:example:P1",
+                "b": "youth:example:P3",
+                "note": "[가상] 중복 수혜 여부 공식 자료 없음"
+              }
+            ]
+          }
+        ],
+        "why": {
+          "gap_won": 600000,
+          "second_total_won": 5400000,
+          "deciding_conflict": [
+            "youth:example:P1",
+            "youth:example:P6"
           ]
-        }
-      ],
-      "missing_fields": [
-        "profile.income_band",
-        "profile.household_type"
-      ]
+        },
+        "excluded": [
+          {
+            "policy_id": "youth:example:P1",
+            "reason": "[가상] P6과 중복 수혜 불가",
+            "evidence": [
+              {
+                "quote": "[가상 예제] 월세 지원과 전세 이자 지원은 함께 받을 수 없습니다.",
+                "location": "가상 공고: 중복 지원",
+                "source": {
+                  "url": "https://policy.example/youth/sample-housing",
+                  "checked_at": "2026-10-26T09:00:00+09:00",
+                  "document_version": "fictional-v1"
+                }
+              }
+            ]
+          }
+        ],
+        "not_eligible": [
+          {
+            "policy_id": "youth:example:P5",
+            "failed": [
+              "age"
+            ]
+          }
+        ],
+        "not_yet_reviewed": [
+          {
+            "policy_id": "youth:example:P120",
+            "eligibility_summary": "needs_review"
+          }
+        ],
+        "closed_now": [
+          {
+            "policy_id": "youth:example:P9",
+            "last_period": "2026-03-30 ~ 2026-05-29",
+            "next_expected": null
+          }
+        ]
+      },
+      "pv_on": {
+        "calculation_status": "available",
+        "unavailable_reason": null,
+        "portfolios": [
+          {
+            "rank": 1,
+            "total_won": 5869626,
+            "present_value_applied": true,
+            "policies": [
+              {
+                "policy_id": "youth:example:P3",
+                "amount_in_period_won": 2978490,
+                "original_amount_won": 3000000,
+                "amount_status": "verified",
+                "eligibility": [
+                  {
+                    "condition_id": "age",
+                    "status": "met",
+                    "reason": "[가상] 25세가 예제 연령 범위에 포함됩니다.",
+                    "evidence": [
+                      {
+                        "quote": "[가상 예제] 신청 연령은 만 19세 이상 34세 이하입니다.",
+                        "location": "가상 공고: 지원 대상",
+                        "source": {
+                          "url": "https://policy.example/youth/sample-p3",
+                          "checked_at": "2026-10-26T09:00:00+09:00",
+                          "document_version": "fictional-v1"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "condition_id": "employment",
+                    "status": "met",
+                    "reason": "[가상] 취업 준비 상태가 조건에 해당합니다.",
+                    "evidence": [
+                      {
+                        "quote": "[가상 예제] 미취업 청년이 대상입니다.",
+                        "location": "가상 공고: 대상",
+                        "source": {
+                          "url": "https://policy.example/youth/sample-p3",
+                          "checked_at": "2026-10-26T09:00:00+09:00",
+                          "document_version": "fictional-v1"
+                        }
+                      }
+                    ]
+                  }
+                ],
+                "ai_reason": "[가상] 구직 중 조건에 맞는 지원금입니다.",
+                "source": {
+                  "url": "https://policy.example/youth/sample-p3",
+                  "checked_at": "2026-10-26T09:00:00+09:00",
+                  "document_version": "fictional-v1"
+                }
+              },
+              {
+                "policy_id": "youth:example:P6",
+                "amount_status": "verified",
+                "eligibility": [
+                  {
+                    "condition_id": "age",
+                    "status": "met",
+                    "reason": "[가상] 예제 연령 조건에 해당합니다.",
+                    "evidence": [
+                      {
+                        "quote": "[가상 예제] 만 19~39세 대상입니다.",
+                        "source": {
+                          "url": "https://policy.example/youth/sample-p6",
+                          "checked_at": "2026-10-26T09:00:00+09:00",
+                          "document_version": "fictional-v1"
+                        }
+                      }
+                    ]
+                  }
+                ],
+                "ai_reason": null,
+                "source": {
+                  "url": "https://policy.example/youth/sample-p6",
+                  "checked_at": "2026-10-26T09:00:00+09:00",
+                  "document_version": "fictional-v1"
+                },
+                "amount_in_period_won": 2891136,
+                "original_amount_won": 3000000
+              }
+            ],
+            "given_up": [
+              {
+                "policy_id": "youth:example:P1",
+                "amount_won": 2368173
+              }
+            ],
+            "unverified_pairs": []
+          },
+          {
+            "rank": 2,
+            "total_won": 5346663,
+            "present_value_applied": true,
+            "policies": [
+              {
+                "policy_id": "youth:example:P1",
+                "amount_in_period_won": 2368173,
+                "original_amount_won": 2400000,
+                "amount_status": "verified",
+                "eligibility": [
+                  {
+                    "condition_id": "parent_income",
+                    "status": "needs_review",
+                    "reason": "부모님 소득 미입력으로 확인이 필요합니다.",
+                    "evidence": []
+                  }
+                ],
+                "ai_reason": "[가상] 월세 부담을 덜어주는 조합입니다.",
+                "source": {
+                  "url": "https://policy.example/youth/sample-housing",
+                  "checked_at": "2026-10-26T09:00:00+09:00",
+                  "document_version": "fictional-v1"
+                }
+              },
+              {
+                "policy_id": "youth:example:P3",
+                "amount_in_period_won": 2978490,
+                "original_amount_won": 3000000,
+                "amount_status": "verified",
+                "eligibility": [
+                  {
+                    "condition_id": "age",
+                    "status": "met",
+                    "reason": "[가상] 25세가 예제 연령 범위에 포함됩니다.",
+                    "evidence": [
+                      {
+                        "quote": "[가상 예제] 신청 연령은 만 19세 이상 34세 이하입니다.",
+                        "location": "가상 공고: 지원 대상",
+                        "source": {
+                          "url": "https://policy.example/youth/sample-p3",
+                          "checked_at": "2026-10-26T09:00:00+09:00",
+                          "document_version": "fictional-v1"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "condition_id": "employment",
+                    "status": "met",
+                    "reason": "[가상] 취업 준비 상태가 조건에 해당합니다.",
+                    "evidence": [
+                      {
+                        "quote": "[가상 예제] 미취업 청년이 대상입니다.",
+                        "location": "가상 공고: 대상",
+                        "source": {
+                          "url": "https://policy.example/youth/sample-p3",
+                          "checked_at": "2026-10-26T09:00:00+09:00",
+                          "document_version": "fictional-v1"
+                        }
+                      }
+                    ]
+                  }
+                ],
+                "ai_reason": "[가상] 구직 중 조건에 맞는 지원금입니다.",
+                "source": {
+                  "url": "https://policy.example/youth/sample-p3",
+                  "checked_at": "2026-10-26T09:00:00+09:00",
+                  "document_version": "fictional-v1"
+                }
+              }
+            ],
+            "given_up": [
+              {
+                "policy_id": "youth:example:P6",
+                "amount_won": 2891136
+              }
+            ],
+            "unverified_pairs": [
+              {
+                "a": "youth:example:P1",
+                "b": "youth:example:P3",
+                "note": "[가상] 중복 수혜 여부 공식 자료 없음"
+              }
+            ]
+          }
+        ],
+        "why": {
+          "gap_won": 522963,
+          "second_total_won": 5346663,
+          "deciding_conflict": [
+            "youth:example:P1",
+            "youth:example:P6"
+          ]
+        },
+        "excluded": [
+          {
+            "policy_id": "youth:example:P1",
+            "reason": "[가상] P6과 중복 수혜 불가",
+            "evidence": [
+              {
+                "quote": "[가상 예제] 월세 지원과 전세 이자 지원은 함께 받을 수 없습니다.",
+                "location": "가상 공고: 중복 지원",
+                "source": {
+                  "url": "https://policy.example/youth/sample-housing",
+                  "checked_at": "2026-10-26T09:00:00+09:00",
+                  "document_version": "fictional-v1"
+                }
+              }
+            ]
+          }
+        ],
+        "not_eligible": [
+          {
+            "policy_id": "youth:example:P5",
+            "failed": [
+              "age"
+            ]
+          }
+        ],
+        "not_yet_reviewed": [
+          {
+            "policy_id": "youth:example:P120",
+            "eligibility_summary": "needs_review"
+          }
+        ],
+        "closed_now": [
+          {
+            "policy_id": "youth:example:P9",
+            "last_period": "2026-03-30 ~ 2026-05-29",
+            "next_expected": null
+          }
+        ]
+      }
+    },
+    "all": {
+      "pv_off": {
+        "calculation_status": "available",
+        "unavailable_reason": null,
+        "portfolios": [
+          {
+            "rank": 1,
+            "total_won": 6000000,
+            "present_value_applied": false,
+            "policies": [
+              {
+                "policy_id": "youth:example:P3",
+                "amount_in_period_won": 3000000,
+                "original_amount_won": 3000000,
+                "amount_status": "verified",
+                "eligibility": [
+                  {
+                    "condition_id": "age",
+                    "status": "met",
+                    "reason": "[가상] 25세가 예제 연령 범위에 포함됩니다.",
+                    "evidence": [
+                      {
+                        "quote": "[가상 예제] 신청 연령은 만 19세 이상 34세 이하입니다.",
+                        "location": "가상 공고: 지원 대상",
+                        "source": {
+                          "url": "https://policy.example/youth/sample-p3",
+                          "checked_at": "2026-10-26T09:00:00+09:00",
+                          "document_version": "fictional-v1"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "condition_id": "employment",
+                    "status": "met",
+                    "reason": "[가상] 취업 준비 상태가 조건에 해당합니다.",
+                    "evidence": [
+                      {
+                        "quote": "[가상 예제] 미취업 청년이 대상입니다.",
+                        "location": "가상 공고: 대상",
+                        "source": {
+                          "url": "https://policy.example/youth/sample-p3",
+                          "checked_at": "2026-10-26T09:00:00+09:00",
+                          "document_version": "fictional-v1"
+                        }
+                      }
+                    ]
+                  }
+                ],
+                "ai_reason": "[가상] 구직 중 조건에 맞는 지원금입니다.",
+                "source": {
+                  "url": "https://policy.example/youth/sample-p3",
+                  "checked_at": "2026-10-26T09:00:00+09:00",
+                  "document_version": "fictional-v1"
+                }
+              },
+              {
+                "policy_id": "youth:example:P6",
+                "amount_status": "verified",
+                "eligibility": [
+                  {
+                    "condition_id": "age",
+                    "status": "met",
+                    "reason": "[가상] 예제 연령 조건에 해당합니다.",
+                    "evidence": [
+                      {
+                        "quote": "[가상 예제] 만 19~39세 대상입니다.",
+                        "source": {
+                          "url": "https://policy.example/youth/sample-p6",
+                          "checked_at": "2026-10-26T09:00:00+09:00",
+                          "document_version": "fictional-v1"
+                        }
+                      }
+                    ]
+                  }
+                ],
+                "ai_reason": null,
+                "source": {
+                  "url": "https://policy.example/youth/sample-p6",
+                  "checked_at": "2026-10-26T09:00:00+09:00",
+                  "document_version": "fictional-v1"
+                },
+                "amount_in_period_won": 3000000,
+                "original_amount_won": 3000000
+              }
+            ],
+            "given_up": [
+              {
+                "policy_id": "youth:example:P1",
+                "amount_won": 2400000
+              }
+            ],
+            "unverified_pairs": []
+          },
+          {
+            "rank": 2,
+            "total_won": 5400000,
+            "present_value_applied": false,
+            "policies": [
+              {
+                "policy_id": "youth:example:P1",
+                "amount_in_period_won": 2400000,
+                "original_amount_won": 2400000,
+                "amount_status": "verified",
+                "eligibility": [
+                  {
+                    "condition_id": "parent_income",
+                    "status": "needs_review",
+                    "reason": "부모님 소득 미입력으로 확인이 필요합니다.",
+                    "evidence": []
+                  }
+                ],
+                "ai_reason": "[가상] 월세 부담을 덜어주는 조합입니다.",
+                "source": {
+                  "url": "https://policy.example/youth/sample-housing",
+                  "checked_at": "2026-10-26T09:00:00+09:00",
+                  "document_version": "fictional-v1"
+                }
+              },
+              {
+                "policy_id": "youth:example:P3",
+                "amount_in_period_won": 3000000,
+                "original_amount_won": 3000000,
+                "amount_status": "verified",
+                "eligibility": [
+                  {
+                    "condition_id": "age",
+                    "status": "met",
+                    "reason": "[가상] 25세가 예제 연령 범위에 포함됩니다.",
+                    "evidence": [
+                      {
+                        "quote": "[가상 예제] 신청 연령은 만 19세 이상 34세 이하입니다.",
+                        "location": "가상 공고: 지원 대상",
+                        "source": {
+                          "url": "https://policy.example/youth/sample-p3",
+                          "checked_at": "2026-10-26T09:00:00+09:00",
+                          "document_version": "fictional-v1"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "condition_id": "employment",
+                    "status": "met",
+                    "reason": "[가상] 취업 준비 상태가 조건에 해당합니다.",
+                    "evidence": [
+                      {
+                        "quote": "[가상 예제] 미취업 청년이 대상입니다.",
+                        "location": "가상 공고: 대상",
+                        "source": {
+                          "url": "https://policy.example/youth/sample-p3",
+                          "checked_at": "2026-10-26T09:00:00+09:00",
+                          "document_version": "fictional-v1"
+                        }
+                      }
+                    ]
+                  }
+                ],
+                "ai_reason": "[가상] 구직 중 조건에 맞는 지원금입니다.",
+                "source": {
+                  "url": "https://policy.example/youth/sample-p3",
+                  "checked_at": "2026-10-26T09:00:00+09:00",
+                  "document_version": "fictional-v1"
+                }
+              }
+            ],
+            "given_up": [
+              {
+                "policy_id": "youth:example:P6",
+                "amount_won": 3000000
+              }
+            ],
+            "unverified_pairs": [
+              {
+                "a": "youth:example:P1",
+                "b": "youth:example:P3",
+                "note": "[가상] 중복 수혜 여부 공식 자료 없음"
+              }
+            ]
+          }
+        ],
+        "why": {
+          "gap_won": 600000,
+          "second_total_won": 5400000,
+          "deciding_conflict": [
+            "youth:example:P1",
+            "youth:example:P6"
+          ]
+        },
+        "excluded": [
+          {
+            "policy_id": "youth:example:P1",
+            "reason": "[가상] P6과 중복 수혜 불가",
+            "evidence": [
+              {
+                "quote": "[가상 예제] 월세 지원과 전세 이자 지원은 함께 받을 수 없습니다.",
+                "location": "가상 공고: 중복 지원",
+                "source": {
+                  "url": "https://policy.example/youth/sample-housing",
+                  "checked_at": "2026-10-26T09:00:00+09:00",
+                  "document_version": "fictional-v1"
+                }
+              }
+            ]
+          }
+        ],
+        "not_eligible": [
+          {
+            "policy_id": "youth:example:P5",
+            "failed": [
+              "age"
+            ]
+          }
+        ],
+        "not_yet_reviewed": [
+          {
+            "policy_id": "youth:example:P120",
+            "eligibility_summary": "needs_review"
+          }
+        ],
+        "closed_now": [
+          {
+            "policy_id": "youth:example:P9",
+            "last_period": "2026-03-30 ~ 2026-05-29",
+            "next_expected": null
+          }
+        ]
+      },
+      "pv_on": {
+        "calculation_status": "available",
+        "unavailable_reason": null,
+        "portfolios": [
+          {
+            "rank": 1,
+            "total_won": 5869626,
+            "present_value_applied": true,
+            "policies": [
+              {
+                "policy_id": "youth:example:P3",
+                "amount_in_period_won": 2978490,
+                "original_amount_won": 3000000,
+                "amount_status": "verified",
+                "eligibility": [
+                  {
+                    "condition_id": "age",
+                    "status": "met",
+                    "reason": "[가상] 25세가 예제 연령 범위에 포함됩니다.",
+                    "evidence": [
+                      {
+                        "quote": "[가상 예제] 신청 연령은 만 19세 이상 34세 이하입니다.",
+                        "location": "가상 공고: 지원 대상",
+                        "source": {
+                          "url": "https://policy.example/youth/sample-p3",
+                          "checked_at": "2026-10-26T09:00:00+09:00",
+                          "document_version": "fictional-v1"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "condition_id": "employment",
+                    "status": "met",
+                    "reason": "[가상] 취업 준비 상태가 조건에 해당합니다.",
+                    "evidence": [
+                      {
+                        "quote": "[가상 예제] 미취업 청년이 대상입니다.",
+                        "location": "가상 공고: 대상",
+                        "source": {
+                          "url": "https://policy.example/youth/sample-p3",
+                          "checked_at": "2026-10-26T09:00:00+09:00",
+                          "document_version": "fictional-v1"
+                        }
+                      }
+                    ]
+                  }
+                ],
+                "ai_reason": "[가상] 구직 중 조건에 맞는 지원금입니다.",
+                "source": {
+                  "url": "https://policy.example/youth/sample-p3",
+                  "checked_at": "2026-10-26T09:00:00+09:00",
+                  "document_version": "fictional-v1"
+                }
+              },
+              {
+                "policy_id": "youth:example:P6",
+                "amount_status": "verified",
+                "eligibility": [
+                  {
+                    "condition_id": "age",
+                    "status": "met",
+                    "reason": "[가상] 예제 연령 조건에 해당합니다.",
+                    "evidence": [
+                      {
+                        "quote": "[가상 예제] 만 19~39세 대상입니다.",
+                        "source": {
+                          "url": "https://policy.example/youth/sample-p6",
+                          "checked_at": "2026-10-26T09:00:00+09:00",
+                          "document_version": "fictional-v1"
+                        }
+                      }
+                    ]
+                  }
+                ],
+                "ai_reason": null,
+                "source": {
+                  "url": "https://policy.example/youth/sample-p6",
+                  "checked_at": "2026-10-26T09:00:00+09:00",
+                  "document_version": "fictional-v1"
+                },
+                "amount_in_period_won": 2891136,
+                "original_amount_won": 3000000
+              }
+            ],
+            "given_up": [
+              {
+                "policy_id": "youth:example:P1",
+                "amount_won": 2368173
+              }
+            ],
+            "unverified_pairs": []
+          },
+          {
+            "rank": 2,
+            "total_won": 5346663,
+            "present_value_applied": true,
+            "policies": [
+              {
+                "policy_id": "youth:example:P1",
+                "amount_in_period_won": 2368173,
+                "original_amount_won": 2400000,
+                "amount_status": "verified",
+                "eligibility": [
+                  {
+                    "condition_id": "parent_income",
+                    "status": "needs_review",
+                    "reason": "부모님 소득 미입력으로 확인이 필요합니다.",
+                    "evidence": []
+                  }
+                ],
+                "ai_reason": "[가상] 월세 부담을 덜어주는 조합입니다.",
+                "source": {
+                  "url": "https://policy.example/youth/sample-housing",
+                  "checked_at": "2026-10-26T09:00:00+09:00",
+                  "document_version": "fictional-v1"
+                }
+              },
+              {
+                "policy_id": "youth:example:P3",
+                "amount_in_period_won": 2978490,
+                "original_amount_won": 3000000,
+                "amount_status": "verified",
+                "eligibility": [
+                  {
+                    "condition_id": "age",
+                    "status": "met",
+                    "reason": "[가상] 25세가 예제 연령 범위에 포함됩니다.",
+                    "evidence": [
+                      {
+                        "quote": "[가상 예제] 신청 연령은 만 19세 이상 34세 이하입니다.",
+                        "location": "가상 공고: 지원 대상",
+                        "source": {
+                          "url": "https://policy.example/youth/sample-p3",
+                          "checked_at": "2026-10-26T09:00:00+09:00",
+                          "document_version": "fictional-v1"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "condition_id": "employment",
+                    "status": "met",
+                    "reason": "[가상] 취업 준비 상태가 조건에 해당합니다.",
+                    "evidence": [
+                      {
+                        "quote": "[가상 예제] 미취업 청년이 대상입니다.",
+                        "location": "가상 공고: 대상",
+                        "source": {
+                          "url": "https://policy.example/youth/sample-p3",
+                          "checked_at": "2026-10-26T09:00:00+09:00",
+                          "document_version": "fictional-v1"
+                        }
+                      }
+                    ]
+                  }
+                ],
+                "ai_reason": "[가상] 구직 중 조건에 맞는 지원금입니다.",
+                "source": {
+                  "url": "https://policy.example/youth/sample-p3",
+                  "checked_at": "2026-10-26T09:00:00+09:00",
+                  "document_version": "fictional-v1"
+                }
+              }
+            ],
+            "given_up": [
+              {
+                "policy_id": "youth:example:P6",
+                "amount_won": 2891136
+              }
+            ],
+            "unverified_pairs": [
+              {
+                "a": "youth:example:P1",
+                "b": "youth:example:P3",
+                "note": "[가상] 중복 수혜 여부 공식 자료 없음"
+              }
+            ]
+          }
+        ],
+        "why": {
+          "gap_won": 522963,
+          "second_total_won": 5346663,
+          "deciding_conflict": [
+            "youth:example:P1",
+            "youth:example:P6"
+          ]
+        },
+        "excluded": [
+          {
+            "policy_id": "youth:example:P1",
+            "reason": "[가상] P6과 중복 수혜 불가",
+            "evidence": [
+              {
+                "quote": "[가상 예제] 월세 지원과 전세 이자 지원은 함께 받을 수 없습니다.",
+                "location": "가상 공고: 중복 지원",
+                "source": {
+                  "url": "https://policy.example/youth/sample-housing",
+                  "checked_at": "2026-10-26T09:00:00+09:00",
+                  "document_version": "fictional-v1"
+                }
+              }
+            ]
+          }
+        ],
+        "not_eligible": [
+          {
+            "policy_id": "youth:example:P5",
+            "failed": [
+              "age"
+            ]
+          }
+        ],
+        "not_yet_reviewed": [
+          {
+            "policy_id": "youth:example:P120",
+            "eligibility_summary": "needs_review"
+          }
+        ],
+        "closed_now": [
+          {
+            "policy_id": "youth:example:P9",
+            "last_period": "2026-03-30 ~ 2026-05-29",
+            "next_expected": null
+          }
+        ]
+      }
     }
-  ],
-  "follow_up_questions": [
-    "소득 구간과 가구 형태를 확인해 주실 수 있나요?"
-  ],
-  "ai_generated": true
+  },
+  "ai_generated": false,
+  "data_updated_at": "2026-10-26T03:12:00+09:00",
+  "discount_rate": 0.025,
+  "discount_rate_status": "verified"
 }
