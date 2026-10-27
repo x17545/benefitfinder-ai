@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benefitfinder.example/contracts/v1/recommendation-request.schema.json",
+  "title": "Recommendation request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["domain", "message", "profile"],
+  "properties": {
+    "domain": {"$ref": "common.schema.json#/$defs/domain_id"},
+    "message": {"type": "string", "minLength": 1, "maxLength": 4000},
+    "profile": {"$ref": "profile.schema.json"},
+    "limit": {"type": "integer", "minimum": 1, "maximum": 10, "default": 5}
+  }
+}

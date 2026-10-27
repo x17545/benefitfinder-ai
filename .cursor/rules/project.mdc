@@ -1,0 +1,8 @@
+---
+description: BenefitFinder 공용 개발 및 Git 작업 절차
+alwaysApply: true
+---
+
+작업 전에 저장소 루트의 AGENTS.md를 읽고 적용한다. 루트부터 수정 대상 경로까지의 하위 AGENTS.md도 읽는다.
+공용 규칙의 원본은 AGENTS.md와 거기서 연결한 docs 문서이며, 이 파일에 복제하지 않는다.
+도구 기본 브랜치 접두어를 사용하지 말고, 공용 Git 규칙과 검사 명령을 따른다.

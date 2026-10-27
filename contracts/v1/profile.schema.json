@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benefitfinder.example/contracts/v1/profile.schema.json",
+  "title": "User-confirmed profile",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "age": {"type": ["integer", "null"], "minimum": 0},
+    "region_code": {"type": ["string", "null"], "minLength": 1},
+    "employment_status": {"type": ["string", "null"], "minLength": 1},
+    "income_band": {"type": ["string", "null"], "minLength": 1},
+    "household_type": {"type": ["string", "null"], "minLength": 1},
+    "domain_data": {"type": "object"}
+  }
+}

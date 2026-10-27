@@ -1,0 +1,181 @@
+# 아키텍처 설계
+
+설계 갱신일: 2026-10-27. **React + TypeScript + Vite, Python + FastAPI, PostgreSQL**을 확정했다. 이 문서는 구현 위치와 경계를 정하며, 실행 프로젝트 초기화와 제품 기능 구현은 아직 완료하지 않았다. 기술 결정의 원본은 9장이다.
+
+## 1. 설계 기준
+
+- 첫 MVP는 청년정책·혜택으로 제한한다. 세부 기능의 우선순위는 별도로 정한다.
+- 공통 혜택 처리와 분야별 조건을 분리해 다른 분야를 추가할 수 있게 한다.
+- 5명이 각자의 디렉터리에서 작업하고, 공용 계약과 예제로 먼저 연결한다.
+- 초기 운영은 모듈형 모놀리스로 구성한다. 기능별 서비스 배포, 메시지 브로커, 플러그인 프레임워크는 실제 필요가 생길 때 검토한다.
+- AI의 해석·설명, 코드의 조건 비교·계산, 외부 데이터의 사실을 구분한다.
+
+## 2. 구성과 실행 흐름
+
+```mermaid
+flowchart TD
+    Web[React + TypeScript / Vite SPA] --> API[FastAPI / HTTP API]
+    API --> App[Application: 사용자 요청 조율]
+    App --> Core[Domain: 공통 모델과 판정]
+    App --> Youth[Youth: 청년정책 조건]
+    App --> AI[AI: Agent / RAG / 설명]
+    AI --> Tools[주입받은 검색·조회·판정 도구]
+    App --> Infra[Infrastructure: 저장·검색 어댑터]
+    Tools --> Infra
+    Infra --> DB[(PostgreSQL / 정책·조건·문서·출처)]
+    AI --> Model[LLM 어댑터]
+    Model --> Provider[외부 모델 API]
+    Scheduler[수동 실행 / 향후 스케줄러] --> Jobs[Jobs]
+    Jobs --> Ingest[수집 → 정제 → 검증]
+    Official[공식 정책 데이터] --> Ingest
+    Ingest --> Infra
+```
+
+위 화살표는 실행 흐름이며 Python import 방향과는 구분한다. 검색 도구가 조건 판정을 수행할 때에는 같은 공통 판정 코드를 호출한다.
+
+프론트엔드는 Vite로 빌드하는 React SPA이며 Next.js 서버나 SSR을 전제하지 않는다. 브라우저는 FastAPI의 HTTP API로만 데이터에 접근하고, DB 연결·LLM 호출·비밀 키는 백엔드가 관리한다. 프론트엔드와 백엔드를 논리적으로 나누되 실제 배포 단위와 호스팅은 아직 정하지 않는다.
+
+개발 환경에서는 Vite의 `/api/v1`·`/health` 프록시를 FastAPI에 연결하는 방식을 기본으로 한다. 운영에서는 같은 출처의 `/api/v1`을 백엔드로 보내는 구성을 우선 검토한다. 서로 다른 출처가 필요하면 백엔드 CORS 허용 목록을 실제 프론트엔드 주소로 제한한다. 현재 프록시·CORS·배포 설정은 아직 없다.
+
+AI는 같은 Python 백엔드의 모듈이며, 별도의 AI 서버를 요구하지 않는다. 데이터 갱신은 같은 백엔드 패키지를 사용하는 작업 실행 진입점으로 분리해, 긴 수집 작업이 사용자 요청을 막지 않게 한다. 스케줄러나 작업 큐 제품은 아직 정하지 않는다.
+
+## 3. 디렉터리와 책임
+
+| 경로 | 책임 | 주 담당 |
+|---|---|---|
+| `apps/web/src/app/` | React 앱 조립, 라우팅, providers, 전역 스타일 | 프론트엔드 |
+| `apps/web/src/features/` | 혜택 결과·사용자 조건 등 사용자 기능 | 프론트엔드 |
+| `apps/web/src/shared/` | 공통 UI, API 클라이언트, 공개 설정, 공용 타입 | 프론트엔드 |
+| `apps/web/src/domains/youth/` | 청년정책 전용 표시·입력 설정 | 프론트엔드 |
+| `backend/src/benefitfinder/api/v1/routers/` | FastAPI v1 엔드포인트, 사용 사례 호출 | 백엔드 |
+| `backend/src/benefitfinder/api/schemas/` | 계약에 맞춘 Pydantic 요청·응답 모델 | 백엔드, 계약 공동 검토 |
+| `backend/src/benefitfinder/api/dependencies/` | 조립된 사용 사례를 HTTP 요청에 연결 | 백엔드 |
+| `backend/src/benefitfinder/application/` | 추천·상세 조회 등 사용 사례와 외부 기능 인터페이스 | 백엔드, AI 협의 |
+| `backend/src/benefitfinder/domain/` | 공통 혜택·조건·근거 모델과 순수 판정 | 공동 검토 |
+| `backend/src/benefitfinder/domains/youth/` | 청년정책 특유의 필드·조건 해석·규칙 | 데이터, AI, 백엔드 협의 |
+| `backend/src/benefitfinder/ai/` | 조건 추출, Agent, RAG, 프롬프트·AI 평가 | AI |
+| `backend/src/benefitfinder/ingestion/` | 출처별 수집, 정규화, 품질 검증 | 데이터 |
+| `backend/src/benefitfinder/infrastructure/` | DB, 검색, LLM·외부 API 클라이언트의 구체 구현 | 백엔드, 관련 담당 협의 |
+| `backend/src/benefitfinder/infrastructure/database/` | PostgreSQL 연결·트랜잭션, DB 전용 모델과 저장소 구현 | 백엔드 |
+| `backend/src/benefitfinder/jobs/` | 수집·갱신 작업 실행과 재실행 제어 | 백엔드·자동화 |
+| `backend/migrations/versions/` | PostgreSQL 스키마 변경 이력 | 백엔드 |
+| `contracts/` | API·수집 결과가 공유하는 교환 형식 | 공동 검토 |
+
+`domain`은 프로그램의 공통 업무 개념을 뜻하고, `domains/youth`는 적용 분야를 뜻한다. 청년 여부를 확인하는 조건문을 공통 API·검색·UI 곳곳에 추가하지 않는다.
+
+실제 하위 경로는 [프론트엔드 구조](../apps/web/README.md)와 [백엔드 구조](../backend/README.md)를 따른다. 현재는 빈 패키지·자리표시자와 안내 문서이며, `main.tsx`·`vite.config.ts`·FastAPI `main.py`·DB 연결 코드는 초기화할 때 추가한다.
+
+## 4. 의존성 규칙
+
+1. `domain/`은 Python 표준 라이브러리만 사용한다. 웹, DB, LLM SDK에 의존하지 않는다.
+2. `domains/youth/`는 공통 `domain/`을 사용해 청년정책의 특수 조건을 정의한다. 다른 분야 모듈에 의존하지 않는다.
+3. `application/`은 공통 `domain/`과 자기 모듈의 인터페이스로 흐름을 조율한다. 분야별 구체 구현·DB·LLM 클래스는 import하지 않고 조립 지점에서 주입받는다.
+4. `ai/`, `ingestion/`, `infrastructure/`는 공통 모델과 `application/`의 인터페이스에 맞춰 구현한다. 서로의 내부 파일을 직접 호출하지 않는다.
+5. `api/`는 사용 사례를 호출한다. FastAPI 라우터 안에 추천, 프롬프트, 수집 로직이나 SQL을 넣지 않는다. 요청 의존성 함수는 이미 조립된 객체를 꺼내 연결하고, 구체 DB·LLM 어댑터를 직접 import하거나 생성하지 않는다.
+6. 구체 구현의 연결은 향후 `backend/src/benefitfinder/bootstrap.py`에서 수행한다. 이 파일과 실행 진입점만 조립을 위해 여러 구현 모듈을 참조한다.
+7. `jobs/`는 수집 흐름을 실행한다. 출처별 파싱이나 데이터 정제 로직은 `ingestion/`에 둔다.
+
+AI Agent의 도구는 검색·상세 조회·조건 판정 같은 인터페이스로 주입한다. AI 모듈이 API 라우터나 애플리케이션 전체를 재호출하지 않게 해 순환 의존을 피한다. AI의 출력으로 판정 코드가 정한 결과를 덮어쓰지 않는다.
+
+실제 인터페이스는 기능 구현 시 필요한 것부터 추가한다. 미리 대형 추상 클래스나 범용 규칙 언어를 만들지 않는다.
+
+## 5. 공용 계약과 독립 개발
+
+교환 데이터의 기준은 `contracts/v1/*.schema.json`이다. FastAPI 경계의 Pydantic 모델, 순수 업무 모델, PostgreSQL 저장 모델은 책임을 구분하며 외부에 내보내는 결과는 계약을 따른다. 초기화 시 JSON Schema에서 TypeScript 타입을 생성하는 경로와 실제 API 입출력·OpenAPI가 계약과 일치하는 검증을 추가한다. 생성 도구는 아직 정하지 않았다. 프론트엔드에서 같은 요청·응답 타입을 수기로 다시 정의하지 않는다.
+
+| 계약 | 목적 |
+|---|---|
+| `benefit.schema.json` | 수집 결과를 공통 혜택 형식으로 정규화 |
+| `profile.schema.json` | 사용자 조건과 분야별 추가 정보 |
+| `recommendation-request.schema.json` | 추천 요청 |
+| `recommendation-response.schema.json` | 추천 결과·조건별 근거·추가 질문 |
+| `error.schema.json` | 오류 코드와 사용자 메시지 |
+
+- 프론트엔드는 가상 응답을 로딩해 화면을 만든다. 모의 응답 사용 여부가 실제 실행과 혼동되지 않게 한다.
+- 데이터 담당은 가상 혜택과 같은 모양으로 수집 결과를 정규화한다.
+- AI 담당은 가상 요청과 혜택으로 도구·근거·추가 질문 흐름을 검증한다.
+- 백엔드는 같은 데이터를 사용하는 임시 저장소로 통합할 수 있다. 실제 저장소 연결 전까지 예제를 실데이터로 안내하지 않는다.
+- 계약 변경은 영향받는 담당자와 검토하고 스키마·예제·테스트를 함께 수정한다.
+
+계약은 **형식**을 검증한다. 정책의 사실성, 출처의 공신력, 근거가 판정을 실제로 뒷받침하는지는 별도 데이터·AI 평가로 검증한다.
+
+## 6. 데이터 모델과 저장 경계
+
+공통 혜택에는 `id`, `domain`, 제목, 운영 기관, 분류, 신청 정보, 자격 조건, 출처와 확인 시점을 둔다. `domain`은 `youth`에 고정된 열거형이 아닌 분야 식별 문자열이다. 혜택 ID는 `youth:source:external-id`처럼 충돌을 피할 수 있게 구성한다.
+
+청년정책 특유의 값은 `domain_data`에 둔다. 확장 필드의 이름·단위·의미는 해당 분야 문서에서 정의하고, 실제 사용 전 분야별 검증을 추가한다. 다른 분야에서도 쓰이기 시작한 필드는 검토 후 공통 모델로 올린다.
+
+기본 저장소는 PostgreSQL이며 구현은 `infrastructure/database/`에 둔다. ORM·드라이버와 실제 테이블·인덱스는 아직 정하지 않았다. 검색·필터링에 필요한 공통 조건은 조회 가능한 구조로 관리하고, 분야별 확장값을 저장하는 방식은 데이터 모델 구현 시 정한다. 아래 경계를 유지한다.
+
+| 데이터 | 관리 원칙 |
+|---|---|
+| 원본 공고·수집 기록 | 정규화 결과와 분리하고 원문·수집 시점 보존 |
+| 정규화 혜택·조건 | 공통 ID·분야·출처 버전으로 갱신 |
+| 공고 문서·검색 청크 | 원문 문서 ID·버전을 연결해 판정 근거 추적 |
+| 검색 인덱스 | 원문과 정규화 데이터로 재생성 가능하게 관리 |
+| 사용자 조건 | 저장 기능·동의 범위가 정해지기 전에는 영구 저장을 전제하지 않음 |
+
+공고가 바뀌면 문서 버전과 검색 인덱스도 함께 갱신한다. 재수집은 안정적인 원천 ID를 사용해 중복을 만들지 않도록 한다. 검증 실패 항목은 게시 대상과 분리하고, 소득·가구 정보가 없으면 확인 필요로 남긴다.
+
+로컬 원본·정제 결과·인덱스는 `data/` 아래 생성하되 Git에 올리지 않는다. 공유 가상 데이터의 기준은 `contracts/fixtures/`다.
+
+DB 스키마 변경은 `backend/migrations/versions/`에 이력으로 관리한다. 애플리케이션 import·서버 시작 시 자동 테이블 생성으로 마이그레이션을 대신하지 않는다. DB 연결 설정은 백엔드 환경 변수로만 전달하며 프론트엔드 `VITE_*`·번들·공개 파일에 넣지 않는다. PostgreSQL 연동은 별도 테스트 DB로 검증하고 실제 사용자·운영 DB를 테스트에 사용하지 않는다.
+
+## 7. 예정 API 경계
+
+아래 경로는 설계안이며 아직 구현하지 않았다. 세부 MVP 범위가 정해지면 필요한 것부터 구현한다.
+
+| Method | 경로 | 용도 |
+|---|---|---|
+| GET | `/health` | 서버 동작 확인 |
+| POST | `/api/v1/recommendations` | 분야·사용자 조건에 맞는 추천 요청 |
+| GET | `/api/v1/benefits/{benefit_id}` | 공통 혜택 상세 조회 |
+
+지원 분야는 초기 `youth` 하나다. 계약이 다른 분야 식별자를 허용하더라도, 서버는 아직 지원하지 않는 분야에 `unsupported_domain` 오류를 반환해야 한다. 입력 오류는 `invalid_request`, 의존 서비스 장애는 `dependency_unavailable`처럼 구분한다. 상세 HTTP 상태는 `contracts/README.md`를 따른다.
+
+로그·추적에는 요청 ID와 처리 상태를 기록하고, 사용자 원문·소득 정보·LLM 프롬프트 전체·API 키를 기본 로그에 남기지 않는다. 개인화 기억이나 알림이 도입되면 별도 수집·보관 정책을 정한다.
+
+## 8. 다른 분야를 추가하는 순서
+
+1. 대상·데이터 출처·자격 기준·용어를 정의하고 공통 모델로 표현 가능한지 확인한다.
+2. `backend/src/benefitfinder/domains/<분야>/`에 고유 조건과 규칙을 추가한다.
+3. `ingestion/`에 필요한 출처 어댑터·정규화 코드를 추가한다. 원본 필드를 API가 직접 읽게 하지 않는다.
+4. 분야별 추가 데이터의 스키마와 가상 예제를 `contracts/`에 추가하고 검증한다.
+5. 조립 지점에 지원 분야를 등록하고, 공통 API와 검색에서 해당 분야를 선택할 수 있게 한다.
+6. 전용 입력·표시가 필요한 경우에만 `apps/web/src/domains/<분야>/`를 추가한다.
+7. 공통 UI·조회·근거·판정 상태를 재사용하면서 해당 분야의 품질 사례를 검증한다.
+
+두 번째 분야가 생기기 전에는 자동 탐색 플러그인·범용 규칙 엔진을 만들지 않는다. 현재는 공통 필드와 모듈 경계를 안정화한다.
+
+## 9. 기술 선택과 검증 범위
+
+### 확정한 결정
+
+2026-10-27 사용자 합의로 아래 조합을 선택했다. 오래된 기획서의 스택 검토안보다 이 결정을 우선한다.
+
+| 영역 | 선택 | 근거·경계 |
+|---|---|---|
+| 프론트엔드 | React + TypeScript + Vite | 입력·혜택 카드·근거 표시를 컴포넌트로 구성하는 SPA. TypeScript strict 사용 |
+| 웹 패키지 관리 | npm + `package-lock.json` | 초기화 시 하나의 도구·lockfile로 통일 |
+| 백엔드 | Python + FastAPI | Python이 익숙한 팀의 백엔드·AI·수집 코드를 공유하고 명시적인 HTTP 경계로 연결 |
+| API 검증 | Pydantic | FastAPI의 요청·응답 모델에 사용. 순수 domain 모델에는 프레임워크 의존성 없음 |
+| 기본 DB | PostgreSQL | 정책·조건·출처·버전 데이터를 관리. 프론트엔드가 직접 접속하지 않음 |
+| 실행 구조 | 모듈형 모놀리스 | 하나의 백엔드 코드베이스와 별도 수집 명령. 분야 확장은 공통 모델과 분야별 모듈로 처리 |
+
+### 아직 정하지 않은 것
+
+- 세부 MVP 기능, 지원 지역·정책 수, 사용자 정보 저장·인증 방식
+- ORM·PostgreSQL 드라이버·마이그레이션 도구, 런타임 세부 버전·의존성 관리 도구
+- LLM 공급자·SDK, RAG·Agent 라이브러리, 벡터 검색 구현
+- 스케줄러·작업 큐, 배포 서비스·운영 구성
+
+pgvector는 PostgreSQL에서 의미 검색이 필요해질 때 검토하는 선택 사항이다. 처음부터 별도 벡터 DB·Redis·분산 작업 큐를 요구하지 않는다. 미정 도구의 선택은 공통 분야 모델을 바꾸지 않게 어댑터에 둔다.
+
+### 구현·검증 상태
+
+- 스택 결정과 실제 패키지 초기화를 구분한다. 현재 React·Vite 프로젝트 설정, FastAPI 실행 진입점, DB 연결·마이그레이션 설정과 제품 기능은 아직 없다.
+- 현재 `python scripts/check.py`는 Git 작업 상태·파일 형식·직접 import 경계와 JSON Schema·가상 예제·잘못된 입력·확장 분야의 회귀 검증을 수행한다. PR 준비 검사는 `--pr`로 실행하며 자세한 범위는 [저장소 운영 설정](REPOSITORY_SETTINGS.md)을 따른다.
+- 웹 초기화 시 lint·typecheck·build와 CI의 `npm ci`를 연결하고, FastAPI 초기화 시 HTTP 입력·오류·계약 검증을 추가한다. PostgreSQL 저장소를 구현하면 테스트 DB에서 마이그레이션·읽기·쓰기를 검증한다.
+- 기능 구현 후에는 AI 근거 일치 평가, 수집 데이터 품질 검사, 필요한 웹 통합 테스트를 각 영역에 추가한다. 현재 공통 검사 통과가 이 검증들을 대신하지 않는다.
+
+설계 참고: [FastAPI의 모듈 분리 안내](https://fastapi.tiangolo.com/tutorial/bigger-applications/), [Vite 환경 변수와 공개 범위](https://vite.dev/guide/env-and-mode), [JSON Schema 조합](https://json-schema.org/understanding-json-schema/reference/combining), [jsonschema 검증 문서](https://python-jsonschema.readthedocs.io/en/stable/validate/).
