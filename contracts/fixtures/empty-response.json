@@ -40,7 +40,7 @@
       }
     }
   },
-  "ai_generated": true,
+  "ai_generated": false,
   "data_updated_at": "2026-10-26T03:12:00+09:00",
   "discount_rate": 0.025,
   "discount_rate_status": "verified"

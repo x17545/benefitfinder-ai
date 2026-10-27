@@ -207,6 +207,22 @@ class ContractTests(unittest.TestCase):
                 with self.assertRaises(ValidationError):
                     self.validator("recommendation-response.schema.json").validate(bad)
 
+    def test_ai_generated_flag_allows_template_and_optional_generation(self):
+        validator = self.validator("recommendation-response.schema.json")
+        for filename in ("recommendation-response.json", "pv-unknown-response.json", "fallback-response.json", "empty-response.json"):
+            with self.subTest(fixture=filename):
+                response = self.fixture(filename)
+                self.assertIs(response["ai_generated"], False)
+                validator.validate(response)
+                generated = copy.deepcopy(response)
+                generated["ai_generated"] = True
+                validator.validate(generated)
+        response = self.fixture("recommendation-response.json")
+        bad = copy.deepcopy(response)
+        bad["ai_generated"] = "false"
+        with self.assertRaises(ValidationError):
+            validator.validate(bad)
+
     def test_portfolio_combination_fixture_shape(self):
         response = self.fixture("recommendation-response.json")
         self.assertEqual(response["view"], "portfolio")

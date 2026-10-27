@@ -33,13 +33,13 @@
 - `evidence`: 원문의 인용문과 해당 버전의 출처. 인용문은 실제 원문에서 확인해야 하며 AI가 생성한 문장을 넣지 않는다.
 - `application.status`: `open`, `closed`, `upcoming`, `unknown`. 상시 모집은 별도 `always` 값을 두지 않고 `open`+공식 상시 근거로 표현한다. 날짜만으로 확정할 수 없는 모집 상태는 `unknown`이며, 날짜 `null`을 `open`으로 추정하지 않는다.
 - `condition_results`/`eligibility[].status`: `met`(충족), `not_met`(미충족), `needs_review`(추가 확인 필요). `need_check` 표기는 거부된다. 충족·미충족에는 최소 하나의 근거가 필요하다.
-- `ai_generated`: 추천 설명이 AI 생성임을 표시한다. 현재 응답 계약은 `true`만 허용한다.
+- `ai_generated`: 결과 설명을 생성형 AI가 작성했으면 `true`, 기본 근거 템플릿이면 `false`다. `ai_reason`(6장 초안 이름 유지)은 템플릿을 포함한 추천 이유 텍스트이며 `ai_generated` 플래그와 함께 해석한다. 최종 필드명은 회의에서 정리한다. UI의 AI 표시는 선택 기능이 실제로 사용될 때만 노출한다. RAG/Agent/LLM은 필수가 아니며 구조화 정책 DB 검색+일반 application 분석 흐름+코드 판정/계산+근거 템플릿 설명이 기본이다. 모델 선정은 필수가 아니다.
 - 금액은 모두 원 단위 정수이며, 조합에는 검수 확정 금액만 포함한다. 만기·현재가치 지급 시점이 불명확하면 `needs_review`로 남긴다. 기준금리가 미확인(`discount_rate: null`, `discount_rate_status: unknown`)일 때 `0` 할인율로 추정하지 않고, 해당 탭의 `result_view`를 `calculation_status: unavailable`+`unavailable_reason: missing_discount_rate`(지급 시점 불명확이면 `unknown_payment_timing`)로 둔다. `unavailable` 분기는 `portfolios` 빈 배열·합계 추정 안 함이 강제되며 정상 원금액(raw) 분기만 활성이다.
 - 실효한계세율=(1년 지원금 감소분/1년 소득 증가분)×100이며 세금·4대보험을 제외한 지원금 변화만 본다.
 
 가상 응답은 현행 기획 8.3의 취업·주거 정책 P1·P3·P6로 6개 탭의 조합·합계를 채운다. 1년 최상위는 540만 원, 2년·전체는 600만 원이며, 금리 미확인 예제도 원금액 결과는 같다. 미확인 중복 쌍 경고는 별도 화면 상태 예시다. 현행 정답은 `tests/fixtures/mvp_planning_rules.json`, 이전 5개 정책의 `planning_rules.json`은 과거·확장 회귀 자료다. 현재가치는 정책별 현금흐름을 할인한 뒤 원 단위로 반올림하고, 조합 합계는 표시하는 정책 금액의 합으로 맞춘다. 만기형의 기간 누적 기대액은 그 기간의 현금 수령액과 구분하며 실제 만기 시점으로 할인한다.
 
-계약에는 최종 수급 자격 확정값을 두지 않는다. UI에서 AI 생성 표시와 최종 판단은 기관 기준이라는 안내를 제공한다.
+계약에는 최종 수급 자격 확정값을 두지 않는다. UI에서 AI 생성 표시는 선택 기능 실사용 시에만 노출하고, 최종 판단은 기관 기준이라는 안내를 제공한다.
 
 ## 민감 정보 취급
 
@@ -94,7 +94,7 @@ SSE 오류 규칙: HTTP 헤더를 보내기 전 오류는 해당 상태코드+`e
 
 같은 PR에서 스키마·가상 예제·관련 소비자 코드를 수정하고 영향받는 담당자와 검토한다. 필수 필드 추가, 필드 제거·의미 변경, 열거형 변경은 호환성 영향을 확인한다. 공개 후 호환이 깨지는 변경은 새 버전으로 관리한다.
 
-이번 정리(v1 초안 내, 배포된 소비자 없음): 미배포 `request.limit` 호환 필드 삭제, 지역 중복 제거(`region_code` SSOT, `domain_data.region`은 `sido_code`만), 요청 `message` 필드 삭제(문장 입력 없음, 13단계 단일 계약), 응답 `follow_up_questions` 필드 삭제(결과 추가 질문 없음, 빈 배열 포함 전부 거부), 기간+현재가치 옵션은 `request.options` 단일 위치로 정리(`domain_data.options` 삭제, 시뮬레이션 요청에도 동일 `options`), 탭별 계산 가능 표시(`calculation_status`+`unavailable_reason`, 스키마 강제; `portfolio.total_status` 삭제, 합계 미상은 `unavailable` 분기로), 시뮬레이션 응답은 선택 기간 카드합(`before/after_total_won`)+연간 환산(`annual`) 분리 및 `income_change.assumption_note` 필수, 시뮬레이션 `todo`는 `evidence` 1개 이상 필수, 조합 목록(`fallback_list`)은 6.3 예시처럼 선택 탭별 `result_view` 안으로 이동(전역 `view`는 초기 기준), 오류 코드 2종(`daily_limit_exceeded`, `calculation_limit_exceeded`) 추가. 기존 `profile` 공통 필드, `source`/`evidence`, `met`/`not_met` 근거 필수, `needs_review`, 오프라인 `$ref` 검증은 유지된다.
+이번 정리(v1 초안 내, 배포된 소비자·실행 API 없음 — 미배포 형식 변경): 미배포 `request.limit` 호환 필드 삭제, 지역 중복 제거(`region_code` SSOT, `domain_data.region`은 `sido_code`만), 요청 `message` 필드 삭제(문장 입력 없음, 13단계 단일 계약), 응답 `follow_up_questions` 필드 삭제(결과 추가 질문 없음, 빈 배열 포함 전부 거부), 기간+현재가치 옵션은 `request.options` 단일 위치로 정리(`domain_data.options` 삭제, 시뮬레이션 요청에도 동일 `options`), 탭별 계산 가능 표시(`calculation_status`+`unavailable_reason`, 스키마 강제; `portfolio.total_status` 삭제, 합계 미상은 `unavailable` 분기로), 시뮬레이션 응답은 선택 기간 카드합(`before/after_total_won`)+연간 환산(`annual`) 분리 및 `income_change.assumption_note` 필수, 시뮬레이션 `todo`는 `evidence` 1개 이상 필수, 조합 목록(`fallback_list`)은 6.3 예시처럼 선택 탭별 `result_view` 안으로 이동(전역 `view`는 초기 기준), 오류 코드 2종(`daily_limit_exceeded`, `calculation_limit_exceeded`) 추가. 기존 `profile` 공통 필드, `source`/`evidence`, `met`/`not_met` 근거 필수, `needs_review`, 오프라인 `$ref` 검증은 유지된다. `ai_generated` boolean(템플릿 false 기본)+`ai_reason` 설명 일반화, SSE `step` 일반 처리 단계 예시.
 
 ```bash
 python -m pip install -r requirements-dev.txt

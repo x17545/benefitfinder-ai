@@ -52,7 +52,8 @@
       }
     },
     "ai_generated": {
-      "const": true
+      "type": "boolean",
+      "description": "결과 설명을 생성형 AI가 작성했으면 true, 기본 근거 템플릿이면 false다."
     },
     "data_updated_at": {
       "type": "string",
@@ -428,7 +429,7 @@
             "string",
             "null"
           ],
-          "description": "LLM 한 줄. 민감 특수조건/부모정보를 쓰지 않는다."
+          "description": "6장 초안 필드명을 호환을 위해 유지한 추천 이유 텍스트. 템플릿을 포함하며 생성형 AI 작성 여부는 ai_generated 플래그와 함께 해석한다. 최종 필드명은 회의에서 정리한다. 민감 특수조건/부모정보를 쓰지 않는다."
         },
         "source": {
           "$ref": "common.schema.json#/$defs/source"

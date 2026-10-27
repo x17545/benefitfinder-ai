@@ -19,7 +19,7 @@ backend/
     application/                사용 사례·외부 기능 인터페이스
     domain/                     순수 공통 모델·판정·계산
     domains/youth/              청년정책 고유 규칙
-    ai/                         Agent·RAG·설명·평가
+    ai/                         향후 선택 AI 기능 자리, 현재 필수 아님
     ingestion/                  수집·정제·품질 검증
     infrastructure/
       database/
@@ -37,7 +37,7 @@ backend/
 | `application/` | 사용 사례, 검색·저장·AI 등 필요한 인터페이스 |
 | `domain/` | 공통 업무 모델과 순수 판정·계산 |
 | `domains/youth/` | 청년정책 고유 조건과 규칙 |
-| `ai/` | Agent, RAG, 프롬프트, AI 평가 |
+| `ai/` | 필요성이 확인된 뒤 도입할 선택 AI 기능 |
 | `ingestion/` | 출처별 수집·정제·검증 |
 | `infrastructure/` | PostgreSQL·검색·LLM SDK 등 구체 어댑터 |
 | `jobs/` | 수집·갱신 실행과 재실행 제어 |
@@ -50,3 +50,5 @@ backend/
 - 각 모듈 README와 [의존성 규칙](../docs/ARCHITECTURE.md)을 따라 구현한다.
 - 실행 명령과 런타임 의존성은 API 서버 초기화 후 추가하고 공통 검사·CI에 연결한다. 현재 루트 `requirements-dev.txt`는 저장소 계약 검증 전용이다.
 - 가상 저장소를 이용한 단위 검증과 실제 PostgreSQL 연동 검증을 구분한다. 실제 DB 구현은 별도 테스트 DB에서 스키마 적용·읽기·쓰기를 확인한다.
+
+2026-10-28 역할 기준: 김하정은 정책 검색·분석 흐름·API·판정·계산·DB 연동, 양승현은 jobs의 실행·스케줄·재시도·실패 알림을 맡는다. ingestion은 윤정찬(원천 수집·출처)과 탁서윤(분석·조건 구조화·정제·품질)이 파일별로 나눠 협업한다. 설명은 근거 템플릿이 기본이며 AI 실행을 요구하지 않는다.

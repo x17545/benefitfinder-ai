@@ -7,7 +7,7 @@
   "additionalProperties": false,
   "required": ["step", "state", "label"],
   "properties": {
-    "step": {"type": "string", "minLength": 1, "description": "Agent가 실제로 부른 도구 단계(예: search_policies)."},
+    "step": {"type": "string", "minLength": 1, "description": "애플리케이션이 실제로 처리한 단계(예: search_policies). RAG/Agent/LLM 사용은 필수가 아니며 구조화 정책 DB 검색과 같은 일반 처리 단계도 이 값을 쓴다."},
     "state": {"enum": ["running", "done", "failed"]},
     "label": {"type": "string", "minLength": 1},
     "detail": {"type": ["string", "null"]}

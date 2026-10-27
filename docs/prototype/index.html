@@ -253,7 +253,7 @@ function s1() {
       <div><b>2</b>함께 받을 수 있는 조합과 총액을 봐요</div>
       <div><b>3</b>신청 방법과 준비 서류까지 확인해요</div>
     </div>
-    <div class="card sub small"><p><span class="ai">AI</span>이 서비스는 생성형 AI를 사용해요. 결과는 참고용이며 최종 자격은 신청 기관에서 확인해야 해요. <button class="link" onclick="go('#/about')">자세히</button></p></div>
+    <div class="card sub small"><p>선택한 조건으로 정책을 찾고 지원금 조합을 계산해요. 결과는 참고용이며 최종 자격은 신청 기관에서 확인해야 해요. <button class="link" onclick="go('#/about')">자세히</button></p></div>
     <div class="check ${S.consent ? "on" : ""}" onclick="S.consent=!S.consent; render()"><span class="box">${S.consent ? "✓" : ""}</span>
       <span><b>(필수)</b> 선택한 조건은 정책 분석에만 사용돼요 <button class="link" onclick="event.stopPropagation(); go('#/privacy')">개인정보 처리방침</button></span></div>
     <div class="check ${S.remember ? "on" : ""}" onclick="S.remember=!S.remember; render()"><span class="box">${S.remember ? "✓" : ""}</span>
@@ -299,7 +299,7 @@ function s2(step) {
     ok = !!(c.income && c.asset); }
   if (step === 9) { body = `<h2>해당하는 게 있나요?</h2><p class="muted">이런 분만 받을 수 있는 정책이 따로 있어요. 여러 개 고를 수 있어요</p>` +
       multi("special", ["기초생활수급자", "차상위계층", "한부모가정", "장애인", "중소기업 재직", "농업인·어업인", "군 복무 중", "해당 없음"], "해당 없음") +
-      `<p class="muted small">이 정보는 AI에게 보내지 않고 자격 계산에만 써요. 서버에 저장하지 않아요</p>`; ok = c.special.length > 0; }
+      `<p class="muted small">이 정보는 자격 계산에만 써요. 서버에 저장하지 않아요</p>`; ok = c.special.length > 0; }
   if (step === 10) { body = `<h2>어떤 지원에 관심 있어요?</h2><p class="muted">초기에는 취업·주거 혜택을 다뤄요. 여러 개 고를 수 있어요</p>` + multi("interests", ["취업", "주거"], ""); ok = c.interests.length > 0; }
   if (step === 11) { body = `<h2>이미 받고 있거나 받았던 게 있나요?</h2><p class="muted">한 번만 받을 수 있거나 함께 가입할 수 없는 정책은 조합에서 빼요</p>` +
       multi("received", ["청년월세 지원", "청년도약계좌·청년미래적금", "청년내일저축계좌", "국민취업지원제도", "버팀목 전세대출", "없음"], "없음"); ok = c.received.length > 0; }
@@ -326,10 +326,10 @@ function refreshCta() { const a = +S.cond.age; if (ageNote(a) !== refreshCta.k) 
   const b = document.querySelector(".cta .btn"); if (b) b.disabled = !a || (a >= 35 && !S.cond.military); }
 
 // ===== 로딩 =====
-const LOAD = [["내 조건에 맞는 정책 찾는 중", "128개 찾음", "search_policies"], ["자격 조건 비교", "", "check_eligibility"], ["함께 받을 수 있는 조합 계산", "", "optimize_portfolio"], ["추천 이유 정리", "", "AI 설명"]];
+const LOAD = [["내 조건에 맞는 정책 찾는 중", "3개 찾음 (가상 예시)", ""], ["자격 조건 비교", "", ""], ["함께 받을 수 있는 조합 계산", "", ""], ["추천 이유 정리", "", ""]];
 function loading(frozen) {
   const k = frozen ? 2 : (loading.k || 0);
-  return bar("분석 중", false) + `<main><h2>가장 이득인 조합을<br>계산하고 있어요</h2><p class="muted">AI가 아래 순서대로 도구를 쓰고 있어요</p>
+  return bar("분석 중", false) + `<main><h2>가장 이득인 조합을<br>계산하고 있어요</h2><p class="muted">아래 단계로 정책을 찾고 계산하고 있어요</p>
     <div class="steps">${LOAD.map(([t, d, tool], i) => `<div class="${i < k ? "done" : i === k ? "now" : ""}"><span class="ic">${i < k ? "✓" : ""}</span><span>${t}${i < k && d ? ` (${d})` : ""}<small>${tool}</small></span></div>`).join("")}</div></main>`;
 }
 function runLoading() { ensureDemo(); loading.k = 0; const tick = () => { if (location.hash !== "#/loading") return; loading.k++; render(); if (loading.k < LOAD.length) setTimeout(tick, 700); else setTimeout(() => { if (S.remember) S.saved = true; go("#/result"); }, 500); }; setTimeout(tick, 700); }
@@ -379,7 +379,7 @@ function s3() {
       </div>
       ${x.type === "maturity" ? `<span class="small" style="color:var(--gold-ink)">만기 시 지급</span>` : ""}
       <div class="st">${x.elig.map(statusChip).join("")}</div>
-      <p class="small"><span class="ai">AI</span>${x.reason}</p>
+      <p class="small">${x.reason}</p>
       <span class="src">출처 ${x.source} · ${x.verified} 확인${x.stale ? ` · <span style="color:var(--ck)">⚠ 최신 내용은 공식 페이지에서 확인</span>` : ""}</span>
       <div class="iact"><button class="btn sm ghost2" onclick="go('#/policy/${id}')">자세히 보기</button><a class="btn sm" href="${SRC_URL[x.source]}" target="_blank" rel="noopener">신청하러 가기 ↗</a></div>
     </div>`; }).join("")}</div>
@@ -392,7 +392,7 @@ function s3() {
     ${fold("nr", "아직 조합 계산 전인 정책 2개", `<p class="muted">금액·중복 여부를 검수 중이에요. 정책별 자격 진단은 볼 수 있어요.</p><div><b>청년 면접 정장 대여</b> <span class="s met">✓ 자격 충족</span></div><div><b>청년 주거 이전 지원</b> <span class="s needs_review">? 확인 필요</span></div>`)}
     <button class="btn line" onclick="go('#/what-if')">상황이 바뀌면 어떻게 될까?</button>
     <button class="btn ghost" onclick="toast('결과 이미지를 저장했어요 (시안: 실제 저장 생략)')">결과 이미지로 저장</button>
-    <p class="disclaimer">AI가 계산을 돕는 참고 결과예요. 최종 자격은 신청 기관에서 확인해 주세요.</p>
+    <p class="disclaimer">검수한 정책과 입력 조건으로 계산한 참고 결과예요. 최종 자격은 신청 기관에서 확인해 주세요.</p>
   </main>${foot()}`;
 }
 
@@ -419,8 +419,8 @@ function s4() {
     ${w.lose.map(([n, r]) => `<div class="card"><span class="s not_met" style="align-self:flex-start">✕ 끊기는 정책</span><b>${n}</b><span class="muted small">${r}</span></div>`).join("")}
     ${w.add.map(([n, r]) => `<div class="card"><span class="s met" style="align-self:flex-start">＋ 새로 받는 정책</span><b>${n}</b><span class="muted small">${r}</span></div>`).join("")}
     <div class="card"><span class="s needs_review" style="align-self:flex-start">! 기준선 주의</span><span>${w.warn}</span></div>
-    ${w.todo ? `<div class="card sub"><b>지금 할 일</b><p><span class="ai">AI</span>${w.todo}</p><span class="src">근거: 공고 원문 '지원 대상' · '지원 중단' 조항</span></div>` : ""}
-    <p class="disclaimer">계산은 바뀐 조건으로 조합을 다시 계산한 결과예요. AI는 '지금 할 일' 설명만 써요. 세금·4대 보험은 빼고 지원금 변화만 계산했어요.</p>
+    ${w.todo ? `<div class="card sub"><b>지금 할 일</b><p>${w.todo}</p><span class="src">근거: 공고 원문 '지원 대상' · '지원 중단' 조항</span></div>` : ""}
+    <p class="disclaimer">계산은 바뀐 조건으로 조합을 다시 계산한 결과예요. 안내는 공고 근거와 계산 결과로 정리했어요. 세금·4대 보험은 빼고 지원금 변화만 계산했어요.</p>
   </main>${foot()}`;
 }
 
@@ -441,18 +441,18 @@ function s5(id) {
     <div class="card"><b>준비 서류</b><p class="muted">공식 자료에 서류 안내가 없어요. 신청 페이지에서 확인해 주세요.</p></div>
     <div class="card sub"><b>확인이 필요한 것</b>${x.elig.filter(e => e[0] === "needs_review").map(e => `<p>? ${e[1]}: 입력하지 않았거나 공식 기준이 불명확해요</p>`).join("") || "<p class='muted'>없어요</p>"}</div>
     <span class="src">출처 ${x.source} · 마지막 확인 ${x.verified} · https://...</span>
-    <p class="disclaimer">AI가 계산을 돕는 참고 결과예요. 최종 자격과 최신 조건은 신청 기관에서 확인해 주세요.</p>
+    <p class="disclaimer">검수한 정책과 입력 조건으로 계산한 참고 결과예요. 최종 자격과 최신 조건은 신청 기관에서 확인해 주세요.</p>
   </main>${foot()}${cta("신청하러 가기 ↗", `window.open('${SRC_URL[x.source]}', '_blank', 'noopener')`)}`;
 }
 
 // ===== 공통 페이지 =====
 function about() { return bar("이용 안내", true) + `<main><h2>청년 정책 매니저는<br>이렇게 만들어졌어요</h2>
-  <div class="card"><b>AI가 하는 일</b><p>정책 원문에서 근거를 찾고(RAG), 필요한 도구를 골라 쓰고(Agent), 추천 이유를 설명해요.</p></div>
-  <div class="card"><b>AI가 하지 않는 일</b><p>자격 판정, 금액 계산, 조합 계산은 코드가 해요. AI는 숫자를 바꾸지 않아요. 최종 자격을 확정하지 않아요.</p></div>
+  <div class="card"><b>정책을 찾고 계산하는 방법</b><p>선택한 조건과 정책 데이터를 비교하고, 함께 받을 수 있는 지원금 조합을 계산해요. 추천 이유는 판정 결과와 공고 근거로 정리해요.</p></div>
+  <div class="card"><b>최종 자격 확인</b><p>결과는 신청 준비를 돕는 참고 정보예요. 최종 자격과 최신 조건은 신청 기관에서 확인해 주세요.</p></div>
   <div class="card"><b>데이터</b><p>온통청년 청년정책 API, 공공데이터포털 공공서비스(보조금24) API. 매일 새벽 3시에 갱신해요.</p></div>
   <div class="card"><b>한계</b><p>두 API에 없는 정책은 다루지 않아요. 금액·중복 여부를 검수한 정책만 조합에 들어가요.</p></div></main>${foot()}`; }
 function privacy() { return bar("개인정보 처리방침", true) + `<main><h2>개인정보 처리방침 (시안)</h2>
-  <div class="card"><dl class="kv"><dt>받는 정보</dt><dd>선택한 조건 (나이, 지역, 상황, 소득·재산 구간 등)</dd><dt>저장 위치</dt><dd>'기억하기'를 켠 경우 사용자 브라우저에만 30일. 서버에는 저장하지 않아요</dd><dt>외부 전달</dt><dd>정책 분석을 위해 AI API에 조건을 전달해요. 특수 조건과 부모님 소득·재산은 보내지 않아요</dd><dt>이용 통계</dt><dd>구글 애널리틱스 (쿠키 사용, 조건 값은 보내지 않아요)</dd><dt>지우기</dt><dd>하단 '내 정보 지우기'를 누르면 바로 지워져요</dd></dl></div></main>${foot()}`; }
+  <div class="card"><dl class="kv"><dt>받는 정보</dt><dd>선택한 조건 (나이, 지역, 상황, 소득·재산 구간 등)</dd><dt>저장 위치</dt><dd>'기억하기'를 켠 경우 사용자 브라우저에만 30일. 서버에는 저장하지 않아요</dd><dt>외부 전달</dt><dd>선택한 조건은 계산을 위해 서버로 보내요. 생성형 AI API로 보내지 않으며, 민감 조건은 서버 판정에만 사용해요</dd><dt>이용 통계</dt><dd>구글 애널리틱스 (쿠키 사용, 조건 값은 보내지 않아요)</dd><dt>지우기</dt><dd>하단 '내 정보 지우기'를 누르면 바로 지워져요</dd></dl></div></main>${foot()}`; }
 function notFound(t = "페이지를 찾을 수 없어요", d = "주소를 다시 확인해 주세요") { return bar("", true) + `<main><div class="empty"><span class="big">🔎</span><h2>${t}</h2><p class="muted">${d}</p></div></main>${cta("처음으로", "go('#/')")}`; }
 function emptyResult() { return bar("추천 조합", true) + `<main><div class="empty"><span class="big">📭</span><h2>지금 다루는 정책 중엔<br>맞는 게 없어요</h2><p class="muted">초기에는 취업·주거 혜택만 다뤄요. 나머지 분야는 확장 예정이에요</p></div>
   <button class="btn line" onclick="go('#/conditions/13')">조건 바꾸기</button><button class="btn ghost" onclick="toast('온통청년으로 이동 (시안)')">온통청년에서 더 찾아보기 ↗</button><button class="btn ghost" onclick="toast('복지로로 이동 (시안)')">복지로에서 더 찾아보기 ↗</button></main>${foot()}`; }

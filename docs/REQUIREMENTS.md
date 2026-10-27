@@ -1,9 +1,9 @@
 # AI 혜택 코치 (BenefitFinder AI)
 ## 기능 요구 명세서 (현행 진입점)
 
-- 문서 상태: 현행 진입점 (2026-10-27 사용자 요청 반영)
+- 문서 상태: 현행 진입점 (2026-10-28 역할·구현 방식 반영)
 - 기획 원본 작성자: 이현서 / 채택 근거: 2026-10-27 사용자의 v2 기획 유지 요청
-- 현행 상세 기준: [REQUIREMENTS_v2.md](../REQUIREMENTS_v2.md) v2.2 (취업·주거 MVP 회의 결정 반영)
+- 현행 상세 기준: [REQUIREMENTS_v2.md](../REQUIREMENTS_v2.md) v2.3 (역할 조정·검색 및 분석 흐름 구현 방식 반영)
 - 현행 기획: [PROJECT_PLAN.md](PROJECT_PLAN.md)
 - 기록 보존: 2026-10-26 이전 요구명세 원문은 [REQUIREMENTS_v1_ARCHIVE.md](REQUIREMENTS_v1_ARCHIVE.md)에 그대로 둔다. 아카이브는 현행 결정이 아니다.
 
@@ -34,8 +34,8 @@
 | ID | 기능명 | 상세 위치 |
 |---|---|---|
 | F01 | 조건 선택 입력 | REQUIREMENTS_v2.md 4.3, 5장 F01 |
-| F02 | RAG 정책 검색 | REQUIREMENTS_v2.md 5장 F02 |
-| F03 | AI Agent | REQUIREMENTS_v2.md 5장 F03 |
+| F02 | 정책 검색 | REQUIREMENTS_v2.md 5장 F02 |
+| F03 | 분석 흐름·진행 상태 | REQUIREMENTS_v2.md 5장 F03 |
 | F04 | 자격 진단 | REQUIREMENTS_v2.md 5장 F04 |
 | F05 | 최적 조합 | REQUIREMENTS_v2.md 5장 F05 |
 | F06 | 상황 변화 분석 | REQUIREMENTS_v2.md 5장 F06 |
@@ -79,7 +79,7 @@
 | 사용자 테스트 진행 | [USER_TEST.md](USER_TEST.md) |
 | 옛 기획서와 요구명세 | [PROJECT_PLAN_v1.1_ARCHIVE.md](PROJECT_PLAN_v1.1_ARCHIVE.md), [REQUIREMENTS_v1_ARCHIVE.md](REQUIREMENTS_v1_ARCHIVE.md) |
 
-계약과 기술 정렬 상태는 현재 개발 초안 기준이며 기획자 최종 승인으로 쓰지 않는다. 6장 필드 이름과 자료형, 11.2 임시 기본값, LLM과 임베딩 모델은 다음 회의 확정 대상이다.
+계약과 기술 정렬 상태는 현재 개발 초안 기준이며 기획자 최종 승인으로 쓰지 않는다. 6장 필드 이름과 자료형, 11.2 임시 기본값은 다음 회의 확정 대상이다. F02·F03은 일반 백엔드로 구현하고 설명은 근거 템플릿을 기본으로 하며, AI 도입·모델 선정은 필요성이 확인될 때 검토한다.
 
 ---
 
@@ -90,3 +90,4 @@
 | 2026-10-26 | 요구명세 v1.0 초안 작성 (원문은 아카이브로 보존) |
 | 2026-10-27 | 사용자 요청에 따른 v2 기획 반영: 이 문서를 현행 진입점으로 정리하고, 상세 기준을 REQUIREMENTS_v2.md v2.1 하나로 둠. 옛 Must, Should, Could 단계화는 현행 기준에서 제외 |
 | 2026-10-27 | 추가 회의 결정 반영: 초기 MVP를 청년 취업·주거로 한정하고 나머지 분류를 확장 단계로 이동. 기능 F01~F11과 13단계 입력은 두 분야에 유지 |
+| 2026-10-28 | 역할 변경과 구현 방식 정리: 서윤은 데이터 분석·정제, 승현은 자동화 추가. F02·F03은 검색·분석 흐름으로 유지하고 AI 필수 조건을 제거(상세 v2.3) |

@@ -1,6 +1,6 @@
 # 아키텍처 설계
 
-설계 갱신일: 2026-10-27. **React + TypeScript + Vite, Python + FastAPI, PostgreSQL**을 확정했다. 기능·화면은 [기획 명세 v2](../REQUIREMENTS_v2.md)를 따른다. 이 문서는 그 기획을 구현할 위치와 경계를 정하며, 실행 프로젝트 초기화와 제품 기능 구현은 아직 완료하지 않았다. 기술 결정의 원본은 9장이다.
+설계 갱신일: 2026-10-28. **React + TypeScript + Vite, Python + FastAPI, PostgreSQL**을 확정했다. 기능·화면은 [기획 명세 v2](../REQUIREMENTS_v2.md)를 따른다. 이 문서는 그 기획을 구현할 위치와 경계를 정하며, 실행 프로젝트 초기화와 제품 기능 구현은 아직 완료하지 않았다. 기술 결정의 원본은 9장이다.
 
 ## 1. 설계 기준
 
@@ -8,7 +8,7 @@
 - 공통 혜택 처리와 분야별 조건을 분리해 다른 분야를 추가할 수 있게 한다.
 - 5명이 각자의 디렉터리에서 작업하고, 공용 계약과 예제로 먼저 연결한다.
 - 초기 운영은 모듈형 모놀리스로 구성한다. 기능별 서비스 배포, 메시지 브로커, 플러그인 프레임워크는 실제 필요가 생길 때 검토한다.
-- AI의 해석·설명, 코드의 조건 비교·계산, 외부 데이터의 사실을 구분한다.
+- 구조화된 정책 DB 조회·조건 비교·금액 계산과 근거 템플릿을 MVP 기본으로 한다. RAG·Agent·LLM·임베딩은 필요성이 확인될 때 검토하며 필수 의존성이나 완료 조건으로 두지 않는다.
 
 ## 2. 구성과 실행 흐름
 
@@ -18,26 +18,24 @@ flowchart TD
     API --> App[Application: 사용자 요청 조율]
     App --> Core[Domain: 공통 모델과 판정]
     App --> Youth[Youth: 청년정책 조건]
-    App --> AI[AI: Agent / RAG / 설명]
-    AI --> Tools[주입받은 검색·조회·판정 도구]
+    App --> Explain[판정 결과와 근거 템플릿]
     App --> Infra[Infrastructure: 저장·검색 어댑터]
-    Tools --> Infra
     Infra --> DB[(PostgreSQL / 정책·조건·문서·출처)]
-    AI --> Model[LLM 어댑터]
-    Model --> Provider[외부 모델 API]
     Scheduler[수동 실행 / 향후 스케줄러] --> Jobs[Jobs]
     Jobs --> Ingest[수집 → 정제 → 검증]
     Official[공식 정책 데이터] --> Ingest
     Ingest --> Infra
 ```
 
-위 화살표는 실행 흐름이며 Python import 방향과는 구분한다. 검색 도구가 조건 판정을 수행할 때에는 같은 공통 판정 코드를 호출한다.
+위 화살표는 실행 흐름이며 Python import 방향과는 구분한다. 일반 애플리케이션 코드가 검색·판정·계산의 순서와 분기를 실행하며 실제 진행 상태를 SSE로 전송한다. 구조화된 조건으로 검색하고 원문 인용은 저장된 근거에서 조회한다.
 
 프론트엔드는 Vite로 빌드하는 React SPA이며 Next.js 서버나 SSR을 전제하지 않는다. 브라우저는 FastAPI의 HTTP API로만 데이터에 접근하고, DB 연결·LLM 호출·비밀 키는 백엔드가 관리한다. 프론트엔드와 백엔드를 논리적으로 나누되 실제 배포 단위와 호스팅은 아직 정하지 않는다.
 
 개발 환경에서는 Vite의 `/api/v1`·`/health` 프록시를 FastAPI에 연결하는 방식을 기본으로 한다. 운영에서는 같은 출처의 `/api/v1`을 백엔드로 보내는 구성을 우선 검토한다. 서로 다른 출처가 필요하면 백엔드 CORS 허용 목록을 실제 프론트엔드 주소로 제한한다. 현재 프록시·CORS·배포 설정은 아직 없다.
 
-AI는 같은 Python 백엔드의 모듈이며, 별도의 AI 서버를 요구하지 않는다. 사용자 조건은 선택값으로 받고, AI는 정책 원문 조건의 구조화·RAG·Agent 도구 선택·설명을 맡는다. 데이터 갱신은 같은 백엔드 패키지를 사용하는 작업 실행 진입점으로 분리해, 긴 수집 작업이 사용자 요청을 막지 않게 한다. 매일 03:00 KST 갱신·실패 알림은 기획 요구이며 실행 어댑터·스케줄러 제품은 아직 정하지 않는다.
+수집·분석·정제 단계에서 정책의 조건·금액·중복 제한과 원문 근거를 구조화하고 사람이 검수한다. 사용자 요청에서는 선택값으로 DB 후보를 찾고 순수 판정·계산 코드를 실행한다. 추천 이유와 신청 안내는 검수된 근거·결과를 템플릿으로 정리한다. 원문 처리에 AI 보조가 필요해져도 온라인 분석에 Agent나 벡터 DB를 함께 도입할 필요는 없다.
+
+데이터 갱신은 같은 백엔드 패키지의 별도 실행 진입점으로 분리한다. 양승현은 실행·스케줄·재시도·실패 알림을, 윤정찬은 원천 수집·출처 관리를, 탁서윤은 수집 데이터 분석·정제·품질 검증을 담당하며 김하정은 API·DB 연동을 지원한다. 매일 03:00 KST 갱신은 기획 요구이고 스케줄러 제품은 아직 정하지 않았다.
 
 ## 3. 디렉터리와 책임
 
@@ -50,14 +48,14 @@ AI는 같은 Python 백엔드의 모듈이며, 별도의 AI 서버를 요구하�
 | `backend/src/benefitfinder/api/v1/routers/` | FastAPI v1 엔드포인트, 사용 사례 호출 | 백엔드 |
 | `backend/src/benefitfinder/api/schemas/` | 계약에 맞춘 Pydantic 요청·응답 모델 | 백엔드, 계약 공동 검토 |
 | `backend/src/benefitfinder/api/dependencies/` | 조립된 사용 사례를 HTTP 요청에 연결 | 백엔드 |
-| `backend/src/benefitfinder/application/` | 추천·상세 조회 등 사용 사례와 외부 기능 인터페이스 | 백엔드, AI 협의 |
+| `backend/src/benefitfinder/application/` | 추천·상세 조회 등 사용 사례와 외부 기능 인터페이스 | 백엔드, 데이터 협의 |
 | `backend/src/benefitfinder/domain/` | 공통 혜택·조건·근거 모델과 순수 판정 | 공동 검토 |
-| `backend/src/benefitfinder/domains/youth/` | 청년정책 특유의 필드·조건 해석·규칙 | 데이터, AI, 백엔드 협의 |
-| `backend/src/benefitfinder/ai/` | 조건 추출, Agent, RAG, 프롬프트·AI 평가 | AI |
-| `backend/src/benefitfinder/ingestion/` | 출처별 수집, 정규화, 품질 검증 | 데이터 |
+| `backend/src/benefitfinder/domains/youth/` | 청년정책 특유의 필드·조건 해석·규칙 | 데이터 분석·정제, 백엔드 협의 |
+| `backend/src/benefitfinder/ai/` | 향후 AI 보조 기능을 검토할 기존 자리. 현재 MVP 의존성 없음 | 현재 전담 없음 |
+| `backend/src/benefitfinder/ingestion/` | 원천 수집·출처 관리 / 수집 후 분석·정규화·품질 검증 | 윤정찬 / 탁서윤, 파일별 분담 |
 | `backend/src/benefitfinder/infrastructure/` | DB, 검색, LLM·외부 API 클라이언트의 구체 구현 | 백엔드, 관련 담당 협의 |
 | `backend/src/benefitfinder/infrastructure/database/` | PostgreSQL 연결·트랜잭션, DB 전용 모델과 저장소 구현 | 백엔드 |
-| `backend/src/benefitfinder/jobs/` | 수집·갱신 작업 실행과 재실행 제어 | 백엔드·자동화 |
+| `backend/src/benefitfinder/jobs/` | 수집·갱신 실행·스케줄·재실행·실패 알림 | 양승현, 김하정 API·DB 협업 |
 | `backend/migrations/versions/` | PostgreSQL 스키마 변경 이력 | 백엔드 |
 | `contracts/` | API·수집 결과가 공유하는 교환 형식 | 공동 검토 |
 
@@ -77,7 +75,7 @@ AI는 같은 Python 백엔드의 모듈이며, 별도의 AI 서버를 요구하�
 6. 구체 구현의 연결은 향후 `backend/src/benefitfinder/bootstrap.py`에서 수행한다. 이 파일과 실행 진입점만 조립을 위해 여러 구현 모듈을 참조한다.
 7. `jobs/`는 수집 흐름을 실행한다. 출처별 파싱이나 데이터 정제 로직은 `ingestion/`에 둔다.
 
-AI Agent의 도구는 검색·상세 조회·조건 판정 같은 인터페이스로 주입한다. AI 모듈이 API 라우터나 애플리케이션 전체를 재호출하지 않게 해 순환 의존을 피한다. AI의 출력으로 판정 코드가 정한 결과를 덮어쓰지 않는다.
+MVP의 검색·상세 조회·판정은 일반 application 사용 사례로 조율한다. 향후 선택 AI 기능을 도입하면 필요한 인터페이스만 주입한다. AI 모듈이 API 라우터나 애플리케이션 전체를 재호출하지 않게 해 순환 의존을 피한다. AI의 출력으로 판정 코드가 정한 결과를 덮어쓰지 않는다.
 
 실제 인터페이스는 기능 구현 시 필요한 것부터 추가한다. 미리 대형 추상 클래스나 범용 규칙 언어를 만들지 않는다.
 
@@ -95,11 +93,11 @@ AI Agent의 도구는 검색·상세 조회·조건 판정 같은 인터페이�
 
 - 프론트엔드는 가상 응답을 로딩해 화면을 만든다. 모의 응답 사용 여부가 실제 실행과 혼동되지 않게 한다.
 - 데이터 담당은 가상 혜택과 같은 모양으로 수집 결과를 정규화한다.
-- AI 담당은 가상 요청과 혜택으로 도구·근거·진행 이벤트·확인 필요 상태를 검증한다. 결과 화면의 추가 질문이나 챗봇은 만들지 않는다.
+- 데이터 수집·분석·정제 담당은 가상 혜택과 조건·근거를 맞추고 누락·중복·변경 사례를 검증한다. 양승현은 실행·재시도, 김하정은 API·진행 이벤트를 검증한다. 결과 화면의 추가 질문이나 챗봇은 만들지 않는다.
 - 백엔드는 같은 데이터를 사용하는 임시 저장소로 통합할 수 있다. 실제 저장소 연결 전까지 예제를 실데이터로 안내하지 않는다.
 - 계약 변경은 영향받는 담당자와 검토하고 스키마·예제·테스트를 함께 수정한다.
 
-계약은 **형식**을 검증한다. 정책의 사실성, 출처의 공신력, 근거가 판정을 실제로 뒷받침하는지는 별도 데이터·AI 평가로 검증한다.
+계약은 **형식**을 검증한다. 정책의 사실성, 출처의 공신력, 근거가 판정을 실제로 뒷받침하는지는 별도 데이터 품질·근거 검수로 검증한다.
 
 ## 6. 데이터 모델과 저장 경계
 
@@ -149,7 +147,7 @@ DB 스키마 변경은 `backend/migrations/versions/`에 이력으로 관리한�
 | 기획 기능 | 구현 위치 |
 |---|---|
 | F01 선택 입력, F09 기억하기, F10 이미지 저장 | 웹 `features/profile`, `features/benefits`, `domains/youth` |
-| F02 RAG, F03 Agent·진행 설명 | 백엔드 `ai`, 주입된 검색·계산 도구 |
+| F02 정책 검색, F03 분석 흐름·진행 상태 | 백엔드 `application`, DB 조회·판정·계산 코드·근거 템플릿 |
 | F04 자격, F05 조합·현재가치, F06 상황 변화 | `domain`의 순수 계산, `domains/youth` 정책 조건, `application` 조율 |
 | F07 상세·신청 안내 | `application`·`api`, 저장소 인터페이스 |
 | F08 갱신 | `jobs` 진입점, `ingestion` 정제, `infrastructure` 원천·DB·검색 어댑터 |
@@ -187,7 +185,7 @@ DB 스키마 변경은 `backend/migrations/versions/`에 이력으로 관리한�
 ### 아직 정하지 않은 것
 
 - ORM·PostgreSQL 드라이버·마이그레이션 도구, 런타임 세부 버전·의존성 관리 도구
-- LLM 공급자·SDK, RAG·Agent 라이브러리, 벡터 검색 구현
+- 선택 AI 기능의 필요성·범위. 도입할 경우에만 LLM·RAG·Agent·벡터 검색 도구 검토
 - 스케줄러·작업 큐, 배포 서비스·운영 구성
 
 pgvector는 PostgreSQL에서 의미 검색이 필요해질 때 검토하는 선택 사항이다. 처음부터 별도 벡터 DB·Redis·분산 작업 큐를 요구하지 않는다. 미정 도구의 선택은 공통 분야 모델을 바꾸지 않게 어댑터에 둔다.
@@ -197,6 +195,6 @@ pgvector는 PostgreSQL에서 의미 검색이 필요해질 때 검토하는 선�
 - 스택 결정과 실제 패키지 초기화를 구분한다. 현재 React·Vite 프로젝트 설정, FastAPI 실행 진입점, DB 연결·마이그레이션 설정과 제품 기능은 아직 없다.
 - 현재 `python scripts/check.py`는 Git 작업 상태·파일 형식·직접 import 경계와 JSON Schema·가상 예제·잘못된 입력·확장 분야의 회귀 검증을 수행한다. PR 준비 검사는 `--pr`로 실행하며 자세한 범위는 [저장소 운영 설정](REPOSITORY_SETTINGS.md)을 따른다.
 - 웹 초기화 시 lint·typecheck·build와 CI의 `npm ci`를 연결하고, FastAPI 초기화 시 HTTP 입력·오류·계약 검증을 추가한다. PostgreSQL 저장소를 구현하면 테스트 DB에서 마이그레이션·읽기·쓰기를 검증한다.
-- 기능 구현 후에는 AI 근거 일치 평가, 수집 데이터 품질 검사, 필요한 웹 통합 테스트를 각 영역에 추가한다. 현재 공통 검사 통과가 이 검증들을 대신하지 않는다.
+- 기능 구현 후에는 판정·설명·원문 근거 일치 검증, 수집·정제 데이터 품질 검사, 필요한 웹 통합 테스트를 각 영역에 추가한다. 현재 공통 검사 통과가 이 검증들을 대신하지 않는다.
 
 설계 참고: [FastAPI의 모듈 분리 안내](https://fastapi.tiangolo.com/tutorial/bigger-applications/), [Vite 환경 변수와 공개 범위](https://vite.dev/guide/env-and-mode), [JSON Schema 조합](https://json-schema.org/understanding-json-schema/reference/combining), [jsonschema 검증 문서](https://python-jsonschema.readthedocs.io/en/stable/validate/).
