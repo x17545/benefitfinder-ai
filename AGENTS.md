@@ -19,7 +19,7 @@
 - 한 작업은 한 짧은 브랜치와 한 PR로 관리한다. 구현한 기능·수정은 검증 후 `main` 대상 PR로 연결한다.
 - **PR 전에는 반드시 작업 브랜치에서 `git fetch origin` → `git merge --no-edit origin/main` → 충돌 해결 → 전체 검증을 수행한다.** 작업 브랜치를 `main`에 로컬 머지하는 방향과 혼동하지 않는다.
 - 충돌 시 파일별 의미와 양쪽 변경을 확인한다. 전체 파일에 `--ours`/`--theirs`를 일괄 적용하지 않는다. 공유 계약처럼 의도가 불분명한 부분만 관련 담당자에게 확인한다.
-- PR 전에는 `python scripts/check.py --pr`을 실행한다. 이 명령은 fetch하지 않으므로 직전 원격 갱신이 필요하다. PR 후 `main`이 바뀌거나 코드를 수정하면 다시 동기화·검증한다.
+- PR 전에는 `uv run --locked python scripts/check.py --pr`을 실행한다. 이 명령은 fetch하지 않으므로 직전 원격 갱신이 필요하다. PR 후 `main`이 바뀌거나 코드를 수정하면 다시 동기화·검증한다.
 - 명시적인 경로만 stage하고 staged diff를 검토한다. `git add .`, `git add -A`, `git commit -a`로 기존 변경을 한꺼번에 포함하지 않는다.
 - 최초 푸시는 `git push -u origin HEAD`를 사용한다. 같은 head와 base=`main`인 PR이 있으면 갱신하고 중복 생성하지 않는다.
 - 제품 기능·수정 개발의 표준 완료 흐름은 검증·작업 브랜치 커밋·푸시·PR 생성까지다. 사용자가 로컬 작업·초안만 요청했거나 게시 권한이 없으면 그 경계를 지킨다. 기존 미커밋 작업을 원격 게시할 권한까지 추론하지 않는다.
@@ -33,7 +33,7 @@
 - 2026-10-28 역할 기준: 양승현은 조장·PM·자동화, 이현서는 기획·프론트엔드, 김하정은 백엔드(API·DB 연동으로 자동화 협업), 탁서윤은 Agent를 활용한 수집 데이터 분석·정제·평가, 윤정찬은 데이터 수집·정제다. 서윤의 역할 이동은 AI 업무 폐기가 아니라 원문 분석·규칙 추출에 집중한다는 뜻이다. 상세 인계는 `REQUIREMENTS_v2.md` 9장을 따른다. 정찬·서윤은 ingestion을 파일별로 나누고 ai의 추출 전략·평가는 서윤이 맡는다.
 
 - 합의한 프레임워크·DB를 유지한다. 임의로 Next.js·Django·다른 DB로 교체하거나 별도 AI 서버를 만들지 않는다. ORM·LLM 공급자·벡터 검색·배포 등 아직 선택하지 않은 요소는 기존 결정과 구분해 필요한 시점에 정한다.
-- 프론트엔드는 TypeScript strict와 npm을 기준으로 초기화하고 lockfile을 함께 관리한다. `VITE_*`는 브라우저에 공개되는 값이므로 DB 연결 문자열·비밀 키를 넣지 않는다. DB·LLM 접근은 백엔드가 담당한다.
+- 프론트엔드는 TypeScript strict·Node.js 24·pnpm 11.25.0을 사용한다. Python은 3.12·uv(0.9.5 이상)를 사용하고 루트 `pyproject.toml`과 단일 `.venv`로 관리한다. 의존성 설치는 루트에서 `uv sync --locked`와 `pnpm install --frozen-lockfile`, 실행은 `pnpm dev`다. `pip`, `npm`, `npx`, yarn, Poetry로 설치·실행하지 않는다. Python 추가는 `uv add`/`uv add --dev`, 웹 추가는 `pnpm --filter @benefitfinder/web add`/`add -D`, 도구 실행은 `uv run`/`pnpm exec`를 사용한다. `uv.lock`·`pnpm-lock.yaml`은 직접 편집·삭제하지 않고 선언 파일과 함께 커밋한다. 설치 안내는 `docs/GETTING_STARTED.md`를 따른다. `VITE_*`는 브라우저에 공개되는 값이므로 DB 연결 문자열·비밀 키를 넣지 않는다. DB·LLM 접근은 백엔드가 담당한다.
 - DB 구현은 PostgreSQL을 기준으로 하고 스키마 변경 이력을 `backend/migrations/`에서 관리한다. 테스트용 가상 저장소는 허용하지만 SQLite 테스트 통과를 PostgreSQL 연동 검증으로 보고하지 않는다.
 - 기능 수락 조건과 영향받는 경로를 확인한 뒤, 필요한 범위만 구현한다. 일상적인 구현 선택마다 승인을 반복 요청하지 않는다.
 - 공통 `domain`, 분야별 `domains`, AI, 수집, 외부 연동의 경계를 지킨다. 상세 의존 방향은 `docs/ARCHITECTURE.md`를 따른다.
@@ -47,9 +47,9 @@
 
 ## 검증과 보고
 
-- 기본 검사는 `python scripts/check.py`, PR 준비 검사는 `python scripts/check.py --pr`이다. 변경에 필요한 실제 기능 검증도 수행한다.
-- 실행 프로젝트 초기화 PR에는 실제 의존성과 실행 방법을 기록하고, 웹 lint·typecheck·build 및 필요한 백엔드 기능 검증을 공통 검사·CI에 연결한다. 아직 없는 명령을 실행했다고 보고하거나 검사를 조용히 건너뛰지 않는다.
+- 기본 검사는 `uv run --locked python scripts/check.py`, PR 준비 검사는 `uv run --locked python scripts/check.py --pr`이다. 변경에 필요한 실제 기능 검증도 수행한다.
+- 의존성·실행 방법·검사 흐름을 바꾸면 선언 파일·lockfile·안내·CI를 함께 갱신한다. 계약 변경 후 `pnpm types:generate`를 실행하고 생성 타입을 함께 커밋한다. `pnpm types:check`는 오래된 생성물을 실패로 처리한다. 아직 없는 명령을 실행했다고 보고하거나 검사를 조용히 건너뛰지 않는다.
 - 검사를 통과시키려고 테스트 삭제·skip, 스키마 완화, 검사 제외, 실패 무시를 하지 않는다. 정당한 기준 변경은 이유와 영향을 명시해 함께 검토한다.
-- 현재 공통 검사는 브랜치·작업 상태·파일 형식·직접 import 경계·계약·기획용 가상 정답·Python 테스트를 확인한다. 계산 참조 테스트는 기획의 정답 검증이며 제품의 계산기 구현 완료를 뜻하지 않는다. 프론트엔드 빌드·실제 API·LLM·정책 사실 검증까지 통과했다는 의미가 아니다.
+- 현재 공통 검사는 브랜치·작업 상태·파일 형식·직접 import 경계·계약·기획용 가상 정답·Python/API 테스트·Ruff·웹 lint/타입/테스트/빌드·생성 타입 최신 여부와 다른 관리자 lockfile 유입을 확인한다. 계산 참조 테스트는 기획의 정답 검증이며 제품의 계산기 구현 완료를 뜻하지 않는다. PostgreSQL·LLM·정책 사실 검증까지 통과했다는 의미가 아니다.
 - 실패·네트워크 차단·권한 부족을 숨기지 않는다. 실행한 명령과 결과, 실행하지 못한 검사, main 동기화 상태, PR URL 또는 미생성 사유를 보고한다.
 - 이 지침·CI·검사 스크립트·공용 계약의 변경은 검사 우회를 위한 수단으로 사용하지 않고 관련 담당자의 리뷰를 받는다.

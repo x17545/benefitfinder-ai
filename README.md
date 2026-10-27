@@ -8,9 +8,9 @@
 
 ## 현재 상태
 
-기획 및 초기 설계 단계입니다. 아키텍처, 담당 영역별 디렉터리, 공용 데이터 계약·가상 예제, 에이전트 지침과 공통 검사·CI 설정이 있습니다. 웹 화면, API 서버, 분석 흐름, 데이터 수집은 아직 구현하지 않았습니다.
+React 개발 시작 화면과 FastAPI 서버를 실행할 수 있습니다. 화면에서 `/health` 연결 상태를 확인하고 `/docs`에서 API 문서를 볼 수 있습니다. 공용 계약·가상 예제·타입 생성·공통 검사·CI를 갖췄습니다. 정책 조회·조합 계산·데이터 수집·DB 연결은 아직 구현하지 않았습니다.
 
-2026-10-27 합의로 **React + TypeScript + Vite, Python + FastAPI, PostgreSQL**을 사용합니다. 스택 선택은 완료했으며, 실행 프로젝트 초기화와 제품 기능 구현은 다음 단계입니다.
+2026-10-27 합의로 **React + TypeScript + Vite, Python + FastAPI, PostgreSQL**을 사용합니다. 실행 프로젝트를 초기화했으며 제품 기능 구현은 다음 단계입니다.
 
 기능·화면·사용자 흐름의 원본은 최신 회의 결정을 반영한 [기능 요구 명세 v2](REQUIREMENTS_v2.md)입니다. F01~F11 전체를 취업·주거 분야에 적용하며, 자연어 입력·챗봇 대신 선택지 입력을 사용합니다. F02는 정책 검색, F03은 분석 흐름·진행 상태를 담당합니다. 전국의 청년 취업·주거 정책을 수집하고 두 분야 안에서 30개 검수를 목표로 하는 계획, 브라우저 기억하기·결과 이미지 저장·이용 통계·자동 갱신도 포함합니다. 기술·모듈 경계는 [아키텍처](docs/ARCHITECTURE.md), 교환 형식은 [공용 계약](contracts/README.md), 작업 절차는 [협업 규칙](docs/CONTRIBUTING.md)을 따릅니다. 배포 제품 등 구현 도구는 아직 선택하지 않았습니다.
 
@@ -25,7 +25,7 @@
 | 데이터베이스 | PostgreSQL | 정책·조건·출처·갱신 이력을 저장하는 기본 DB |
 | 데이터·AI·자동화 | 같은 백엔드의 Python 모듈 | Agent로 원문 분석·규칙 후보 추출 → 검수·게시. 사용자 요청의 판정·계산은 코드로 실행 |
 
-초기화 시 프론트엔드는 npm과 `package-lock.json`을 사용합니다. ORM·DB 드라이버·마이그레이션 도구, 배포 서비스는 아직 선택하지 않았습니다. 데이터 Agent의 LLM·SDK·평가 기준은 비교 후 정하며, RAG·임베딩·벡터 검색은 원문 탐색에 필요할 때 선택합니다.
+패키지 관리는 **Python은 uv, 웹은 pnpm**으로 통일합니다. Python 3.12·Node.js 24·pnpm 11.25.0을 사용하고, `uv.lock`·`pnpm-lock.yaml`을 공유합니다. ORM·DB 드라이버·마이그레이션 도구, 배포 서비스는 아직 선택하지 않았습니다. 데이터 Agent의 LLM·SDK·평가 기준은 비교 후 정하며, RAG·임베딩·벡터 검색은 원문 탐색에 필요할 때 선택합니다.
 
 ## 아키텍처
 
@@ -36,13 +36,16 @@
 데이터 준비는 **공식 API·공고 수집 → Agent의 중복 제한·예외 규칙 후보 추출 → 검증·사람 검수 → 버전별 게시**로 설계합니다. 사용자 요청은 게시된 데이터에서 후보를 조회하고 적용되는 제약을 비교한 뒤 조합을 계산합니다. API에 제한 정보가 없다는 이유로 동시 수급을 허용하지 않습니다. 상세는 [정책 데이터 분석·정제 설계](docs/POLICY_DATA_PIPELINE.md)를 따릅니다.
 
 ```text
-apps/web/                         React + TypeScript + Vite SPA의 구조
+pyproject.toml · uv.lock           Python 의존성·고정 버전 (루트 uv 프로젝트)
+package.json · pnpm-lock.yaml      공용 실행 명령·웹 의존성 고정 버전
+pnpm-workspace.yaml               웹 패키지와 pnpm 설정
+apps/web/                         React + TypeScript + Vite SPA
   public/                        가공 없이 제공할 공개 정적 파일
   src/app/                       앱 조립·라우팅·providers·스타일
   src/features/                  혜택 조회·사용자 조건 등 기능
   src/shared/                    UI·API·공개 설정·공용 타입
   src/domains/youth/              청년정책 전용 입력·표시
-  tests/                         향후 프론트엔드 테스트
+  tests/                         API 클라이언트 테스트
 backend/src/benefitfinder/
   api/                            FastAPI의 v1 라우터·요청/응답 스키마·의존성
   application/                    사용 사례 조율·공통 인터페이스
@@ -54,7 +57,7 @@ backend/src/benefitfinder/
     database/                    PostgreSQL 연결·모델·저장소 구현
   jobs/                           수집·갱신 실행 진입점
 backend/migrations/versions/      향후 PostgreSQL 스키마 변경 이력
-backend/tests/                    향후 백엔드 기능 테스트
+backend/tests/                    HTTP·오류 계약 테스트
 contracts/                        공용 JSON Schema·가상 예제
 data/                             로컬 데이터 취급 안내
 docs/                             기획·설계·협업 문서
@@ -81,25 +84,36 @@ scripts/                          로컬·CI 공통 검사
 
 각 담당자는 [공용 계약과 가상 예제](contracts/README.md)를 기준으로 독립 개발을 시작할 수 있습니다. 예제는 실제 정책이나 사용자의 데이터가 아닙니다.
 
-환경 변수·키·DB 덤프·수집 데이터·빌드 결과물은 [.gitignore](.gitignore)에서 제외합니다. `.env.example`, npm lockfile, 마이그레이션과 가상 예제는 공유합니다. 제외 파일을 강제로 추가하면 공통 검사가 실패합니다. 상세 범위와 한계는 [저장소 운영 설정](docs/REPOSITORY_SETTINGS.md)을 참고합니다.
-
-현재 공통 검증에는 Python 3.11 이상만 필요하며, 아래 의존성은 계약 검증용입니다. React·FastAPI·PostgreSQL 실행 환경을 설치하는 명령은 아닙니다.
+먼저 **Node.js 24, uv, pnpm 11.25.0**을 설치합니다. 설치 방법과 용어는 [처음 개발 시작하기](docs/GETTING_STARTED.md)에 정리했습니다. 저장소 루트에서 실행합니다.
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -r requirements-dev.txt
-python scripts/check.py
+uv sync --locked
+pnpm install --frozen-lockfile
+pnpm dev
 ```
 
-현재 `package.json`, Vite 설정, FastAPI 실행 진입점, DB 연결·마이그레이션 실행 설정은 없습니다. 실제 초기화 시 버전·의존성·실행 명령을 [프론트엔드 안내](apps/web/README.md)와 [백엔드 안내](backend/README.md)에 추가하고, 웹 lint·typecheck·build와 필요한 기능 검증을 공통 검사·CI에 연결합니다.
+- 웹: http://127.0.0.1:5173
+- API 문서: http://127.0.0.1:8000/docs
+- 서버 상태: http://127.0.0.1:8000/health
 
-코딩 에이전트는 작업 전에 [AGENTS.md](AGENTS.md)와 수정 대상 경로의 추가 지침을 읽습니다. 브랜치는 `feat/`, `fix/`, `docs/`, `refactor/`, `test/`, `chore/`, `ci/` 접두어를 사용하며 `codex/`와 main 직접 작업을 금지합니다. PR 전에는 작업 브랜치에서 최신 `origin/main`을 머지·검증하고 `python scripts/check.py --pr`을 실행합니다. 상태별 명령은 [Git 작업 절차](docs/GIT_WORKFLOW.md)를 따릅니다.
+`pnpm dev`가 두 서버를 함께 실행하며 `Ctrl+C`로 종료합니다. 따로 실행하려면 `pnpm dev:web` / `pnpm dev:api`를 각 터미널에서 실행합니다. 기본 실행에는 `.env`·PostgreSQL·AI 키가 필요 없습니다. `/health` 성공은 서버 생존 확인이며 DB 연결 확인이 아닙니다. PostgreSQL은 확정 스택이고 연결 구현은 후속 작업입니다.
 
-현재 검사는 Git·파일·직접 import·계약·기획용 가상 계산 정답·Python 테스트를 다룹니다. 프론트엔드 실행·실제 API 통합·정책 사실 검증은 아직 포함하지 않습니다. 계정 권한 제한에 따라 원격 main 보호 설정은 이번 범위에서 제외했습니다. 브랜치·PR·리뷰 절차와 CI를 사용하며, 관리자용 설정은 [저장소 운영 설정](docs/REPOSITORY_SETTINGS.md)에 참고 자료로 남깁니다.
+```bash
+uv run --locked python scripts/check.py   # 저장소·API·웹 전체 검사
+pnpm types:generate                      # 계약 변경 후 타입 재생성
+```
+
+uv는 Python 가상환경·의존성·실행을, pnpm은 JavaScript 의존성·개발 명령을 관리합니다. `pip install`·`npm install`·`npx`를 사용하거나 다른 lockfile을 추가하지 않습니다. 의존성 추가는 `uv add` / `pnpm --filter @benefitfinder/web add`로 하고 두 종류의 lockfile을 커밋합니다.
+
+환경 변수·키·DB 덤프·수집 데이터·빌드 결과물은 [.gitignore](.gitignore)에서 제외합니다. `.env.example`, 두 lockfile, 마이그레이션과 가상 예제는 공유합니다. 제외 파일 강제 추가와 다른 관리자의 lockfile 유입은 공통 검사에서 실패합니다. 상세는 [저장소 운영 설정](docs/REPOSITORY_SETTINGS.md)을 참고합니다.
+
+코딩 에이전트는 작업 전에 [AGENTS.md](AGENTS.md)와 수정 대상 경로의 추가 지침을 읽습니다. 브랜치는 `feat/`, `fix/`, `docs/`, `refactor/`, `test/`, `chore/`, `ci/` 접두어를 사용하며 `codex/`와 main 직접 작업을 금지합니다. PR 전에는 작업 브랜치에서 최신 `origin/main`을 머지·검증하고 `uv run --locked python scripts/check.py --pr`을 실행합니다. 상태별 명령은 [Git 작업 절차](docs/GIT_WORKFLOW.md)를 따릅니다.
+
+현재 검사는 Git·파일·직접 import·계약·기획용 가상 계산 정답·API HTTP 테스트·Ruff·웹 lint/타입/테스트/빌드·생성 타입 최신 여부를 다룹니다. 실제 PostgreSQL·LLM·정책 사실 검증과 제품 기능 완성을 뜻하지 않습니다. 계정 권한 제한에 따라 원격 main 보호 설정은 이번 범위에서 제외했습니다. 브랜치·PR·리뷰 절차와 CI를 사용하며, 관리자용 설정은 [저장소 운영 설정](docs/REPOSITORY_SETTINGS.md)에 참고 자료로 남깁니다.
 
 ## 문서
 
+- [처음 개발 시작하기](docs/GETTING_STARTED.md)
 - [기능·화면·디자인·계산 규칙의 원본](REQUIREMENTS_v2.md)
 - [아키텍처와 확장 방법](docs/ARCHITECTURE.md)
 - [정책 데이터 분석·정제와 Agent 활용](docs/POLICY_DATA_PIPELINE.md)

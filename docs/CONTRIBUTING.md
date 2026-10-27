@@ -82,7 +82,7 @@ GitHub에서는 PR 작성자가 자신을 리뷰어로 지정할 수 없다. 기
 
 ## 검증과 완료 보고
 
-- 개발 중에는 python scripts/check.py, 작업 브랜치에 최신 origin/main을 머지한 뒤 PR 직전에는 python scripts/check.py --pr을 실행한다. 실제 명령 순서는 Git 문서를 따른다.
+- 개발 중에는 uv run --locked python scripts/check.py, 작업 브랜치에 최신 origin/main을 머지한 뒤 PR 직전에는 uv run --locked python scripts/check.py --pr을 실행한다. 실제 명령 순서는 Git 문서를 따른다.
 - 검사 결과와 실행하지 못한 검사를 구분한다. 현재 검사에 프론트엔드 빌드와 실제 API 통합, 정책 사실 검증이 포함됐다고 주장하지 않는다.
 - 보고에는 결과, 주요 변경, 실제 검증, 남은 문제, 브랜치와 main 동기화 상태, PR URL 또는 미생성 사유를 적는다.
 - 완료된 개발은 PR로 연결하고 리뷰 결과를 반영한다. 계정과 권한, 네트워크가 막히면 로컬 구현과 검증, PR 본문까지 준비한 뒤 차단된 단계와 이유를 알린다.

@@ -1,7 +1,7 @@
 # 개발 흐름
 
-확정 스택은 React + TypeScript + Vite, Python + FastAPI, PostgreSQL이다. 현재는 실행 프로젝트 초기화 전인 구조 초안이며, API·DB·LLM 없이 가상 자료로 각자 진행할 수 있다.
-개발 환경 준비는 README.md를 따른다. Git 절차는 docs/GIT_WORKFLOW.md를 따른다.
+확정 스택은 React + TypeScript + Vite, Python + FastAPI, PostgreSQL이다. React 개발 화면과 FastAPI `/health`를 실행할 수 있다. DB·LLM 없이 실행되며 제품 기능은 공용 가상 자료로 각자 개발한다.
+개발 환경 준비와 uv·pnpm 사용법은 [처음 개발 시작하기](GETTING_STARTED.md)를 따른다. Git 절차는 docs/GIT_WORKFLOW.md를 따른다.
 
 기능·화면의 원본은 [기획 명세 v2](../REQUIREMENTS_v2.md)다. 초기 MVP의 정책 분류는 청년 취업·주거이며 생활·자산형성·교육·장학 등은 확장 단계다. 선택지 13단계와 F01~F11을 이 두 분야에 유지하고, 기술·협업 규칙은 기존 아키텍처와 Git 문서를 따른다. 오래된 기획은 `*_ARCHIVE.md`에 보존하며 현행 수락 조건으로 사용하지 않는다.
 
@@ -29,12 +29,12 @@
 
 ## 4. 검증
 
-- 단일 검사 명령은 `python scripts/check.py`다. PR 전 검사는 `python scripts/check.py --pr`이다.
+- 단일 검사 명령은 `uv run --locked python scripts/check.py`다. PR 전 검사는 `uv run --locked python scripts/check.py --pr`이다.
 - --pr은 origin/main 조상 포함과 작업 트리 clean을 확인한다. 직전 fetch·동기화 절차는 docs/GIT_WORKFLOW.md를 따른다.
 - 테스트 실패를 기준 약화로 우회하지 않는다. 정당한 기준 변경 사유는 PR에서 리뷰받는다.
-- 프론트엔드 스택은 확정됐지만 실행 프로젝트는 아직 없다. 현재 공통 검사에는 웹 lint·typecheck·build가 없으며, 녹색 검사를 화면 기능 완성으로 안내하지 않는다.
-- 웹 초기화 PR에서는 npm scripts로 lint·typecheck·build를 제공하고 `package-lock.json`을 관리한다. CI에서 `npm ci` 후 이 검사를 공통 검사 흐름에 연결한다. 의미 있는 테스트가 생기면 실제 테스트 명령도 연결한다.
-- FastAPI 초기화 PR에서는 HTTP 입력·공통 오류·가상 저장소를 이용한 기능 검증을 추가한다. PostgreSQL 저장소·마이그레이션을 구현할 때는 별도 테스트 DB에서 적용과 읽기·쓰기를 검증한다. 운영 DB에 테스트하지 않는다.
+- 공통 검사는 Python/API unittest·Ruff와 `pnpm check:web`를 실행한다. 웹 검사는 생성 타입 최신 여부·ESLint·TypeScript strict·Vitest·Vite 빌드다. 설치하지 않은 도구나 실패한 검사를 건너뛰지 않는다.
+- 설치는 `uv sync --locked` / `pnpm install --frozen-lockfile`, 일상 실행은 `pnpm dev`다. CI도 같은 lockfile과 검사 명령을 쓴다. 패키지 변경은 `uv add` / `pnpm --filter @benefitfinder/web add` 후 lockfile을 함께 검토한다.
+- 실제 HTTP 생존 확인·404·405·입력 검증 422·내부 오류 500을 검사한다. 정책 기능과 PostgreSQL 저장소·마이그레이션 구현 시에는 기능 테스트와 별도 테스트 DB의 적용·읽기·쓰기를 추가한다. 운영 DB에 테스트하지 않는다.
 - 계약 변경 시에는 위 단일 검사로 스키마·예제·회귀 사례를 확인한다.
 - 기획용 가상 정답 검증은 작은 정책 조합의 독립 참조 계산과 복무기간·기간별 금액 경계를 확인한다. 제품 기능 구현 후에는 같은 정답 자료로 실제 계산기를 검증해야 한다. 참조 테스트 성공을 제품 API·최적화 성능·실제 정책 검증 성공으로 보고하지 않는다.
 - 확인하지 못한 검증과 남은 불확실성은 PR에 적는다.

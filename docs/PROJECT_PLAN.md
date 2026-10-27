@@ -3,7 +3,7 @@
 
 - 문서 상태: 현행 기획 (2026-10-28 데이터 Agent 역할 보충 설명 반영)
 - 기획 원본 작성자: 이현서 / 채택 근거: 2026-10-27 사용자의 v2 기획 유지 요청
-- 현행 요구 기준: [REQUIREMENTS_v2.md](../REQUIREMENTS_v2.md) v2.4 (데이터 Agent의 중복 제한·예외 규칙 추출과 코드 계산 구분)
+- 현행 요구 기준: [REQUIREMENTS_v2.md](../REQUIREMENTS_v2.md) v2.5 (데이터 Agent의 중복 제한·예외 규칙 추출과 코드 계산 구분)
 - 아키텍처와 협업 규칙: 기존 PR2(main) 기준을 유지한다. 기술 결정은 [ARCHITECTURE.md](ARCHITECTURE.md), 작업 절차는 [CONTRIBUTING.md](CONTRIBUTING.md)와 [GIT_WORKFLOW.md](GIT_WORKFLOW.md)를 따른다.
 - 기록 보존: 2026-10-27 이전 기획서 원문은 [PROJECT_PLAN_v1.1_ARCHIVE.md](PROJECT_PLAN_v1.1_ARCHIVE.md)에, 이전 요구명세 원문은 [REQUIREMENTS_v1_ARCHIVE.md](REQUIREMENTS_v1_ARCHIVE.md)에 그대로 둔다. 아카이브는 현행 결정이 아니다.
 
@@ -532,3 +532,4 @@ API와 데이터 형식의 상세는 [REQUIREMENTS_v2.md](../REQUIREMENTS_v2.md)
 | 2026-10-28 | 역할 변경: 탁서윤은 수집 데이터 분석·정제(ingestion의 수집 후 분석·조건 구조화·정제·품질 검증, 윤정찬과 공유)로 이동, 양승현은 조장/PM에 자동화(jobs 실행·스케줄·재시도·실패 알림) 추가. 김하정은 백엔드 주축으로 API·DB 연동 범위에서 자동화 협업. 데이터 업무 파일별 분담은 Issue에서 조정 |
 | 2026-10-28 | AI 표현 바로잡음: F02는 정책 검색(구조화 DB 조건), F03은 분석 흐름·진행 상태(일반 application 코드)로 표현. RAG/Agent/LLM/임베딩은 필수 아님, 후속 필요성 검증 전 기술 미정, 설명은 판정 근거 템플릿 기본. ai/는 향후 선택 기능 자리이며 현재 전담 없음 |
 | 2026-10-28 | 사용자 보충 설명 반영(v2.4): 앞선 AI 전체 선택 사항 표현을 정정. 데이터 Agent로 공식 원문의 중복 제한·예외 규칙 후보를 추출·정제·평가하고 검수 후 게시하는 방향이며 서윤이 담당. 사용자 검색·판정·최적화는 검수 데이터와 코드로 구현. 모델·도구·복잡한 규칙 계약 및 지원 범위는 검토 항목 |
+| 2026-10-28 | 사용자 요청으로 실행 환경 초기화: Python 3.12·uv, Node.js 24·pnpm 11.25.0을 기준으로 통일. 개발 화면·생존 확인 API·공통 검사·CI와 설치 안내를 추가. 기능 범위·계산 규칙은 유지 |

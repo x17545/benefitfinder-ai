@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
 
@@ -18,10 +19,15 @@ BRANCH_PATTERN = re.compile(
 )
 TEXT_SUFFIXES = {
     ".py", ".md", ".mdc", ".json", ".yml", ".yaml", ".toml", ".txt",
-    ".html", ".css", ".scss", ".sh", ".bash", ".zsh",
+    ".html", ".css", ".scss", ".sh", ".bash", ".zsh", ".mjs",
 }
 TEXT_FILENAMES = {
     ".gitignore", ".editorconfig", ".env.example", "Dockerfile", "Containerfile", "Makefile",
+    ".python-version", ".node-version", "uv.lock",
+}
+FOREIGN_LOCKFILES = {
+    "package-lock.json", "npm-shrinkwrap.json", "yarn.lock", "bun.lock", "bun.lockb",
+    "Pipfile.lock", "poetry.lock",
 }
 CODE_SUFFIXES = {".py", ".json", ".yml", ".yaml", ".toml", ".js", ".jsx", ".ts", ".tsx"}
 CONFLICT_MARKER = re.compile(r"^(?:<{7}(?: .*)?|\|{7}(?: .*)?|={7}|>{7}(?: .*)?)$", re.MULTILINE)
@@ -169,6 +175,8 @@ def file_errors(root: Path) -> list[str]:
         if not path.is_file():
             continue
         filename = path.name
+        if filename in FOREIGN_LOCKFILES:
+            errors.append(f"{name}: uv.lock·pnpm-lock.yaml만 사용하세요. 다른 패키지 관리자의 잠금 파일입니다.")
         if (filename == ".env" or filename.startswith(".env.") and filename != ".env.example"
                 or path.suffix in {".key", ".pem"}
                 or name.startswith(("data/raw/", "data/processed/", "data/indexes/"))):
@@ -205,6 +213,14 @@ def file_errors(root: Path) -> list[str]:
     return errors
 
 
+def project_errors(root: Path) -> list[str]:
+    required = (
+        "pyproject.toml", "uv.lock", ".python-version", ".node-version", "package.json",
+        "pnpm-workspace.yaml", "pnpm-lock.yaml", "apps/web/package.json",
+    )
+    return [f"실행 설정({name})이 없습니다." for name in required if not (root / name).is_file()]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--pr", action="store_true", help="main 포함 여부와 clean 상태도 검사")
@@ -223,7 +239,7 @@ def main() -> int:
     branch = args.branch if args.branch is not None else actual_branch
     if args.allow_main and branch != "main":
         parser.error("--allow-main은 main의 GitHub CI 검사에만 사용할 수 있습니다.")
-    errors = operation_errors(ROOT) + file_errors(ROOT)
+    errors = operation_errors(ROOT) + file_errors(ROOT) + project_errors(ROOT)
     if actual_branch and branch != actual_branch:
         errors.append("--branch가 실제 브랜치와 다릅니다. CI 옵션으로 로컬 브랜치를 숨기지 마세요.")
     for required_test in REQUIRED_TEST_FILES:
@@ -246,11 +262,23 @@ def main() -> int:
         )
         if result.returncode:
             return result.returncode
+    commands = (
+        [sys.executable, "-m", "ruff", "check", "backend/src", "backend/tests"],
+        [shutil.which("pnpm") or "pnpm", "check:web"],
+    )
+    for command in commands:
+        try:
+            result = subprocess.run(command, cwd=ROOT, check=False)
+        except FileNotFoundError:
+            print("uv sync --locked와 pnpm install --frozen-lockfile로 개발 환경을 설치하세요.", file=sys.stderr)
+            return 1
+        if result.returncode:
+            return result.returncode
     if args.pr and (error := clean_tree_error(ROOT)):
         print(f"ERROR: {error}", file=sys.stderr)
         return 1
-    print("공통 검사 통과: Git·파일·직접 import·계약·기획용 가상 정답·발견된 Python 테스트")
-    print("미구성: 프론트엔드 실행 검사·실제 API/LLM 통합·정책 사실 검증")
+    print("공통 검사 통과: Git·파일·직접 import·계약·기획 정답·API 테스트·Python lint·웹 타입/테스트/빌드")
+    print("미구성: 제품 기능·실제 LLM/PostgreSQL 통합·정책 사실 검증")
     return 0
 
 

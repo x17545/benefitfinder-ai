@@ -1,6 +1,6 @@
 # 아키텍처 설계
 
-설계 갱신일: 2026-10-28. **React + TypeScript + Vite, Python + FastAPI, PostgreSQL**을 확정했다. 기능·화면은 [기획 명세 v2](../REQUIREMENTS_v2.md)를 따른다. 이 문서는 그 기획을 구현할 위치와 경계를 정하며, 실행 프로젝트 초기화와 제품 기능 구현은 아직 완료하지 않았다. 기술 결정의 원본은 9장이다.
+설계 갱신일: 2026-10-28. **React + TypeScript + Vite, Python + FastAPI, PostgreSQL**을 확정했다. 기능·화면은 [기획 명세 v2](../REQUIREMENTS_v2.md)를 따른다. 이 문서는 그 기획을 구현할 위치와 경계를 정하며, React/Vite 개발 화면과 FastAPI 생존 확인·공통 오류를 초기화했다. 정책 기능·DB·수집/Agent 구현은 후속 작업이다. 기술 결정의 원본은 9장이다.
 
 ## 1. 설계 기준
 
@@ -33,7 +33,7 @@ flowchart TD
 
 프론트엔드는 Vite로 빌드하는 React SPA이며 Next.js 서버나 SSR을 전제하지 않는다. 브라우저는 FastAPI의 HTTP API로만 데이터에 접근하고, DB 연결·LLM 호출·비밀 키는 백엔드가 관리한다. 프론트엔드와 백엔드를 논리적으로 나누되 실제 배포 단위와 호스팅은 아직 정하지 않는다.
 
-개발 환경에서는 Vite의 `/api/v1`·`/health` 프록시를 FastAPI에 연결하는 방식을 기본으로 한다. 운영에서는 같은 출처의 `/api/v1`을 백엔드로 보내는 구성을 우선 검토한다. 서로 다른 출처가 필요하면 백엔드 CORS 허용 목록을 실제 프론트엔드 주소로 제한한다. 현재 프록시·CORS·배포 설정은 아직 없다.
+개발 환경에서는 Vite의 `/api/v1`·`/health` 프록시를 FastAPI에 연결하는 방식을 기본으로 한다. 운영에서는 같은 출처의 `/api/v1`을 백엔드로 보내는 구성을 우선 검토한다. 서로 다른 출처가 필요하면 백엔드 CORS 허용 목록을 실제 프론트엔드 주소로 제한한다. 개발 프록시는 `apps/web/vite.config.ts`에 구현했다. 개발 중 브라우저는 같은 출처의 프록시를 사용하므로 별도 CORS 설정은 두지 않았다. 운영 배포 설정은 아직 없다.
 
 원천 API만으로 확인되지 않는 조건은 공식 공고·사업 지침·FAQ와 연결 문서를 보완 수집하고, Agent가 중복 제한·예외·시점·금액 영향의 규칙 후보와 원문 근거를 추출한다. 검증·사람 검수 후 같은 버전의 정책·규칙·근거를 게시한다. 사용자 요청에서는 게시된 DB 후보를 찾고 순수 판정·계산 코드를 실행한다. 추천 이유와 신청 안내는 검수된 근거·결과를 템플릿으로 정리한다. 이 요청 흐름은 LLM 없이 동작하며 데이터 준비의 Agent 활용과 구분한다.
 
@@ -85,7 +85,7 @@ flowchart TD
 
 ## 5. 공용 계약과 독립 개발
 
-교환 데이터의 기준은 `contracts/v1/*.schema.json`이다. FastAPI 경계의 Pydantic 모델, 순수 업무 모델, PostgreSQL 저장 모델은 책임을 구분하며 외부에 내보내는 결과는 계약을 따른다. 초기화 시 JSON Schema에서 TypeScript 타입을 생성하는 경로와 실제 API 입출력·OpenAPI가 계약과 일치하는 검증을 추가한다. 생성 도구는 아직 정하지 않았다. 프론트엔드에서 같은 요청·응답 타입을 수기로 다시 정의하지 않는다.
+교환 데이터의 기준은 `contracts/v1/*.schema.json`이다. FastAPI 경계의 Pydantic 모델, 순수 업무 모델, PostgreSQL 저장 모델은 책임을 구분하며 외부에 내보내는 결과는 계약을 따른다. `pnpm types:generate`가 JSON Schema에서 TypeScript 타입을 생성한다. 현재 생존 확인·공통 오류의 실제 HTTP 입출력·OpenAPI를 계약과 비교하며, 정책 API 구현 시 같은 검증을 확장한다. 프론트엔드에서 같은 요청·응답 타입을 수기로 다시 정의하지 않는다.
 
 | 계약 | 목적 |
 |---|---|
@@ -179,7 +179,8 @@ DB 스키마 변경은 `backend/migrations/versions/`에 이력으로 관리한�
 | 영역 | 선택 | 근거·경계 |
 |---|---|---|
 | 프론트엔드 | React + TypeScript + Vite | 입력·혜택 카드·근거 표시를 컴포넌트로 구성하는 SPA. TypeScript strict 사용 |
-| 웹 패키지 관리 | npm + `package-lock.json` | 초기화 시 하나의 도구·lockfile로 통일 |
+| 웹 패키지 관리 | pnpm 11.25.0 + `pnpm-lock.yaml`, Node.js 24 | 루트 pnpm workspace, 앱 이름 `@benefitfinder/web` |
+| Python 관리 | uv + `uv.lock`, Python 3.12 | 루트 단일 프로젝트·가상환경, `backend/src/benefitfinder`를 editable 패키지로 설치 |
 | 백엔드 | Python + FastAPI | Python이 익숙한 팀의 백엔드·AI·수집 코드를 공유하고 명시적인 HTTP 경계로 연결 |
 | API 검증 | Pydantic | FastAPI의 요청·응답 모델에 사용. 순수 domain 모델에는 프레임워크 의존성 없음 |
 | 기본 DB | PostgreSQL | 정책·조건·출처·버전 데이터를 관리. 프론트엔드가 직접 접속하지 않음 |
@@ -189,7 +190,7 @@ DB 스키마 변경은 `backend/migrations/versions/`에 이력으로 관리한�
 
 ### 아직 정하지 않은 것
 
-- ORM·PostgreSQL 드라이버·마이그레이션 도구, 런타임 세부 버전·의존성 관리 도구
+- ORM·PostgreSQL 드라이버·마이그레이션 도구
 - 데이터 Agent의 모델·도구·추출 평가 기준·검수 절차·호출 비용, 복잡한 중복 제한의 계약과 코드 지원 범위
 - 스케줄러·작업 큐, 배포 서비스·운영 구성
 
@@ -197,9 +198,11 @@ pgvector는 PostgreSQL에서 의미 검색이 필요해질 때 검토하는 선�
 
 ### 구현·검증 상태
 
-- 스택 결정과 실제 패키지 초기화를 구분한다. 현재 React·Vite 프로젝트 설정, FastAPI 실행 진입점, DB 연결·마이그레이션 설정과 제품 기능은 아직 없다.
-- 현재 `python scripts/check.py`는 Git 작업 상태·파일 형식·직접 import 경계와 JSON Schema·가상 예제·잘못된 입력·확장 분야의 회귀 검증을 수행한다. PR 준비 검사는 `--pr`로 실행하며 자세한 범위는 [저장소 운영 설정](REPOSITORY_SETTINGS.md)을 따른다.
-- 웹 초기화 시 lint·typecheck·build와 CI의 `npm ci`를 연결하고, FastAPI 초기화 시 HTTP 입력·오류·계약 검증을 추가한다. PostgreSQL 저장소를 구현하면 테스트 DB에서 마이그레이션·읽기·쓰기를 검증한다.
+- `pnpm dev`가 Vite(5173)와 FastAPI(8000)를 함께 실행한다. `bootstrap.create_app()`에서 서버를 조립하고 `main:app`을 ASGI 진입점으로 쓴다. `/health`와 `/docs`만 기본 제공하며 정책 API·DB 연결·마이그레이션·Agent는 아직 없다.
+- `pyproject.toml`·`uv.lock`은 Python, 루트/웹 `package.json`·`pnpm-workspace.yaml`·`pnpm-lock.yaml`은 웹 실행·의존성을 정의한다. 공유 의존성은 담당 영역과 조율한다. `pip`·`npm` 설치나 별도 lockfile을 추가하지 않는다. 실행 안내는 [처음 개발 시작하기](GETTING_STARTED.md)를 따른다.
+- `contracts/v1/*.schema.json`에서 `json-schema-to-typescript`로 `apps/web/src/shared/api/generated/*.ts`를 생성한다. `pnpm types:generate` 후 생성물을 커밋한다. `pnpm types:check`는 최신 여부를 검사하며 실제 HTTP의 Pydantic 모델과 JSON Schema 일치는 API 테스트로 확인한다.
+- `uv run --locked python scripts/check.py`는 Git·파일·직접 import·계약·가상 계산 정답·API HTTP·Ruff·웹 lint/타입/테스트/빌드를 검사한다. PR 준비 검사는 `--pr`이며 자세한 범위는 [저장소 운영 설정](REPOSITORY_SETTINGS.md)을 따른다. CI는 두 lockfile로 설치한 뒤 같은 검사를 실행한다.
+- PostgreSQL 저장소 구현 후에는 테스트 DB에서 마이그레이션·읽기·쓰기를 검증한다. `/health` 성공을 DB 준비 완료나 정책 계산 검증으로 해석하지 않는다.
 - 기능 구현 후에는 판정·설명·원문 근거 일치 검증, 수집·정제 데이터 품질 검사, 필요한 웹 통합 테스트를 각 영역에 추가한다. 현재 공통 검사 통과가 이 검증들을 대신하지 않는다.
 
 설계 참고: [FastAPI의 모듈 분리 안내](https://fastapi.tiangolo.com/tutorial/bigger-applications/), [Vite 환경 변수와 공개 범위](https://vite.dev/guide/env-and-mode), [JSON Schema 조합](https://json-schema.org/understanding-json-schema/reference/combining), [jsonschema 검증 문서](https://python-jsonschema.readthedocs.io/en/stable/validate/).

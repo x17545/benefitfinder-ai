@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benefitfinder.example/contracts/v1/health.schema.json",
+  "title": "HealthResponse",
+  "description": "GET /health liveness response. Liveness only; it does not guarantee DB readiness.",
+  "type": "object",
+  "required": ["status"],
+  "additionalProperties": false,
+  "properties": {
+    "status": {"const": "ok"}
+  }
+}

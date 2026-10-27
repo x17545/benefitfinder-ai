@@ -139,6 +139,6 @@ pnpm-debug.log*
 Thumbs.db
 Desktop.ini
 
-# Keep source code, migrations, fictional fixtures, .env.example, package-lock.json,
+# Keep source code, migrations, fictional fixtures, .env.example, uv.lock, pnpm-lock.yaml,
 # AGENTS.md, CLAUDE.md, .cursor/rules/, .github/, and .editorconfig shareable.
 # Do not add blanket rules for *.json, *.sql, *.csv, *.md, or lockfiles.
