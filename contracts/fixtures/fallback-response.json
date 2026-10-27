@@ -1,0 +1,71 @@
+{
+  "request_id": "example-request-fallback",
+  "domain": "youth",
+  "view": "fallback_list",
+  "results": {
+    "1y": {
+      "pv_off": {
+        "portfolios": [],
+        "fallback_list": [
+          {
+            "policy_id": "youth:example:P2",
+            "amount_in_period_won": 1200000,
+            "reason": "[가상] 묶을 수 있는 조합이 1개뿐이라 목록으로 표시합니다."
+          }
+        ],
+        "calculation_status": "available",
+        "unavailable_reason": null
+      },
+      "pv_on": {
+        "portfolios": [],
+        "fallback_list": null,
+        "calculation_status": "unavailable",
+        "unavailable_reason": "missing_discount_rate"
+      }
+    },
+    "2y": {
+      "pv_off": {
+        "portfolios": [],
+        "fallback_list": [
+          {
+            "policy_id": "youth:example:P2",
+            "amount_in_period_won": 1200000,
+            "reason": "[가상] 묶을 수 있는 조합이 1개뿐이라 목록으로 표시합니다."
+          }
+        ],
+        "calculation_status": "available",
+        "unavailable_reason": null
+      },
+      "pv_on": {
+        "portfolios": [],
+        "fallback_list": null,
+        "calculation_status": "unavailable",
+        "unavailable_reason": "missing_discount_rate"
+      }
+    },
+    "all": {
+      "pv_off": {
+        "portfolios": [],
+        "fallback_list": [
+          {
+            "policy_id": "youth:example:P2",
+            "amount_in_period_won": 1200000,
+            "reason": "[가상] 묶을 수 있는 조합이 1개뿐이라 목록으로 표시합니다."
+          }
+        ],
+        "calculation_status": "available",
+        "unavailable_reason": null
+      },
+      "pv_on": {
+        "portfolios": [],
+        "fallback_list": null,
+        "calculation_status": "unavailable",
+        "unavailable_reason": "missing_discount_rate"
+      }
+    }
+  },
+  "ai_generated": true,
+  "data_updated_at": "2026-10-26T03:12:00+09:00",
+  "discount_rate": null,
+  "discount_rate_status": "unknown"
+}

@@ -2,7 +2,7 @@
 
 청년정책과 혜택을 사용자 상황에 맞춰 찾고, 선택과 신청 준비를 돕는 AI 서비스입니다.
 
-첫 MVP는 **청년정책·청년 대상 혜택**에 집중합니다. 다른 대상과 분야의 혜택은 scale up 단계에서 추가합니다. 장기적으로는 함께 받을 수 있는 혜택의 조합과 상황 변화에 따른 혜택 변동까지 안내하는 것을 지향합니다.
+첫 서비스는 **청년정책·청년 대상 혜택**에 집중합니다. 만 19~39세를 중심으로 13단계 선택지에서 조건을 확인하고, 자격 진단·지원금 조합·현재가치·상황 변화·신청 안내를 제공합니다. 다른 대상과 분야의 혜택은 scale up 단계에서 추가합니다.
 
 ## 현재 상태
 
@@ -10,7 +10,9 @@
 
 2026-10-27 합의로 **React + TypeScript + Vite, Python + FastAPI, PostgreSQL**을 사용합니다. 스택 선택은 완료했으며, 실행 프로젝트 초기화와 제품 기능 구현은 다음 단계입니다.
 
-세부 MVP 기능, 지원 지역·정책 수, LLM 공급자·검색 방식·배포 환경은 추가로 확정합니다. 기존 기획서의 검토안과 충돌하면 [현재 아키텍처의 기술 결정](docs/ARCHITECTURE.md#9-기술-선택과-검증-범위)을 따릅니다.
+기능·화면·사용자 흐름의 원본은 기획자가 작성하고 사용자가 승인한 [기능 요구 명세 v2](REQUIREMENTS_v2.md)입니다. F01~F11 전체가 개발 대상이며, 자연어 입력·챗봇 대신 선택지 입력을 사용합니다. 전국 정책 수집과 검수 완료 정책 30개부터 시작하는 계획, 브라우저 기억하기·결과 이미지 저장·이용 통계·자동 갱신도 포함합니다. 기술·모듈 경계는 [아키텍처](docs/ARCHITECTURE.md), 교환 형식은 [공용 계약](contracts/README.md), 작업 절차는 [협업 규칙](docs/CONTRIBUTING.md)을 따릅니다. LLM·벡터 검색·배포 제품 등 구현 도구는 아직 선택하지 않았습니다.
+
+필드 이름·자료형과 11.2의 임시 기본값은 기획자가 다음 회의에서 확인할 초안입니다. 이번 계약 정리는 현재 개발을 위한 기준이며, 팀의 최종 합의를 대신하지 않습니다.
 
 ## 확정 기술 스택
 
@@ -88,10 +90,11 @@ python scripts/check.py
 
 코딩 에이전트는 작업 전에 [AGENTS.md](AGENTS.md)와 수정 대상 경로의 추가 지침을 읽습니다. 브랜치는 `feat/`, `fix/`, `docs/`, `refactor/`, `test/`, `chore/`, `ci/` 접두어를 사용하며 `codex/`와 main 직접 작업을 금지합니다. PR 전에는 작업 브랜치에서 최신 `origin/main`을 머지·검증하고 `python scripts/check.py --pr`을 실행합니다. 상태별 명령은 [Git 작업 절차](docs/GIT_WORKFLOW.md)를 따릅니다.
 
-현재 검사는 Git·파일·직접 import·계약·Python 테스트를 다룹니다. 프론트엔드 실행·실제 API/LLM 통합·정책 사실 검증은 아직 포함하지 않습니다. GitHub 필수 검사·리뷰·보호 규칙은 [저장소 운영 설정](docs/REPOSITORY_SETTINGS.md)에 따라 별도 적용해야 합니다.
+현재 검사는 Git·파일·직접 import·계약·기획용 가상 계산 정답·Python 테스트를 다룹니다. 프론트엔드 실행·실제 API/LLM 통합·정책 사실 검증은 아직 포함하지 않습니다. 계정 권한 제한에 따라 원격 main 보호 설정은 이번 범위에서 제외했습니다. 브랜치·PR·리뷰 절차와 CI를 사용하며, 관리자용 설정은 [저장소 운영 설정](docs/REPOSITORY_SETTINGS.md)에 참고 자료로 남깁니다.
 
 ## 문서
 
+- [기능·화면·디자인·계산 규칙의 원본](REQUIREMENTS_v2.md)
 - [아키텍처와 확장 방법](docs/ARCHITECTURE.md)
 - [협업 규칙](docs/CONTRIBUTING.md)
 - [코딩 컨벤션](docs/CONVENTIONS.md)
@@ -101,5 +104,7 @@ python scripts/check.py
 - [데이터 계약](contracts/README.md)
 - [프론트엔드 구조](apps/web/README.md)
 - [백엔드 구조](backend/README.md)
-- [기존 프로젝트 기획서](docs/PROJECT_PLAN.md)
-- [기능 요구 명세서 초안](docs/REQUIREMENTS.md)
+- [현재 프로젝트 기획서](docs/PROJECT_PLAN.md)
+- [요구 명세 안내와 이전 버전 기록](docs/REQUIREMENTS.md)
+- [클릭 가능한 화면 시안](docs/prototype/index.html)
+- [사용자 테스트 진행안](docs/USER_TEST.md)

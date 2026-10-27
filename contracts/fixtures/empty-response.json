@@ -1,7 +1,47 @@
 {
   "request_id": "example-request-empty",
   "domain": "youth",
-  "recommendations": [],
-  "follow_up_questions": [],
-  "ai_generated": true
+  "view": "empty",
+  "results": {
+    "1y": {
+      "pv_off": {
+        "portfolios": [],
+        "calculation_status": "available",
+        "unavailable_reason": null
+      },
+      "pv_on": {
+        "portfolios": [],
+        "calculation_status": "available",
+        "unavailable_reason": null
+      }
+    },
+    "2y": {
+      "pv_off": {
+        "portfolios": [],
+        "calculation_status": "available",
+        "unavailable_reason": null
+      },
+      "pv_on": {
+        "portfolios": [],
+        "calculation_status": "available",
+        "unavailable_reason": null
+      }
+    },
+    "all": {
+      "pv_off": {
+        "portfolios": [],
+        "calculation_status": "available",
+        "unavailable_reason": null
+      },
+      "pv_on": {
+        "portfolios": [],
+        "calculation_status": "available",
+        "unavailable_reason": null
+      }
+    }
+  },
+  "ai_generated": true,
+  "data_updated_at": "2026-10-26T03:12:00+09:00",
+  "discount_rate": 0.025,
+  "discount_rate_status": "verified"
 }

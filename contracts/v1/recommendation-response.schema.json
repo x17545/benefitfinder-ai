@@ -2,45 +2,541 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://benefitfinder.example/contracts/v1/recommendation-response.schema.json",
   "title": "Recommendation response",
+  "description": "POST /api/v1/recommendations 최종 result. 13단계 선택지 단일 계약이며 결과 추가 질문 필드는 없다. 3기간(1y/2y/all)xPV on/off 6가지를 results에 한 번에 담는다. view는 전역 초기 기준(기본 선택 1y+PV 끔, 즉 results[1y][pv_off]의 결과와 일치)이다. 기간/PV 탭 전환 시 화면은 다시 묻지 않고 선택 탭의 result_view를 따라 표시 섹션을 바꾼다(portfolios가 있으면 카드, 없으면 그 탭의 fallback_list, 둘 다 없으면 비어 있음). 조건 판정의 met/not_met은 근거 1개 이상 필수, 미상은 needs_review. need_check 상태값은 거부된다. 모든 업무 불변식을 스키마 하나로 강제하지 않고 구조+문서/테스트로 검증한다.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["request_id", "domain", "recommendations", "follow_up_questions", "ai_generated"],
+  "required": [
+    "request_id",
+    "domain",
+    "view",
+    "results",
+    "ai_generated",
+    "data_updated_at",
+    "discount_rate",
+    "discount_rate_status"
+  ],
   "properties": {
-    "request_id": {"type": "string", "minLength": 1},
-    "domain": {"$ref": "common.schema.json#/$defs/domain_id"},
-    "recommendations": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["benefit", "reason", "condition_results", "missing_fields"],
-        "properties": {
-          "benefit": {"$ref": "benefit.schema.json"},
-          "reason": {"type": "string", "minLength": 1},
-          "condition_results": {
-            "type": "array",
-            "items": {"$ref": "#/$defs/condition_result"}
-          },
-          "missing_fields": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true}
+    "request_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "domain": {
+      "$ref": "common.schema.json#/$defs/domain_id"
+    },
+    "view": {
+      "enum": [
+        "portfolio",
+        "fallback_list",
+        "empty"
+      ],
+      "description": "전역 초기 기준. results[1y][pv_off]의 표시 섹션과 일치한다."
+    },
+    "results": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "1y",
+        "2y",
+        "all"
+      ],
+      "properties": {
+        "1y": {
+          "$ref": "#/$defs/period_result"
+        },
+        "2y": {
+          "$ref": "#/$defs/period_result"
+        },
+        "all": {
+          "$ref": "#/$defs/period_result"
         }
       }
     },
-    "follow_up_questions": {"type": "array", "items": {"type": "string", "minLength": 1}},
-    "ai_generated": {"const": true}
+    "ai_generated": {
+      "const": true
+    },
+    "data_updated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "discount_rate": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "description": "현재가치 할인율(연). 기준금리 미확인이면 null. null일 때 0 할인율로 확정하지 않는다."
+    },
+    "discount_rate_status": {
+      "enum": [
+        "verified",
+        "unknown"
+      ]
+    }
   },
   "$defs": {
+    "period_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pv_off",
+        "pv_on"
+      ],
+      "properties": {
+        "pv_off": {
+          "$ref": "#/$defs/result_view"
+        },
+        "pv_on": {
+          "$ref": "#/$defs/result_view"
+        }
+      }
+    },
+    "result_view": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "portfolios",
+        "calculation_status",
+        "unavailable_reason"
+      ],
+      "properties": {
+        "portfolios": {
+          "type": "array",
+          "maxItems": 3,
+          "items": {
+            "$ref": "#/$defs/portfolio"
+          }
+        },
+        "why": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "gap_won": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "second_total_won": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "deciding_conflict": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "excluded": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/excluded_item"
+          }
+        },
+        "not_eligible": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "policy_id",
+              "failed"
+            ],
+            "properties": {
+              "policy_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "failed": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          }
+        },
+        "not_yet_reviewed": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "policy_id",
+              "eligibility_summary"
+            ],
+            "properties": {
+              "policy_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "eligibility_summary": {
+                "enum": [
+                  "met",
+                  "not_met",
+                  "needs_review"
+                ]
+              }
+            }
+          }
+        },
+        "closed_now": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "policy_id"
+            ],
+            "properties": {
+              "policy_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "last_period": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "next_expected": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          }
+        },
+        "fallback_list": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "maxItems": 5,
+          "items": {
+            "$ref": "#/$defs/fallback_item"
+          },
+          "description": "선택 탭의 목록(6.3 예시 위치). 후보 1개 이하라 묶음을 못 만들 때 최대 5개. 탭과 무관하게 후보 수로 정해지므로 통상 6가지 탭에서 동일하다."
+        },
+        "calculation_status": {
+          "enum": [
+            "available",
+            "unavailable"
+          ],
+          "description": "PV 금리 unknown 등 계산 불가 분기는 unavailable. unavailable이면 portfolios 빈 배열, 합계 추정 안 함(정상 raw 분기만 활성)."
+        },
+        "unavailable_reason": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "missing_discount_rate",
+            "unknown_payment_timing",
+            null
+          ],
+          "description": "available이면 null. unavailable이면 사유 필수."
+        }
+      },
+      "description": "선택 탭의 계산 결과. 6.3 예시 위치에 fallback_list를 둔다.",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "calculation_status": {
+                "const": "unavailable"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "portfolios": {
+                "maxItems": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "calculation_status": {
+                "const": "unavailable"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "unavailable_reason": {
+                "enum": [
+                  "missing_discount_rate",
+                  "unknown_payment_timing"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "calculation_status": {
+                "const": "available"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "unavailable_reason": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "portfolio": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rank",
+        "total_won",
+        "policies"
+      ],
+      "properties": {
+        "rank": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3
+        },
+        "total_won": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "원 단위 정수. 조합은 검수 확정 금액만 포함하므로 항상 정수. 미상 시나리오는 unavailable 분기로 표현하고 여기서 null을 쓰지 않는다."
+        },
+        "present_value_applied": {
+          "type": "boolean"
+        },
+        "policies": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/portfolio_policy"
+          }
+        },
+        "given_up": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "policy_id"
+            ],
+            "properties": {
+              "policy_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "amount_won": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              }
+            }
+          }
+        },
+        "unverified_pairs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "a",
+              "b",
+              "note"
+            ],
+            "properties": {
+              "a": {
+                "type": "string",
+                "minLength": 1
+              },
+              "b": {
+                "type": "string",
+                "minLength": 1
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    "portfolio_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy_id",
+        "eligibility",
+        "source"
+      ],
+      "properties": {
+        "policy_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "amount_in_period_won": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "original_amount_won": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "amount_status": {
+          "enum": [
+            "verified",
+            "unknown"
+          ]
+        },
+        "eligibility": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/condition_result"
+          }
+        },
+        "ai_reason": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "LLM 한 줄. 민감 특수조건/부모정보를 쓰지 않는다."
+        },
+        "source": {
+          "$ref": "common.schema.json#/$defs/source"
+        }
+      }
+    },
     "condition_result": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["condition_id", "status", "reason", "evidence"],
+      "required": [
+        "condition_id",
+        "status",
+        "reason",
+        "evidence"
+      ],
       "properties": {
-        "condition_id": {"type": "string", "minLength": 1},
-        "status": {"enum": ["met", "not_met", "needs_review"]},
-        "reason": {"type": "string", "minLength": 1},
-        "evidence": {"type": "array", "items": {"$ref": "common.schema.json#/$defs/evidence"}}
+        "condition_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "enum": [
+            "met",
+            "not_met",
+            "needs_review"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/evidence"
+          }
+        }
       },
-      "if": {"properties": {"status": {"enum": ["met", "not_met"]}}, "required": ["status"]},
-      "then": {"properties": {"evidence": {"minItems": 1}}}
+      "if": {
+        "properties": {
+          "status": {
+            "enum": [
+              "met",
+              "not_met"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "evidence": {
+            "minItems": 1
+          }
+        }
+      }
+    },
+    "excluded_item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy_id",
+        "reason",
+        "evidence"
+      ],
+      "properties": {
+        "policy_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "common.schema.json#/$defs/evidence"
+          }
+        }
+      }
+    },
+    "fallback_item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy_id"
+      ],
+      "properties": {
+        "policy_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "amount_in_period_won": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
     }
   }
 }

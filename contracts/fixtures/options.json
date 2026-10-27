@@ -1,0 +1,14 @@
+{
+  "regions": [
+    {"sido_code": "11", "sido_name": "[가상] 서울", "sigungu": [{"code": "11110", "name": "[가상] 종로구"}]},
+    {"sido_code": "41", "sido_name": "[가상] 경기", "sigungu": [{"code": "41110", "name": "[가상] 수원시"}]}
+  ],
+  "bands": {
+    "income": [{"value": "none", "label": "[가상] 없음"}, {"value": "between_30m_50m", "label": "[가상] 3,000만~5,000만"}],
+    "asset": [{"value": "under_122m", "label": "[가상] 1억2천만 이하"}],
+    "deposit": [{"value": "under_50m", "label": "[가상] 5천만 이하"}],
+    "rent": [{"value": "between_40_60", "label": "[가상] 40만~60만"}],
+    "parent_income": [{"value": "under_3m", "label": "[가상] 300만 이하"}],
+    "parent_asset": [{"value": "under_300m", "label": "[가상] 3억 이하"}]
+  }
+}

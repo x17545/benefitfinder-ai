@@ -1,0 +1,206 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benefitfinder.example/contracts/v1/simulation-response.schema.json",
+  "title": "Change simulation result",
+  "description": "POST /api/v1/simulations 응답. before/after_total_won은 선택 기간(basis_period) 카드합, annual은 연간 환산 지원금으로 분리한다. effective_marginal_rate=(연간 지원금 감소분/연간 소득 증가분)*100. 세금/4대보험 제외, 지원금 변화만 계산. 소득이 바뀌지 않으면 income_change와 effective_marginal_rate는 null.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "scenario",
+    "basis_period",
+    "before_total_won",
+    "after_total_won",
+    "annual",
+    "calculation_note"
+  ],
+  "properties": {
+    "scenario": {
+      "enum": [
+        "employed",
+        "income_up",
+        "independent",
+        "age_plus_one"
+      ]
+    },
+    "basis_period": {
+      "enum": [
+        "1y",
+        "2y",
+        "all"
+      ],
+      "description": "선택 기간. before/after_total_won의 카드합 기준."
+    },
+    "before_total_won": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "선택 기간 카드합(변화 전)."
+    },
+    "after_total_won": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "선택 기간 카드합(변화 후)."
+    },
+    "annual": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "before_won",
+        "after_won"
+      ],
+      "properties": {
+        "before_won": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "연간 환산 지원금(변화 전)."
+        },
+        "after_won": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "연간 환산 지원금(변화 후)."
+        }
+      },
+      "description": "연간 비율 계산용 지원금(annual). 실효비율 분자는 annual 감소분이다."
+    },
+    "income_change": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "required": [
+        "from_won",
+        "to_won",
+        "assumption_note"
+      ],
+      "properties": {
+        "from_won": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "연간(annual) 소득."
+        },
+        "to_won": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "연간(annual) 소득."
+        },
+        "assumption_note": {
+          "type": "string",
+          "minLength": 1,
+          "description": "가상 시나리오 가정 표시 문구. 불명확 소득 구간의 대표값이며 사용자 확정 소득이 아님을 밝힌다."
+        }
+      },
+      "description": "연간 소득 변화(annual). from/to는 불명확 구간 대표값을 포함한 가상 시나리오 가정이며 사용자 확정 소득으로 표시·저장하지 않는다."
+    },
+    "effective_marginal_rate": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "description": "연간 지원금 감소분/연간 소득 증가분*100."
+    },
+    "lost": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "policy_id",
+          "reason"
+        ],
+        "properties": {
+          "policy_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          },
+          "amount_won": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          }
+        }
+      },
+      "description": "policy_id로 추천 결과의 조합 정책 및 GET /api/v1/benefits/{benefit_id} 상세의 source·evidence에 연결한다. 변동 카드 자체에 source·evidence를 중복하지 않는다."
+    },
+    "gained": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "policy_id",
+          "reason"
+        ],
+        "properties": {
+          "policy_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          },
+          "amount_won": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          }
+        }
+      },
+      "description": "policy_id로 추천 결과의 조합 정책 및 GET /api/v1/benefits/{benefit_id} 상세의 source·evidence에 연결한다. 변동 카드 자체에 source·evidence를 중복하지 않는다."
+    },
+    "next_threshold": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "required": [
+        "text"
+      ],
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "todo": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "required": [
+        "text",
+        "evidence"
+      ],
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "common.schema.json#/$defs/evidence"
+          }
+        }
+      },
+      "description": "AI 지금 할 일. 공고 원문 근거(evidence 1개 이상 필수)가 있을 때만 제공하고, 없으면 todo 전체를 null로 둔다."
+    },
+    "calculation_note": {
+      "type": "string",
+      "minLength": 1,
+      "description": "예: 선택 기간 카드합과 연간 환산, 세금/4대보험 제외, 연간 지원금 변화/연간 소득 증가 기준."
+    }
+  }
+}

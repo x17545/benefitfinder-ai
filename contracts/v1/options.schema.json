@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benefitfinder.example/contracts/v1/options.schema.json",
+  "title": "Select options",
+  "description": "GET /api/v1/options 응답. *_band value는 youth-profile.schema.json의 열거값과 일치한다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["regions", "bands"],
+  "properties": {
+    "regions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["sido_code", "sido_name", "sigungu"],
+        "properties": {
+          "sido_code": {"type": "string", "minLength": 1},
+          "sido_name": {"type": "string", "minLength": 1},
+          "sigungu": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["code", "name"],
+              "properties": {
+                "code": {"type": "string", "minLength": 1},
+                "name": {"type": "string", "minLength": 1}
+              }
+            }
+          }
+        }
+      }
+    },
+    "bands": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["income", "asset", "deposit", "rent", "parent_income", "parent_asset"],
+      "properties": {
+        "income": {"$ref": "#/$defs/band_list"},
+        "asset": {"$ref": "#/$defs/band_list"},
+        "deposit": {"$ref": "#/$defs/band_list"},
+        "rent": {"$ref": "#/$defs/band_list"},
+        "parent_income": {"$ref": "#/$defs/band_list"},
+        "parent_asset": {"$ref": "#/$defs/band_list"}
+      }
+    }
+  },
+  "$defs": {
+    "band_list": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["value", "label"],
+        "properties": {
+          "value": {"type": "string", "minLength": 1},
+          "label": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  }
+}

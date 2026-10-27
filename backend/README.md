@@ -4,6 +4,8 @@ Python + FastAPI와 PostgreSQL을 사용하는 백엔드 구조다. 스택은 �
 
 `src/benefitfinder/`의 모듈을 한 애플리케이션으로 통합한다. AI·데이터 수집은 담당 디렉터리를 가지며 각각 별도 서버로 배포할 필요는 없다.
 
+기능은 [기획 명세 v2](../REQUIREMENTS_v2.md)의 F01~F11을 따른다. 선택 프로필에서 검색·자격·조합·현재가치·상황 변화·상세를 조율하고, HTTP 경계에서 SSE 진행·결과를 제공한다. 매일 갱신·검수 해제는 같은 패키지의 jobs/ingestion으로 구현한다. 실제 API·계산기·스케줄러는 아직 없다.
+
 ```text
 backend/
   .env.example                  DB 연결 설정의 가상 양식

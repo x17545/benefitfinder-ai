@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benefitfinder.example/contracts/v1/simulation-request.schema.json",
+  "title": "Change simulation request",
+  "description": "POST /api/v1/simulations 요청. profile은 변경 전 조건, scenario는 S4 상황 칩. 기간+현재가치 옵션은 recommendation 요청과 동일한 options 단일 위치에 둔다. income_up처럼 소득이 바뀌는 경우 income_change로 연간 소득 대표값을 함께 보낼 수 있다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["domain", "profile", "scenario"],
+  "properties": {
+    "domain": {"$ref": "common.schema.json#/$defs/domain_id"},
+    "profile": {"$ref": "profile.schema.json"},
+    "scenario": {"enum": ["employed", "income_up", "independent", "age_plus_one"]},
+    "options": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "period": {"enum": ["1y", "2y", "all"]},
+        "present_value": {"type": "boolean"}
+      },
+      "description": "기간+현재가치 공통 옵션(단일 위치, recommendation과 동일)."
+    },
+    "income_change": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["from_won", "to_won"],
+      "properties": {
+        "from_won": {"type": "integer", "minimum": 0, "description": "연간(annual) 소득."},
+        "to_won": {"type": "integer", "minimum": 0, "description": "연간(annual) 소득."}
+      },
+      "description": "연간 소득 변화(annual)."
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"domain": {"const": "youth"}}},
+      "then": {"properties": {"profile": {"$ref": "youth-profile.schema.json"}}}
+    }
+  ]
+}

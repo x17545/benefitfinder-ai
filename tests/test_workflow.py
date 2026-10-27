@@ -142,6 +142,7 @@ class GitWorkflowTests(unittest.TestCase):
             "tests/test_contracts.py",
             "tests/test_gitignore.py",
             "tests/test_workflow.py",
+            "tests/test_planning_rules.py",
         )
         (self.root / "tests").mkdir(exist_ok=True)
         for name in required:
@@ -191,6 +192,7 @@ class GitWorkflowTests(unittest.TestCase):
             "tests/test_contracts.py",
             "tests/test_gitignore.py",
             "tests/test_workflow.py",
+            "tests/test_planning_rules.py",
         )
         (self.root / "tests").mkdir(exist_ok=True)
         for name in required:

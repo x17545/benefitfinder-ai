@@ -1,13 +1,14 @@
 # AI 혜택 코치 (BenefitFinder AI)
-## 기능 요구 명세서 v2.0 (화면 설계 · 데이터 형식 · 디자인 가이드 포함)
+## 기능 요구 명세서 v2.1 (화면 설계 · 데이터 형식 · 디자인 가이드 포함)
 
 - 프로젝트: 코디세이 Final Project
 - 팀 구성: 5명
 - 작성일: 2026-10-26
 - 작성: 이현서 (기획·프론트엔드)
 - 제출 마감일: 2026-11-25
-- 문서 상태: v2.0 (팀 공유본, 데이터 형식은 회의에서 확정)
-- 기반 문서: PROJECT_PLAN.md v1.1, REQUIREMENTS.md v1.0 (v1.0은 그대로 두고 이 파일을 새로 추가)
+- 문서 상태: v2.1 (팀 공유본. 기획 기준 v2.0 유지, 기술·계약 정렬은 개발용 초안으로 다음 회의 확인 필요)
+- 기반 문서: 프로젝트 기획서 v1.1, 요구명세 v1.0. 원문은 [기획서 아카이브](docs/PROJECT_PLAN_v1.1_ARCHIVE.md)와 [요구명세 아카이브](docs/REQUIREMENTS_v1_ARCHIVE.md)에 보존했고, 현재 진입 문서는 v2 기준으로 갱신했다
+- 계약 정렬 상태: `contracts/v1`은 현재 개발 기준 SSOT이며, 6장·11.2·LLM/임베딩 모델은 다음 회의 확정 대상 초안이다. 계약 정렬을 기획자가 최종 승인한 것으로 쓰지 않는다
 - 클릭되는 화면 시안: `docs/prototype/index.html` (내려받아 브라우저로 열기)
 - 화면 표시 이름: 청년 정책 매니저 (프로젝트 이름은 AI 혜택 코치 그대로)
 
@@ -42,7 +43,7 @@
 | 윤정찬 (정책데이터) | 5장 F04·F05·F08, 6.1·6.2 데이터 형식, 8.3 테스트 사용자, 4.3 단계별 질문 |
 
 ### 쉬운 말 풀이
-      
+
 | 말 | 뜻 |
 | --- | --- |
 | 조합 | 동시에 받을 수 있는 지원금 묶음. 예: 월세 지원 + 적금 + 구직 지원금 |
@@ -202,7 +203,7 @@ S1 시작 ─▶ S2 조건 선택 (1 ~ 13단계) ─▶ L 로딩 ─▶ S3 내 �
 
 | 단계 | 질문 (문구 ID) | 입력 | 선택지 | 필수 |
 | --- | --- | --- | --- | --- |
-| 1 | 나이가 어떻게 되나요? (S2-1) | 숫자 입력 | 만 나이. 35세 이상이면 아래에 '군 복무를 마쳤나요?' 칩: 해당 없음 / 1년 6개월 이하 / 1년 6개월 ~ 2년 / 2년 초과 | 필수 |
+| 1 | 나이가 어떻게 되나요? (S2-1) | 숫자 입력 | 만 나이. 35세 이상이면 아래에 '군 복무를 마쳤나요?' 칩: 해당 없음 / 1년 6개월 이하 / 1년 6개월 초과 ~ 2년 / 2년 초과 | 필수 |
 | 2 | 어디에 살아요? (S2-2) | 드롭다운 2개 | 시·도 17개 → 시·군·구. 하위 단위가 하나면(세종) 자동 선택 | 필수 |
 | 3 | 지금 상황은요? (S2-3) | 하나 | 고등학생 / 대학생 (휴학 포함) / 대학원생 / 취업 준비 / 재직 (정규·계약) / 단기·일용 근로 / 자영업 / 프리랜서 / (예비) 창업 / 농업·어업 / 기타 | 필수 |
 | 4 | 최종 학력은요? (S2-4) | 하나 | 고졸 미만 / 고등학교 재학 / 고등학교 졸업 / 대학 재학·휴학 / 대학 졸업 예정 / 대학 졸업 / 석·박사 | 필수 |
@@ -423,7 +424,7 @@ S1 시작 ─▶ S2 조건 선택 (1 ~ 13단계) ─▶ L 로딩 ─▶ S3 내 �
 | S2-T | S2 상단 바 | 조건 고르기 · {n} / 13 |
 | S2-1 | 1단계 | 나이가 어떻게 되나요? · 만 나이로 적어 주세요 |
 | S2-1-N | 1단계 범위 밖 | 청년(만 19 ~ 39세) 정책 위주라 받을 수 있는 게 적을 수 있어요. 그래도 계속 볼 수 있어요. |
-| S2-1-M | 1단계 군 복무 | 군 복무를 마쳤나요? · 복무한 기간만큼 나이 기준을 늘려 주는 정책이 있어요 (최대 6년) |
+| S2-1-M | 1단계 군 복무 | 군 복무를 마쳤나요? · 복무한 기간만큼 나이 기준을 늘려 주는 정책이 있어요 (연장 폭과 상한은 정책 공고마다 다르고, 공고에 없으면 확인 필요로 표시해요) |
 | S2-2 | 2단계 | 어디에 사나요? · 주민등록상 주소 기준이에요 |
 | S2-3 | 3단계 | 지금 상황은요? · 가장 가까운 것 하나를 골라 주세요 |
 | S2-4 | 4단계 | 최종 학력은요? |
@@ -437,7 +438,7 @@ S1 시작 ─▶ S2 조건 선택 (1 ~ 13단계) ─▶ L 로딩 ─▶ S3 내 �
 | S2-11 | 11단계 | 이미 받고 있거나 받았던 게 있나요? · 한 번만 받을 수 있거나 함께 가입할 수 없는 정책은 조합에서 빼요 |
 | S2-12 | 12단계 | 더 정확하게 볼까요? · 일부 정책은 부모님(원가구) 소득·재산을 봐요. 모르면 '확인 필요'로 표시돼요 |
 | S2-12-30 | 12단계 30세 이상 | . 만 30세 이상이면 안 보는 정책도 있어요 |
-| S2-12-M | 12단계 기혼 | 부모님 정보는 필요 없어요 · 결혼한 청년은 부모님 소득·재산 대신 본인 가구 기준으로 봐요 |
+| S2-12-M | 12단계 기혼 | 부모님 정보 입력은 건너뛰어요 · 정책별 부모님 기준은 따로 확인해요 |
 | S2-SKIP | 12단계 버튼 | 건너뛰기 |
 | S2-13 | 13단계 | 이 조건으로 찾을까요? · 항목을 누르면 고칠 수 있어요 |
 | S2-BTN | 버튼 | 다음 · (13단계) 내 조합 찾기 |
@@ -543,7 +544,7 @@ S1 시작 ─▶ S2 조건 선택 (1 ~ 13단계) ─▶ L 로딩 ─▶ S3 내 �
 
 #### 처리
 1. 지역·나이·분야로 DB에서 1차 거르기를 한다.
-2. 정책 원문을 벡터 검색(pgvector)해 후보와 근거 문장을 찾는다.
+2. 정책 원문을 벡터 검색으로 후보와 근거 문장을 찾는다. 검색 구현(라이브러리·인덱스)은 미정이며 pgvector는 PostgreSQL을 쓸 때의 후보 중 하나다.
 3. 근거 문장과 공식 출처 URL, 마지막 확인일을 연결한다.
 4. 관련 자료가 없으면 검색 결과 없음으로 처리한다.
 
@@ -602,12 +603,12 @@ AI Agent가 도구 결과를 보고 다음 도구를 골라 호출하고,
 사용자 조건과 정책 조건을 비교해 조건마다 판정하고 근거와 함께 보여 준다.
 
 #### 처리 규칙
-1. 조건마다 충족(✓, `met`) / 미충족(✕, `not_met`) / 확인 필요(?, `need_check`)로 판정한다.
+1. 조건마다 충족(✓, `met`) / 미충족(✕, `not_met`) / 확인 필요(?, `needs_review`)로 판정한다.
 2. '모름'·건너뛴 값이 필요하면 확인 필요. 미입력을 충족으로 처리하지 않는다.
 3. 기준이 문장뿐이라 코드로 판정할 수 없으면 확인 필요 + 원문 인용.
-4. 나이 상한: 정책이 병역 기간 연장을 인정하면 상한 + 군 복무 기간.
-5. 소득: 금액 구간을 중위소득 %로 바꿔 비교. 구간이 기준선에 걸치면 확인 필요.
-6. 기혼이면 부모님 소득·재산을 판정에 쓰지 않는다. '만 30세 이상은 본인 가구만' 같은 예외를 따른다.
+4. 나이 상한(군 복무 연장): 고른 칩을 `domain_data.military_months_range {min, max}`로 보낸다(해당 없음 0..0, 1년 6개월 이하 0..18, 1년 6개월 초과 ~ 2년 19..24, 2년 초과 25..null, 미상은 전체 null). 확정 개월값을 추정해 상한에 더하지 않는다. 정책별 공고 근거에 있는 연장 상한을 적용한 뒤, 구간 안 모든 가능 값에서 상한을 넘지 않으면 `met`, 모두 넘으면 `not_met`, 갈리거나 공고 기준이 불명확하면 `needs_review`로 판정한다. 35세 미만이라 수집하지 않은 값은 0으로 추정하지 않으며, 연장이 판정에 필요하면 `needs_review`로 남긴다.
+5. 소득: 금액 구간을 중위소득 %로 바꿔 비교. 공고 연산자(≤ vs <)와 구간 끝 포함 여부(explicit `inclusive`)대로 판정한다. 경계값 일치(=) 자체는 확인 필요 사유가 아니며, 전 구간 값이 통과하면 `met`, 전부 실패하면 `not_met`이다. 구간이 기준선을 가로지를 때(일부는 통과·일부는 실패)만 `needs_review`로 남긴다.
+6. 기혼이면 12단계 UI는 생략하되, 원가구 면제는 공고별로 판정한다. '만 30세 이상은 본인 가구만' 같은 예외는 공고 근거가 있을 때만 적용하고, 근거가 불명확하면 `needs_review`로 남긴다.
 7. 이미 받은 정책이 '생애 1회'이거나 같은 계열 중복 가입이 안 되면 미충족.
 8. 정책이 요구하는 특수 조건(수급자 등)을 고르지 않았으면 미충족.
 9. 미충족이 하나라도 있으면 조합 후보에서 빠지고 '조건이 맞지 않는 정책'으로 간다.
@@ -636,13 +637,13 @@ AI Agent가 도구 결과를 보고 다음 도구를 골라 호출하고,
 2. 모집이 끝난 정책은 조합에서 빼고 '지금은 모집이 끝난 정책'으로 따로 보여 준다 (지난 모집 기간, 알려진 경우 다음 모집 시기).
 3. 공식 근거로 함께 받을 수 없는 쌍은 같은 조합에 넣지 않는다.
 4. 함께 받을 수 있는지 근거가 없는 쌍은 넣고 '확인 필요'로 표시한다.
-5. 금액을 모르는 정책은 넣되 총액에 더하지 않는다 ("금액 확인 필요").
+5. 금액 미상 정책은 조합 총액에 넣지 않고 0원으로도 보지 않는다. 조합 내 `total_won`은 검수 확정 금액의 합이며, 미상 정책은 기능상 계속 노출하되 `not_yet_reviewed`/'아직 조합 계산 전인 정책' 목록으로 따로 보여 준다. 전역 전체 수급액을 확정된 최대값으로 표시하지 않으며, 검수 금액 후보 안의 최대와 미상 정책 보완 목록을 구분한다.
 6. 다른 정책을 더 넣을 수 있는 작은 묶음은 후보로 치지 않는다 (조합 3개는 서로 다른 '꽉 찬 묶음').
 7. 점수 = 고른 기간(1년 / 2년 / 전체) 동안 받는 금액 합. 현재가치를 켜면 현재가치 합. 기간을 바꾸면 순위도 다시 매긴다.
 8. 점수가 같으면 확인 필요 쌍이 적은 조합 → 정책 수가 적은 조합 순.
 9. 꽉 찬 묶음이 1 ~ 2개뿐이면 있는 만큼만 보여 준다.
 10. 조합을 못 만들면(후보 1개 이하) 받을 수 있는 정책을 최대 5개 목록으로 보여 준다 (`fallback_list`).
-11. 정책 수가 적으므로 모든 조합을 다 따져 본다. 후보가 20개를 넘으면 금액 상위 20개만 쓴다.
+11. 후보 전체를 정확 탐색한다. 임의로 후보를 잘라낸 결과를 최적 조합으로 보내지 않는다. 안전 가지치기(중복 제한·모집 상태로 겹칠 수 없는 묶음을 미리 제외)나 분지 한계 같은 정확한 탐색 최적화는 쓸 수 있다. 시간·자원을 초과하면 `calculation_limit_exceeded`로 실패를 알리고, 잘린 후보로 계산한 총액을 최적이라고 표시하지 않는다. 60초 초과 실패 원칙은 유지한다. (회귀 사례: 서로 받을 수 없는 정책 20개(각 100만 원)와 21번째 호환 정책(99만 원)이면 전역 최적은 199만 원이다. 금액 상위 20개만 자르면 100만 원이 1위가 되는 잘못된 결과가 나온다.)
 12. 결과가 0개면 "지금 다루는 정책 중엔 맞는 게 없어요" + 조건 바꾸기 + 온통청년·복지로 링크.
 
 #### 기간 금액
@@ -651,20 +652,21 @@ AI Agent가 도구 결과를 보고 다음 도구를 골라 호출하고,
 |---|---|---|---|
 | 매달 | 월 금액 × min(지급 개월, 12) | × min(지급 개월, 24) | 총 지급액 |
 | 일시금 | 전액 | 전액 | 전액 |
-| 만기 지급 | 그 기간까지 쌓인 금액 (만기 전이면 매칭분) | 같은 방식 | 만기 전액 |
-| 이자 지원 | 연 지원액 × 1 | × 2 | × 지원 연수 |
+| 만기 지급 | 그 기간까지 쌓인 금액 (만기 전이면 예상 적립액으로 표시) | 같은 방식 | 만기 전액 |
+| 이자 지원 | 연 지원액 × min(1, 지원 연수) | 연 지원액 × min(2, 지원 연수) | 연 지원액 × 지원 연수 |
 
-'전체 기간'은 정책마다 끝까지 받는 금액이다. 만기 지급은 화면에 '만기 시 지급'을 붙인다.
+'전체 기간'은 정책마다 끝까지 받는 금액이다. 지원 기간을 초과해 곱하지 않는다(예: 지원 2년이면 전체도 연 지원액 × 2). 만기 지급은 화면에 '만기 시 지급'을 붙이고, 만기 전 매칭분은 받을 돈이 아니라 예상 적립액임을 구분해 표시한다.
 
 #### 현재가치 (화면의 '현재가치로 보기', 처음엔 꺼짐)
 - m개월 뒤 받는 금액 A의 현재가치 = A ÷ (1 + r)^(m ÷ 12)
-- 매달 지급은 달마다, 만기 지급은 만기 달에, 이자 지원은 해마다 할인한다
-- r = 한국은행 기준금리 (매일 자동 갱신). 화면에 "할인율 연 ○.○%" 표시
-- 만 원 단위 반올림
+- 실제 현금이 지급되는 시점을 기준으로 할인한다. 매달 지급은 달마다, 만기 지급은 만기 달에, 이자 지원은 해마다 할인한다. 만기 전 적립 매칭분은 할인 대상 현금 지급이 아니라 예상 적립액으로 표시한다
+- r = 한국은행 기준금리 (매일 자동 갱신). 기준금리가 미확인이면 r을 0으로 가정하지 않고 `discount_rate: null, discount_rate_status: unknown`으로 둔다. 화면에 "할인율 연 ○.○%" 표시
+- 계산·계약은 정책별 할인 금액을 원 단위로 반올림하고 그 정수 금액을 합산한다. 화면에서만 만 원 단위로 표시하며, 화면 반올림값을 다시 합산해 순위를 바꾸지 않는다
 
 #### 포기하는 지원금 (기회비용)
 - 조합에 없는 정책 중, 조합 안 정책과 '함께 받을 수 없는' 정책과 그 금액
 - "왜 이 순서인가요?": 1위와 2위의 총액 차이, 1위를 고르는 기회비용(= 2위 총액), 둘을 가른 '함께 받을 수 없는 쌍'
+- 동시에 받을 수 없어 빠진 정책의 금액을 합해 받을 수 있는 총액처럼 표시하지 않는다. 기회비용은 놓치는 금액이라는 설명을 함께 보여 준다
 
 #### 출력
 - 조합 3개 (총액, 구성, 정책별 금액·진단·추천 이유, 포기하는 지원금, 확인 필요 쌍)
@@ -699,8 +701,9 @@ AI Agent가 도구 결과를 보고 다음 도구를 골라 호출하고,
 #### 처리
 1. 바꾼 조건으로 F04·F05를 다시 돌려 1위 조합끼리 비교한다.
 2. 끊기는 정책, 새로 받는 정책, 다음으로 가까운 기준선을 찾는다.
-3. 소득이 바뀌는 상황에서만 실효한계세율을 계산한다.
-   - 실효한계세율(%) = (바뀌기 전 1위 총액 − 바뀐 뒤 1위 총액) ÷ 늘어난 연 소득 × 100
+3. 연 소득 증가분이 양수인 상황에서 실효한계세율과 실제 순증가를 계산한다. 증가분이 0·음수이거나 필요한 금액이 미상이면 비율을 `null`로 두고 계산 근거 부족을 표시한다.
+   - 실효한계세율(%) = (바뀌기 전 1위 1년 총액 − 바뀐 뒤 1위 1년 총액) ÷ 늘어난 연 소득(1년) × 100
+   - 실제 순증가 = 늘어난 연 소득(1년) − 줄어든 1년 지원금. 2년·전체 기간 총액을 연 소득 1년 증가분과 직접 나누거나 빼지 않는다. 선택 기간 총액 카드와 1년 기준 비교는 화면에서 구분해 표시하고, 응답의 `basis_period`로 기준 기간을 명시한다
    - 100% 이상이면 '혜택 절벽'을 알린다
 4. '기준선 주의'는 바뀐 조건에서 다음으로 가까운 소득·나이 기준선 하나.
 5. 세금·4대 보험은 넣지 않는다 (화면에 표시).
@@ -744,7 +747,7 @@ AI Agent가 도구 결과를 보고 다음 도구를 골라 호출하고,
 - 주 담당: 윤정찬 (스크립트)
 - 협업: 조장 (매일 실행 설정, 실패 알림), 탁서윤 (원문 조건 추출)
 
-#### 처리 (매일 새벽 3시 KST, GitHub Actions)
+#### 처리 (매일 새벽 3시 KST, 실행 스케줄러는 추후 선택)
 1. 온통청년·보조금24 API에서 정책 수집 (연령 조건이 19 ~ 39세와 겹치는 것). 겹치는 정책은 하나로 합친다.
 2. 원문 해시를 비교해 바뀐 정책만 골라낸다.
 3. 바뀐 정책만 파싱(나이·금액·소득 기준·지역·신청 기간·출처) → DB 갱신.
@@ -767,7 +770,7 @@ AI Agent가 도구 결과를 보고 다음 도구를 골라 호출하고,
 
 #### 처리
 1. 시작 화면에서 '기억하기'를 켰을 때만, 분석을 시작하는 순간 저장한다.
-2. 저장 위치는 사용자 브라우저뿐이다. 서버에는 저장하지 않는다. localStorage 키 `ypm.conditions.v1`, 값 `{ "saved_at": "날짜", "conditions": 6.1 형식 }`
+2. 저장 위치는 사용자 브라우저뿐이다. 서버에는 저장하지 않는다. localStorage 키 `ypm.conditions.v1`, 값 `{ "saved_at": "날짜", "conditions": 6.1 계약 형식(profile) }`
 3. 저장한 지 30일이 지나면 다음 접속 때 지운다.
 4. 저장된 조건이 있으면 시작 화면에 "지난번 조건으로 바로 보기".
 5. 모든 화면 하단 [내 정보 지우기]로 저장값과 마지막 결과를 바로 지운다 (토스트 T-CLEAR).
@@ -796,7 +799,7 @@ AI Agent가 도구 결과를 보고 다음 도구를 골라 호출하고,
 - 협업: 팀원 전원
 
 #### 처리
-1. 화면·서버를 Render에 배포하고 외부에서 접속 가능하게 한다.
+1. 화면·서버를 정해진 배포 대상에 배포하고 외부에서 접속 가능하게 한다 (배포 서비스는 미정, Render는 후보).
 2. 하루 분석 상한: 서버 전체 **100회** (자정 KST 초기화). 넘으면 "오늘 이용량이 많아 잠시 쉬어요".
 3. 구글 애널리틱스(조장 계정)를 연결하고 팀원에게 보기 권한을 준다. 사용자 조건 값은 보내지 않는다.
 4. API 키는 환경변수로 관리한다.
@@ -810,52 +813,39 @@ AI Agent가 도구 결과를 보고 다음 도구를 골라 호출하고,
 
 ---
 
-## 6. 데이터 형식과 API (회의 확정 전 초안)
+## 6. 데이터 형식과 API (기획 기준 + 계약 연결)
 
-필드 이름과 자료형은 **회의에서 한 번에 확정**한다(현서, 하정, 서윤, 정찬). 확정 후 `shared/` 공통 스키마 파일로 옮긴다. 금액은 모두 원 단위 정수.
+이 장의 화면 값·금액 단위·판정 규칙은 기획 기준(사용자 승인)으로 유지한다. 필드 이름과 자료형의 정본은 `contracts/v1/*.schema.json`이며, 가상 예제는 `contracts/fixtures/`를 링크로 참조한다(예제 중복 게재 금지). 계약 담당이 `contracts/v1`과 fixtures를 확장했으므로, 이 장은 중복 정의 대신 기획 필드 → 계약 필드 매핑으로 의미를 보존한다. 이 매핑은 개발용 정렬 초안이며 다음 회의에서 확정한다. 금액은 모두 원 단위 정수.
 
 ### 6.1 사용자 조건 (화면 → 서버)
 
-```json
-{
-  "age": 25,
-  "military_months": null,
-  "region": { "sido_code": "41", "sigungu_code": "41110" },
-  "status": "job_seeker",
-  "school": "university_graduate",
-  "marital": "single",
-  "housing": {
-    "living": "alone",
-    "homeless": true,
-    "household_head": true,
-    "contract": "monthly_rent",
-    "deposit_band": "under_50m",
-    "rent_band": "40_60"
-  },
-  "income_band": "none",
-  "asset_band": "under_122m",
-  "special": [],
-  "interests": ["housing", "living"],
-  "received": [],
-  "household": {
-    "household_size": null,
-    "parent_income_band": null,
-    "parent_asset_band": null
-  },
-  "options": { "period": "1y", "present_value": false }
-}
-```
+정본: 요청 예제 [`contracts/fixtures/recommendation-request.json`](contracts/fixtures/recommendation-request.json), 스키마 [`contracts/v1/recommendation-request.schema.json`](contracts/v1/recommendation-request.schema.json) + [`contracts/v1/youth-profile.schema.json`](contracts/v1/youth-profile.schema.json). 아래 표는 기획 선택지(4.3·5장)의 의미를 계약 필드로 옮긴 것으로, 선택지 범위와 단위를 그대로 보존한다. 이 매핑은 개발용 정렬 초안이며 다음 회의에서 확정한다.
 
-- 모르는 값과 건너뛴 값은 `null`
-- 지역은 행정표준코드로 보낸다
-- `status` = 온통청년 `jobCd`, `school` = `schoolCd`, `marital` = `mrgSttsCd`, `special` = `sbizCd`에 대응 (코드표는 정찬이 `shared/`에)
-- `status`: high_school / student / grad_student / job_seeker / employed / short_term_worker / self_employed / freelancer / founder / farmer / other
-- `marital`: single / married / marrying_soon
-- `special`: basic_livelihood / near_poverty / single_parent / disabled / sme_employee / farmer_fisher / soldier
-- `military_months`: 만 35세 이상만. 구간의 위쪽 값(18 / 24 / 30)
-- 구간 값 이름(`*_band`)은 6.5의 `/api/options`가 내려 주는 `value`를 그대로 쓴다
+| 기획 선택지 | 계약 필드 | 의미 보존 |
+| --- | --- | --- |
+| 나이(만, S2-1) | `profile.age` | 만 나이 정수. 19~39세 밖이어도 막지 않고 안내만 한다 |
+| 군 복무 칩(S2-1, 35세 이상) | `profile.domain_data.military_months_range {min, max}` | 해당 없음 0..0, 1년 6개월 이하 0..18, 1년 6개월 초과 ~ 2년 19..24, 2년 초과 25..null, 미상은 전체 null. 확정 상한값(18/24/30)을 단정해 보내지 않는다 |
+| 지역(S2-2) | `profile.region_code`(시군구 또는 시도) 단일 + `domain_data.region {sido_code}`(상위 피커만) | 행정표준코드. 시·도 17개 → 시·군·구. `domain_data.region.sigungu_code` 중복은 계약에서 제거 |
+| 지금 상황(S2-3) | `profile.employment_status` | 온통청년 jobCd 대응. high_school / student / grad_student / job_seeker / employed / short_term_worker / self_employed / freelancer / founder / farmer / other |
+| 최종 학력(S2-4) | `domain_data.school` | schoolCd 대응 |
+| 결혼(S2-5) | `domain_data.marital` | mrgSttsCd 대응. single / married / marrying_soon |
+| 사는 형태·집 소유·세대주(S2-6) | `domain_data.housing {living, home_ownership, household_head}` | 분양권·입주권 포함, 세대주 구분 유지 |
+| 집 계약·보증금·월세(S2-7) | `domain_data.contract {type, deposit_band, rent_band}` | 구간 경계는 실제 정책 기준선 유지. `*_band` 값 이름은 `GET /api/v1/options`가 내려 주는 value 그대로 쓴다 |
+| 본인 소득·재산(S2-8) | `profile.income_band` + `domain_data.asset_band` | 금액 구간으로 묻고 코드가 중위소득 %로 변환. 모름 → unknown, 건너뜀 → null |
+| 해당 조건(S2-9) | `domain_data.special` | sbizCd 대응. '해당 없음' → none(단독). 민감 정보이므로 LLM·임베딩·GA·로그에 보내지 않는다 |
+| 관심 지원(S2-10) | `domain_data.interests` | housing / employment / living / asset / education |
+| 받은 정책(S2-11) | `domain_data.received` | '없음' → none. 생애 1회·중복 가입 판정용 |
+| 가구·부모님 정보(S2-12) | `domain_data.household {household_size, parent_income_band, parent_asset_band}` | 가구원 수 4는 4명 이상. 선택·건너뜀 가능, 기혼이면 null. 민감 정보이므로 LLM·임베딩·GA·로그에 보내지 않는다 |
+| 기간 탭·현재가치(S3) | 요청 `options {period, present_value}` | 1y / 2y / all. 서버는 3기간 × PV on/off 6가지 결과를 응답에 모두 담는다 |
+
+- 모르는 값과 건너뛴 값은 `null`(미상)로 두고 `0`·무소득·미충족으로 바꾸지 않는다
+- 문장 입력이 없으므로 요청에 `message` 필드가 없다(계약에서 삭제됨). `domain`·`profile`·`options`가 원본이다
+- 미배포 `limit` 필드는 계약에서 삭제했으므로 보내지 않는다
+- 코드표·중위소득표·구간 경계는 정찬·하정이 계약 fixtures 기준으로 관리하고, 바꾸면 이 표와 4.3 단계별 질문 표를 함께 고친다
 
 ### 6.2 정책
+
+노출 형식의 정본은 [`contracts/v1/benefit.schema.json`](contracts/v1/benefit.schema.json)과 예제 [`contracts/fixtures/youth-benefit.json`](contracts/fixtures/youth-benefit.json)이다 (개발 기준, 회의 확인 필요 초안). 아래는 수집·검수용 기획 형식으로, 계약 형식과의 의미 매핑을 함께 둔다.
 
 ```json
 {
@@ -895,79 +885,47 @@ AI Agent가 도구 결과를 보고 다음 도구를 골라 호출하고,
 - `amount_status`: verified / unknown
 - `reviewed`: 금액·중복 제한·지급 시점 검수 완료. true만 조합 계산에 들어감
 
+기획 형식 → 계약 형식 매핑: `policy_id` → 혜택 `id`(`youth:출처:외부ID`); `organization` → `provider`; `category` → `categories`; `benefit` → `benefit_amount`(금액·기간·지급 시점·확인 상태); `conditions[]` → `eligibility_conditions`(조건 ID·설명·근거); `conflicts[]` → `conflicts`(근거); `lifetime_once` 유지; 모집 상태·기간·신청 URL → `application`; 원문 URL·확인 시각·문서 버전 → `source {url, checked_at, document_version}`; 조건별 근거 문장 → `evidence {quote, source}`. 상시 모집은 계약의 `application.status: open`과 공식 상시 근거로 표현하고 `always` 값은 보내지 않는다.
+
+수치 조건의 연산자·상하한·복무 연장 규칙, 다음 모집 시기·신청 방법·접수 기관·준비 서류는 위 수집 초안의 기획 요구로 보존한다. 현재 공용 혜택 스키마에는 이 세부 항목의 자료형이 아직 없다. 구현 전에 담당자들이 조건 판정용 규칙과 상세 안내 계약을 함께 확장하고 fixtures·테스트로 확인한다. 현재 스키마에 없는 필드를 그대로 보내거나, 변환 중 정보를 버려서는 안 된다.
+
 ### 6.3 분석 결과 (조합)
 
-```json
-{
-  "request_id": "a1b2c3",
-  "period": "1y",
-  "present_value": false,
-  "discount_rate": 0.025,
-  "portfolios": [
-    {
-      "rank": 1,
-      "total_won": 6600000,
-      "policies": [
-        {
-          "policy_id": "P-0001",
-          "amount_in_period_won": 2400000,
-          "original_amount_won": 2400000,
-          "eligibility": [
-            { "condition": "age", "status": "met", "evidence": "공고 원문 문장" },
-            { "condition": "parent_income", "status": "need_check", "reason": "미입력" }
-          ],
-          "ai_reason": "AI가 쓴 한 줄 추천 이유"
-        }
-      ],
-      "given_up": [ { "policy_id": "P-0006", "amount_won": 1500000 } ],
-      "unverified_pairs": [ { "a": "P-0001", "b": "P-0002", "note": "중복 수혜 여부 공식 자료 없음" } ]
-    }
-  ],
-  "why": { "gap_won": 900000, "second_total_won": 5700000, "deciding_conflict": ["P-0001", "P-0006"] },
-  "excluded": [ { "policy_id": "P-0006", "reason": "P-0001과 중복 수혜 불가", "evidence": "공고 원문 문장" } ],
-  "not_eligible": [ { "policy_id": "P-0005", "failed": ["age"] } ],
-  "not_yet_reviewed": [ { "policy_id": "P-0120", "eligibility_summary": "met" } ],
-  "closed_now": [ { "policy_id": "P-0001", "last_period": "2026-03-30 ~ 2026-05-29", "next_expected": null } ],
-  "fallback_list": null,
-  "data_updated_at": "2026-10-26T03:12:00+09:00"
-}
-```
+정본: [`contracts/v1/recommendation-response.schema.json`](contracts/v1/recommendation-response.schema.json), 예제 [`contracts/fixtures/recommendation-response.json`](contracts/fixtures/recommendation-response.json) · [`contracts/fixtures/fallback-response.json`](contracts/fixtures/fallback-response.json) · [`contracts/fixtures/empty-response.json`](contracts/fixtures/empty-response.json). 최종 JSON이 바로 이 계약 응답이다 (개발 기준, 회의 확인 필요 초안).
 
-- 기간·현재가치를 바꿀 때마다 서버에 다시 묻지 않도록, 서버는 **기간 3개 × 현재가치 켬/끔 6가지를 모두 계산해 한 번에** 보낸다 (`results["1y"]["pv_off"]` 형태로 감싸기). 형식은 회의에서 확정
-- `ai_reason`만 LLM이 쓰고 나머지 숫자·상태는 코드가 채운다
+- `view`: 전역 초기 기준이며 `results[1y][pv_off]`의 표시 섹션과 일치한다. `portfolio`(조합 카드) / `fallback_list`(목록) / `empty`(결과 없음, S3-E)
+- `results`: `1y`·`2y`·`all` × `pv_off`·`pv_on` 6가지를 한 번에. 기간·현재가치 탭을 바꿀 때 다시 묻지 않고, 선택 탭의 `result_view`를 따라 렌더한다(portfolios가 있으면 카드, 없으면 그 탭의 `fallback_list`, 둘 다 없으면 비어 있음). 각 `result_view` 안에는 기획 기준 그대로 `portfolios`(최대 3개. 총액·구성·정책별 금액·진단·추천 이유·포기하는 지원금·확인 필요 쌍), `why`(1·2위 총액 차이·2위 총액·둘을 가른 중복 쌍), `excluded`(빠진 정책, 근거 필수), `not_eligible`(조건 미충족), `not_yet_reviewed`(검수 전·금액 미상 노출, 자격 요약), `closed_now`(모집 끝남, 지난 모집 기간·다음 모집 시기), `fallback_list`(그 탭의 목록, 최대 5개)를 둔다
+- `calculation_status`(필수): `available` / `unavailable` + `unavailable_reason`(필수, `null` / `missing_discount_rate` / `unknown_payment_timing`). 금리 미확인·지급 시점 불명확으로 `pv_on`을 계산할 수 없으면 0으로 추정하지 않고 해당 탭을 `unavailable`로 둔다. `unavailable`이면 `portfolios`는 빈 배열이 강제되고 합계를 추정하지 않으며, 탭에 계산 불가 안내를 보여 주고 명목금액(`pv_off`/raw) 분기로 본다
+- 조합 안 정책마다 `policy_id`, `amount_in_period_won`, `original_amount_won`(현재가치 켬 시 원래 금액), `amount_status`(조합 금액은 verified, 미상 정책은 별도 목록), `eligibility [{condition_id, status, evidence}]`, `ai_reason`(LLM 한 줄, 민감 조건·부모 정보 사용 금지), `source {url, checked_at, document_version}`를 둔다
+- 판정 상태는 `met` / `not_met` / `needs_review`만 쓴다. `met`·`not_met`에는 근거 1개 이상이 필수다. `ai_reason`만 LLM이 쓰고 나머지 숫자·상태는 코드가 채운다
+- `discount_rate`: 한국은행 기준금리(연). 미확인이면 `null` + `discount_rate_status: unknown`으로 두고 0으로 가정하지 않는다
 
 ### 6.4 상황 변화 결과
 
-```json
-{
-  "scenario": "income_up",
-  "before_total_won": 6600000,
-  "after_total_won": 4200000,
-  "income_change": { "from_won": 29000000, "to_won": 31000000 },
-  "effective_marginal_rate": 120,
-  "lost": [ { "policy_id": "P-0001", "reason": "연 소득 3,000만 원 기준 초과", "amount_won": 2400000 } ],
-  "gained": [],
-  "next_threshold": { "text": "연 소득 5,000만 원을 넘으면 청년 자산형성 통장 매칭도 줄어요" },
-  "todo": { "text": "AI가 쓴 문장", "evidence": "공고 원문 '지원 중단' 조항" }
-}
-```
+정본: 요청 [`contracts/v1/simulation-request.schema.json`](contracts/v1/simulation-request.schema.json) + 예제 [`contracts/fixtures/simulation-request.json`](contracts/fixtures/simulation-request.json), 응답 [`contracts/v1/simulation-response.schema.json`](contracts/v1/simulation-response.schema.json) + 예제 [`contracts/fixtures/simulation-response.json`](contracts/fixtures/simulation-response.json) (개발 기준, 회의 확인 필요 초안).
 
-- 소득이 안 바뀌는 상황이면 `income_change`, `effective_marginal_rate`는 `null`
-- 근거가 없으면 `todo`는 `null`
+- 요청: `{domain, profile(바뀌기 전 조건), scenario, options?, income_change?}`. `scenario`: `employed`(취업하면) / `income_up`(연 소득이 오르면) / `independent`(독립하면) / `age_plus_one`(나이가 1살 많아지면). 기간+현재가치 옵션은 추천 요청과 동일한 단일 `options` 위치에 둔다. 소득이 바뀌는 경우 연간 소득 대표값을 `income_change {from_won, to_won}`으로 함께 보낼 수 있다
+- 응답: `{scenario, basis_period, before_total_won, after_total_won, annual {before_won, after_won}, income_change|null, effective_marginal_rate|null, lost, gained, next_threshold|null, todo|null, calculation_note}`. `before/after_total_won`은 선택 기간(`basis_period`, S3에서 고른 기간) 카드합이고, `annual`은 연간 환산 지원금으로 분리한다. 선택 기간 총액과 연간 비교를 화면에서 구분해 표시한다
+- 실효한계세율 분자는 연간 지원금 감소분이다: 실효한계세율(%) = (`annual.before_won` − `annual.after_won`) ÷ 늘어난 연 소득(1년) × 100. `calculation_note`에 '선택 기간 카드합과 연간 환산, 세금·4대 보험 제외, 연간 지원금 변화/연간 소득 증가 기준'을 명시한다
+- `income_change {from_won, to_won, assumption_note(필수)}`: 연간 가상 시나리오이며, 불명확 소득 구간의 대표값임을 `assumption_note`로 밝힌다. 사용자 확정 소득으로 표시·저장하지 않는다. 소득이 안 바뀌는 상황이면 `income_change`, `effective_marginal_rate`는 `null`
+- `todo`(AI '지금 할 일')는 공고 원문 근거(`evidence` 1개 이상 필수)가 있을 때만 제공한다. 근거가 없으면 `todo` 전체를 `null`로 둔다
 
 ### 6.5 API
 
-모든 주소는 `/api`로 시작한다. 요청·응답은 JSON (분석만 SSE).
+정본 주소와 스키마는 `contracts/v1`과 [`contracts/README.md`](contracts/README.md)의 예정 HTTP 매핑을 개발 기준으로 따르고, 아래 표는 기획 화면과의 연결이다 (개발 기준, 회의 확인 필요 초안). 요청·응답은 JSON이며, 추천 분석만 POST fetch 스트림(SSE 형식)으로 받는다.
 
-| 방식 | 주소 | 하는 일 | 응답 |
+| 방식 | 주소 | 하는 일 | 요청·응답 |
 | --- | --- | --- | --- |
-| GET | `/api/meta` | 데이터 마지막 갱신 시각, 기준금리, 오늘 남은 분석 횟수 | `{ "data_updated_at", "base_rate", "daily_remaining" }` |
-| GET | `/api/options` | 지역 목록(행정표준코드), 소득·재산·보증금·월세 구간 목록 | `{ "regions": [...], "bands": { "income": [{ "value", "label" }], ... } }` |
-| POST | `/api/analyze` | 분석 시작. 본문 = 6.1. **SSE로 응답** | 이벤트 `progress` 여러 번 → `result` 한 번 (또는 `error`) |
-| POST | `/api/simulate` | 상황 변화 계산. 본문 = `{ "conditions": 6.1, "scenario": "employed" }` | 6.4 |
-| GET | `/api/policies/{policy_id}` | 정책 상세 | 6.2 |
+| GET | `/health` | 서버 동작 확인 | 200 |
+| GET | `/api/v1/meta` | 데이터 마지막 갱신 시각, 기준금리(미확인이면 null + 상태 unknown), 오늘 남은 분석 횟수 | [`meta.schema.json`](contracts/v1/meta.schema.json) · 예제 [`meta.json`](contracts/fixtures/meta.json) |
+| GET | `/api/v1/options` | 지역 목록(행정표준코드), 소득·재산·보증금·월세·부모 소득·재산 구간 목록(`*_band` value는 계약 열거값과 일치) | [`options.schema.json`](contracts/v1/options.schema.json) · 예제 [`options.json`](contracts/fixtures/options.json) |
+| POST | `/api/v1/recommendations` | 분석 시작. 본문 6.1. POST fetch 스트림으로 `progress` 여러 번 → `result` 한 번 (또는 `error`) | 요청 [`recommendation-request.schema.json`](contracts/v1/recommendation-request.schema.json), 최종 `result` data는 6.3 계약 응답 |
+| POST | `/api/v1/simulations` | 상황 변화 계산. 본문 6.4 | 요청·응답 스키마 6.4 참조 |
+| GET | `/api/v1/benefits/{benefit_id}` | 혜택 상세 | [`benefit.schema.json`](contracts/v1/benefit.schema.json) · 예제 [`youth-benefit.json`](contracts/fixtures/youth-benefit.json) |
 
-SSE 이벤트
+SSE 진행 이벤트
+
+`progress` 이벤트의 data는 [`sse-progress.schema.json`](contracts/v1/sse-progress.schema.json) + 예제 [`sse-progress.json`](contracts/fixtures/sse-progress.json)을 따른다. `result` 이벤트의 data는 6.3 계약 응답, `error` 이벤트의 data는 아래 오류 계약을 따른다.
 
 ```
 event: progress
@@ -977,30 +935,31 @@ event: progress
 data: { "step": "search_policies", "state": "done", "label": "내 조건에 맞는 정책 찾는 중", "detail": "128개 찾음" }
 
 event: result
-data: { 6.3 }
+data: { 6.3 계약 응답 }
 
 event: error
-data: { "code": "ANALYSIS_FAILED", "message": "..." }
+data: { "request_id": "...", "code": "internal_error", "message": "..." }
 ```
 
-오류
+오류 (코드 명명 lower_snake_case, 정본 [`error.schema.json`](contracts/v1/error.schema.json) · 예제 [`error.json`](contracts/fixtures/error.json))
 
 | HTTP | code | 언제 | 화면 |
 | --- | --- | --- | --- |
-| 400 | INVALID_CONDITION | 필수 값 없음, 범위 밖 값 | L-E1 (정상 화면에선 생기지 않아야 함) |
-| 404 | POLICY_NOT_FOUND | 없는 정책 ID | S5-404 |
-| 429 | DAILY_LIMIT_EXCEEDED | 오늘 분석 100회 초과 | L-E2 |
-| 500 | ANALYSIS_FAILED | 계산·DB 오류 | L-E1 |
-| 503 | AI_UNAVAILABLE | LLM·임베딩 API 실패 | L-E1 |
-| (화면) | TIMEOUT | 60초 동안 result가 안 옴 | L-E1 |
+| 422 | invalid_request | 필수 값 없음, 범위 밖 값, 형식 오류 | L-E1 (정상 화면에선 생기지 않아야 함) |
+| 400 | unsupported_domain | youth 외 분야 요청 | L-E1 |
+| 404 | not_found | 없는 혜택 ID | S5-404 |
+| 429 | daily_limit_exceeded | 오늘 분석 100회 초과 | L-E2 |
+| 503 | dependency_unavailable | LLM·임베딩·외부 API 실패 | L-E1 |
+| 500 | internal_error | 계산·DB 오류 | L-E1 |
+| 503 | calculation_limit_exceeded | 시간·자원 초과로 정확한 조합 탐색 실패 (60초 초과 포함) | L-E1 |
 
-- 하루 상한은 `/api/analyze`와 `/api/simulate`를 합쳐 서버 전체 **하루 100회** (자정 KST 초기화)
+- 하루 상한은 `/api/v1/recommendations`와 `/api/v1/simulations`을 합쳐 서버 전체 **하루 100회** (자정 KST 초기화)
 - 서버는 사용자 조건을 저장하지 않는다. 로그에도 조건 값을 남기지 않는다(요청 ID, 소요 시간, 오류 코드만)
 
 ### 6.6 이용 통계 (구글 애널리틱스)
 
 - 계정: 조장 계정으로 만들고 팀원에게 보기 권한
-- **사용자가 고른 조건 값은 보내지 않는다** (나이, 소득 등 전부)
+- **사용자가 고른 조건 값은 보내지 않는다** (나이, 소득 등 전부). 특수 조건·부모님 소득·재산은 어떤 형태로도 보내지 않는다
 
 | 이벤트 | 언제 | 함께 보내는 값 |
 | --- | --- | --- |
@@ -1066,7 +1025,7 @@ data: { "code": "ANALYSIS_FAILED", "message": "..." }
 | 브라우저 | 최신 크롬, 사파리(iOS), 삼성 인터넷, 엣지 |
 | 접근성 | 글자 대비 4.5:1 이상, 아이콘 버튼 이름표(aria-label), 키보드로 전체 진행, 색만으로 구분하지 않기 (✓ ✕ ? 기호와 글자 함께) |
 | 문구 | 해요체 통일 (4.10 문구 표) |
-| 기술 | 화면 HTML·CSS·JavaScript (프레임워크 없음), 서버 FastAPI, DB PostgreSQL + pgvector, 배포 Render |
+| 기술 | 화면 React + TypeScript + Vite(npm + lockfile), 서버 Python + FastAPI(Pydantic 검증), DB PostgreSQL, 모듈형 모놀리스. 벡터 검색 구현·배포 서비스는 미정(pgvector·Render는 후보) |
 | 오류 | 오류 코드와 화면은 6.5 |
 
 ---
@@ -1100,6 +1059,7 @@ F01 ~ F11이 요구사항대로 동작하는지 확인한다.
 | TC-F05-03 | 조합 | 기간 1년 → 2년 | 총액·순위 변경 |
 | TC-F05-04 | 조합 | 현재가치 켬 | 금액이 할인되고 할인율 표시 |
 | TC-F05-05 | 조합 | 결과 0개 | 안내 + 조건 바꾸기 + 외부 링크 |
+| TC-F05-06 | 조합 | 상위 금액 절단 금지 회귀 | 서로 못 받는 20개(각 100만 원) + 호환 99만 원 후보에서 199만 원이 1위. 잘라서 100만 원이 1위가 되면 실패 |
 | TC-F06-01 | 상황 변화 | 연 소득이 오르면 | 실효한계세율 표시, 100% 이상이면 혜택 절벽 |
 | TC-F06-02 | 상황 변화 | 독립하면 (이미 혼자) | 바뀌는 게 없다는 안내 |
 | TC-F07-01 | 상세 | 서류 정보 없음 | 임의 생성 없이 안내 문구 |
@@ -1115,7 +1075,7 @@ F01 ~ F11이 요구사항대로 동작하는지 확인한다.
 
 ### 8.3 정답이 정해진 테스트 사용자
 
-조합 계산이 맞는지 확인하는 기준이다. 아래 가상 정책 5개로 개발 중 테스트하고, 시연 시나리오로도 쓴다. 실제 정책 검수가 끝나면 정찬이 같은 방식으로 실제 정책 버전을 `shared/fixtures/`에 만든다.
+조합 계산이 맞는지 확인하는 기준이다. 아래 가상 정책 5개로 개발 중 테스트하고, 시연 시나리오로도 쓴다. 실제 정책 검수가 끝나면 정찬이 같은 방식으로 실제 정책 버전을 `contracts/fixtures/`에 만든다.
 
 **테스트용 가상 정책** (금액은 1년 / 2년 / 전체, 만 원)
 
@@ -1136,7 +1096,7 @@ F01 ~ F11이 요구사항대로 동작하는지 확인한다.
 | A 기본 | 25세, 취업 준비, 혼자 월세(보증금 5천 이하), 무주택, 소득 없음, 부모님 정보 모름 | P1, P2, P3, P4, P6 | 추천 P3+P1+P2 (660) · 대안 1 P3+P6+P2 (570) · 대안 2 P1+P2+P4 (372) | P1·P2에 '확인 필요'(부모님·가구 소득) / 추천 조합의 포기하는 지원금 P6 150, P4 12 / 차이 90만 원 |
 | A 2년 | A와 같음, 기간 2년 | 같음 | 추천 P3+P6+P2 (840) · 대안 1 P3+P1+P2 (780) · 대안 2 P6+P2+P4 (564) | 기간을 바꾸면 1위가 바뀐다 |
 | B 직장인 | 28세, 재직, 전세, 무주택, 연 소득 3,000 ~ 5,000만 | P2, P4, P6 | 추천 P2+P4+P6 (282) 하나뿐 | 대안 카드 없음, '왜 이 순서' 없음 / P1은 '월세 아님·소득', P3은 '재직'으로 미충족 |
-| C 군필 | 35세, 군 복무 1년 6개월 ~ 2년, 취업 준비, 혼자 월세, 무주택, 소득 없음 | P1, P3 (연장으로 통과), P4, P6 / P2는 나이 미충족 | 추천 P1+P3 (540) · 대안 1 P6+P3 (450) · 대안 2 P1+P4 (252) | 군 복무 연장이 연장 인정 정책에만 적용되는지 |
+| C 군필 | 35세, 군 복무 1년 6개월 초과 ~ 2년, 취업 준비, 혼자 월세, 무주택, 소득 없음 | P1, P3 (연장으로 통과), P4, P6 / P2는 나이 미충족 | 추천 P1+P3 (540) · 대안 1 P6+P3 (450) · 대안 2 P1+P4 (252) | 군 복무 연장이 연장 인정 정책에만 적용되는지 |
 | D 기혼 | 30세, 기혼, 취업 준비, 전세, 무주택, 소득 없음 | P2, P3, P4, P6 | 추천 P3+P6+P2 (570) · 대안 1 P6+P2+P4 (282) | 12단계를 묻지 않음 / P2에 부모님 관련 '확인 필요'가 붙지 않음 |
 | E 마감 | A와 같음, 단 P1이 모집 끝남 | P2, P3, P4, P6 (+ P1은 모집 끝남) | 추천 P3+P6+P2 (570) · 대안 1 P6+P2+P4 (282) | P1이 '지금은 모집이 끝난 정책'에만 나오고 조합에 없다 |
 | F 소득 절벽 | 27세, 재직, 혼자 월세, 무주택, 연 소득 1,500 ~ 3,000만 → S4 '연 소득이 오르면' | 전: P1, P2, P4, P6 / 후: P2, P4, P6 | 전 추천 P1+P2+P4 (372) → 후 추천 P6+P2+P4 (282) | 연 소득 2,900 → 3,100만 원, 줄어드는 지원금 90만, 순증가 +110만, 실효한계세율 45% |
@@ -1200,11 +1160,11 @@ F01 ~ F11이 요구사항대로 동작하는지 확인한다.
 | 담당자 | 역할 | 주요 업무 | 폴더 |
 |---|---|---|---|
 | 조장 | 총괄·통합·배포 | 일정 관리, 통합, 배포, 매일 실행 설정, 하루 상한, GA, 기준금리 수집, 예산 | `.github/` |
-| 이현서 | 기획 + 프론트엔드 | 기획 문서 관리, 피그마 디자인, 모든 화면, 기억하기, 이미지 저장, GA 이벤트, 사용자 테스트 | `frontend/`, `docs/` |
+| 이현서 | 기획 + 프론트엔드 | 기획 문서 관리, 피그마 디자인, 모든 화면, 기억하기, 이미지 저장, GA 이벤트, 사용자 테스트 | `apps/web/`, `docs/` |
 | 김하정 | 백엔드 | API·SSE, 자격 진단, 최적 조합, 현재가치, 상황 변화·실효한계세율, 정책 상세, 정답 자동 테스트 | `backend/` |
-| 탁서윤 | AI/RAG | 모델 선정, 임베딩·검색, Agent, 추천 이유·지금 할 일, 숫자 검증, 민감 정보 차단, 원문 조건 추출 | `ai/` |
-| 윤정찬 | DB·정책 데이터 | 수집·합치기, DB 스키마, 파싱, 검수 표, 모집 상태, 코드표·중위소득표·구간, 자동화 스크립트 | `data/` |
-| 전원 | | 공통 데이터 형식, 코드표, 테스트 정답 데이터 | `shared/` |
+| 탁서윤 | AI/RAG | 모델 선정, 임베딩·검색, Agent, 추천 이유·지금 할 일, 숫자 검증, 민감 정보 차단, 원문 조건 추출 | `backend/src/benefitfinder/ai/` |
+| 윤정찬 | DB·정책 데이터 | 수집·합치기, DB 스키마, 파싱, 검수 표, 모집 상태, 코드표·중위소득표·구간, 자동화 스크립트 | `backend/src/benefitfinder/ingestion/` |
+| 전원 | | 공통 데이터 형식, 코드표, 테스트 정답 데이터 | `contracts/` |
 
 ### 9.2 기능별 담당자
 
@@ -1224,22 +1184,24 @@ F01 ~ F11이 요구사항대로 동작하는지 확인한다.
 
 ### 9.3 서로 넘겨주는 것 (순서)
 
-1. 현서 → 전원: 데이터 형식 초안 → 회의에서 확정 → `shared/` (이게 있어야 각자 개발 시작)
+1. 현서 → 전원: 기획 선택지 초안(6.1) → 계약 초안 정렬(`contracts/`) → 다음 회의에서 확정 (이게 있어야 각자 개발 시작)
 2. 정찬 → 하정: 정책 DB, 코드표, 중위소득표, 구간 경계값
 3. 정찬 → 서윤: 정책 원문, 임베딩 대상 / 서윤 → 정찬: 원문에서 뽑은 조건
 4. 하정 → 서윤: 계산 도구 4개 / 서윤 → 하정: Agent 실행 함수 + 진행 이벤트
-5. 하정 → 현서: API 5개 + 가짜 응답 (그 전까지 현서는 데이터 형식 예시로 개발)
+5. 하정 → 현서: 정본 API 6개(6.5: health·meta·options·recommendations·simulations·benefits) + 계약 fixtures 가짜 응답 (그 전까지 현서는 fixtures 예제로 개발)
 6. 조장 → 현서: GA 측정 ID, 배포 주소 / 조장 → 하정: 기준금리 값 위치
 
 ### 9.4 GitHub 협업 기준
 
+협업 절차의 원본은 [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md)과 [`docs/GIT_WORKFLOW.md`](docs/GIT_WORKFLOW.md)이며, 아래는 이 기획에서 쓰는 요약이다. 충돌하면 원본 문서를 따른다.
+
 1. `main`에는 직접 올리지 않는다. PR로만 합친다.
-2. 브랜치: `feature/{영역}-{할 일}`, `fix/{영역}-{내용}`, `docs/{내용}` (예: `feature/backend-optimize`)
-3. 커밋: `[영역] 무엇을 했는지` (영역: frontend / backend / ai / data / shared / docs / infra)
-4. **AI가 코드를 쓴 커밋은 끝에 `[AI]`**, PR 양식 'AI 사용' 칸에 도구·AI가 쓴 부분·내가 직접 확인한 것을 적는다. 설명하지 못하는 AI 코드는 올리지 않는다.
+2. 브랜치: `feat/{영역}-{할 일}`, `fix/{영역}-{내용}`, `docs/{내용}` 등으로 시작한다 (예: `feat/backend-optimize`). 허용 접두어와 금지 규칙은 `docs/GIT_WORKFLOW.md` 3장을 따른다
+3. 커밋: `type(scope): 한국어 설명` (예: `feat(search): ...`). 형식 원본은 `docs/GIT_WORKFLOW.md` 4장을 따른다
+4. AI 사용은 PR 양식에 도구·변경 범위·직접 확인한 내용을 기록하고, 필요하면 커밋 본문 트레일러에 남긴다. 커밋 제목은 `type(scope): 설명`을 유지하며 `[AI]` 접미사를 강제하지 않는다. 설명하지 못하는 AI 코드는 올리지 않는다.
 5. **리뷰어는 다른 축 1명**이 브랜치를 받아 **직접 실행**해 보고 승인한다.
    - 축: 자동화·백엔드(하정, 조장) / 정책데이터·검색(정찬, 서윤) / 기획·판단·기능 추가(현서)
-6. `shared/`를 바꾸면 관련자 전원 승인.
+6. `contracts/`를 바꾸면 관련자 전원 승인.
 7. API 키는 `.env`에만, `.env.example`에 키 이름만.
 8. 개발 중에는 가짜(mock) LLM 응답을 쓴다 (크레딧 절약).
 9. 기획 문서는 누구나 직접 고칠 수 있다. PR에 바꾸는 이유를 적고 **현서가 승인**하면 합친다. 기획과 다르게 만들어야 할 때도 문서부터 고친다.
@@ -1302,15 +1264,15 @@ F01 ~ F11이 요구사항대로 동작하는지 확인한다.
 
 ### 11.1 데이터 형식
 
-요청·응답 JSON의 필드 이름과 자료형은 회의에서 한 번에 확정하고 `shared/`로 옮긴다 (이현서, 김하정, 탁서윤, 윤정찬).
+요청·응답 JSON의 필드 이름과 자료형은 6장의 기획 선택지 기준과 `contracts/v1` 개발용 정렬 초안을 다음 회의에서 확정한다 (이현서, 김하정, 탁서윤, 윤정찬, 계약 담당). 확정 전까지 `contracts/v1`이 개발 기준 SSOT이며, 기획 임시값(4.10 문구·8.3 조건 등)은 회의 확정 없이 바꾸지 않는다.
 
 ### 11.2 기본값으로 정해 둔 것 (바꿀 수 있음)
 
 - 조합 점수가 같을 때 순서 (확인 필요 쌍 적은 순 → 정책 수 적은 순)
-- 조합 후보가 20개를 넘으면 금액 상위 20개만 사용
+- (삭제) 금액 상위 20개 절단은 사용하지 않는다. 후보 전체를 정확 탐색하고, 시간·자원 초과 시 `calculation_limit_exceeded`로 실패 처리한다 (F05 규칙 11)
 - '취업하면' 가정 연 소득 2,400만 원
 - '연 소득이 오르면' 기준선 ±100만 원 방식
-- 지원 브라우저, API 주소 이름
+- 지원 브라우저, 정본 API 주소와 SSE 진행 이벤트 형식(6.5, 개발 기준·회의 확인 필요)
 - 테스트용 가상 정책 조건 (8.3)
 - 성공 기준 숫자 (8.6)
 
@@ -1350,6 +1312,9 @@ F01 ~ F11이 요구사항대로 동작하는지 확인한다.
 22. 화면·기능 명세와 기능 요구 명세를 이 문서 하나로 합침
 23. 기획 문서는 누구나 직접 고치고, PR에서 현서가 승인 (9.4)
 
+24. 사용자 승인 사항(작업본 기록): 사용자 요청으로 기획 기준 v2.0 채택(이 PR의 정식 승인·병합과 구분). F01~F11·19~39세·13단계·최적 조합·상황 변화 유지, 기술 중복·계산 규칙만 개발 기준에 맞춤. main 보호 설정은 팀 절차·CI 유지로 대체하며 원격 설정을 강요하지 않는다
+25. 계약 정렬은 개발용 초안으로 표시: 6장·11.2·LLM/임베딩 모델은 다음 회의 확정 대상이며, 기획자가 최종 승인한 것처럼 쓰지 않는다
+
 ### 11.5 변경 이력
 
 문서를 고친 사람이 여기에 한 줄 남긴다.
@@ -1358,3 +1323,4 @@ F01 ~ F11이 요구사항대로 동작하는지 확인한다.
 | --- | --- | --- | --- |
 | v1.0 | 2026-10-26 | 팀 | 초안 (Must / Should / Could, 자연어 입력, 3 ~ 5개 추천) |
 | v2.0 | 2026-10-26 | 이현서 | 선택지 13단계 입력, 최적 조합·상황 변화·현재가치·포기하는 지원금·실효한계세율, 모집 끝난 정책 규칙, 민감 정보 LLM 미전달, 정답 테스트 사용자, 성공 기준. 화면 설계(그림·문구), 데이터 형식·API, 디자인 가이드를 이 문서에 합침 |
+| v2.1 | 2026-10-27 | 기술 정합 작업본 | 수정 이유: 기획 기준(v2.0)은 유지하고 기술 중복·계산 규칙만 개발 기준에 맞춤. 통합 내용: 정본 스택·경로·정본 API·오류 코드, 군 복무 구간 판정, 상위 금액 절단 삭제·정확 탐색, 현재가치 지급 시점·원 단위 합산, 실효한계세율의 연간 비교 기준, 미상 금액 표시 규칙, 6장 계약 매핑(개발용 초안·회의 확인 필요). 원기획 변경 이력(v1.0·v2.0)은 그대로 보존 |

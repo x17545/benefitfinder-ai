@@ -27,6 +27,7 @@ CODE_SUFFIXES = {".py", ".json", ".yml", ".yaml", ".toml", ".js", ".jsx", ".ts",
 CONFLICT_MARKER = re.compile(r"^(?:<{7}(?: .*)?|\|{7}(?: .*)?|={7}|>{7}(?: .*)?)$", re.MULTILINE)
 REQUIRED_TEST_FILES = (
     "tests/test_contracts.py", "tests/test_gitignore.py", "tests/test_workflow.py",
+    "tests/test_planning_rules.py",
 )
 BACKEND_PREFIX = "backend/src/benefitfinder/"
 ASSEMBLY_FILES = {"bootstrap.py", "main.py", "__main__.py", "jobs/__main__.py"}
@@ -248,7 +249,7 @@ def main() -> int:
     if args.pr and (error := clean_tree_error(ROOT)):
         print(f"ERROR: {error}", file=sys.stderr)
         return 1
-    print("공통 검사 통과: Git·파일·직접 import·계약·발견된 Python 테스트")
+    print("공통 검사 통과: Git·파일·직접 import·계약·기획용 가상 정답·발견된 Python 테스트")
     print("미구성: 프론트엔드 실행 검사·실제 API/LLM 통합·정책 사실 검증")
     return 0
 
