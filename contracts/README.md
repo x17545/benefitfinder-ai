@@ -82,6 +82,7 @@ SSE 오류 규칙: HTTP 헤더를 보내기 전 오류는 해당 상태코드+`e
 
 | `code` | 상태 | 언제 |
 |---|---|---|
+| `http_error` | 원래 HTTP 상태 | 아래 기본 매핑에 없는 명시적 HTTP 오류(400·401·403·418·429·502 등) |
 | `invalid_request` | 422 | 필수 값 없음, 범위 밖 값 |
 | `unsupported_domain` | 400 | 미지원 분야 |
 | `not_found` | 404 | 없는 경로·정책 ID |
@@ -91,7 +92,7 @@ SSE 오류 규칙: HTTP 헤더를 보내기 전 오류는 해당 상태코드+`e
 | `calculation_limit_exceeded` | 503 | 계산 상한 초과 |
 | `internal_error` | 500 | 계산·DB 등 내부 오류 |
 
-웹 프레임워크의 기본 오류 형식도 위 공통 오류로 변환한다. FastAPI 부트스트랩은 실제 404·405·검증 422·예상치 못한 500을 `error` 스키마로 반환하며, 405에서는 `Allow` 헤더를 보존한다. 오류마다 UUID `request_id`를 부여하고 입력값·예외 원문을 포함하지 않는다.
+웹 프레임워크의 기본 오류 형식도 위 공통 오류로 변환한다. FastAPI 부트스트랩은 명시적인 `HTTPException`의 상태코드와 `Retry-After`·`WWW-Authenticate`·`Allow` 등 응답 헤더를 보존한다. 본문을 JSON으로 교체하므로 Content-Type·Content-Length는 재생성하고 기존 Content-Encoding·Transfer-Encoding은 전달하지 않는다. 기본 코드는 404→`not_found`, 405→`method_not_allowed`, 422→`invalid_request`, 500→`internal_error`, 503→`dependency_unavailable`, 나머지는 `http_error`다. HTTP 상태만으로 미지원 분야·하루 사용량 초과·계산 상한 초과를 추정하지 않으며, 이 업무 오류는 기능 구현 시 명시적으로 분류한다. 요청 검증 오류는 422, 예기치 않은 일반 예외는 500으로 반환한다. 오류마다 UUID `request_id`를 부여하고 입력값·예외 원문을 포함하지 않는다.
 
 ## 변경과 검증
 

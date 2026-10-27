@@ -13,10 +13,11 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from jsonschema import validate
 from pydantic import BaseModel, Field
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 import benefitfinder.main as main_module
 from benefitfinder.bootstrap import create_app
@@ -118,6 +119,64 @@ class BootstrapApiTest(unittest.TestCase):
         response = self.client.post("/health")
         self.assertErrorShape(response, 405, "method_not_allowed")
         self.assertIn("GET", response.headers["allow"])
+
+    def test_http_errors_preserve_status_and_headers_without_exposing_detail(self) -> None:
+        cases = (
+            (400, "http_error"), (401, "http_error"), (403, "http_error"),
+            (404, "not_found"), (405, "method_not_allowed"), (409, "http_error"),
+            (418, "http_error"), (422, "invalid_request"), (429, "http_error"),
+            (500, "internal_error"), (502, "http_error"),
+            (503, "dependency_unavailable"), (504, "http_error"),
+        )
+        secret = "private-detail-must-not-leak"
+        headers = {
+            "Retry-After": "30",
+            "WWW-Authenticate": 'Bearer realm="test"',
+            "Allow": "GET",
+            "X-Test-Context": "public-context",
+        }
+        for exception_type in (HTTPException, StarletteHTTPException):
+            app = create_app()
+
+            @app.get("/_test/http-error/{status}")
+            def raise_http_error(status: int) -> None:
+                # FastAPI permits structured detail; Starlette usually uses text.
+                detail = {"private": secret} if exception_type is HTTPException else secret
+                raise exception_type(status_code=status, detail=detail, headers=headers)
+
+            with TestClient(app, raise_server_exceptions=False) as client:
+                for status, code in cases:
+                    with self.subTest(exception=exception_type.__module__, status=status):
+                        response = client.get(f"/_test/http-error/{status}")
+                        self.assertErrorShape(response, status, code)
+                        for name, value in headers.items():
+                            self.assertEqual(response.headers[name], value)
+                        self.assertNotIn(secret, response.text)
+                        self.assertNotIn("detail", response.json())
+
+    def test_http_error_rebuilds_headers_for_the_new_json_body(self) -> None:
+        @self.app.get("/_test/encoded-error")
+        def encoded_error() -> None:
+            raise HTTPException(
+                status_code=503,
+                detail="private-old-body",
+                headers={
+                    "CoNtEnT-TyPe": "text/plain",
+                    "CONTENT-LENGTH": "9999",
+                    "Content-Encoding": "gzip",
+                    "Transfer-Encoding": "chunked",
+                    "Retry-After": "60",
+                },
+            )
+
+        response = self.client.get("/_test/encoded-error")
+        self.assertErrorShape(response, 503, "dependency_unavailable")
+        self.assertEqual(response.headers["content-type"], "application/json")
+        self.assertEqual(int(response.headers["content-length"]), len(response.content))
+        self.assertNotIn("content-encoding", response.headers)
+        self.assertNotIn("transfer-encoding", response.headers)
+        self.assertEqual(response.headers["retry-after"], "60")
+        self.assertNotIn("private-old-body", response.text)
 
     def test_request_ids_are_unique(self) -> None:
         first = self.client.get("/api/v1/no-such-route").json()["request_id"]

@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 HealthStatus = Literal["ok"]
 
 ErrorCode = Literal[
+    "http_error",
     "invalid_request",
     "unsupported_domain",
     "not_found",
