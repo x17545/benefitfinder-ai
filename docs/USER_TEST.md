@@ -1,7 +1,7 @@
 # 사용자 테스트 진행안과 설문
 
 > 목적: REQUIREMENTS_v2.md 8.6 성공 기준 중 이해도와 만족도, 입력 시간을 확인하고, 고칠 곳을 찾는다.
-> 현행 기준: [REQUIREMENTS_v2.md](../REQUIREMENTS_v2.md) v2.3 (취업·주거 MVP·역할 조정·구현 방식 반영), 현행 기획 [PROJECT_PLAN.md](PROJECT_PLAN.md)
+> 현행 기준: [REQUIREMENTS_v2.md](../REQUIREMENTS_v2.md) v2.4 (취업·주거 MVP·데이터 Agent와 코드 계산 구분), 현행 기획 [PROJECT_PLAN.md](PROJECT_PLAN.md)
 > 취업·주거 혜택에 F01~F11과 13단계를 적용해 평가한다. 다른 분류는 확장 대상으로 분리하고 MVP 실패로 세지 않는다.
 
 ## 1. 진행 방법
