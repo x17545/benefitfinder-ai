@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benefitfinder.example/contracts/v1/error.schema.json",
+  "title": "Public error response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["request_id", "code", "message"],
+  "properties": {
+    "request_id": {"type": "string", "minLength": 1},
+    "code": {"enum": ["invalid_request", "unsupported_domain", "not_found", "dependency_unavailable", "internal_error"]},
+    "message": {"type": "string", "minLength": 1}
+  }
+}

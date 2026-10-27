@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benefitfinder.example/contracts/v1/recommendation-response.schema.json",
+  "title": "Recommendation response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["request_id", "domain", "recommendations", "follow_up_questions", "ai_generated"],
+  "properties": {
+    "request_id": {"type": "string", "minLength": 1},
+    "domain": {"$ref": "common.schema.json#/$defs/domain_id"},
+    "recommendations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["benefit", "reason", "condition_results", "missing_fields"],
+        "properties": {
+          "benefit": {"$ref": "benefit.schema.json"},
+          "reason": {"type": "string", "minLength": 1},
+          "condition_results": {
+            "type": "array",
+            "items": {"$ref": "#/$defs/condition_result"}
+          },
+          "missing_fields": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true}
+        }
+      }
+    },
+    "follow_up_questions": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "ai_generated": {"const": true}
+  },
+  "$defs": {
+    "condition_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["condition_id", "status", "reason", "evidence"],
+      "properties": {
+        "condition_id": {"type": "string", "minLength": 1},
+        "status": {"enum": ["met", "not_met", "needs_review"]},
+        "reason": {"type": "string", "minLength": 1},
+        "evidence": {"type": "array", "items": {"$ref": "common.schema.json#/$defs/evidence"}}
+      },
+      "if": {"properties": {"status": {"enum": ["met", "not_met"]}}, "required": ["status"]},
+      "then": {"properties": {"evidence": {"minItems": 1}}}
+    }
+  }
+}

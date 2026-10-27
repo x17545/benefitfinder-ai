@@ -1,0 +1,13 @@
+{
+  "domain": "youth",
+  "message": "[가상 사용자] 25살 취업준비생이고 주거비 지원을 찾고 있어요.",
+  "profile": {
+    "age": 25,
+    "region_code": null,
+    "employment_status": "job_seeking",
+    "income_band": null,
+    "household_type": null,
+    "domain_data": {}
+  },
+  "limit": 5
+}

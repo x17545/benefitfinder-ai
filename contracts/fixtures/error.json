@@ -1,0 +1,5 @@
+{
+  "request_id": "example-request-error",
+  "code": "unsupported_domain",
+  "message": "아직 지원하지 않는 분야입니다."
+}

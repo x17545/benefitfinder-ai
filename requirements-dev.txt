@@ -1,0 +1,2 @@
+# Repository validation only; product runtime dependencies are not initialized yet.
+jsonschema[format]>=4.23,<5
