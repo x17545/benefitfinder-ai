@@ -10,7 +10,7 @@
         "portfolios": [
           {
             "rank": 1,
-            "total_won": 6600000,
+            "total_won": 5400000,
             "present_value_applied": false,
             "policies": [
               {
@@ -29,26 +29,6 @@
                 "ai_reason": "[가상] 월세 부담을 덜어주는 조합입니다.",
                 "source": {
                   "url": "https://policy.example/youth/sample-housing",
-                  "checked_at": "2026-10-26T09:00:00+09:00",
-                  "document_version": "fictional-v1"
-                }
-              },
-              {
-                "policy_id": "youth:example:P2",
-                "amount_in_period_won": 1200000,
-                "original_amount_won": 1200000,
-                "amount_status": "verified",
-                "eligibility": [
-                  {
-                    "condition_id": "household_income",
-                    "status": "needs_review",
-                    "reason": "가구 소득 미입력으로 확인이 필요합니다.",
-                    "evidence": []
-                  }
-                ],
-                "ai_reason": null,
-                "source": {
-                  "url": "https://policy.example/youth/sample-p2",
                   "checked_at": "2026-10-26T09:00:00+09:00",
                   "document_version": "fictional-v1"
                 }
@@ -102,10 +82,6 @@
             ],
             "given_up": [
               {
-                "policy_id": "youth:example:P4",
-                "amount_won": 120000
-              },
-              {
                 "policy_id": "youth:example:P6",
                 "amount_won": 1500000
               }
@@ -113,36 +89,16 @@
             "unverified_pairs": [
               {
                 "a": "youth:example:P1",
-                "b": "youth:example:P2",
+                "b": "youth:example:P3",
                 "note": "[가상] 중복 수혜 여부 공식 자료 없음"
               }
             ]
           },
           {
             "rank": 2,
-            "total_won": 5700000,
+            "total_won": 4500000,
             "present_value_applied": false,
             "policies": [
-              {
-                "policy_id": "youth:example:P2",
-                "amount_in_period_won": 1200000,
-                "original_amount_won": 1200000,
-                "amount_status": "verified",
-                "eligibility": [
-                  {
-                    "condition_id": "household_income",
-                    "status": "needs_review",
-                    "reason": "가구 소득 미입력으로 확인이 필요합니다.",
-                    "evidence": []
-                  }
-                ],
-                "ai_reason": null,
-                "source": {
-                  "url": "https://policy.example/youth/sample-p2",
-                  "checked_at": "2026-10-26T09:00:00+09:00",
-                  "document_version": "fictional-v1"
-                }
-              },
               {
                 "policy_id": "youth:example:P3",
                 "amount_in_period_won": 3000000,
@@ -223,111 +179,14 @@
               {
                 "policy_id": "youth:example:P1",
                 "amount_won": 2400000
-              },
-              {
-                "policy_id": "youth:example:P4",
-                "amount_won": 120000
               }
             ],
             "unverified_pairs": []
-          },
-          {
-            "rank": 3,
-            "total_won": 3720000,
-            "present_value_applied": false,
-            "policies": [
-              {
-                "policy_id": "youth:example:P1",
-                "amount_in_period_won": 2400000,
-                "original_amount_won": 2400000,
-                "amount_status": "verified",
-                "eligibility": [
-                  {
-                    "condition_id": "parent_income",
-                    "status": "needs_review",
-                    "reason": "부모님 소득 미입력으로 확인이 필요합니다.",
-                    "evidence": []
-                  }
-                ],
-                "ai_reason": "[가상] 월세 부담을 덜어주는 조합입니다.",
-                "source": {
-                  "url": "https://policy.example/youth/sample-housing",
-                  "checked_at": "2026-10-26T09:00:00+09:00",
-                  "document_version": "fictional-v1"
-                }
-              },
-              {
-                "policy_id": "youth:example:P2",
-                "amount_in_period_won": 1200000,
-                "original_amount_won": 1200000,
-                "amount_status": "verified",
-                "eligibility": [
-                  {
-                    "condition_id": "household_income",
-                    "status": "needs_review",
-                    "reason": "가구 소득 미입력으로 확인이 필요합니다.",
-                    "evidence": []
-                  }
-                ],
-                "ai_reason": null,
-                "source": {
-                  "url": "https://policy.example/youth/sample-p2",
-                  "checked_at": "2026-10-26T09:00:00+09:00",
-                  "document_version": "fictional-v1"
-                }
-              },
-              {
-                "policy_id": "youth:example:P4",
-                "amount_status": "verified",
-                "eligibility": [
-                  {
-                    "condition_id": "age",
-                    "status": "met",
-                    "reason": "[가상] 예제 연령 조건에 해당합니다.",
-                    "evidence": [
-                      {
-                        "quote": "[가상 예제] 만 19~39세 대상입니다.",
-                        "source": {
-                          "url": "https://policy.example/youth/sample-p4",
-                          "checked_at": "2026-10-26T09:00:00+09:00",
-                          "document_version": "fictional-v1"
-                        }
-                      }
-                    ]
-                  }
-                ],
-                "ai_reason": null,
-                "source": {
-                  "url": "https://policy.example/youth/sample-p4",
-                  "checked_at": "2026-10-26T09:00:00+09:00",
-                  "document_version": "fictional-v1"
-                },
-                "amount_in_period_won": 120000,
-                "original_amount_won": 120000
-              }
-            ],
-            "given_up": [
-              {
-                "policy_id": "youth:example:P3",
-                "amount_won": 3000000
-              },
-              {
-                "policy_id": "youth:example:P6",
-                "amount_won": 1500000
-              }
-            ],
-            "unverified_pairs": [
-              {
-                "a": "youth:example:P1",
-                "b": "youth:example:P2",
-                "note": "[가상] 중복 수혜 여부 공식 자료 없음"
-              }
-            ]
           }
         ],
         "why": {
           "gap_won": 900000,
-          "second_total_won": 5700000,
+          "second_total_won": 4500000,
           "deciding_conflict": [
             "youth:example:P1",
             "youth:example:P6"
@@ -378,7 +237,7 @@
         "portfolios": [
           {
             "rank": 1,
-            "total_won": 6460982,
+            "total_won": 5346663,
             "present_value_applied": true,
             "policies": [
               {
@@ -397,26 +256,6 @@
                 "ai_reason": "[가상] 월세 부담을 덜어주는 조합입니다.",
                 "source": {
                   "url": "https://policy.example/youth/sample-housing",
-                  "checked_at": "2026-10-26T09:00:00+09:00",
-                  "document_version": "fictional-v1"
-                }
-              },
-              {
-                "policy_id": "youth:example:P2",
-                "amount_in_period_won": 1114319,
-                "original_amount_won": 1200000,
-                "amount_status": "verified",
-                "eligibility": [
-                  {
-                    "condition_id": "household_income",
-                    "status": "needs_review",
-                    "reason": "가구 소득 미입력으로 확인이 필요합니다.",
-                    "evidence": []
-                  }
-                ],
-                "ai_reason": null,
-                "source": {
-                  "url": "https://policy.example/youth/sample-p2",
                   "checked_at": "2026-10-26T09:00:00+09:00",
                   "document_version": "fictional-v1"
                 }
@@ -470,10 +309,6 @@
             ],
             "given_up": [
               {
-                "policy_id": "youth:example:P4",
-                "amount_won": 118409
-              },
-              {
                 "policy_id": "youth:example:P6",
                 "amount_won": 1463415
               }
@@ -481,36 +316,16 @@
             "unverified_pairs": [
               {
                 "a": "youth:example:P1",
-                "b": "youth:example:P2",
+                "b": "youth:example:P3",
                 "note": "[가상] 중복 수혜 여부 공식 자료 없음"
               }
             ]
           },
           {
             "rank": 2,
-            "total_won": 5556224,
+            "total_won": 4441905,
             "present_value_applied": true,
             "policies": [
-              {
-                "policy_id": "youth:example:P2",
-                "amount_in_period_won": 1114319,
-                "original_amount_won": 1200000,
-                "amount_status": "verified",
-                "eligibility": [
-                  {
-                    "condition_id": "household_income",
-                    "status": "needs_review",
-                    "reason": "가구 소득 미입력으로 확인이 필요합니다.",
-                    "evidence": []
-                  }
-                ],
-                "ai_reason": null,
-                "source": {
-                  "url": "https://policy.example/youth/sample-p2",
-                  "checked_at": "2026-10-26T09:00:00+09:00",
-                  "document_version": "fictional-v1"
-                }
-              },
               {
                 "policy_id": "youth:example:P3",
                 "amount_in_period_won": 2978490,
@@ -591,116 +406,57 @@
               {
                 "policy_id": "youth:example:P1",
                 "amount_won": 2368173
-              },
-              {
-                "policy_id": "youth:example:P4",
-                "amount_won": 118409
               }
             ],
             "unverified_pairs": []
-          },
+          }
+        ],
+        "why": {
+          "gap_won": 904758,
+          "second_total_won": 4441905,
+          "deciding_conflict": [
+            "youth:example:P1",
+            "youth:example:P6"
+          ]
+        },
+        "excluded": [
           {
-            "rank": 3,
-            "total_won": 3600901,
-            "present_value_applied": true,
-            "policies": [
+            "policy_id": "youth:example:P6",
+            "reason": "[가상] P1과 중복 수혜 불가",
+            "evidence": [
               {
-                "policy_id": "youth:example:P1",
-                "amount_in_period_won": 2368173,
-                "original_amount_won": 2400000,
-                "amount_status": "verified",
-                "eligibility": [
-                  {
-                    "condition_id": "parent_income",
-                    "status": "needs_review",
-                    "reason": "부모님 소득 미입력으로 확인이 필요합니다.",
-                    "evidence": []
-                  }
-                ],
-                "ai_reason": "[가상] 월세 부담을 덜어주는 조합입니다.",
+                "quote": "[가상 예제] 월세 지원과 전세 이자 지원은 함께 받을 수 없습니다.",
+                "location": "가상 공고: 중복 지원",
                 "source": {
                   "url": "https://policy.example/youth/sample-housing",
                   "checked_at": "2026-10-26T09:00:00+09:00",
                   "document_version": "fictional-v1"
                 }
-              },
-              {
-                "policy_id": "youth:example:P2",
-                "amount_in_period_won": 1114319,
-                "original_amount_won": 1200000,
-                "amount_status": "verified",
-                "eligibility": [
-                  {
-                    "condition_id": "household_income",
-                    "status": "needs_review",
-                    "reason": "가구 소득 미입력으로 확인이 필요합니다.",
-                    "evidence": []
-                  }
-                ],
-                "ai_reason": null,
-                "source": {
-                  "url": "https://policy.example/youth/sample-p2",
-                  "checked_at": "2026-10-26T09:00:00+09:00",
-                  "document_version": "fictional-v1"
-                }
-              },
-              {
-                "policy_id": "youth:example:P4",
-                "amount_status": "verified",
-                "eligibility": [
-                  {
-                    "condition_id": "age",
-                    "status": "met",
-                    "reason": "[가상] 예제 연령 조건에 해당합니다.",
-                    "evidence": [
-                      {
-                        "quote": "[가상 예제] 만 19~39세 대상입니다.",
-                        "source": {
-                          "url": "https://policy.example/youth/sample-p4",
-                          "checked_at": "2026-10-26T09:00:00+09:00",
-                          "document_version": "fictional-v1"
-                        }
-                      }
-                    ]
-                  }
-                ],
-                "ai_reason": null,
-                "source": {
-                  "url": "https://policy.example/youth/sample-p4",
-                  "checked_at": "2026-10-26T09:00:00+09:00",
-                  "document_version": "fictional-v1"
-                },
-                "amount_in_period_won": 118409,
-                "original_amount_won": 120000
-              }
-            ],
-            "given_up": [
-              {
-                "policy_id": "youth:example:P3",
-                "amount_won": 2978490
-              },
-              {
-                "policy_id": "youth:example:P6",
-                "amount_won": 1463415
-              }
-            ],
-            "unverified_pairs": [
-              {
-                "a": "youth:example:P1",
-                "b": "youth:example:P2",
-                "note": "[가상] 중복 수혜 여부 공식 자료 없음"
               }
             ]
           }
         ],
-        "why": {
-          "gap_won": 904758,
-          "second_total_won": 5556224,
-          "deciding_conflict": [
-            "youth:example:P1",
-            "youth:example:P6"
-          ]
-        }
+        "not_eligible": [
+          {
+            "policy_id": "youth:example:P5",
+            "failed": [
+              "age"
+            ]
+          }
+        ],
+        "not_yet_reviewed": [
+          {
+            "policy_id": "youth:example:P120",
+            "eligibility_summary": "needs_review"
+          }
+        ],
+        "closed_now": [
+          {
+            "policy_id": "youth:example:P9",
+            "last_period": "2026-03-30 ~ 2026-05-29",
+            "next_expected": null
+          }
+        ]
       }
     },
     "2y": {
@@ -710,29 +466,9 @@
         "portfolios": [
           {
             "rank": 1,
-            "total_won": 8400000,
+            "total_won": 6000000,
             "present_value_applied": false,
             "policies": [
-              {
-                "policy_id": "youth:example:P2",
-                "amount_in_period_won": 2400000,
-                "original_amount_won": 2400000,
-                "amount_status": "verified",
-                "eligibility": [
-                  {
-                    "condition_id": "household_income",
-                    "status": "needs_review",
-                    "reason": "가구 소득 미입력으로 확인이 필요합니다.",
-                    "evidence": []
-                  }
-                ],
-                "ai_reason": null,
-                "source": {
-                  "url": "https://policy.example/youth/sample-p2",
-                  "checked_at": "2026-10-26T09:00:00+09:00",
-                  "document_version": "fictional-v1"
-                }
-              },
               {
                 "policy_id": "youth:example:P3",
                 "amount_in_period_won": 3000000,
@@ -813,17 +549,13 @@
               {
                 "policy_id": "youth:example:P1",
                 "amount_won": 2400000
-              },
-              {
-                "policy_id": "youth:example:P4",
-                "amount_won": 240000
               }
             ],
             "unverified_pairs": []
           },
           {
             "rank": 2,
-            "total_won": 7800000,
+            "total_won": 5400000,
             "present_value_applied": false,
             "policies": [
               {
@@ -847,26 +579,6 @@
                 }
               },
               {
-                "policy_id": "youth:example:P2",
-                "amount_in_period_won": 2400000,
-                "original_amount_won": 2400000,
-                "amount_status": "verified",
-                "eligibility": [
-                  {
-                    "condition_id": "household_income",
-                    "status": "needs_review",
-                    "reason": "가구 소득 미입력으로 확인이 필요합니다.",
-                    "evidence": []
-                  }
-                ],
-                "ai_reason": null,
-                "source": {
-                  "url": "https://policy.example/youth/sample-p2",
-                  "checked_at": "2026-10-26T09:00:00+09:00",
-                  "document_version": "fictional-v1"
-                }
-              },
-              {
                 "policy_id": "youth:example:P3",
                 "amount_in_period_won": 3000000,
                 "original_amount_won": 3000000,
@@ -915,10 +627,6 @@
             ],
             "given_up": [
               {
-                "policy_id": "youth:example:P4",
-                "amount_won": 240000
-              },
-              {
                 "policy_id": "youth:example:P6",
                 "amount_won": 3000000
               }
@@ -926,116 +634,58 @@
             "unverified_pairs": [
               {
                 "a": "youth:example:P1",
-                "b": "youth:example:P2",
+                "b": "youth:example:P3",
                 "note": "[가상] 중복 수혜 여부 공식 자료 없음"
               }
             ]
-          },
-          {
-            "rank": 3,
-            "total_won": 5640000,
-            "present_value_applied": false,
-            "policies": [
-              {
-                "policy_id": "youth:example:P2",
-                "amount_in_period_won": 2400000,
-                "original_amount_won": 2400000,
-                "amount_status": "verified",
-                "eligibility": [
-                  {
-                    "condition_id": "household_income",
-                    "status": "needs_review",
-                    "reason": "가구 소득 미입력으로 확인이 필요합니다.",
-                    "evidence": []
-                  }
-                ],
-                "ai_reason": null,
-                "source": {
-                  "url": "https://policy.example/youth/sample-p2",
-                  "checked_at": "2026-10-26T09:00:00+09:00",
-                  "document_version": "fictional-v1"
-                }
-              },
-              {
-                "policy_id": "youth:example:P4",
-                "amount_status": "verified",
-                "eligibility": [
-                  {
-                    "condition_id": "age",
-                    "status": "met",
-                    "reason": "[가상] 예제 연령 조건에 해당합니다.",
-                    "evidence": [
-                      {
-                        "quote": "[가상 예제] 만 19~39세 대상입니다.",
-                        "source": {
-                          "url": "https://policy.example/youth/sample-p4",
-                          "checked_at": "2026-10-26T09:00:00+09:00",
-                          "document_version": "fictional-v1"
-                        }
-                      }
-                    ]
-                  }
-                ],
-                "ai_reason": null,
-                "source": {
-                  "url": "https://policy.example/youth/sample-p4",
-                  "checked_at": "2026-10-26T09:00:00+09:00",
-                  "document_version": "fictional-v1"
-                },
-                "amount_in_period_won": 240000,
-                "original_amount_won": 240000
-              },
-              {
-                "policy_id": "youth:example:P6",
-                "amount_status": "verified",
-                "eligibility": [
-                  {
-                    "condition_id": "age",
-                    "status": "met",
-                    "reason": "[가상] 예제 연령 조건에 해당합니다.",
-                    "evidence": [
-                      {
-                        "quote": "[가상 예제] 만 19~39세 대상입니다.",
-                        "source": {
-                          "url": "https://policy.example/youth/sample-p6",
-                          "checked_at": "2026-10-26T09:00:00+09:00",
-                          "document_version": "fictional-v1"
-                        }
-                      }
-                    ]
-                  }
-                ],
-                "ai_reason": null,
-                "source": {
-                  "url": "https://policy.example/youth/sample-p6",
-                  "checked_at": "2026-10-26T09:00:00+09:00",
-                  "document_version": "fictional-v1"
-                },
-                "amount_in_period_won": 3000000,
-                "original_amount_won": 3000000
-              }
-            ],
-            "given_up": [
-              {
-                "policy_id": "youth:example:P1",
-                "amount_won": 2400000
-              },
-              {
-                "policy_id": "youth:example:P3",
-                "amount_won": 3000000
-              }
-            ],
-            "unverified_pairs": []
           }
         ],
         "why": {
           "gap_won": 600000,
-          "second_total_won": 7800000,
+          "second_total_won": 5400000,
           "deciding_conflict": [
             "youth:example:P1",
             "youth:example:P6"
           ]
-        }
+        },
+        "excluded": [
+          {
+            "policy_id": "youth:example:P1",
+            "reason": "[가상] P6과 중복 수혜 불가",
+            "evidence": [
+              {
+                "quote": "[가상 예제] 월세 지원과 전세 이자 지원은 함께 받을 수 없습니다.",
+                "location": "가상 공고: 중복 지원",
+                "source": {
+                  "url": "https://policy.example/youth/sample-housing",
+                  "checked_at": "2026-10-26T09:00:00+09:00",
+                  "document_version": "fictional-v1"
+                }
+              }
+            ]
+          }
+        ],
+        "not_eligible": [
+          {
+            "policy_id": "youth:example:P5",
+            "failed": [
+              "age"
+            ]
+          }
+        ],
+        "not_yet_reviewed": [
+          {
+            "policy_id": "youth:example:P120",
+            "eligibility_summary": "needs_review"
+          }
+        ],
+        "closed_now": [
+          {
+            "policy_id": "youth:example:P9",
+            "last_period": "2026-03-30 ~ 2026-05-29",
+            "next_expected": null
+          }
+        ]
       },
       "pv_on": {
         "calculation_status": "available",
@@ -1043,29 +693,9 @@
         "portfolios": [
           {
             "rank": 1,
-            "total_won": 8098265,
+            "total_won": 5869626,
             "present_value_applied": true,
             "policies": [
-              {
-                "policy_id": "youth:example:P2",
-                "amount_in_period_won": 2228639,
-                "original_amount_won": 2400000,
-                "amount_status": "verified",
-                "eligibility": [
-                  {
-                    "condition_id": "household_income",
-                    "status": "needs_review",
-                    "reason": "가구 소득 미입력으로 확인이 필요합니다.",
-                    "evidence": []
-                  }
-                ],
-                "ai_reason": null,
-                "source": {
-                  "url": "https://policy.example/youth/sample-p2",
-                  "checked_at": "2026-10-26T09:00:00+09:00",
-                  "document_version": "fictional-v1"
-                }
-              },
               {
                 "policy_id": "youth:example:P3",
                 "amount_in_period_won": 2978490,
@@ -1146,17 +776,13 @@
               {
                 "policy_id": "youth:example:P1",
                 "amount_won": 2368173
-              },
-              {
-                "policy_id": "youth:example:P4",
-                "amount_won": 233929
               }
             ],
             "unverified_pairs": []
           },
           {
             "rank": 2,
-            "total_won": 7575302,
+            "total_won": 5346663,
             "present_value_applied": true,
             "policies": [
               {
@@ -1180,26 +806,6 @@
                 }
               },
               {
-                "policy_id": "youth:example:P2",
-                "amount_in_period_won": 2228639,
-                "original_amount_won": 2400000,
-                "amount_status": "verified",
-                "eligibility": [
-                  {
-                    "condition_id": "household_income",
-                    "status": "needs_review",
-                    "reason": "가구 소득 미입력으로 확인이 필요합니다.",
-                    "evidence": []
-                  }
-                ],
-                "ai_reason": null,
-                "source": {
-                  "url": "https://policy.example/youth/sample-p2",
-                  "checked_at": "2026-10-26T09:00:00+09:00",
-                  "document_version": "fictional-v1"
-                }
-              },
-              {
                 "policy_id": "youth:example:P3",
                 "amount_in_period_won": 2978490,
                 "original_amount_won": 3000000,
@@ -1248,10 +854,6 @@
             ],
             "given_up": [
               {
-                "policy_id": "youth:example:P4",
-                "amount_won": 233929
-              },
-              {
                 "policy_id": "youth:example:P6",
                 "amount_won": 2891136
               }
@@ -1259,116 +861,58 @@
             "unverified_pairs": [
               {
                 "a": "youth:example:P1",
-                "b": "youth:example:P2",
+                "b": "youth:example:P3",
                 "note": "[가상] 중복 수혜 여부 공식 자료 없음"
               }
             ]
-          },
-          {
-            "rank": 3,
-            "total_won": 5353704,
-            "present_value_applied": true,
-            "policies": [
-              {
-                "policy_id": "youth:example:P2",
-                "amount_in_period_won": 2228639,
-                "original_amount_won": 2400000,
-                "amount_status": "verified",
-                "eligibility": [
-                  {
-                    "condition_id": "household_income",
-                    "status": "needs_review",
-                    "reason": "가구 소득 미입력으로 확인이 필요합니다.",
-                    "evidence": []
-                  }
-                ],
-                "ai_reason": null,
-                "source": {
-                  "url": "https://policy.example/youth/sample-p2",
-                  "checked_at": "2026-10-26T09:00:00+09:00",
-                  "document_version": "fictional-v1"
-                }
-              },
-              {
-                "policy_id": "youth:example:P4",
-                "amount_status": "verified",
-                "eligibility": [
-                  {
-                    "condition_id": "age",
-                    "status": "met",
-                    "reason": "[가상] 예제 연령 조건에 해당합니다.",
-                    "evidence": [
-                      {
-                        "quote": "[가상 예제] 만 19~39세 대상입니다.",
-                        "source": {
-                          "url": "https://policy.example/youth/sample-p4",
-                          "checked_at": "2026-10-26T09:00:00+09:00",
-                          "document_version": "fictional-v1"
-                        }
-                      }
-                    ]
-                  }
-                ],
-                "ai_reason": null,
-                "source": {
-                  "url": "https://policy.example/youth/sample-p4",
-                  "checked_at": "2026-10-26T09:00:00+09:00",
-                  "document_version": "fictional-v1"
-                },
-                "amount_in_period_won": 233929,
-                "original_amount_won": 240000
-              },
-              {
-                "policy_id": "youth:example:P6",
-                "amount_status": "verified",
-                "eligibility": [
-                  {
-                    "condition_id": "age",
-                    "status": "met",
-                    "reason": "[가상] 예제 연령 조건에 해당합니다.",
-                    "evidence": [
-                      {
-                        "quote": "[가상 예제] 만 19~39세 대상입니다.",
-                        "source": {
-                          "url": "https://policy.example/youth/sample-p6",
-                          "checked_at": "2026-10-26T09:00:00+09:00",
-                          "document_version": "fictional-v1"
-                        }
-                      }
-                    ]
-                  }
-                ],
-                "ai_reason": null,
-                "source": {
-                  "url": "https://policy.example/youth/sample-p6",
-                  "checked_at": "2026-10-26T09:00:00+09:00",
-                  "document_version": "fictional-v1"
-                },
-                "amount_in_period_won": 2891136,
-                "original_amount_won": 3000000
-              }
-            ],
-            "given_up": [
-              {
-                "policy_id": "youth:example:P1",
-                "amount_won": 2368173
-              },
-              {
-                "policy_id": "youth:example:P3",
-                "amount_won": 2978490
-              }
-            ],
-            "unverified_pairs": []
           }
         ],
         "why": {
           "gap_won": 522963,
-          "second_total_won": 7575302,
+          "second_total_won": 5346663,
           "deciding_conflict": [
             "youth:example:P1",
             "youth:example:P6"
           ]
-        }
+        },
+        "excluded": [
+          {
+            "policy_id": "youth:example:P1",
+            "reason": "[가상] P6과 중복 수혜 불가",
+            "evidence": [
+              {
+                "quote": "[가상 예제] 월세 지원과 전세 이자 지원은 함께 받을 수 없습니다.",
+                "location": "가상 공고: 중복 지원",
+                "source": {
+                  "url": "https://policy.example/youth/sample-housing",
+                  "checked_at": "2026-10-26T09:00:00+09:00",
+                  "document_version": "fictional-v1"
+                }
+              }
+            ]
+          }
+        ],
+        "not_eligible": [
+          {
+            "policy_id": "youth:example:P5",
+            "failed": [
+              "age"
+            ]
+          }
+        ],
+        "not_yet_reviewed": [
+          {
+            "policy_id": "youth:example:P120",
+            "eligibility_summary": "needs_review"
+          }
+        ],
+        "closed_now": [
+          {
+            "policy_id": "youth:example:P9",
+            "last_period": "2026-03-30 ~ 2026-05-29",
+            "next_expected": null
+          }
+        ]
       }
     },
     "all": {
@@ -1378,29 +922,9 @@
         "portfolios": [
           {
             "rank": 1,
-            "total_won": 9600000,
+            "total_won": 6000000,
             "present_value_applied": false,
             "policies": [
-              {
-                "policy_id": "youth:example:P2",
-                "amount_in_period_won": 3600000,
-                "original_amount_won": 3600000,
-                "amount_status": "verified",
-                "eligibility": [
-                  {
-                    "condition_id": "household_income",
-                    "status": "needs_review",
-                    "reason": "가구 소득 미입력으로 확인이 필요합니다.",
-                    "evidence": []
-                  }
-                ],
-                "ai_reason": null,
-                "source": {
-                  "url": "https://policy.example/youth/sample-p2",
-                  "checked_at": "2026-10-26T09:00:00+09:00",
-                  "document_version": "fictional-v1"
-                }
-              },
               {
                 "policy_id": "youth:example:P3",
                 "amount_in_period_won": 3000000,
@@ -1481,17 +1005,13 @@
               {
                 "policy_id": "youth:example:P1",
                 "amount_won": 2400000
-              },
-              {
-                "policy_id": "youth:example:P4",
-                "amount_won": 240000
               }
             ],
             "unverified_pairs": []
           },
           {
             "rank": 2,
-            "total_won": 9000000,
+            "total_won": 5400000,
             "present_value_applied": false,
             "policies": [
               {
@@ -1515,26 +1035,6 @@
                 }
               },
               {
-                "policy_id": "youth:example:P2",
-                "amount_in_period_won": 3600000,
-                "original_amount_won": 3600000,
-                "amount_status": "verified",
-                "eligibility": [
-                  {
-                    "condition_id": "household_income",
-                    "status": "needs_review",
-                    "reason": "가구 소득 미입력으로 확인이 필요합니다.",
-                    "evidence": []
-                  }
-                ],
-                "ai_reason": null,
-                "source": {
-                  "url": "https://policy.example/youth/sample-p2",
-                  "checked_at": "2026-10-26T09:00:00+09:00",
-                  "document_version": "fictional-v1"
-                }
-              },
-              {
                 "policy_id": "youth:example:P3",
                 "amount_in_period_won": 3000000,
                 "original_amount_won": 3000000,
@@ -1583,10 +1083,6 @@
             ],
             "given_up": [
               {
-                "policy_id": "youth:example:P4",
-                "amount_won": 240000
-              },
-              {
                 "policy_id": "youth:example:P6",
                 "amount_won": 3000000
               }
@@ -1594,116 +1090,58 @@
             "unverified_pairs": [
               {
                 "a": "youth:example:P1",
-                "b": "youth:example:P2",
+                "b": "youth:example:P3",
                 "note": "[가상] 중복 수혜 여부 공식 자료 없음"
               }
             ]
-          },
-          {
-            "rank": 3,
-            "total_won": 6840000,
-            "present_value_applied": false,
-            "policies": [
-              {
-                "policy_id": "youth:example:P2",
-                "amount_in_period_won": 3600000,
-                "original_amount_won": 3600000,
-                "amount_status": "verified",
-                "eligibility": [
-                  {
-                    "condition_id": "household_income",
-                    "status": "needs_review",
-                    "reason": "가구 소득 미입력으로 확인이 필요합니다.",
-                    "evidence": []
-                  }
-                ],
-                "ai_reason": null,
-                "source": {
-                  "url": "https://policy.example/youth/sample-p2",
-                  "checked_at": "2026-10-26T09:00:00+09:00",
-                  "document_version": "fictional-v1"
-                }
-              },
-              {
-                "policy_id": "youth:example:P4",
-                "amount_status": "verified",
-                "eligibility": [
-                  {
-                    "condition_id": "age",
-                    "status": "met",
-                    "reason": "[가상] 예제 연령 조건에 해당합니다.",
-                    "evidence": [
-                      {
-                        "quote": "[가상 예제] 만 19~39세 대상입니다.",
-                        "source": {
-                          "url": "https://policy.example/youth/sample-p4",
-                          "checked_at": "2026-10-26T09:00:00+09:00",
-                          "document_version": "fictional-v1"
-                        }
-                      }
-                    ]
-                  }
-                ],
-                "ai_reason": null,
-                "source": {
-                  "url": "https://policy.example/youth/sample-p4",
-                  "checked_at": "2026-10-26T09:00:00+09:00",
-                  "document_version": "fictional-v1"
-                },
-                "amount_in_period_won": 240000,
-                "original_amount_won": 240000
-              },
-              {
-                "policy_id": "youth:example:P6",
-                "amount_status": "verified",
-                "eligibility": [
-                  {
-                    "condition_id": "age",
-                    "status": "met",
-                    "reason": "[가상] 예제 연령 조건에 해당합니다.",
-                    "evidence": [
-                      {
-                        "quote": "[가상 예제] 만 19~39세 대상입니다.",
-                        "source": {
-                          "url": "https://policy.example/youth/sample-p6",
-                          "checked_at": "2026-10-26T09:00:00+09:00",
-                          "document_version": "fictional-v1"
-                        }
-                      }
-                    ]
-                  }
-                ],
-                "ai_reason": null,
-                "source": {
-                  "url": "https://policy.example/youth/sample-p6",
-                  "checked_at": "2026-10-26T09:00:00+09:00",
-                  "document_version": "fictional-v1"
-                },
-                "amount_in_period_won": 3000000,
-                "original_amount_won": 3000000
-              }
-            ],
-            "given_up": [
-              {
-                "policy_id": "youth:example:P1",
-                "amount_won": 2400000
-              },
-              {
-                "policy_id": "youth:example:P3",
-                "amount_won": 3000000
-              }
-            ],
-            "unverified_pairs": []
           }
         ],
         "why": {
           "gap_won": 600000,
-          "second_total_won": 9000000,
+          "second_total_won": 5400000,
           "deciding_conflict": [
             "youth:example:P1",
             "youth:example:P6"
           ]
-        }
+        },
+        "excluded": [
+          {
+            "policy_id": "youth:example:P1",
+            "reason": "[가상] P6과 중복 수혜 불가",
+            "evidence": [
+              {
+                "quote": "[가상 예제] 월세 지원과 전세 이자 지원은 함께 받을 수 없습니다.",
+                "location": "가상 공고: 중복 지원",
+                "source": {
+                  "url": "https://policy.example/youth/sample-housing",
+                  "checked_at": "2026-10-26T09:00:00+09:00",
+                  "document_version": "fictional-v1"
+                }
+              }
+            ]
+          }
+        ],
+        "not_eligible": [
+          {
+            "policy_id": "youth:example:P5",
+            "failed": [
+              "age"
+            ]
+          }
+        ],
+        "not_yet_reviewed": [
+          {
+            "policy_id": "youth:example:P120",
+            "eligibility_summary": "needs_review"
+          }
+        ],
+        "closed_now": [
+          {
+            "policy_id": "youth:example:P9",
+            "last_period": "2026-03-30 ~ 2026-05-29",
+            "next_expected": null
+          }
+        ]
       },
       "pv_on": {
         "calculation_status": "available",
@@ -1711,29 +1149,9 @@
         "portfolios": [
           {
             "rank": 1,
-            "total_won": 9212584,
+            "total_won": 5869626,
             "present_value_applied": true,
             "policies": [
-              {
-                "policy_id": "youth:example:P2",
-                "amount_in_period_won": 3342958,
-                "original_amount_won": 3600000,
-                "amount_status": "verified",
-                "eligibility": [
-                  {
-                    "condition_id": "household_income",
-                    "status": "needs_review",
-                    "reason": "가구 소득 미입력으로 확인이 필요합니다.",
-                    "evidence": []
-                  }
-                ],
-                "ai_reason": null,
-                "source": {
-                  "url": "https://policy.example/youth/sample-p2",
-                  "checked_at": "2026-10-26T09:00:00+09:00",
-                  "document_version": "fictional-v1"
-                }
-              },
               {
                 "policy_id": "youth:example:P3",
                 "amount_in_period_won": 2978490,
@@ -1814,17 +1232,13 @@
               {
                 "policy_id": "youth:example:P1",
                 "amount_won": 2368173
-              },
-              {
-                "policy_id": "youth:example:P4",
-                "amount_won": 233929
               }
             ],
             "unverified_pairs": []
           },
           {
             "rank": 2,
-            "total_won": 8689621,
+            "total_won": 5346663,
             "present_value_applied": true,
             "policies": [
               {
@@ -1848,26 +1262,6 @@
                 }
               },
               {
-                "policy_id": "youth:example:P2",
-                "amount_in_period_won": 3342958,
-                "original_amount_won": 3600000,
-                "amount_status": "verified",
-                "eligibility": [
-                  {
-                    "condition_id": "household_income",
-                    "status": "needs_review",
-                    "reason": "가구 소득 미입력으로 확인이 필요합니다.",
-                    "evidence": []
-                  }
-                ],
-                "ai_reason": null,
-                "source": {
-                  "url": "https://policy.example/youth/sample-p2",
-                  "checked_at": "2026-10-26T09:00:00+09:00",
-                  "document_version": "fictional-v1"
-                }
-              },
-              {
                 "policy_id": "youth:example:P3",
                 "amount_in_period_won": 2978490,
                 "original_amount_won": 3000000,
@@ -1916,10 +1310,6 @@
             ],
             "given_up": [
               {
-                "policy_id": "youth:example:P4",
-                "amount_won": 233929
-              },
-              {
                 "policy_id": "youth:example:P6",
                 "amount_won": 2891136
               }
@@ -1927,116 +1317,58 @@
             "unverified_pairs": [
               {
                 "a": "youth:example:P1",
-                "b": "youth:example:P2",
+                "b": "youth:example:P3",
                 "note": "[가상] 중복 수혜 여부 공식 자료 없음"
               }
             ]
-          },
-          {
-            "rank": 3,
-            "total_won": 6468023,
-            "present_value_applied": true,
-            "policies": [
-              {
-                "policy_id": "youth:example:P2",
-                "amount_in_period_won": 3342958,
-                "original_amount_won": 3600000,
-                "amount_status": "verified",
-                "eligibility": [
-                  {
-                    "condition_id": "household_income",
-                    "status": "needs_review",
-                    "reason": "가구 소득 미입력으로 확인이 필요합니다.",
-                    "evidence": []
-                  }
-                ],
-                "ai_reason": null,
-                "source": {
-                  "url": "https://policy.example/youth/sample-p2",
-                  "checked_at": "2026-10-26T09:00:00+09:00",
-                  "document_version": "fictional-v1"
-                }
-              },
-              {
-                "policy_id": "youth:example:P4",
-                "amount_status": "verified",
-                "eligibility": [
-                  {
-                    "condition_id": "age",
-                    "status": "met",
-                    "reason": "[가상] 예제 연령 조건에 해당합니다.",
-                    "evidence": [
-                      {
-                        "quote": "[가상 예제] 만 19~39세 대상입니다.",
-                        "source": {
-                          "url": "https://policy.example/youth/sample-p4",
-                          "checked_at": "2026-10-26T09:00:00+09:00",
-                          "document_version": "fictional-v1"
-                        }
-                      }
-                    ]
-                  }
-                ],
-                "ai_reason": null,
-                "source": {
-                  "url": "https://policy.example/youth/sample-p4",
-                  "checked_at": "2026-10-26T09:00:00+09:00",
-                  "document_version": "fictional-v1"
-                },
-                "amount_in_period_won": 233929,
-                "original_amount_won": 240000
-              },
-              {
-                "policy_id": "youth:example:P6",
-                "amount_status": "verified",
-                "eligibility": [
-                  {
-                    "condition_id": "age",
-                    "status": "met",
-                    "reason": "[가상] 예제 연령 조건에 해당합니다.",
-                    "evidence": [
-                      {
-                        "quote": "[가상 예제] 만 19~39세 대상입니다.",
-                        "source": {
-                          "url": "https://policy.example/youth/sample-p6",
-                          "checked_at": "2026-10-26T09:00:00+09:00",
-                          "document_version": "fictional-v1"
-                        }
-                      }
-                    ]
-                  }
-                ],
-                "ai_reason": null,
-                "source": {
-                  "url": "https://policy.example/youth/sample-p6",
-                  "checked_at": "2026-10-26T09:00:00+09:00",
-                  "document_version": "fictional-v1"
-                },
-                "amount_in_period_won": 2891136,
-                "original_amount_won": 3000000
-              }
-            ],
-            "given_up": [
-              {
-                "policy_id": "youth:example:P1",
-                "amount_won": 2368173
-              },
-              {
-                "policy_id": "youth:example:P3",
-                "amount_won": 2978490
-              }
-            ],
-            "unverified_pairs": []
           }
         ],
         "why": {
           "gap_won": 522963,
-          "second_total_won": 8689621,
+          "second_total_won": 5346663,
           "deciding_conflict": [
             "youth:example:P1",
             "youth:example:P6"
           ]
-        }
+        },
+        "excluded": [
+          {
+            "policy_id": "youth:example:P1",
+            "reason": "[가상] P6과 중복 수혜 불가",
+            "evidence": [
+              {
+                "quote": "[가상 예제] 월세 지원과 전세 이자 지원은 함께 받을 수 없습니다.",
+                "location": "가상 공고: 중복 지원",
+                "source": {
+                  "url": "https://policy.example/youth/sample-housing",
+                  "checked_at": "2026-10-26T09:00:00+09:00",
+                  "document_version": "fictional-v1"
+                }
+              }
+            ]
+          }
+        ],
+        "not_eligible": [
+          {
+            "policy_id": "youth:example:P5",
+            "failed": [
+              "age"
+            ]
+          }
+        ],
+        "not_yet_reviewed": [
+          {
+            "policy_id": "youth:example:P120",
+            "eligibility_summary": "needs_review"
+          }
+        ],
+        "closed_now": [
+          {
+            "policy_id": "youth:example:P9",
+            "last_period": "2026-03-30 ~ 2026-05-29",
+            "next_expected": null
+          }
+        ]
       }
     }
   },

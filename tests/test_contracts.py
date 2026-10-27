@@ -2,6 +2,7 @@
 
 import copy
 import json
+from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 import unittest
 
@@ -239,9 +240,66 @@ class ContractTests(unittest.TestCase):
                             self.assertEqual(portfolio["total_won"], sum(amounts))
                             self.assertEqual(portfolio["present_value_applied"], mode == "pv_on")
         response = self.fixture("recommendation-response.json")
-        for period, total in (("1y", 6600000), ("2y", 8400000), ("all", 9600000)):
+        for period, total in (("1y", 5400000), ("2y", 6000000), ("all", 6000000)):
             with self.subTest(period=period):
                 self.assertEqual(response["results"][period]["pv_off"]["portfolios"][0]["total_won"], total)
+
+    def test_youth_mvp_interests_exclude_expansion_categories(self):
+        request = self.fixture("recommendation-request.json")
+        validator = self.validator("recommendation-request.schema.json")
+        request["profile"]["domain_data"]["interests"] = ["employment", "housing"]
+        validator.validate(request)
+        for category in ("living", "asset", "education"):
+            with self.subTest(category=category):
+                bad = copy.deepcopy(request)
+                bad["profile"]["domain_data"]["interests"].append(category)
+                with self.assertRaises(ValidationError):
+                    validator.validate(bad)
+        # Storage's common contract stays extensible; active scope is enforced
+        # by application policy filters when the product is implemented.
+        benefit = self.fixture("youth-benefit.json")
+        benefit["categories"] = ["example_future_category"]
+        self.validator("benefit.schema.json").validate(benefit)
+
+    def test_mvp_response_values_use_only_current_policy_cashflows(self):
+        for filename in ("recommendation-response.json", "pv-unknown-response.json"):
+            response = self.fixture(filename)
+            for period, modes in response["results"].items():
+                flows = {
+                    "P1": [(m, 200000) for m in range(1, 13)],
+                    "P3": [(m, 500000) for m in range(1, 7)],
+                    "P6": [(12, 1500000)] if period == "1y" else [(12, 1500000), (24, 1500000)],
+                }
+                for mode, tab in modes.items():
+                    for portfolio in tab["portfolios"]:
+                        for policy in portfolio["policies"]:
+                            pid = policy["policy_id"].split(":")[-1]
+                            with self.subTest(fixture=filename, period=period, mode=mode, policy=pid):
+                                self.assertIn(pid, flows)
+                                raw = sum(amount for _, amount in flows[pid])
+                                self.assertEqual(policy["original_amount_won"], raw)
+                                if mode == "pv_on":
+                                    amount = sum(
+                                        Decimal(v) / Decimal("1.025") ** (Decimal(m) / 12)
+                                        for m, v in flows[pid]
+                                    )
+                                    expected = int(amount.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+                                else:
+                                    expected = raw
+                                self.assertEqual(policy["amount_in_period_won"], expected)
+
+    def test_mvp_simulation_and_single_policy_examples_match_current_scope(self):
+        fallback = self.fixture("fallback-response.json")
+        for period, amount in (("1y", 1500000), ("2y", 3000000), ("all", 3000000)):
+            entry = fallback["results"][period]["pv_off"]["fallback_list"][0]
+            self.assertEqual(entry["policy_id"], "youth:example:P6")
+            self.assertEqual(entry["amount_in_period_won"], amount)
+        simulation = self.fixture("simulation-response.json")
+        self.assertEqual(simulation["before_total_won"], 2400000)
+        self.assertEqual(simulation["after_total_won"], 1500000)
+        gained = sum(p["amount_won"] for p in simulation["gained"])
+        lost = sum(p["amount_won"] for p in simulation["lost"])
+        self.assertEqual(simulation["after_total_won"] - simulation["before_total_won"], gained - lost)
 
     def test_fallback_and_empty_views(self):
         fallback = self.fixture("fallback-response.json")

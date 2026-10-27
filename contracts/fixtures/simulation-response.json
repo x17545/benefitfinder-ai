@@ -1,8 +1,8 @@
 {
   "scenario": "income_up",
   "basis_period": "1y",
-  "before_total_won": 3720000,
-  "after_total_won": 2820000,
+  "before_total_won": 2400000,
+  "after_total_won": 1500000,
   "income_change": {
     "from_won": 29000000,
     "to_won": 31000000,
@@ -16,14 +16,20 @@
       "amount_won": 2400000
     }
   ],
-  "gained": [],
+  "gained": [
+    {
+      "policy_id": "youth:example:P6",
+      "reason": "[가상] P1 탈락 후 기존 후보 P6가 최적 결과에 포함됨(신규 자격 획득을 뜻하지 않음)",
+      "amount_won": 1500000
+    }
+  ],
   "next_threshold": {
-    "text": "[가상] 연 소득 5,000만 원을 넘으면 청년 자산형성 통장 매칭도 줄어요"
+    "text": "[가상] 연 소득 5,000만 원을 넘으면 전세대출 이자 지원 대상에서도 벗어나요"
   },
   "todo": null,
   "calculation_note": "[가상] 선택 기간(1y) 카드합과 연간 환산 분리, 세금/4대보험 제외, 연간 지원금 변화/연간 소득 증가 기준.",
   "annual": {
-    "before_won": 3720000,
-    "after_won": 2820000
+    "before_won": 2400000,
+    "after_won": 1500000
   }
 }

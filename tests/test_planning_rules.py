@@ -286,5 +286,121 @@ class PresentValueTests(unittest.TestCase):
         self.assertIsNotNone(ref.present_value([(12, 1200000)], Decimal("0.025")))
 
 
+MVP_FIXTURE = Path(__file__).resolve().parent / "fixtures" / "mvp_planning_rules.json"
+
+
+def load_mvp():
+    return json.loads(MVP_FIXTURE.read_text(encoding="utf-8"))
+
+
+class MvpFixtureShapeTests(unittest.TestCase):
+    """First-MVP fixture shape: employment plus housing only (P1, P3, P6)."""
+
+    def test_mvp_categories_within_youth_cover_employment_and_housing_only(self):
+        data = load_mvp()
+        by_id = {p["id"]: p for p in data["policies"]}
+        self.assertEqual(sorted(by_id), ["P1", "P3", "P6"])
+        self.assertEqual(by_id["P1"]["category"], "housing")
+        self.assertEqual(by_id["P3"]["category"], "employment")
+        self.assertEqual(by_id["P6"]["category"], "housing")
+        self.assertEqual({p["category"] for p in data["policies"]}, {"housing", "employment"})
+        self.assertEqual({p["domain"] for p in data["policies"]}, {"youth"})
+        self.assertEqual(by_id["P1"]["amounts_won"], {"y1": 2400000, "y2": 2400000, "full": 2400000})
+        self.assertEqual(by_id["P3"]["amounts_won"], {"y1": 3000000, "y2": 3000000, "full": 3000000})
+        self.assertEqual(by_id["P6"]["amounts_won"], {"y1": 1500000, "y2": 3000000, "full": 3000000})
+        for policy in data["policies"]:
+            for value in policy["amounts_won"].values():
+                with self.subTest(policy=policy["id"]):
+                    self.assertIsInstance(value, int)
+                    self.assertGreater(value, 0)
+        pairs = {tuple(sorted(pair)) for pair in data["conflicts"]}
+        self.assertEqual(pairs, {("P1", "P6")})
+        self.assertIn("8.3", data["meta"]["source"])
+        self.assertIn("v2.2", data["meta"]["source"])
+
+
+class MvpCombinationTests(unittest.TestCase):
+    """MVP answers with the same independent oracles as the 5-policy fixture."""
+
+    def test_mvp_all_cases_match_independent_oracles(self):
+        data = load_mvp()
+        conflicts = [tuple(pair) for pair in data["conflicts"]]
+        self.assertEqual(len(data["scenarios"]), 10)
+        for scenario in data["scenarios"]:
+            with self.subTest(scenario=scenario["id"]):
+                weights = {p["id"]: p["amounts_won"][scenario["period"]] for p in data["policies"]}
+                expected = scenario["expected"]
+                ranked = ref.rank_portfolios(scenario["eligible"], weights, conflicts, limit=len(expected))
+                self.assertEqual(len(ranked), len(expected))
+                for got, want in zip(ranked, expected):
+                    self.assertEqual(sorted(got["members"]), sorted(want["members"]))
+                    self.assertEqual(got["total_won"], want["total_won"])
+                brute = independent_top3(scenario["eligible"], weights, conflicts, limit=len(expected))
+                self.assertEqual(ranked, brute)
+                for entry in ranked:
+                    self.assertTrue(ref.is_compatible(entry["members"], conflicts))
+                    for closed in scenario.get("closed", []):
+                        self.assertNotIn(closed, entry["members"])
+                if scenario["id"] == "E":
+                    self.assertEqual(scenario["closed"], ["P1"])
+                    self.assertEqual(len(ranked), 1)
+                    self.assertEqual(sorted(ranked[0]["members"]), ["P3", "P6"])
+                    self.assertEqual(ranked[0]["total_won"], 4500000)
+
+    def test_mvp_period_change_flips_rank_one(self):
+        data = load_mvp()
+        by_id = {s["id"]: s for s in data["scenarios"]}
+        self.assertEqual(by_id["A"]["expected"][0]["members"], ["P1", "P3"])
+        self.assertEqual(by_id["A"]["expected"][0]["total_won"], 5400000)
+        self.assertEqual(by_id["A"]["expected"][1]["members"], ["P3", "P6"])
+        self.assertEqual(by_id["A"]["expected"][1]["total_won"], 4500000)
+        self.assertEqual(by_id["A_2y"]["expected"][0]["members"], ["P3", "P6"])
+        self.assertEqual(by_id["A_2y"]["expected"][0]["total_won"], 6000000)
+        self.assertEqual(by_id["A_2y"]["expected"][1]["members"], ["P1", "P3"])
+        self.assertEqual(by_id["A_2y"]["expected"][1]["total_won"], 5400000)
+        self.assertEqual(by_id["C"]["expected"], by_id["A"]["expected"])
+
+    def test_mvp_single_policy_helper_result_is_not_api_list_claim(self):
+        data = load_mvp()
+        conflicts = [tuple(pair) for pair in data["conflicts"]]
+        by_id = {s["id"]: s for s in data["scenarios"]}
+        for sid in ("B", "D", "F_after"):
+            with self.subTest(scenario=sid):
+                scenario = by_id[sid]
+                weights = {p["id"]: p["amounts_won"][scenario["period"]] for p in data["policies"]}
+                ranked = ref.rank_portfolios(scenario["eligible"], weights, conflicts, limit=3)
+                self.assertEqual(len(ranked), 1)
+                self.assertEqual(len(scenario["expected"]), 1)
+                self.assertEqual(sorted(ranked[0]["members"]), sorted(scenario["expected"][0]["members"]))
+                self.assertEqual(ranked[0]["total_won"], scenario["expected"][0]["total_won"])
+        # Calculation helper returning one combination describes the helper
+        # output shape only. API list-card display and product UI behavior
+        # are separate contracts and are not verified here.
+
+
+class MvpIncomeChangeTests(unittest.TestCase):
+    """MVP annual F/G cliff checks on y1 totals only."""
+
+    def test_mvp_income_cliff_f_and_g_use_annual_gap(self):
+        data = load_mvp()
+        f_case = data["income_change"]["F"]
+        g_case = data["income_change"]["G"]
+        self.assertEqual((f_case["before_won"], f_case["after_won"]), (2400000, 1500000))
+        self.assertEqual(f_case["lost_won"], 900000)
+        self.assertEqual(f_case["net_gain_won"], 1100000)
+        self.assertEqual(ref.effective_rate(f_case["before_won"], f_case["after_won"], f_case["from_won"], f_case["to_won"]), Decimal(45))
+        self.assertEqual((g_case["before_won"], g_case["after_won"]), (5400000, 2400000))
+        self.assertEqual(g_case["lost_won"], 3000000)
+        self.assertEqual(ref.effective_rate(g_case["before_won"], g_case["after_won"], g_case["from_won"], g_case["to_won"]), Decimal("12.5"))
+        conflicts = [tuple(pair) for pair in data["conflicts"]]
+        weights_y1 = {p["id"]: p["amounts_won"]["y1"] for p in data["policies"]}
+        f_before_best = ref.rank_portfolios(["P1", "P6"], weights_y1, conflicts, limit=1)[0]["total_won"]
+        f_after_best = ref.rank_portfolios(["P6"], weights_y1, conflicts, limit=1)[0]["total_won"]
+        self.assertEqual((f_before_best, f_after_best), (2400000, 1500000))
+        g_before_best = ref.rank_portfolios(["P1", "P3", "P6"], weights_y1, conflicts, limit=1)[0]["total_won"]
+        g_after_best = ref.rank_portfolios(["P1", "P6"], weights_y1, conflicts, limit=1)[0]["total_won"]
+        self.assertEqual((g_before_best, g_after_best), (5400000, 2400000))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -8,9 +8,9 @@
         "portfolios": [],
         "fallback_list": [
           {
-            "policy_id": "youth:example:P2",
-            "amount_in_period_won": 1200000,
-            "reason": "[가상] 묶을 수 있는 조합이 1개뿐이라 목록으로 표시합니다."
+            "policy_id": "youth:example:P6",
+            "amount_in_period_won": 1500000,
+            "reason": "[가상] 후보 정책이 1개라 함께 묶을 수 없어 단일 정책 목록으로 표시합니다."
           }
         ],
         "calculation_status": "available",
@@ -28,9 +28,9 @@
         "portfolios": [],
         "fallback_list": [
           {
-            "policy_id": "youth:example:P2",
-            "amount_in_period_won": 1200000,
-            "reason": "[가상] 묶을 수 있는 조합이 1개뿐이라 목록으로 표시합니다."
+            "policy_id": "youth:example:P6",
+            "amount_in_period_won": 3000000,
+            "reason": "[가상] 후보 정책이 1개라 함께 묶을 수 없어 단일 정책 목록으로 표시합니다."
           }
         ],
         "calculation_status": "available",
@@ -48,9 +48,9 @@
         "portfolios": [],
         "fallback_list": [
           {
-            "policy_id": "youth:example:P2",
-            "amount_in_period_won": 1200000,
-            "reason": "[가상] 묶을 수 있는 조합이 1개뿐이라 목록으로 표시합니다."
+            "policy_id": "youth:example:P6",
+            "amount_in_period_won": 3000000,
+            "reason": "[가상] 후보 정책이 1개라 함께 묶을 수 없어 단일 정책 목록으로 표시합니다."
           }
         ],
         "calculation_status": "available",

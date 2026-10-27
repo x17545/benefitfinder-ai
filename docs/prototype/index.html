@@ -164,24 +164,16 @@ footer.foot button { border: 0; background: none; padding: 0; color: var(--muted
 <div class="app" id="app"></div>
 <div class="toast" id="toast"></div>
 <script>
-// ===== 가상 데이터 (형식 예시용, 실제 정책·금액 아님) =====
+// ===== v2.2 초기 MVP: 청년 취업·주거 가상 데이터 (실제 정책·금액 아님) =====
 const POLICIES = {
   P1: { title: "청년 월세 지원", org: "국토교통부", cat: "주거", tag: ["open", "모집 중"], type: "monthly", span: 12,
         amountText: "월 최대 20만 원 · 12개월", amt: { "1y": 240, "2y": 240, "all": 240 }, source: "온통청년", verified: "10/26",
         elig: [["met", "나이"], ["met", "무주택"], ["needs_review", "부모님 소득"]],
         reason: "혼자 자취 중이고 주거에 관심 있다고 해서 추천했어요" },
-  P2: { title: "청년 자산형성 통장", org: "지방자치단체", cat: "자산형성", tag: ["due", "마감 D-12"], type: "maturity",
-        amountText: "월 10만 원 저축 시 같은 금액 매칭 · 만기 시 지급", amt: { "1y": 120, "2y": 240, "all": 360 }, source: "보조금24", verified: "10/25",
-        elig: [["met", "나이"], ["met", "지역"], ["needs_review", "가구 소득"]],
-        reason: "목돈 마련을 함께 할 수 있어 조합 총액을 키워요" },
   P3: { title: "구직활동 지원금", org: "고용노동부", cat: "취업", tag: ["open", "모집 중"], type: "monthly", span: 6,
         amountText: "월 50만 원 · 6개월", amt: { "1y": 300, "2y": 300, "all": 300 }, source: "온통청년", verified: "10/26",
         elig: [["met", "나이"], ["met", "구직 상태"], ["met", "소득"]],
         reason: "취업 준비 중이라 받을 수 있는 금액이 가장 커요" },
-  P4: { title: "청년 대중교통비 환급", org: "지방자치단체", cat: "생활", tag: ["open", "상시"], type: "monthly",
-        amountText: "월 최대 1만 원 환급", amt: { "1y": 12, "2y": 24, "all": 24 }, source: "보조금24", verified: "10/14",
-        elig: [["met", "나이"], ["met", "지역"]], stale: true,
-        reason: "다른 정책과 함께 받을 수 있는 생활비 혜택이에요" },
   P6: { title: "청년 전세대출 이자 지원", org: "지방자치단체", cat: "주거", tag: ["open", "모집 중"], type: "interest",
         amountText: "대출 이자 연 최대 150만 원", amt: { "1y": 150, "2y": 300, "all": 300 }, source: "보조금24", verified: "10/26",
         elig: [["met", "나이"], ["needs_review", "전세 계약"]],
@@ -189,14 +181,12 @@ const POLICIES = {
 };
 // 정책 이름은 가상이라 링크는 출처 포털로 연결한다. 실서비스에서는 정책별 공식 신청 URL(source_url)
 const SRC_URL = { "온통청년": "https://www.youthcenter.go.kr", "보조금24": "https://www.gov.kr/portal/rcvfvrSvc/main" };
-const CAT_ICON = { "주거": "🏠", "취업": "💼", "자산형성": "🐷", "생활": "🚌", "교육·장학": "🎓" };
+const CAT_ICON = { "주거": "🏠", "취업": "💼" };
 // 함께 받을 수 없는 쌍 (공고 원문 근거) — 조합 계산에서 같은 조합에 넣지 않는다
-const CONFLICTS = [["P1", "P6", "청년 월세 지원과 청년 전세대출 이자 지원은 함께 받을 수 없어요"], ["P3", "P4", "구직활동 지원금과 청년 대중교통비 환급은 함께 받을 수 없어요"]];
+const CONFLICTS = [["P1", "P6", "청년 월세 지원과 청년 전세대출 이자 지원은 함께 받을 수 없어요"]];
 const PORTFOLIOS = [
-  { ids: ["P3", "P1", "P2"], unverified: ["P1", "P2"] },
-  { ids: ["P3", "P6", "P2"], unverified: [] },
-  { ids: ["P1", "P2", "P4"], unverified: ["P1", "P2"] },
-  { ids: ["P6", "P2", "P4"], unverified: [] },
+  { ids: ["P3", "P1"], unverified: ["P1", "P3"] },
+  { ids: ["P3", "P6"], unverified: [] },
 ];
 // 현재가치: 나중에 받는 돈을 할인율로 깎아 지금 가치로 바꾼다. 할인율은 기준금리 가정 (실서비스는 한국은행 ECOS에서 매일 받음)
 const RATE = 0.025;
@@ -210,7 +200,7 @@ function pvOf(id, per) {
 const val = (id, per) => S.pv ? Math.round(pvOf(id, per)) : POLICIES[id].amt[per];
 const SEG = ["#3B424C", "#C9963A", "#9AA0A8", "#E2C68E"];
 const EXCLUDED = [["청년 전세대출 이자 지원", "청년 월세 지원과 함께 받을 수 없음 (공고 원문 근거)"]];
-const NOT_ELIGIBLE = [["국가장학금형 생활비 지원", "재학 중인 학생만 받을 수 있음"], ["청년 창업 정착 지원", "사업자 등록이 필요함"], ["신혼부부 주거 지원", "혼인 조건"]];
+const NOT_ELIGIBLE = [["청년 면접 준비 지원", "해당 지역 거주 조건"], ["청년 재직 지원", "재직 조건"], ["신혼부부 주거 지원", "혼인 조건"]];
 // 전국 17개 시·도와 시·군·구 (2026-10 기준, 인천 2026-07 행정체제 개편 반영). 실서비스에서는 백엔드가 행정표준코드 기준으로 내려준다
 const REGIONS = {
   "서울특별시": ["강남구", "강동구", "강북구", "강서구", "관악구", "광진구", "구로구", "금천구", "노원구", "도봉구", "동대문구", "동작구", "마포구", "서대문구", "서초구", "성동구", "성북구", "송파구", "양천구", "영등포구", "용산구", "은평구", "종로구", "중구", "중랑구"],
@@ -234,7 +224,7 @@ const REGIONS = {
 
 // ===== 상태 =====
 const demo = { age: 25, military: "", sido: "경기도", sigungu: "수원시", status: "취업 준비", school: "대학 졸업", married: "미혼", housing: "혼자 살아요", owner: "없어요 (무주택)", head: "세대주", contract: "월세", deposit: "5천만 원 이하", rent: "40만 ~ 60만 원",
-               income: "없음", asset: "1억 2천만 원 이하", special: ["해당 없음"], interests: ["주거", "생활"], received: ["없음"], hh: null, pIncome: "모름", pAsset: "모름" };
+               income: "없음", asset: "1억 2천만 원 이하", special: ["해당 없음"], interests: ["취업", "주거"], received: ["없음"], hh: null, pIncome: "모름", pAsset: "모름" };
 const S = { consent: false, remember: false, saved: false, cond: { age: "", military: "", sido: "", sigungu: "", status: "", school: "", married: "", housing: "", owner: "", head: "", contract: "", deposit: "", rent: "", income: "", asset: "", special: [], interests: [], received: [], hh: null, pIncome: "", pAsset: "" },
             period: "1y", pv: false, tab: 0, open: {}, whatif: "취업하면" };
 const won = (man) => "약 " + man.toLocaleString() + "만 원";
@@ -272,7 +262,7 @@ function s1() {
 }
 
 // ===== S2 조건 선택 =====
-// 질문 구성은 기획/04_정책조건_분석.md 기준 (온통청년 API 혼인·취업·학력·특화 코드와 실제 정책 5개 자격 조건)
+// 질문 구성은 기획/04_정책조건_분석.md 기준 (온통청년 API 혼인·취업·학력·특화 코드와 취업·주거 가상 정책의 자격 조건)
 const N = 13;
 const PICK = (key, v) => `S.cond['${key}']='${v}'; render()`;
 function opts(key, list) { return `<div class="options">${list.map(v => `<button class="option ${S.cond[key] === v ? "on" : ""}" onclick="${PICK(key, v)}">${v}</button>`).join("")}</div>`; }
@@ -310,7 +300,7 @@ function s2(step) {
   if (step === 9) { body = `<h2>해당하는 게 있나요?</h2><p class="muted">이런 분만 받을 수 있는 정책이 따로 있어요. 여러 개 고를 수 있어요</p>` +
       multi("special", ["기초생활수급자", "차상위계층", "한부모가정", "장애인", "중소기업 재직", "농업인·어업인", "군 복무 중", "해당 없음"], "해당 없음") +
       `<p class="muted small">이 정보는 AI에게 보내지 않고 자격 계산에만 써요. 서버에 저장하지 않아요</p>`; ok = c.special.length > 0; }
-  if (step === 10) { body = `<h2>어떤 지원에 관심 있어요?</h2><p class="muted">여러 개 고를 수 있어요</p>` + multi("interests", ["주거", "취업", "생활", "자산형성", "교육·장학"], ""); ok = c.interests.length > 0; }
+  if (step === 10) { body = `<h2>어떤 지원에 관심 있어요?</h2><p class="muted">초기에는 취업·주거 혜택을 다뤄요. 여러 개 고를 수 있어요</p>` + multi("interests", ["취업", "주거"], ""); ok = c.interests.length > 0; }
   if (step === 11) { body = `<h2>이미 받고 있거나 받았던 게 있나요?</h2><p class="muted">한 번만 받을 수 있거나 함께 가입할 수 없는 정책은 조합에서 빼요</p>` +
       multi("received", ["청년월세 지원", "청년도약계좌·청년미래적금", "청년내일저축계좌", "국민취업지원제도", "버팀목 전세대출", "없음"], "없음"); ok = c.received.length > 0; }
   if (step === 12) { body = c.married === "기혼"
@@ -377,7 +367,7 @@ function s3() {
       <p>추천 조합을 고르는 <b>기회비용</b>은 다음으로 좋은 ${RL[1]}의 ${won(second.total)}이에요. 그보다 커서 1위예요.</p>
       ${conflict ? `<p>${conflict[2]}. 그래서 둘 중 총액이 커지는 쪽을 골랐어요.</p>` : ""}
       ${per !== "1y" ? `<p class="muted small">기간을 바꾸면 매달·만기 지급 금액이 달라져 순위가 바뀔 수 있어요.</p>` : ""}
-      ${S.pv ? `<p class="muted small">현재가치: 만기에 한꺼번에 받는 적금 매칭금은 지금 받는 돈보다 가치가 작아요. 예) ${POLICIES.P2.title} ${POLICIES.P2.amt[per]}만 원 → 지금 가치 약 ${val("P2", per)}만 원</p>` : ""}
+      ${S.pv ? `<p class="muted small">현재가치: 매월 받는 지원금과 매년 받는 이자 지원을 실제 지급 시점으로 할인한 가상 예시예요. 예) ${POLICIES.P6.title} ${POLICIES.P6.amt[per]}만 원 → 지금 가치 약 ${val("P6", per)}만 원</p>` : ""}
     </div>
 
     <h3>${RL[sel]}에 들어 있는 지원금 ${p.ids.length}개</h3>
@@ -399,7 +389,7 @@ function s3() {
       return ex.length ? fold("ex", `이 조합에서 빠진 정책 ${ex.length}개`, ex.map(([n, r]) => `<div><b>${n}</b><br><span class="muted">${r}</span></div>`).join("")) : ""; })()}
     ${fold("cl", "지금은 모집이 끝난 정책 1개", `<p class="muted">다음 모집 때 받을 수 있어요.</p><div><b>청년 이사비 지원</b><br><span class="muted">지난 모집 2026.03.30 ~ 05.29 · 다음 모집 미정</span></div>`)}
     ${fold("ne", "조건이 맞지 않는 정책 3개", NOT_ELIGIBLE.map(([n, r]) => `<div><b>${n}</b><br><span class="s not_met">✕ 미충족</span> <span class="muted">${r}</span></div>`).join(""))}
-    ${fold("nr", "아직 조합 계산 전인 정책 12개", `<p class="muted">금액·중복 여부를 검수 중이에요. 정책별 자격 진단은 볼 수 있어요.</p><div><b>청년 마음건강 지원</b> <span class="s met">✓ 자격 충족</span></div><div><b>청년 문화예술 패스</b> <span class="s needs_review">? 확인 필요</span></div>`)}
+    ${fold("nr", "아직 조합 계산 전인 정책 2개", `<p class="muted">금액·중복 여부를 검수 중이에요. 정책별 자격 진단은 볼 수 있어요.</p><div><b>청년 면접 정장 대여</b> <span class="s met">✓ 자격 충족</span></div><div><b>청년 주거 이전 지원</b> <span class="s needs_review">? 확인 필요</span></div>`)}
     <button class="btn line" onclick="go('#/what-if')">상황이 바뀌면 어떻게 될까?</button>
     <button class="btn ghost" onclick="toast('결과 이미지를 저장했어요 (시안: 실제 저장 생략)')">결과 이미지로 저장</button>
     <p class="disclaimer">AI가 계산을 돕는 참고 결과예요. 최종 자격은 신청 기관에서 확인해 주세요.</p>
@@ -408,17 +398,17 @@ function s3() {
 
 // ===== S4 절벽 =====
 const WHATIF = {
-  "취업하면": { after: 480, income: [0, 2400], lose: [["구직활동 지원금", "재직하면 대상이 아니에요", 300]], add: [["재직 청년 자산형성 지원", "재직 청년 대상 (+120만 원)", 120]], warn: "연 소득 3,000만 원을 넘으면 청년 월세 지원도 끊겨요", todo: "취업 전에 청년 자산형성 통장을 신청해 두면 재직 후에도 계속 받을 수 있어요" },
-  "연 소득이 오르면": { after: 420, income: [2900, 3100], lose: [["청년 월세 지원", "연 소득 3,000만 원 기준 초과", 240]], add: [], warn: "연 소득 5,000만 원을 넘으면 자산형성 매칭도 줄어요", todo: "소득 기준선 전 달까지 받은 지원금은 돌려주지 않아도 돼요 (공고 원문 근거)" },
-  "독립하면": { after: 660, lose: [], add: [], warn: "이미 혼자 살고 있어서 바뀌는 게 없어요", todo: "" },
-  "나이가 1살 많아지면": { after: 660, lose: [], add: [], warn: "만 34세가 지나면 청년 월세 지원 대상에서 빠져요 (9년 남음, 군 복무 기간만큼 늘어날 수 있어요)", todo: "" },
+  "취업하면": { before: 540, after: 240, income: [0, 2400], lose: [["구직활동 지원금", "재직하면 대상이 아니에요", 300]], add: [], warn: "[가상] 연 소득 3,000만 원을 넘으면 청년 월세 지원도 대상에서 벗어나요", todo: "" },
+  "연 소득이 오르면": { before: 240, after: 150, income: [2900, 3100], lose: [["청년 월세 지원", "연 소득 3,000만 원 기준 초과", 240]], add: [["청년 전세대출 이자 지원", "월세 지원 탈락 후 기존 후보 중 대체 선택 (+150만 원)", 150]], warn: "[가상] 연 소득 5,000만 원을 넘으면 전세대출 이자 지원도 대상에서 벗어나요", todo: "" },
+  "독립하면": { before: 540, after: 540, lose: [], add: [], warn: "이미 혼자 살고 있는 가상 조건이라 바뀌는 게 없어요", todo: "" },
+  "나이가 1살 많아지면": { before: 540, after: 540, lose: [], add: [], warn: "가상 정책의 연령 조건 안에서는 변동이 없어요. 군 복무 연장은 정책별 근거로 확인해요", todo: "" },
 };
 function s4() {
-  const w = WHATIF[S.whatif], now = 660, d = w.after - now;
-  return bar("상황이 바뀌면?", true) + `<main><h2>지금 조건에서<br>무엇이 바뀌나요?</h2>
+  const w = WHATIF[S.whatif], now = w.before, d = w.after - now;
+  return bar("상황이 바뀌면?", true) + `<main><h2>지금 조건에서<br>무엇이 바뀌나요?</h2><p class="muted small">시나리오마다 별도로 정한 취업·주거 가상 조건과 금액이에요. 입력한 조건을 계산하는 기능은 아직 없어요.</p>
     <div class="chips">${Object.keys(WHATIF).map(k => `<button class="chip sm ${S.whatif === k ? "on" : ""}" onclick="S.whatif='${k}'; render()">${k}</button>`).join("")}</div>
     <div class="card"><div class="diff"><span class="muted">현재 추천 조합 (1년)</span><b>${won(now)}</b><span class="muted">바뀐 뒤 추천 조합</span><b>${won(w.after)} ${d ? `<span class="${d < 0 ? "minus" : "plus"}">(${d > 0 ? "+" : ""}${d}만)</span>` : ""}</b></div></div>
-    ${w.income ? (() => { const [a, b] = w.income, dy = b - a, lost = now - w.after, net = dy - lost, emtr = Math.round(lost / dy * 100);
+    ${w.income ? (() => { const [a, b] = w.income, dy = b - a, lost = now - w.after, net = dy - lost, emtr = Math.round(lost / dy * 1000) / 10;
       return `<div class="card emtr"><b>실제로 늘어나는 돈 (1년 기준)</b>
         <div class="diff"><span class="muted">연 소득</span><b>${a.toLocaleString()} → ${b.toLocaleString()}만 원 <span class="plus">(+${dy.toLocaleString()}만)</span></b>
         <span class="muted">줄어드는 지원금</span><b><span class="minus">−${lost}만 원</span></b>
@@ -464,7 +454,7 @@ function about() { return bar("이용 안내", true) + `<main><h2>청년 정책 
 function privacy() { return bar("개인정보 처리방침", true) + `<main><h2>개인정보 처리방침 (시안)</h2>
   <div class="card"><dl class="kv"><dt>받는 정보</dt><dd>선택한 조건 (나이, 지역, 상황, 소득·재산 구간 등)</dd><dt>저장 위치</dt><dd>'기억하기'를 켠 경우 사용자 브라우저에만 30일. 서버에는 저장하지 않아요</dd><dt>외부 전달</dt><dd>정책 분석을 위해 AI API에 조건을 전달해요. 특수 조건과 부모님 소득·재산은 보내지 않아요</dd><dt>이용 통계</dt><dd>구글 애널리틱스 (쿠키 사용, 조건 값은 보내지 않아요)</dd><dt>지우기</dt><dd>하단 '내 정보 지우기'를 누르면 바로 지워져요</dd></dl></div></main>${foot()}`; }
 function notFound(t = "페이지를 찾을 수 없어요", d = "주소를 다시 확인해 주세요") { return bar("", true) + `<main><div class="empty"><span class="big">🔎</span><h2>${t}</h2><p class="muted">${d}</p></div></main>${cta("처음으로", "go('#/')")}`; }
-function emptyResult() { return bar("추천 조합", true) + `<main><div class="empty"><span class="big">📭</span><h2>지금 다루는 정책 중엔<br>맞는 게 없어요</h2><p class="muted">주거·취업·생활·자산형성·교육장학 분야를 다뤄요</p></div>
+function emptyResult() { return bar("추천 조합", true) + `<main><div class="empty"><span class="big">📭</span><h2>지금 다루는 정책 중엔<br>맞는 게 없어요</h2><p class="muted">초기에는 취업·주거 혜택만 다뤄요. 나머지 분야는 확장 예정이에요</p></div>
   <button class="btn line" onclick="go('#/conditions/13')">조건 바꾸기</button><button class="btn ghost" onclick="toast('온통청년으로 이동 (시안)')">온통청년에서 더 찾아보기 ↗</button><button class="btn ghost" onclick="toast('복지로로 이동 (시안)')">복지로에서 더 찾아보기 ↗</button></main>${foot()}`; }
 
 // ===== 화면설계서용 번호 표시 =====

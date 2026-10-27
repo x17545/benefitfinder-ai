@@ -1,0 +1,366 @@
+{
+  "meta": {
+    "source": "REQUIREMENTS_v2.md 8.3 v2.2",
+    "unit": "won",
+    "note": "All amounts are integers in KRW (won). Planning tables state values in man-won; this fixture stores won = man_won * 10000. Virtual planning data for first-MVP answer regression only, not real policy data. No personal, customer, or key material.",
+    "planning_scope": "First MVP: youth employment and housing only (P1, P3, P6). Life, asset, and education expansion excluded from MVP ranking. F01-F11, 13-step choice input maintained. Existing 5-policy fixture (tests/fixtures/planning_rules.json) is retained as history and expansion regression data."
+  },
+  "policies": [
+    {
+      "id": "P1",
+      "name": "virtual youth monthly rent support",
+      "domain": "youth",
+      "age": {
+        "min": 19,
+        "max": 34,
+        "military_extension": true
+      },
+      "amounts_won": {
+        "y1": 2400000,
+        "y2": 2400000,
+        "full": 2400000
+      },
+      "benefit_type": "monthly",
+      "pay_timing": "monthly_from_start",
+      "cashflow": {
+        "monthly_amount_won": 200000,
+        "months": 12,
+        "first_month": 1
+      },
+      "recruit_status": "open",
+      "reviewed": true,
+      "category": "housing"
+    },
+    {
+      "id": "P3",
+      "name": "virtual job-seeking grant",
+      "domain": "youth",
+      "age": {
+        "min": 19,
+        "max": 34,
+        "military_extension": true
+      },
+      "amounts_won": {
+        "y1": 3000000,
+        "y2": 3000000,
+        "full": 3000000
+      },
+      "benefit_type": "monthly",
+      "pay_timing": "monthly_from_start",
+      "cashflow": {
+        "monthly_amount_won": 500000,
+        "months": 6,
+        "first_month": 1
+      },
+      "recruit_status": "open",
+      "reviewed": true,
+      "category": "employment"
+    },
+    {
+      "id": "P6",
+      "name": "virtual youth jeonse interest support",
+      "domain": "youth",
+      "age": {
+        "min": 19,
+        "max": 39,
+        "military_extension": false
+      },
+      "amounts_won": {
+        "y1": 1500000,
+        "y2": 3000000,
+        "full": 3000000
+      },
+      "benefit_type": "interest",
+      "pay_timing": "yearly",
+      "cashflow": {
+        "annual_amount_won": 1500000,
+        "years": 2,
+        "months": [
+          12,
+          24
+        ]
+      },
+      "recruit_status": "open",
+      "reviewed": true,
+      "category": "housing"
+    }
+  ],
+  "conflicts": [
+    [
+      "P1",
+      "P6"
+    ]
+  ],
+  "periods": [
+    "y1",
+    "y2",
+    "full"
+  ],
+  "scenarios": [
+    {
+      "id": "A",
+      "description": "25yo job-seeking monthly-rent, no income: all three MVP policies eligible, period y1",
+      "period": "y1",
+      "eligible": [
+        "P1",
+        "P3",
+        "P6"
+      ],
+      "closed": [],
+      "expected": [
+        {
+          "rank": 1,
+          "members": [
+            "P1",
+            "P3"
+          ],
+          "total_won": 5400000
+        },
+        {
+          "rank": 2,
+          "members": [
+            "P3",
+            "P6"
+          ],
+          "total_won": 4500000
+        }
+      ]
+    },
+    {
+      "id": "A_2y",
+      "description": "Same as A, period y2: jeonse interest grows, rank one flips",
+      "period": "y2",
+      "eligible": [
+        "P1",
+        "P3",
+        "P6"
+      ],
+      "closed": [],
+      "expected": [
+        {
+          "rank": 1,
+          "members": [
+            "P3",
+            "P6"
+          ],
+          "total_won": 6000000
+        },
+        {
+          "rank": 2,
+          "members": [
+            "P1",
+            "P3"
+          ],
+          "total_won": 5400000
+        }
+      ]
+    },
+    {
+      "id": "B",
+      "description": "28yo employed jeonse, income 3000-5000man: only P6 eligible, single-combination list fallback",
+      "period": "y1",
+      "eligible": [
+        "P6"
+      ],
+      "closed": [],
+      "expected": [
+        {
+          "rank": 1,
+          "members": [
+            "P6"
+          ],
+          "total_won": 1500000
+        }
+      ]
+    },
+    {
+      "id": "C",
+      "description": "35yo veteran, service over 18 months up to 2 years, same eligible as A in y1",
+      "period": "y1",
+      "eligible": [
+        "P1",
+        "P3",
+        "P6"
+      ],
+      "closed": [],
+      "expected": [
+        {
+          "rank": 1,
+          "members": [
+            "P1",
+            "P3"
+          ],
+          "total_won": 5400000
+        },
+        {
+          "rank": 2,
+          "members": [
+            "P3",
+            "P6"
+          ],
+          "total_won": 4500000
+        }
+      ]
+    },
+    {
+      "id": "D",
+      "description": "30yo married job-seeking jeonse, no income: P3+P6 single combination",
+      "period": "y1",
+      "eligible": [
+        "P3",
+        "P6"
+      ],
+      "closed": [],
+      "expected": [
+        {
+          "rank": 1,
+          "members": [
+            "P3",
+            "P6"
+          ],
+          "total_won": 4500000
+        }
+      ]
+    },
+    {
+      "id": "E",
+      "description": "Same as A but P1 recruitment closed: P3+P6 single combination",
+      "period": "y1",
+      "eligible": [
+        "P3",
+        "P6"
+      ],
+      "closed": [
+        "P1"
+      ],
+      "expected": [
+        {
+          "rank": 1,
+          "members": [
+            "P3",
+            "P6"
+          ],
+          "total_won": 4500000
+        }
+      ]
+    },
+    {
+      "id": "F_before",
+      "description": "27yo employed monthly-rent before income rise: P1 vs P6 conflict, best P1 2400000",
+      "period": "y1",
+      "eligible": [
+        "P1",
+        "P6"
+      ],
+      "closed": [],
+      "expected": [
+        {
+          "rank": 1,
+          "members": [
+            "P1"
+          ],
+          "total_won": 2400000
+        },
+        {
+          "rank": 2,
+          "members": [
+            "P6"
+          ],
+          "total_won": 1500000
+        }
+      ]
+    },
+    {
+      "id": "F_after",
+      "description": "Same as F after income rise past P1 limit: P6 only 1500000",
+      "period": "y1",
+      "eligible": [
+        "P6"
+      ],
+      "closed": [],
+      "expected": [
+        {
+          "rank": 1,
+          "members": [
+            "P6"
+          ],
+          "total_won": 1500000
+        }
+      ]
+    },
+    {
+      "id": "G_before",
+      "description": "Same as A before employment: P1+P3 5400000",
+      "period": "y1",
+      "eligible": [
+        "P1",
+        "P3",
+        "P6"
+      ],
+      "closed": [],
+      "expected": [
+        {
+          "rank": 1,
+          "members": [
+            "P1",
+            "P3"
+          ],
+          "total_won": 5400000
+        },
+        {
+          "rank": 2,
+          "members": [
+            "P3",
+            "P6"
+          ],
+          "total_won": 4500000
+        }
+      ]
+    },
+    {
+      "id": "G_after",
+      "description": "After employment: P3 out, P1 vs P6 conflict, best P1 2400000",
+      "period": "y1",
+      "eligible": [
+        "P1",
+        "P6"
+      ],
+      "closed": [],
+      "expected": [
+        {
+          "rank": 1,
+          "members": [
+            "P1"
+          ],
+          "total_won": 2400000
+        },
+        {
+          "rank": 2,
+          "members": [
+            "P6"
+          ],
+          "total_won": 1500000
+        }
+      ]
+    }
+  ],
+  "income_change": {
+    "F": {
+      "from_won": 29000000,
+      "to_won": 31000000,
+      "before_won": 2400000,
+      "after_won": 1500000,
+      "lost_won": 900000,
+      "net_gain_won": 1100000,
+      "rate_percent": 45
+    },
+    "G": {
+      "from_won": 0,
+      "to_won": 24000000,
+      "before_won": 5400000,
+      "after_won": 2400000,
+      "lost_won": 3000000,
+      "rate_percent": 12.5
+    }
+  }
+}

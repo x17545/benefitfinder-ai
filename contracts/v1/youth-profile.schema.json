@@ -289,10 +289,7 @@
           "items": {
             "enum": [
               "housing",
-              "employment",
-              "living",
-              "asset",
-              "education"
+              "employment"
             ]
           }
         },
