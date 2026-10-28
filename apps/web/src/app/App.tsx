@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import type { JSX } from 'react';
+import { ConditionScreen } from '../features/profile/ConditionScreen.tsx';
 import { StartScreen } from '../features/profile/StartScreen.tsx';
 import { PlaceholderScreen } from './PlaceholderScreen.tsx';
 import { CONDITION_STEPS, parseRoute, paths, startLinkInterception } from './router.ts';
@@ -25,26 +26,8 @@ function renderRoute(route: Route): JSX.Element {
   switch (route.name) {
     case 'start':
       return <StartScreen />;
-    case 'conditions': {
-      const { step } = route;
-      const links: { label: string; to: string }[] = [];
-      if (step > 1) {
-        links.push({ label: '이전 단계', to: paths.conditions(step - 1) });
-      }
-      links.push(
-        step < CONDITION_STEPS
-          ? { label: '다음', to: paths.conditions(step + 1) }
-          : { label: '내 조합 찾기', to: paths.loading },
-      );
-      return (
-        <PlaceholderScreen
-          key={step}
-          screenId={`S2-${String(step)}`}
-          title={`조건 고르기 ${String(step)} / ${String(CONDITION_STEPS)}`}
-          links={links}
-        />
-      );
-    }
+    case 'conditions':
+      return <ConditionScreen key={route.step} step={route.step} />;
     case 'loading':
       return (
         <PlaceholderScreen

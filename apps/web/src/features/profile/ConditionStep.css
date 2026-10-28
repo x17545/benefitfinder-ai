@@ -1,0 +1,101 @@
+/* S2 조건 고르기 공통 틀 */
+.s2-progress {
+  margin-bottom: 4px;
+}
+
+.s2-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding-block: 26px 8px;
+  word-break: keep-all;
+}
+
+.s2-question {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.s2-desc {
+  margin: 0;
+  color: var(--color-muted);
+}
+
+/* 질문 안의 작은 질문 (예: 군 복무, 집 소유) */
+.s2-sub {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.s2-sub__title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.s2-sub__desc {
+  margin: 0;
+  font-size: var(--text-sub);
+  color: var(--color-muted);
+}
+
+/* 나이 입력칸 */
+.s2-number {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 480px;
+  height: 60px;
+  padding: 0 20px;
+  border: 2px solid var(--color-line);
+  border-radius: 16px;
+  background: var(--color-card);
+}
+
+.s2-number:focus-within {
+  border-color: var(--color-primary);
+}
+
+.s2-number input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.s2-number span {
+  font-size: 18px;
+  color: var(--color-muted);
+}
+
+/* 막지 않는 안내 (주황) */
+.s2-warn {
+  margin: -8px 0 0;
+  font-size: var(--text-sub);
+  color: var(--color-check);
+}
+
+/* 아래에 붙는 [다음] */
+.s2-bottom {
+  position: sticky;
+  bottom: 0;
+  padding-block: 14px 24px;
+  background: linear-gradient(to bottom, transparent, var(--color-bg) 28%);
+}
+
+@media (min-width: 768px) {
+  .s2-bottom {
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .s2-bottom .ui-button {
+    max-width: 360px;
+  }
+}
