@@ -17,6 +17,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from benefitfinder.api.schemas import ErrorCode, ErrorResponse
 from benefitfinder.api.v1.routers.health import router as health_router
+from benefitfinder.api.v1.routers.recommendations import router as recommendations_router
 
 NOT_FOUND_MESSAGE = "요청한 리소스를 찾을 수 없습니다."
 INVALID_REQUEST_MESSAGE = "요청 값이 올바르지 않습니다."
@@ -92,4 +93,5 @@ def create_app() -> FastAPI:
         )
 
     app.include_router(health_router)
+    app.include_router(recommendations_router)
     return app
