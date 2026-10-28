@@ -1,9 +1,11 @@
 import { useEffect } from 'react';
 import type { JSX } from 'react';
+import { LoadingScreen } from '../features/benefits/LoadingScreen.tsx';
+import { ResultScreen } from '../features/benefits/ResultScreen.tsx';
 import { ConditionScreen } from '../features/profile/ConditionScreen.tsx';
 import { StartScreen } from '../features/profile/StartScreen.tsx';
 import { PlaceholderScreen } from './PlaceholderScreen.tsx';
-import { CONDITION_STEPS, parseRoute, paths, startLinkInterception } from './router.ts';
+import { parseRoute, paths, startLinkInterception } from './router.ts';
 import type { Route } from './router.ts';
 import { usePathname } from './usePathname.ts';
 
@@ -29,25 +31,9 @@ function renderRoute(route: Route): JSX.Element {
     case 'conditions':
       return <ConditionScreen key={route.step} step={route.step} />;
     case 'loading':
-      return (
-        <PlaceholderScreen
-          screenId="L"
-          title="로딩"
-          showBack={false}
-          links={[{ label: '결과 보기', to: paths.result }]}
-        />
-      );
+      return <LoadingScreen />;
     case 'result':
-      return (
-        <PlaceholderScreen
-          screenId="S3 / S3-E"
-          title="내 지원금 조합"
-          links={[
-            { label: '조건 수정', to: paths.conditions(CONDITION_STEPS) },
-            { label: '상황이 바뀌면 어떻게 될까?', to: paths.whatIf },
-          ]}
-        />
-      );
+      return <ResultScreen />;
     case 'whatIf':
       return <PlaceholderScreen screenId="S4" title="상황이 바뀌면?" links={[]} />;
     case 'policy':

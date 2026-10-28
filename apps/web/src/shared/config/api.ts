@@ -15,3 +15,6 @@ export const API_PREFIX = '/api/v1';
 
 /** GET 선택지 목록 (지역·구간). contracts/v1 options.schema.json */
 export const OPTIONS_PATH = `${API_PREFIX}/options`;
+
+/** POST 추천 분석. contracts/v1 recommendation-request / response */
+export const RECOMMENDATIONS_PATH = `${API_PREFIX}/recommendations`;
