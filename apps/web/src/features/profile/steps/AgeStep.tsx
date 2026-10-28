@@ -1,11 +1,7 @@
 import type { JSX } from 'react';
-import {
-  AGE_NOTICE_MAX,
-  AGE_NOTICE_MIN,
-  MILITARY_CHOICES,
-  MILITARY_QUESTION_MIN_AGE,
-} from '../../../domains/youth/conditionOptions.ts';
+import { AGE_NOTICE_MAX, AGE_NOTICE_MIN, MILITARY_CHOICES } from '../../../domains/youth/conditionOptions.ts';
 import { ChoiceChip, ChoiceGroup } from '../../../shared/ui/ChoiceChip.tsx';
+import { needsMilitary } from '../answerRules.ts';
 import { ConditionStepLayout } from '../ConditionStepLayout.tsx';
 import { updateAnswers, useFlowState } from '../flowStore.ts';
 
@@ -13,7 +9,7 @@ import { updateAnswers, useFlowState } from '../flowStore.ts';
 export function AgeStep(): JSX.Element {
   const { age, military } = useFlowState().answers;
 
-  const showMilitary = age !== null && age >= MILITARY_QUESTION_MIN_AGE;
+  const showMilitary = needsMilitary(age);
   const outOfRange = age !== null && (age < AGE_NOTICE_MIN || age > AGE_NOTICE_MAX);
   const canNext = age !== null && (!showMilitary || military !== null);
 

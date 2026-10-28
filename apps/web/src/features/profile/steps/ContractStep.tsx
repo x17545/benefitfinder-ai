@@ -2,20 +2,17 @@ import type { JSX } from 'react';
 import { CONTRACT_CHOICES, DEPOSIT_CHOICES, RENT_CHOICES } from '../../../domains/youth/conditionOptions.ts';
 import type { ContractType } from '../../../domains/youth/conditionOptions.ts';
 import { ChoiceChip, ChoiceGroup } from '../../../shared/ui/ChoiceChip.tsx';
+import { needsDeposit, needsRent } from '../answerRules.ts';
 import { ConditionStepLayout } from '../ConditionStepLayout.tsx';
 import { updateAnswers, useFlowState } from '../flowStore.ts';
 import { ChipQuestion } from './ChipQuestion.tsx';
-
-function needsDeposit(type: ContractType | null): boolean {
-  return type === 'monthly_rent' || type === 'jeonse';
-}
 
 /** S2-7 집 계약. 월세·전세면 보증금, 월세면 월세 금액도 (보이는 것 모두 필수) */
 export function ContractStep(): JSX.Element {
   const { contractType, depositBand, rentBand } = useFlowState().answers;
 
   const showDeposit = needsDeposit(contractType);
-  const showRent = contractType === 'monthly_rent';
+  const showRent = needsRent(contractType);
   const canNext =
     contractType !== null && (!showDeposit || depositBand !== null) && (!showRent || rentBand !== null);
 
@@ -24,7 +21,7 @@ export function ContractStep(): JSX.Element {
     updateAnswers({
       contractType: type,
       depositBand: needsDeposit(type) ? depositBand : null,
-      rentBand: type === 'monthly_rent' ? rentBand : null,
+      rentBand: needsRent(type) ? rentBand : null,
     });
   }
 

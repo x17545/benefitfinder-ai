@@ -3,15 +3,20 @@ import type { JSX } from 'react';
 import { navigate, paths } from '../../app/router.ts';
 import {
   EMPLOYMENT_CHOICES,
+  INTEREST_CHOICES,
   MARITAL_CHOICES,
+  RECEIVED_CHOICES,
   SCHOOL_CHOICES,
+  SPECIAL_CHOICES,
 } from '../../domains/youth/conditionOptions.ts';
-import { ConditionStepLayout } from './ConditionStepLayout.tsx';
 import { updateAnswers, useFlowState } from './flowStore.ts';
 import { AgeStep } from './steps/AgeStep.tsx';
+import { ConfirmStep } from './steps/ConfirmStep.tsx';
 import { ContractStep } from './steps/ContractStep.tsx';
 import { HousingStep } from './steps/HousingStep.tsx';
 import { IncomeStep } from './steps/IncomeStep.tsx';
+import { MultiChoiceStep } from './steps/MultiChoiceStep.tsx';
+import { ParentsStep } from './steps/ParentsStep.tsx';
 import { RegionStep } from './steps/RegionStep.tsx';
 import { SingleChoiceStep } from './steps/SingleChoiceStep.tsx';
 
@@ -86,12 +91,63 @@ export function ConditionScreen({ step }: ConditionScreenProps): JSX.Element {
       return <ContractStep />;
     case 8:
       return <IncomeStep />;
-    default:
-      // 아직 만들지 않은 단계 (5단계 다음 묶음에서 만든다)
+    case 9:
       return (
-        <ConditionStepLayout step={step} title="이 단계는 다음 묶음에서 만들어요" canNext>
-          <p className="s2-desc">개발 중인 자리예요. [다음]으로 넘어갈 수 있어요.</p>
-        </ConditionStepLayout>
+        <MultiChoiceStep
+          step={9}
+          title="해당하는 게 있나요?"
+          description="이런 분만 받을 수 있는 정책이 따로 있어요. 여러 개 고를 수 있어요"
+          label="해당 조건"
+          choices={SPECIAL_CHOICES}
+          values={answers.special}
+          noneValue="none"
+          onChange={(values) => {
+            updateAnswers({ special: values });
+          }}
+        >
+          <p className="s2-private">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <rect x="5" y="11" width="14" height="10" rx="2" />
+              <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+            </svg>
+            이 정보는 자격 계산에만 써요. 서버에 저장하지 않아요
+          </p>
+        </MultiChoiceStep>
       );
+    case 10:
+      return (
+        <MultiChoiceStep
+          step={10}
+          title="어떤 지원에 관심이 있나요?"
+          description="여러 개를 고를 수 있어요. 초기에는 취업·주거 혜택을 다뤄요"
+          label="관심 지원"
+          choices={INTEREST_CHOICES}
+          values={answers.interests}
+          onChange={(values) => {
+            updateAnswers({ interests: values });
+          }}
+        />
+      );
+    case 11:
+      return (
+        <MultiChoiceStep
+          step={11}
+          title="이미 받고 있거나 받았던 게 있나요?"
+          description="한 번만 받을 수 있거나 함께 가입할 수 없는 정책은 조합에서 빼요"
+          label="받았던 지원"
+          choices={RECEIVED_CHOICES}
+          values={answers.received}
+          noneValue="none"
+          onChange={(values) => {
+            updateAnswers({ received: values });
+          }}
+        />
+      );
+    case 12:
+      return <ParentsStep />;
+    case 13:
+      return <ConfirmStep />;
+    default:
+      return <></>;
   }
 }
