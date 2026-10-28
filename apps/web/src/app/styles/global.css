@@ -1,14 +1,42 @@
-:root {
-  color-scheme: light;
-  font-family: system-ui, -apple-system, sans-serif;
+
+/* 모든 화면 공통 기본값 */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
 }
 
 body {
   margin: 0;
-  background: #f6f7f9;
-  color: #1a1d21;
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
 }
 
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+/* 키보드로 이동할 때 보이는 테두리 */
+:focus-visible {
+  outline: 3px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* 화면 폭 상자: 휴대폰은 꽉 차게, 큰 모니터는 내용 1400px까지 */
+.page-width {
+  width: 100%;
+  max-width: calc(var(--content-max) + var(--gutter) * 2);
+  margin: 0 auto;
+  padding-inline: var(--gutter);
+}
+
+/* ---- 개발 시작 화면용 (3단계에서 지움) ---- */
 .page {
   max-width: 640px;
   margin: 0 auto;
@@ -16,26 +44,13 @@ body {
 }
 
 .card {
-  background: #ffffff;
-  border: 1px solid #dfe3e8;
-  border-radius: 8px;
+  background: var(--color-card);
+  border-radius: var(--radius-card);
   padding: 16px;
   margin-top: 16px;
 }
 
 .hint {
-  color: #5b6470;
-  font-size: 0.9rem;
-}
-
-button {
-  padding: 8px 14px;
-  font-size: 1rem;
-  cursor: pointer;
-}
-
-code {
-  background: #eef0f3;
-  padding: 1px 6px;
-  border-radius: 4px;
+  color: var(--color-muted);
+  font-size: var(--text-sub);
 }
