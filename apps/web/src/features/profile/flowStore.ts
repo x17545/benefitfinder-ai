@@ -27,6 +27,8 @@ export interface ConditionAnswers {
   military: MilitaryChoice | null;
   sidoCode: string | null;
   regionCode: string | null;
+  /** 확인 화면에 보여 줄 지역 이름. 예: 경기도 수원시 */
+  regionLabel: string | null;
   employmentStatus: EmploymentStatus | null;
   school: School | null;
   marital: Marital | null;
@@ -53,6 +55,7 @@ export const EMPTY_ANSWERS: ConditionAnswers = {
   military: null,
   sidoCode: null,
   regionCode: null,
+  regionLabel: null,
   employmentStatus: null,
   school: null,
   marital: null,

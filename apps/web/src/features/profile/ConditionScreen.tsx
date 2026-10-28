@@ -9,6 +9,10 @@ import {
 import { ConditionStepLayout } from './ConditionStepLayout.tsx';
 import { updateAnswers, useFlowState } from './flowStore.ts';
 import { AgeStep } from './steps/AgeStep.tsx';
+import { ContractStep } from './steps/ContractStep.tsx';
+import { HousingStep } from './steps/HousingStep.tsx';
+import { IncomeStep } from './steps/IncomeStep.tsx';
+import { RegionStep } from './steps/RegionStep.tsx';
 import { SingleChoiceStep } from './steps/SingleChoiceStep.tsx';
 
 interface ConditionScreenProps {
@@ -33,6 +37,8 @@ export function ConditionScreen({ step }: ConditionScreenProps): JSX.Element {
   switch (step) {
     case 1:
       return <AgeStep />;
+    case 2:
+      return <RegionStep />;
     case 3:
       return (
         <SingleChoiceStep
@@ -74,6 +80,12 @@ export function ConditionScreen({ step }: ConditionScreenProps): JSX.Element {
           }}
         />
       );
+    case 6:
+      return <HousingStep />;
+    case 7:
+      return <ContractStep />;
+    case 8:
+      return <IncomeStep />;
     default:
       // 아직 만들지 않은 단계 (5단계 다음 묶음에서 만든다)
       return (

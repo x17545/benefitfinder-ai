@@ -99,3 +99,63 @@
     max-width: 360px;
   }
 }
+
+/* 2단계 지역: 드롭다운 2개 */
+.s2-fields {
+  display: grid;
+  gap: 14px;
+  max-width: 720px;
+}
+
+.s2-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.s2-field__label {
+  font-size: var(--text-sub);
+  font-weight: 700;
+  color: var(--color-muted);
+}
+
+.s2-select {
+  height: 56px;
+  padding: 0 44px 0 18px;
+  border: 2px solid var(--color-line);
+  border-radius: 14px;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%233e4e70' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")
+      no-repeat right 16px center,
+    var(--color-card);
+  font-size: 16px;
+  appearance: none;
+  cursor: pointer;
+}
+
+.s2-select:focus {
+  border-color: var(--color-primary);
+  outline: none;
+}
+
+.s2-select:disabled {
+  color: var(--color-muted);
+  cursor: not-allowed;
+}
+
+@media (min-width: 768px) {
+  .s2-fields {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* 개발 중에만 보이는 안내 */
+.s2-dev-note {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--color-check-soft);
+  color: var(--color-check);
+  font-size: var(--text-sub);
+}
