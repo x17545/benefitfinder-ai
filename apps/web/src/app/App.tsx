@@ -3,7 +3,9 @@ import type { JSX } from 'react';
 import { LoadingScreen } from '../features/benefits/LoadingScreen.tsx';
 import { ResultScreen } from '../features/benefits/ResultScreen.tsx';
 import { ConditionScreen } from '../features/profile/ConditionScreen.tsx';
+import { loadSavedConditions } from '../features/profile/savedConditions.ts';
 import { StartScreen } from '../features/profile/StartScreen.tsx';
+import { ToastHost } from '../shared/ui/Toast.tsx';
 import { PlaceholderScreen } from './PlaceholderScreen.tsx';
 import { parseRoute, paths, startLinkInterception } from './router.ts';
 import type { Route } from './router.ts';
@@ -16,12 +18,22 @@ export function App(): JSX.Element {
   // 같은 사이트 링크는 새로 고침 없이 이동
   useEffect(() => startLinkInterception(), []);
 
+  // 접속할 때 30일 지난 기억하기 저장값을 지운다 (F09-3)
+  useEffect(() => {
+    loadSavedConditions();
+  }, []);
+
   // 화면이 바뀌면 맨 위로 (기획서 4.1)
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [pathname]);
 
-  return renderRoute(route);
+  return (
+    <>
+      {renderRoute(route)}
+      <ToastHost />
+    </>
+  );
 }
 
 function renderRoute(route: Route): JSX.Element {

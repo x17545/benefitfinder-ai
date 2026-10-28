@@ -1,4 +1,5 @@
 import type { JSX } from 'react';
+import { clearMyData } from '../features/profile/clearMyData.ts';
 import { SiteFooter } from '../shared/ui/SiteFooter.tsx';
 import { TopBar } from '../shared/ui/TopBar.tsx';
 
@@ -49,7 +50,7 @@ export function PlaceholderScreen({
           ))}
         </nav>
       </main>
-      <SiteFooter />
+      <SiteFooter onClearData={clearMyData} />
     </div>
   );
 }

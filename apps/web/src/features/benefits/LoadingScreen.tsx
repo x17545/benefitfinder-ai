@@ -4,6 +4,7 @@ import { navigate, paths } from '../../app/router.ts';
 import { Button } from '../../shared/ui/Button.tsx';
 import { missingSteps } from '../profile/answerRules.ts';
 import { getFlowState } from '../profile/flowStore.ts';
+import { removeSavedConditions, saveConditions } from '../profile/savedConditions.ts';
 import { toRecommendationRequest } from '../profile/toRequest.ts';
 import {
   cancelAnalysis,
@@ -15,7 +16,15 @@ import {
 import './LoadingScreen.css';
 
 function start(): void {
-  startAnalysis(toRecommendationRequest(getFlowState().answers));
+  const { answers, remember } = getFlowState();
+  const request = toRecommendationRequest(answers);
+  // 기억하기를 켰을 때만 분석을 시작하는 순간 저장한다. 끄면 남아 있던 것도 지운다 (F09)
+  if (remember) {
+    saveConditions(request.profile);
+  } else {
+    removeSavedConditions();
+  }
+  startAnalysis(request);
 }
 
 /** L 로딩 (기획서 4.4). 상단 바와 뒤로 버튼이 없다 */

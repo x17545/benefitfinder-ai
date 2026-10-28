@@ -158,3 +158,32 @@
 .s1-consent {
   word-break: keep-all;
 }
+
+/* 지난 조건 카드 (저장된 조건이 있을 때만) */
+.s1-saved {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+  word-break: keep-all;
+}
+
+.s1-saved__title {
+  margin: 0;
+  font-size: var(--text-sub);
+  font-weight: 700;
+  color: var(--color-accent-ink);
+}
+
+.s1-saved__summary {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.s1-saved__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}

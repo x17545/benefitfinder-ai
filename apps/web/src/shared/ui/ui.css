@@ -214,3 +214,26 @@
     justify-content: space-between;
   }
 }
+
+/* 토스트: 화면 아래 가운데 */
+.ui-toast-host {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  z-index: 20;
+  display: flex;
+  justify-content: center;
+  padding-inline: var(--gutter);
+  pointer-events: none;
+}
+
+.ui-toast {
+  max-width: 480px;
+  padding: 12px 18px;
+  border-radius: 14px;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-size: 14px;
+  font-weight: 600;
+}

@@ -1,13 +1,30 @@
+import { useEffect, useState } from 'react';
 import type { JSX } from 'react';
 import { navigate, paths } from '../../app/router.ts';
 import { Button } from '../../shared/ui/Button.tsx';
 import { SiteFooter } from '../../shared/ui/SiteFooter.tsx';
+import { clearMyData } from './clearMyData.ts';
 import { updateFlowState, useFlowState } from './flowStore.ts';
+import { SavedConditionsCard } from './SavedConditionsCard.tsx';
+import { loadSavedConditions } from './savedConditions.ts';
 import './StartScreen.css';
 
 /** S1 시작 (기획서 4.2, 문구 S1-01 ~ S1-BTN) */
 export function StartScreen(): JSX.Element {
   const { consent, remember } = useFlowState();
+  const [saved, setSaved] = useState(() => loadSavedConditions());
+
+  // 기억해 둔 조건이 있으면 기억하기를 켠 채로 보여 준다
+  useEffect(() => {
+    if (saved !== null) {
+      updateFlowState({ remember: true });
+    }
+  }, [saved]);
+
+  function clear(): void {
+    clearMyData();
+    setSaved(null);
+  }
 
   return (
     <div className="page-width screen">
@@ -21,6 +38,8 @@ export function StartScreen(): JSX.Element {
       </header>
 
       <main className="screen__body" style={{ gap: 0 }}>
+        {saved !== null ? <SavedConditionsCard saved={saved} onClear={clear} /> : null}
+
         <section className="s1-intro">
           <h1 className="s1-intro__title">받을 수 있는 지원금, 가장 이득인 조합으로 찾아 드려요</h1>
           <p className="s1-intro__desc">함께 받을 수 없는 정책은 빼고, 총액이 가장 큰 조합을 계산해요.</p>
@@ -101,7 +120,7 @@ export function StartScreen(): JSX.Element {
         </div>
       </main>
 
-      <SiteFooter />
+      <SiteFooter onClearData={clear} />
     </div>
   );
 }

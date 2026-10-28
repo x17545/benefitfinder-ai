@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import type { JSX } from 'react';
 import { navigate, paths, CONDITION_STEPS } from '../../app/router.ts';
 import { SiteFooter } from '../../shared/ui/SiteFooter.tsx';
+import { clearMyData } from '../profile/clearMyData.ts';
 import { TopBar } from '../../shared/ui/TopBar.tsx';
 import { useAnalysis } from './analysisStore.ts';
 
@@ -44,7 +45,7 @@ export function ResultScreen(): JSX.Element {
           표시 방식 {result.view} · 1년 기준 조합 {view.portfolios.length}개. 7단계에서 이 결과로 화면을 만들어요.
         </p>
       </main>
-      <SiteFooter />
+      <SiteFooter onClearData={clearMyData} />
     </div>
   );
 }
