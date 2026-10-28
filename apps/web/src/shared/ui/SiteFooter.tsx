@@ -10,7 +10,7 @@ export function SiteFooter({ onClearData }: SiteFooterProps): JSX.Element {
   return (
     <footer className="ui-footer">
       <div className="ui-footer__links">
-        <a className="ui-footer__link" href="/guide">
+        <a className="ui-footer__link" href="/about">
           이용 안내
         </a>
         <a className="ui-footer__link" href="/privacy">
