@@ -30,7 +30,7 @@
 
 ## 구현과 협업
 
-- 2026-10-28 역할 기준: 양승현은 조장·PM·자동화, 이현서는 기획·프론트엔드, 김하정은 백엔드(API·DB 연동으로 자동화 협업), 탁서윤은 Agent를 활용한 수집 데이터 분석·정제·평가, 윤정찬은 데이터 수집·정제다. 서윤의 역할 이동은 AI 업무 폐기가 아니라 원문 분석·규칙 추출에 집중한다는 뜻이다. 상세 인계는 `docs/product/REQUIREMENTS.md` 9장을 따른다. 정찬·서윤은 ingestion을 파일별로 나누고 ai의 추출 전략·평가는 서윤이 맡는다.
+- 2026-10-29 역할 기준: 양승현(조장)은 통합·배포/백엔드, 이현서는 기획/화면 설계, 김하정은 디자인/프론트엔드, 윤정찬은 원천 데이터 수집·원본 관리/PostgreSQL 적재, 탁서윤은 데이터 정제·AI Agent 분석·중복 수혜 규칙 추출/자동화를 맡는다. 상세 담당·인계의 원본은 `docs/product/REQUIREMENTS.md` 9장이다. `ingestion`은 정찬의 수집과 서윤의 정제로 파일별 분담하고, `ai`·`jobs`는 서윤이 맡는다. DB 적재와 백엔드 조회가 공유하는 저장 모델·마이그레이션은 정찬·승현이 함께 검토한다. 현서는 흐름·화면 구조·프로토타입을, 하정은 UI 디자인·React 구현·API 연결을 담당한다.
 
 - 합의한 프레임워크·DB를 유지한다. 임의로 Next.js·Django·다른 DB로 교체하거나 별도 AI 서버를 만들지 않는다. ORM·LLM 공급자·벡터 검색·배포 등 아직 선택하지 않은 요소는 기존 결정과 구분해 필요한 시점에 정한다.
 - 프론트엔드는 TypeScript strict·Node.js 24·pnpm 11.25.0을 사용한다. Python은 3.12·uv(0.9.5 이상)를 사용하고 루트 `pyproject.toml`과 단일 `.venv`로 관리한다. 의존성 설치는 루트에서 `uv sync --locked`와 `pnpm install --frozen-lockfile`, 실행은 `pnpm dev`다. `pip`, `npm`, `npx`, yarn, Poetry로 설치·실행하지 않는다. Python 추가는 `uv add`/`uv add --dev`, 웹 추가는 `pnpm --filter @benefitfinder/web add`/`add -D`, 도구 실행은 `uv run`/`pnpm exec`를 사용한다. `uv.lock`·`pnpm-lock.yaml`은 직접 편집·삭제하지 않고 선언 파일과 함께 커밋한다. 설치 안내는 `docs/development/GETTING_STARTED.md`를 따른다. `VITE_*`는 브라우저에 공개되는 값이므로 DB 연결 문자열·비밀 키를 넣지 않는다. DB·LLM 접근은 백엔드가 담당한다.
