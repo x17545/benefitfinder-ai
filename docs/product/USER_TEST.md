@@ -1,7 +1,7 @@
 # 사용자 테스트 진행안과 설문
 
-> 목적: REQUIREMENTS_v2.md 8.6 성공 기준 중 이해도와 만족도, 입력 시간을 확인하고, 고칠 곳을 찾는다.
-> 현행 기준: [REQUIREMENTS_v2.md](../REQUIREMENTS_v2.md) v2.5 (취업·주거 MVP·데이터 Agent와 코드 계산 구분), 현행 기획 [PROJECT_PLAN.md](PROJECT_PLAN.md)
+> 목적: docs/product/REQUIREMENTS.md 8.6 성공 기준 중 이해도와 만족도, 입력 시간을 확인하고, 고칠 곳을 찾는다.
+> 현행 기준: [docs/product/REQUIREMENTS.md](REQUIREMENTS.md) v2.5 (취업·주거 MVP·데이터 Agent와 코드 계산 구분), 기획 개요 [OVERVIEW.md](OVERVIEW.md)
 > 취업·주거 혜택에 F01~F11과 13단계를 적용해 평가한다. 다른 분류는 확장 대상으로 분리하고 MVP 실패로 세지 않는다.
 
 ## 1. 진행 방법
@@ -102,7 +102,7 @@
 
 ## 4. 결과 정리 양식
 
-| 지표 (REQUIREMENTS_v2.md 8.6) | 목표 | 결과 | 통과 |
+| 지표 (docs/product/REQUIREMENTS.md 8.6) | 목표 | 결과 | 통과 |
 |---|---|---|---|
 | 이해도: 설문 1번 그렇다 이상 비율 | 80퍼센트 이상 | | |
 | 만족도: 설문 11번 평균 | 4점 이상 | | |
@@ -120,6 +120,6 @@
 | | | | | |
 
 - 3명 이상이 같은 곳에서 막히면 반드시 고친다.
-- 결과는 이 문서 아래에 날짜와 함께 붙이고, REQUIREMENTS_v2.md 11.5 변경 이력에 반영한다.
+- 결과는 이 문서 아래에 날짜와 함께 붙이고, docs/product/REQUIREMENTS.md 11.5 변경 이력에 반영한다.
 
 변경 기록: 2026-10-27 추가 회의에 따라 취업·주거 MVP 평가로 정렬. F01~F11과 13단계 평가는 유지하고 다른 분류는 확장 대상으로 구분.

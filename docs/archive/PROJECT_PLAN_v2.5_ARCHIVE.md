@@ -1,10 +1,12 @@
+> 과거 기록: 문서 정리 전 기획서 v2.5 전체 본문이다. 구현 기준으로 사용하지 않는다. 현행 기준은 [문서 지도](../README.md)에서 확인한다. 아래 본문의 경로·구현 상태·결정 문구는 당시 기록이며, Markdown 링크만 이동 후 위치에 맞췄다.
+
 # AI 혜택 코치 (BenefitFinder AI)
 ## 프로젝트 기획서 (PR1 현행)
 
 - 문서 상태: 현행 기획 (2026-10-28 데이터 Agent 역할 보충 설명 반영)
 - 기획 원본 작성자: 이현서 / 채택 근거: 2026-10-27 사용자의 v2 기획 유지 요청
-- 현행 요구 기준: [REQUIREMENTS_v2.md](../REQUIREMENTS_v2.md) v2.5 (데이터 Agent의 중복 제한·예외 규칙 추출과 코드 계산 구분)
-- 아키텍처와 협업 규칙: 기존 PR2(main) 기준을 유지한다. 기술 결정은 [ARCHITECTURE.md](ARCHITECTURE.md), 작업 절차는 [CONTRIBUTING.md](CONTRIBUTING.md)와 [GIT_WORKFLOW.md](GIT_WORKFLOW.md)를 따른다.
+- 현행 요구 기준: [REQUIREMENTS_v2.md](../product/REQUIREMENTS.md) v2.5 (데이터 Agent의 중복 제한·예외 규칙 추출과 코드 계산 구분)
+- 아키텍처와 협업 규칙: 기존 PR2(main) 기준을 유지한다. 기술 결정은 [ARCHITECTURE.md](../architecture/ARCHITECTURE.md), 작업 절차는 [CONTRIBUTING.md](../../CONTRIBUTING.md)와 [GIT_WORKFLOW.md](../development/GIT_WORKFLOW.md)를 따른다.
 - 기록 보존: 2026-10-27 이전 기획서 원문은 [PROJECT_PLAN_v1.1_ARCHIVE.md](PROJECT_PLAN_v1.1_ARCHIVE.md)에, 이전 요구명세 원문은 [REQUIREMENTS_v1_ARCHIVE.md](REQUIREMENTS_v1_ARCHIVE.md)에 그대로 둔다. 아카이브는 현행 결정이 아니다.
 
 이 문서의 역할은 배경과 목표, 대상과 범위, 팀과 일정, 운영 원칙을 현행 기준으로 정리하는 것이다. 화면과 데이터 형식, 기능별 처리 규칙의 상세 기준은 REQUIREMENTS_v2.md에 두고 이 문서에서 반복하지 않는다.
@@ -191,13 +193,13 @@ AI 혜택 코치는 사용자가 13단계 선택 입력으로 자신의 조건�
 
 ### 4.6 분야 확장 계획
 
-첫 MVP 이후 생활·자산형성·교육·장학 등 다른 청년 분류를 먼저 추가할 수 있고, 다른 대상의 혜택으로도 넓힌다(scale up). 취업·주거는 `youth` 내 정책 분류로 관리하며 별도 앱이나 최상위 domain으로 분리하지 않는다. 확장 시 공통 혜택 처리와 분야별 조건의 경계를 유지하고, 아키텍처의 분야 추가 방식을 따른다. 상세는 [ARCHITECTURE.md](ARCHITECTURE.md)를 본다.
+첫 MVP 이후 생활·자산형성·교육·장학 등 다른 청년 분류를 먼저 추가할 수 있고, 다른 대상의 혜택으로도 넓힌다(scale up). 취업·주거는 `youth` 내 정책 분류로 관리하며 별도 앱이나 최상위 domain으로 분리하지 않는다. 확장 시 공통 혜택 처리와 분야별 조건의 경계를 유지하고, 아키텍처의 분야 추가 방식을 따른다. 상세는 [ARCHITECTURE.md](../architecture/ARCHITECTURE.md)를 본다.
 
 ---
 
 ## 5. 기능 범위 F01부터 F11
 
-F01부터 F11까지를 취업·주거 혜택에 적용한다. 기능 목록과 13단계는 유지하고, 다루는 정책 분류를 두 개로 좁힌다. 기능별 처리 규칙과 완료 기준의 상세는 [REQUIREMENTS_v2.md](../REQUIREMENTS_v2.md) 5장을 본다.
+F01부터 F11까지를 취업·주거 혜택에 적용한다. 기능 목록과 13단계는 유지하고, 다루는 정책 분류를 두 개로 좁힌다. 기능별 처리 규칙과 완료 기준의 상세는 [REQUIREMENTS_v2.md](../product/REQUIREMENTS.md) 5장을 본다.
 
 | ID | 기능명 | 요약 |
 |---|---|---|
@@ -288,7 +290,7 @@ F01부터 F11까지를 취업·주거 혜택에 적용한다. 기능 목록과 1
 
 ### 7.1 데이터 분석·정제와 요청 처리
 
-윤정찬이 공식 API와 연결된 공고·지침·FAQ·출처·버전을 수집하고, 탁서윤은 Agent를 통한 원문 분석·규칙 후보 추출·정제·평가를 맡는다. 적용 정책·조건·예외·방향·시점·금액 영향과 근거를 보존하고 검증·사람 검수 후 버전별로 게시한다. API 필드 누락을 동시 수급 허용으로 해석하지 않으며, 불명확·상충·코드 미지원 조건은 검수 대기와 확인 필요로 남긴다. 상세는 [정책 데이터 분석·정제 설계](POLICY_DATA_PIPELINE.md)를 따른다.
+윤정찬이 공식 API와 연결된 공고·지침·FAQ·출처·버전을 수집하고, 탁서윤은 Agent를 통한 원문 분석·규칙 후보 추출·정제·평가를 맡는다. 적용 정책·조건·예외·방향·시점·금액 영향과 근거를 보존하고 검증·사람 검수 후 버전별로 게시한다. API 필드 누락을 동시 수급 허용으로 해석하지 않으며, 불명확·상충·코드 미지원 조건은 검수 대기와 확인 필요로 남긴다. 상세는 [정책 데이터 분석·정제 설계](../architecture/POLICY_DATA_PIPELINE.md)를 따른다.
 
 ### 7.2 정책 검색과 근거 조회
 
@@ -348,7 +350,7 @@ MVP는 취업·주거 분류와 나이·지역 등 구조화된 필드로 후보
 
 ### 8.2 확정 기술 스택과 추가 선택 사항
 
-2026-10-27에 React와 TypeScript, Vite, Python과 FastAPI, PostgreSQL 조합을 확정했다. 상세 결정은 [ARCHITECTURE.md](ARCHITECTURE.md) 9장을 기준으로 한다.
+2026-10-27에 React와 TypeScript, Vite, Python과 FastAPI, PostgreSQL 조합을 확정했다. 상세 결정은 [ARCHITECTURE.md](../architecture/ARCHITECTURE.md) 9장을 기준으로 한다.
 
 | 영역 | 선택 | 상태 |
 |---|---|---|
@@ -363,7 +365,7 @@ MVP는 취업·주거 분류와 나이·지역 등 구조화된 필드로 후보
 
 ### 8.3 주요 API와 데이터 형식
 
-API와 데이터 형식의 상세는 [REQUIREMENTS_v2.md](../REQUIREMENTS_v2.md) 6장을 기준으로 하되, 필드 이름과 자료형, 11.2의 임시 기본값은 다음 회의 확정 대상이다. 조건부·기간별·이력·차감 규칙은 현재 단순 금지 쌍 계약에 손실 변환하지 않고 표현·지원 범위를 검토한다. 현재 정렬 상태는 개발 초안 기준이며 기획자 최종 승인으로 쓰지 않는다.
+API와 데이터 형식의 상세는 [REQUIREMENTS_v2.md](../product/REQUIREMENTS.md) 6장을 기준으로 하되, 필드 이름과 자료형, 11.2의 임시 기본값은 다음 회의 확정 대상이다. 조건부·기간별·이력·차감 규칙은 현재 단순 금지 쌍 계약에 손실 변환하지 않고 표현·지원 범위를 검토한다. 현재 정렬 상태는 개발 초안 기준이며 기획자 최종 승인으로 쓰지 않는다.
 
 - 메타와 선택지 조회, 분석 시작(SSE), 상황 변화 계산, 정책 상세 조회
 - 분석 진행 상황은 서버가 전송하는 진행 이벤트로 화면에 표시한다.
@@ -397,7 +399,7 @@ API와 데이터 형식의 상세는 [REQUIREMENTS_v2.md](../REQUIREMENTS_v2.md)
 | 탁서윤 | 수집 데이터 분석·정제 | ingestion의 분석·정제·검수와 ai의 원문 분석 Agent·중복 제한/예외 규칙 추출·평가 (윤정찬과 파일별 분담) |
 | 윤정찬 | 데이터 수집, 정제 | 원천 수집·출처/원본 관리 주축, 공식 정책 데이터 수집과 정제, 자격 조건과 출처 관리, 검수와 코드표 |
 
-역할별 주 작업 경계와 공통 영역 변경 절차는 [CONTRIBUTING.md](CONTRIBUTING.md)를 따른다. 계약과 공통 모델, 분야별 조건은 관련 담당자가 함께 검토한다. 데이터 업무는 윤정찬과 탁서윤이 공유하며, Issue에서 파일별 작업을 나눠 같은 파일 동시 수정을 피한다. 서윤의 데이터 Agent 산출물은 검수된 규칙·근거·버전과 평가 자료로 하정에게 인계하며, 승현은 수집·분석·정제 실행과 실패·재검수 알림을 연결한다.
+역할별 주 작업 경계와 공통 영역 변경 절차는 [CONTRIBUTING.md](../../CONTRIBUTING.md)를 따른다. 계약과 공통 모델, 분야별 조건은 관련 담당자가 함께 검토한다. 데이터 업무는 윤정찬과 탁서윤이 공유하며, Issue에서 파일별 작업을 나눠 같은 파일 동시 수정을 피한다. 서윤의 데이터 Agent 산출물은 검수된 규칙·근거·버전과 평가 자료로 하정에게 인계하며, 승현은 수집·분석·정제 실행과 실패·재검수 알림을 연결한다.
 
 ### 9.3 GitHub 협업 방식
 
@@ -409,7 +411,7 @@ API와 데이터 형식의 상세는 [REQUIREMENTS_v2.md](../REQUIREMENTS_v2.md)
 - main 브랜치는 배포 가능한 상태를 유지한다.
 - 주요 결정과 변경사항을 문서에 기록한다.
 
-허용 브랜치 접두어는 feat, fix, docs, refactor, test, chore, ci다. main에서의 직접 작업을 금지한다. PR 전에는 작업 브랜치에서 최신 origin main을 머지하고, 충돌 해결과 검증을 마친다. 상태별 명령과 완료 기준은 [GIT_WORKFLOW.md](GIT_WORKFLOW.md)를 따른다.
+허용 브랜치 접두어는 feat, fix, docs, refactor, test, chore, ci다. main에서의 직접 작업을 금지한다. PR 전에는 작업 브랜치에서 최신 origin main을 머지하고, 충돌 해결과 검증을 마친다. 상태별 명령과 완료 기준은 [GIT_WORKFLOW.md](../development/GIT_WORKFLOW.md)를 따른다.
 
 ### 9.4 개발 일정
 
@@ -430,7 +432,7 @@ API와 데이터 형식의 상세는 [REQUIREMENTS_v2.md](../REQUIREMENTS_v2.md)
 
 ### 9.5 사용자 테스트 계획
 
-실제 타깃 사용자 5명 이상을 대상으로 서비스를 테스트한다. 전체 기능 F01부터 F11 중에서 사용자 화면에 보이는 흐름을 계속 평가하며 뒤로 미루지 않는다. 관찰 기록에는 사용자의 실제 조건을 남기지 않는다. 진행 방법과 기록표, 설문은 [USER_TEST.md](USER_TEST.md)를 본다.
+실제 타깃 사용자 5명 이상을 대상으로 서비스를 테스트한다. 전체 기능 F01부터 F11 중에서 사용자 화면에 보이는 흐름을 계속 평가하며 뒤로 미루지 않는다. 관찰 기록에는 사용자의 실제 조건을 남기지 않는다. 진행 방법과 기록표, 설문은 [USER_TEST.md](../product/USER_TEST.md)를 본다.
 
 ### 9.6 팀 운영 원칙
 
@@ -471,7 +473,7 @@ API와 데이터 형식의 상세는 [REQUIREMENTS_v2.md](../REQUIREMENTS_v2.md)
 ### 10.3 최종 제출물
 
 1. 프로젝트 기획서: docs/PROJECT_PLAN.md
-2. 기능 요구 명세서 진입점: docs/REQUIREMENTS.md와 현행 상세 [REQUIREMENTS_v2.md](../REQUIREMENTS_v2.md)
+2. 기능 요구 명세서 진입점: docs/REQUIREMENTS.md와 현행 상세 [REQUIREMENTS_v2.md](../product/REQUIREMENTS.md)
 3. 서비스 배포 URL과 평가자 테스트 방법: README에 배포 URL과 테스트 절차 안내
 4. GitHub 저장소 URL: 최종 제출 시 저장소 주소 제공
 5. 사용자 피드백 기록: docs/USER_TEST.md 아래 결과 정리

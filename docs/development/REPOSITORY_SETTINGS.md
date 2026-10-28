@@ -4,13 +4,13 @@
 
 | 파일 | 역할 |
 |---|---|
-| `AGENTS.md` | Codex 등 지원 에이전트의 공용 진입 지침 |
-| `apps/web/AGENTS.md`, `backend/AGENTS.md` | 프론트엔드·백엔드 추가 지침 |
-| AI·수집·계약 디렉터리의 `AGENTS.md` | 작업 영역별 추가 지침 |
-| `CLAUDE.md` | `@AGENTS.md`로 공용 원본을 불러오는 Claude Code 진입점 |
-| `.cursor/rules/project.mdc` | 항상 적용되는 Cursor 진입 규칙 |
+| [AGENTS.md](../../AGENTS.md) | Codex 등 지원 에이전트의 공용 진입 지침 |
+| [웹 지침](../../apps/web/AGENTS.md), [백엔드 지침](../../backend/AGENTS.md) | 프론트엔드·백엔드 추가 지침 |
+| [AI](../../backend/src/benefitfinder/ai/AGENTS.md)·[수집](../../backend/src/benefitfinder/ingestion/AGENTS.md)·[계약](../../contracts/AGENTS.md)의 `AGENTS.md` | 작업 영역별 추가 지침 |
+| [CLAUDE.md](../../CLAUDE.md) | `@AGENTS.md`로 공용 원본을 불러오는 Claude Code 진입점 |
+| [Cursor 규칙](../../.cursor/rules/project.mdc) | 항상 적용되는 Cursor 진입 규칙 |
 | `.editorconfig` | UTF-8·LF·들여쓰기 편집 설정 |
-| `.github/pull_request_template.md` | PR 본문에 동기화·검증·공동 검토 기록 |
+| [PR 템플릿](../../.github/pull_request_template.md) | PR 본문에 동기화·검증·공동 검토 기록 |
 | `scripts/check.py` | 로컬·CI 공통 검사 |
 | `.github/workflows/ci.yml` | PR과 main에서 실행할 `repository-checks` 작업 |
 
@@ -72,7 +72,7 @@ CI는 PR의 합성 merge commit 대신 실제 head를 검사한다. 합성 commi
 6. PR 반영 방식은 squash merge를 기본으로 하고, 승인 없는 자동 병합이나 배포는 활성화하지 않는다.
 7. 코드 소유자 검토를 운영할 때는 팀원의 실제 GitHub ID와 권한을 확인해 `.github/CODEOWNERS`를 만들고 소유자 승인을 필수로 설정한다.
 
-관리자용 [main 보호 설정 파일](../.github/main-branch-protection.json)을 제공한다. 승인 1개, 새 push 시 승인 재검토, 마지막 push 작성자 외 승인, 최신 main 반영·필수 CI, 리뷰 대화 해결, 관리자에게도 규칙 적용, 강제 push·삭제 금지, 선형 이력을 설정한다. 선형 이력을 위해 PR은 squash merge로 반영한다. CODEOWNERS 승인은 실제 소유자 지정 전이므로 켜지 않는다.
+관리자용 [main 보호 설정 파일](../../.github/main-branch-protection.json)을 제공한다. 승인 1개, 새 push 시 승인 재검토, 마지막 push 작성자 외 승인, 최신 main 반영·필수 CI, 리뷰 대화 해결, 관리자에게도 규칙 적용, 강제 push·삭제 금지, 선형 이력을 설정한다. 선형 이력을 위해 PR은 squash merge로 반영한다. CODEOWNERS 승인은 실제 소유자 지정 전이므로 켜지 않는다.
 
 CI가 한 번 실행되어 `repository-checks`가 표시된 뒤, 저장소 소유자 또는 관리자가 다음 명령을 실행한다. 단순 push 권한만 있는 계정으로는 적용할 수 없다.
 

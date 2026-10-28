@@ -1,4 +1,4 @@
-> 이 파일은 2026-10-26 기준 REQUIREMENTS v1.0 원문의 기록 보존용 아카이브다. 현행 결정이 아니다. 현행 진입점은 [REQUIREMENTS.md](REQUIREMENTS.md), 상세 기준은 [REQUIREMENTS_v2.md](../REQUIREMENTS_v2.md), 현행 기획은 [PROJECT_PLAN.md](PROJECT_PLAN.md)를 본다. 이 파일 본문은 원문 그대로 둔다.
+> 이 파일은 2026-10-26 기준 REQUIREMENTS v1.0 원문의 기록 보존용 아카이브다. 현행 결정이 아니다. 현행 진입점은 [REQUIREMENTS.md](../README.md), 상세 기준은 [REQUIREMENTS_v2.md](../product/REQUIREMENTS.md), 현행 기획은 [PROJECT_PLAN.md](../product/OVERVIEW.md)를 본다. 이 파일 본문은 원문 그대로 둔다.
 >
 
 # AI 혜택 코치 (BenefitFinder AI)
