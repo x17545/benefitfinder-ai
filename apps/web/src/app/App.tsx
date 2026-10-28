@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import type { JSX } from 'react';
+import { StartScreen } from '../features/profile/StartScreen.tsx';
 import { PlaceholderScreen } from './PlaceholderScreen.tsx';
 import { CONDITION_STEPS, parseRoute, paths, startLinkInterception } from './router.ts';
 import type { Route } from './router.ts';
@@ -23,14 +24,7 @@ export function App(): JSX.Element {
 function renderRoute(route: Route): JSX.Element {
   switch (route.name) {
     case 'start':
-      return (
-        <PlaceholderScreen
-          screenId="S1"
-          title="시작"
-          showBack={false}
-          links={[{ label: '시작하기', to: paths.conditions(1) }]}
-        />
-      );
+      return <StartScreen />;
     case 'conditions': {
       const { step } = route;
       const links: { label: string; to: string }[] = [];
