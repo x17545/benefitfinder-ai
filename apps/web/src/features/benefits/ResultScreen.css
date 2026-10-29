@@ -413,6 +413,14 @@
 
 .s3-bottom__inner {
   display: grid;
+  grid-auto-flow: column;
+  grid-template-columns: auto;
+  grid-auto-columns: 1fr;
+  gap: 8px;
+}
+
+.s3-bottom__inner .ui-button--secondary {
+  padding-inline: 14px;
 }
 
 /* S3-E 결과 없음 */
@@ -450,7 +458,11 @@
     justify-content: flex-end;
   }
 
-  .s3-bottom__inner .ui-button {
+  .s3-bottom__inner .ui-button--secondary {
+    min-width: 200px;
+  }
+
+  .s3-bottom__inner .ui-button--primary {
     min-width: 320px;
   }
 
@@ -458,4 +470,84 @@
     grid-template-columns: repeat(2, 160px);
     justify-content: end;
   }
+}
+
+/* 접기 목록 */
+.s3-folds {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.s3-fold {
+  border-radius: 18px;
+  background: var(--color-card);
+}
+
+.s3-fold__summary {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 56px;
+  padding: 14px 44px 14px 16px;
+  position: relative;
+  cursor: pointer;
+  list-style: none;
+}
+
+.s3-fold__summary::-webkit-details-marker {
+  display: none;
+}
+
+.s3-fold__summary::after {
+  content: '›';
+  position: absolute;
+  right: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-muted);
+  font-size: 20px;
+  transition: transform 0.15s;
+}
+
+.s3-fold[open] .s3-fold__summary::after {
+  transform: translateY(-50%) rotate(90deg);
+}
+
+.s3-fold__title {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.s3-fold__note {
+  font-size: var(--text-sub);
+  color: var(--color-muted);
+}
+
+.s3-fold__list {
+  list-style: none;
+  margin: 0;
+  padding: 0 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.s3-fold__list li {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 14px;
+  color: var(--color-muted);
+}
+
+.s3-fold__name {
+  color: var(--color-ink);
+  font-weight: 700;
+}
+
+.s3-fold__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }

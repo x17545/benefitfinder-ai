@@ -3,16 +3,20 @@ import type { JSX } from 'react';
 import { CONDITION_STEPS, navigate, paths } from '../../app/router.ts';
 import { Button } from '../../shared/ui/Button.tsx';
 import { SiteFooter } from '../../shared/ui/SiteFooter.tsx';
+import { showToast } from '../../shared/ui/toastStore.ts';
 import { TopBar } from '../../shared/ui/TopBar.tsx';
 import { clearMyData } from '../profile/clearMyData.ts';
 import { conditionSummary } from '../profile/conditionSummary.ts';
 import { useFlowState } from '../profile/flowStore.ts';
 import { useAnalysis } from './analysisStore.ts';
+import { FallbackList } from './FallbackList.tsx';
 import { formatManWon, josa, PERIOD_TABS, withJosa } from './format.ts';
 import type { Period } from './format.ts';
 import { PolicyCard } from './PolicyCard.tsx';
 import { PortfolioCard } from './PortfolioCard.tsx';
 import { usePolicyInfo } from './policyInfo.ts';
+import { saveResultImage } from './resultImage.ts';
+import { ResultLists } from './ResultLists.tsx';
 import { allPolicyIds, pickView, policyName, portfolioLabel } from './resultModel.ts';
 import type { ResultView } from './resultModel.ts';
 import './ResultScreen.css';
@@ -114,6 +118,36 @@ export function ResultScreen(): JSX.Element {
 
   const conflict = view.why?.deciding_conflict ?? [];
   const pvSuffix = presentValue ? ' (현재가치 기준)' : '';
+  const fallback = view.fallback_list ?? [];
+
+  // F10: 조합 카드와 지금 고른 조합의 지원금만 그림으로 저장한다 (조건은 넣지 않는다)
+  function saveImage(): void {
+    if (selected === undefined) {
+      return;
+    }
+    void saveResultImage({
+      periodLabel: `${PERIOD_TABS.find((tab) => tab.value === period)?.label ?? ''}${presentValue ? ' · 현재가치' : ''}`,
+      combos: portfolios.map((portfolio) => ({
+        label: portfolioLabel(portfolio.rank),
+        total: formatManWon(portfolio.total_won),
+        names: portfolio.policies.map((policy) => policyName(policy.policy_id, info)).join(' + '),
+        selected: portfolio.rank === selected.rank,
+      })),
+      listTitle: `${portfolioLabel(selected.rank)}에 들어 있는 지원금 ${String(selected.policies.length)}개`,
+      policies: selected.policies.map((policy) => ({
+        name: policyName(policy.policy_id, info),
+        amount:
+          policy.amount_in_period_won !== null && policy.amount_in_period_won !== undefined
+            ? formatManWon(policy.amount_in_period_won)
+            : '금액 확인 필요',
+      })),
+      createdAt: new Date(),
+    }).then((saved) => {
+      if (saved) {
+        showToast('결과 이미지를 저장했어요');
+      }
+    });
+  }
 
   return (
     <div className="page-width screen s3">
@@ -126,7 +160,11 @@ export function ResultScreen(): JSX.Element {
 
         <section className="s3-heading">
           {summary !== '' ? <p className="s3-summary">{summary}</p> : null}
-          <h1 className="screen__title">함께 받을 수 있는 조합 {portfolios.length}개를 찾았어요</h1>
+          <h1 className="screen__title">
+            {portfolios.length > 0
+              ? `함께 받을 수 있는 조합 ${String(portfolios.length)}개를 찾았어요`
+              : `받을 수 있는 지원금 ${String(fallback.length)}개를 찾았어요`}
+          </h1>
         </section>
 
         {top !== undefined ? (
@@ -256,6 +294,13 @@ export function ResultScreen(): JSX.Element {
           </section>
         ) : null}
 
+        {portfolios.length === 0 && fallback.length > 0 ? (
+          <section className="s3-section">
+            <p className="s2-desc">함께 묶을 수 있는 정책이 없어서, 받을 수 있는 지원금을 하나씩 보여 드려요.</p>
+            <FallbackList items={fallback} info={info} />
+          </section>
+        ) : null}
+
         {selected?.unverified_pairs !== undefined && selected.unverified_pairs.length > 0 ? (
           <section className="s3-note s3-note--check">
             <h2 className="s3-note__title">? 이 조합에서 확인이 필요한 부분</h2>
@@ -273,6 +318,8 @@ export function ResultScreen(): JSX.Element {
           </section>
         ) : null}
 
+        <ResultLists view={view} selected={selected} info={info} />
+
         <p className="s3-disclaimer">
           검수한 정책과 입력 조건으로 계산한 참고 결과예요. 최종 자격과 최신 조건은 신청 기관에서 확인해 주세요.
         </p>
@@ -282,6 +329,11 @@ export function ResultScreen(): JSX.Element {
 
       <div className="s3-bottom">
         <div className="s3-bottom__inner">
+          {selected !== undefined ? (
+            <Button size="large" variant="secondary" onClick={saveImage}>
+              결과 이미지로 저장
+            </Button>
+          ) : null}
           <Button
             size="large"
             onClick={() => {
