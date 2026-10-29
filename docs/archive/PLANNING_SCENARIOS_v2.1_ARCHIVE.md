@@ -1,7 +1,7 @@
 # 기획 시나리오 아카이브 v2.1 (과거 기록 보존본)
 
 > 역사 배너: 이 문서는 과거 기록이며 현행 지시가 아니다.
-> 현행 수락 조건: [REQUIREMENTS_v2.md](../REQUIREMENTS_v2.md) v2.2의 8.3과 [MVP 정답 자료](../tests/fixtures/mvp_planning_rules.json).
+> 현행 수락 조건: [REQUIREMENTS_v2.md](../product/REQUIREMENTS.md) v2.2의 8.3과 [MVP 정답 자료](../../tests/fixtures/mvp_planning_rules.json).
 > 원문 출처: REQUIREMENTS_v2.md v2.1의 8.3(가상 정책 5개, 정답 8개). 아래 원문 구역은 바이트 내용 그대로 보존한다.
 
 ## v2.1 8.3 원문 (그대로 보존)

@@ -4,10 +4,10 @@
 
 ## 먼저 읽고 확인할 것
 
-1. `README.md`, `REQUIREMENTS_v2.md`, `docs/ARCHITECTURE.md`, `docs/CONTRIBUTING.md`, `docs/GIT_WORKFLOW.md`를 읽는다. 코드 변경 시 `docs/CONVENTIONS.md`, `docs/DEVELOPMENT.md`, 관련 데이터 계약도 읽는다.
+1. `README.md`, `docs/README.md`의 문서별 기준·구현 상태, `CONTRIBUTING.md`, `docs/development/GIT_WORKFLOW.md`를 읽는다. 기능 구현 시 `docs/product/REQUIREMENTS.md`의 해당 기능·화면·수락 조건과 `docs/architecture/ARCHITECTURE.md`, `docs/development/CONVENTIONS.md`, 관련 데이터 계약을 읽는다. 설치·실행은 `docs/development/GETTING_STARTED.md`를 따른다. 아카이브는 변경 근거를 추적할 때만 읽고, 과거 경로에 현행 문서 사본을 만들지 않는다.
 2. 수정할 경로를 정한 뒤, 그 경로의 부모 디렉터리에 있는 모든 `AGENTS.md`를 루트부터 순서대로 추가로 읽는다. 시작 디렉터리에 따른 자동 로딩만 가정하지 않는다.
 3. `git status --short`, 현재 브랜치, 원격, 진행 중인 merge/rebase를 확인한다. 기존 변경을 임의로 커밋·삭제·stash하거나 덮어쓰지 않는다.
-4. 기능·화면·사용자 흐름은 최신 회의 결정을 반영한 `REQUIREMENTS_v2.md`가 원본이다. 2026-10-27 추가 회의에 따라 초기 MVP는 청년 대상 취업·주거 혜택만 지원한다. 수집·검색·진단·조합·상황 변화·상세·관심 선택에 같은 범위를 적용하고 생활·자산형성·교육·장학 등 나머지는 확장으로 둔다. 선택지 13단계와 F01~F11은 이 두 분야에 유지한다. 취업·주거는 `youth` 안의 정책 분류이며 별도 앱·서버·최상위 domain을 만들지 않는다. 기술 스택·모듈 경계는 `docs/ARCHITECTURE.md` 9장, 교환 형식은 `contracts/v1/`, 협업은 연결된 Git 문서를 따른다. `*_ARCHIVE.md`와 이전 5개 정책 정답은 과거 기록이며 현행 MVP 수락 기준으로 사용하지 않는다.
+4. 기능·화면·사용자 흐름은 최신 회의 결정을 반영한 `docs/product/REQUIREMENTS.md`가 원본이다. 2026-10-27 추가 회의에 따라 초기 MVP는 청년 대상 취업·주거 혜택만 지원한다. 수집·검색·진단·조합·상황 변화·상세·관심 선택에 같은 범위를 적용하고 생활·자산형성·교육·장학 등 나머지는 확장으로 둔다. 선택지 13단계와 F01~F11은 이 두 분야에 유지한다. 취업·주거는 `youth` 안의 정책 분류이며 별도 앱·서버·최상위 domain을 만들지 않는다. 기술 스택은 `docs/architecture/ARCHITECTURE.md` 9장, 모듈 경계는 같은 문서 3~4장, 교환 형식은 `contracts/v1/`, 협업은 연결된 Git 문서를 따른다. `docs/archive/`의 문서와 이전 5개 정책 정답은 과거 기록이며 현행 MVP 수락 기준으로 사용하지 않는다.
 5. 6장의 필드 이름·자료형, 11.2의 임시 기본값은 회의에서 확인할 초안이다. 데이터 분석·정제에는 Agent 활용을 계획하며 구체 LLM·도구·평가 기준은 미확정이다. RAG·임베딩·벡터 DB는 별도 필요에 따라 정한다. 기획을 수정하면 이유와 11.5 변경 이력을 남기고 기획자 이현서의 확인을 받는다. 기존 PR의 작성자 제목·본문은 보존하고 추가 변경·이유·검증·회의 결정은 별도 리뷰 댓글로 기록한다. 작업 지시에 이미 승인된 수정은 먼저 구현·검증해 검토 가능한 PR로 만든다.
 
 ## 브랜치와 완료 절차 — 반드시 준수
@@ -26,24 +26,30 @@
 - PR 생성은 main 병합 승인을 뜻하지 않는다. 승인 대리, 자동 병합 활성화, `main` 직접 반영, 배포, 원격 보호 규칙 변경은 명시적인 별도 승인이 필요하다.
 - force push, `reset --hard`, `clean -fd`, 공유 이력 rebase, 다른 사람 브랜치 삭제는 통상 흐름에서 사용하지 않는다.
 
-상태별 명령·충돌 해결·푸시 실패·병합 후 정리는 `docs/GIT_WORKFLOW.md`를 따른다.
+상태별 명령·충돌 해결·푸시 실패·병합 후 정리는 `docs/development/GIT_WORKFLOW.md`를 따른다.
 
 ## 구현과 협업
 
-- 2026-10-28 역할 기준: 양승현은 조장·PM·자동화, 이현서는 기획·프론트엔드, 김하정은 백엔드(API·DB 연동으로 자동화 협업), 탁서윤은 Agent를 활용한 수집 데이터 분석·정제·평가, 윤정찬은 데이터 수집·정제다. 서윤의 역할 이동은 AI 업무 폐기가 아니라 원문 분석·규칙 추출에 집중한다는 뜻이다. 상세 인계는 `REQUIREMENTS_v2.md` 9장을 따른다. 정찬·서윤은 ingestion을 파일별로 나누고 ai의 추출 전략·평가는 서윤이 맡는다.
+- 2026-10-28 역할 기준: 양승현은 조장·PM·자동화, 이현서는 기획·프론트엔드, 김하정은 백엔드(API·DB 연동으로 자동화 협업), 탁서윤은 Agent를 활용한 수집 데이터 분석·정제·평가, 윤정찬은 데이터 수집·정제다. 서윤의 역할 이동은 AI 업무 폐기가 아니라 원문 분석·규칙 추출에 집중한다는 뜻이다. 상세 인계는 `docs/product/REQUIREMENTS.md` 9장을 따른다. 정찬·서윤은 ingestion을 파일별로 나누고 ai의 추출 전략·평가는 서윤이 맡는다.
 
 - 합의한 프레임워크·DB를 유지한다. 임의로 Next.js·Django·다른 DB로 교체하거나 별도 AI 서버를 만들지 않는다. ORM·LLM 공급자·벡터 검색·배포 등 아직 선택하지 않은 요소는 기존 결정과 구분해 필요한 시점에 정한다.
-- 프론트엔드는 TypeScript strict·Node.js 24·pnpm 11.25.0을 사용한다. Python은 3.12·uv(0.9.5 이상)를 사용하고 루트 `pyproject.toml`과 단일 `.venv`로 관리한다. 의존성 설치는 루트에서 `uv sync --locked`와 `pnpm install --frozen-lockfile`, 실행은 `pnpm dev`다. `pip`, `npm`, `npx`, yarn, Poetry로 설치·실행하지 않는다. Python 추가는 `uv add`/`uv add --dev`, 웹 추가는 `pnpm --filter @benefitfinder/web add`/`add -D`, 도구 실행은 `uv run`/`pnpm exec`를 사용한다. `uv.lock`·`pnpm-lock.yaml`은 직접 편집·삭제하지 않고 선언 파일과 함께 커밋한다. 설치 안내는 `docs/GETTING_STARTED.md`를 따른다. `VITE_*`는 브라우저에 공개되는 값이므로 DB 연결 문자열·비밀 키를 넣지 않는다. DB·LLM 접근은 백엔드가 담당한다.
+- 프론트엔드는 TypeScript strict·Node.js 24·pnpm 11.25.0을 사용한다. Python은 3.12·uv(0.9.5 이상)를 사용하고 루트 `pyproject.toml`과 단일 `.venv`로 관리한다. 의존성 설치는 루트에서 `uv sync --locked`와 `pnpm install --frozen-lockfile`, 실행은 `pnpm dev`다. `pip`, `npm`, `npx`, yarn, Poetry로 설치·실행하지 않는다. Python 추가는 `uv add`/`uv add --dev`, 웹 추가는 `pnpm --filter @benefitfinder/web add`/`add -D`, 도구 실행은 `uv run`/`pnpm exec`를 사용한다. `uv.lock`·`pnpm-lock.yaml`은 직접 편집·삭제하지 않고 선언 파일과 함께 커밋한다. 설치 안내는 `docs/development/GETTING_STARTED.md`를 따른다. `VITE_*`는 브라우저에 공개되는 값이므로 DB 연결 문자열·비밀 키를 넣지 않는다. DB·LLM 접근은 백엔드가 담당한다.
 - DB 구현은 PostgreSQL을 기준으로 하고 스키마 변경 이력을 `backend/migrations/`에서 관리한다. 테스트용 가상 저장소는 허용하지만 SQLite 테스트 통과를 PostgreSQL 연동 검증으로 보고하지 않는다.
 - 기능 수락 조건과 영향받는 경로를 확인한 뒤, 필요한 범위만 구현한다. 일상적인 구현 선택마다 승인을 반복 요청하지 않는다.
-- 공통 `domain`, 분야별 `domains`, AI, 수집, 외부 연동의 경계를 지킨다. 상세 의존 방향은 `docs/ARCHITECTURE.md`를 따른다.
-- 사용자 조건은 선택값으로 받는다. 데이터 준비는 공식 API·원문 수집 → Agent의 규칙 후보 추출 → 검증·사람 검수 → 게시로 설계하며 상세는 `docs/POLICY_DATA_PIPELINE.md`를 따른다. 사용자 요청은 게시된 구조화 DB·일반 application 흐름·코드 판정 및 계산·근거 템플릿으로 처리한다. 데이터 Agent를 이유로 온라인 요청마다 LLM 호출이나 벡터 DB를 추가하지 않는다. API에 중복 제한 필드가 없다는 이유로 허용을 추정하거나 Agent 초안을 검수 없이 계산 규칙으로 게시하지 않는다. 복무기간 구간을 상한의 확정값으로 바꾸지 않고, 금액 상위 20개를 잘라 만든 결과를 전역 최적이라고 표시하지 않는다. 시간·자원 한도를 넘으면 명시적인 계산 오류를 반환한다.
+- 공통 `domain`, 분야별 `domains`, AI, 수집, 외부 연동의 경계를 지킨다. 상세 의존 방향은 `docs/architecture/ARCHITECTURE.md`를 따른다.
+- 사용자 조건은 선택값으로 받는다. 데이터 준비는 공식 API·원문 수집 → Agent의 규칙 후보 추출 → 검증·사람 검수 → 게시로 설계하며 상세는 `docs/architecture/POLICY_DATA_PIPELINE.md`를 따른다. 사용자 요청은 게시된 구조화 DB·일반 application 흐름·코드 판정 및 계산·근거 템플릿으로 처리한다. 데이터 Agent를 이유로 온라인 요청마다 LLM 호출이나 벡터 DB를 추가하지 않는다. API에 중복 제한 필드가 없다는 이유로 허용을 추정하거나 Agent 초안을 검수 없이 계산 규칙으로 게시하지 않는다. 복무기간 구간을 상한의 확정값으로 바꾸지 않고, 금액 상위 20개를 잘라 만든 결과를 전역 최적이라고 표시하지 않는다. 시간·자원 한도를 넘으면 명시적인 계산 오류를 반환한다.
 - `contracts/`가 교환 형식의 기준이다. 호환성이 바뀌면 소비자·예제·테스트 영향을 함께 검토하고 필요한 파일을 같은 PR에서 갱신한다.
 - 작업이 겹치면 담당자와 변경 순서를 조율한다. 여러 에이전트가 같은 작업 디렉터리에서 동시에 브랜치를 전환하지 않는다. 병렬 작업은 별도 clone 또는 적절한 worktree로 격리한다.
 - 독립적인 작업은 필요할 때 환경의 기본 서브에이전트 모델에 위임한다. 비밀값·개인정보·고객 데이터의 전달 범위를 먼저 확인하고 원본 접근 차단이 필요하면 실제로 격리한다.
 - API 키·개인 대화·실제 수집 원본을 커밋하지 않는다. 공유 예제는 가상값을 쓴다.
 - 특수 조건·부모님 소득/재산은 LLM·임베딩·GA·로그에 전달하지 않는다. 프로필 전체를 도구 결과나 오류 문장에 넣어 우회 전달하지 않는다. 선택한 브라우저 기억하기·30일 삭제와 서버 무저장 원칙을 따른다.
 - `.gitignore` 제외 파일을 `git add -f`로 강제 추가하지 않는다. 실제 데이터는 `data/`, DB 덤프는 `backups/` 또는 `dumps/`에 보관하고 공유 가상 예제는 `contracts/fixtures/`를 사용한다. 제외 규칙을 바꾸기 전 민감정보와 공유 파일 영향을 확인한다.
+
+## 문서 갱신
+
+- 주제별 기준은 `docs/README.md`를 따른다. 기능·계산은 기능 명세, 기술은 아키텍처, 교환 형식은 contracts, 역할은 기능 명세 9장에 반영한다. 중복 역할표·규칙 사본을 새로 만들지 않는다.
+- 파일 이동·병합·분리 시 Markdown 링크와 본문 경로, 하위 에이전트 지침, fixture 출처를 함께 갱신한다. 명세의 장 번호·기능 ID·수락 조건은 단순 문서 정리를 이유로 바꾸지 않는다.
+- 구현 상태가 바뀌면 `docs/README.md`의 구현 상태를 갱신하고, 목표 설계와 실제 동작을 구분한다.
 
 ## 검증과 보고
 

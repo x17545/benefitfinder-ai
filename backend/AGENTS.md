@@ -1,6 +1,6 @@
 # 백엔드 추가 지침
 
-- 루트 `AGENTS.md`, `backend/README.md`, `docs/ARCHITECTURE.md`를 따른다. Python 3.12를 사용한다. 루트 uv 프로젝트에 속하므로 `backend/`에 별도 가상환경·requirements 파일을 만들지 않는다. `uv sync --locked`, `uv add`/`uv add --dev`, `uv run --locked`를 사용하며 pip로 직접 설치하지 않는다.
+- 루트 `AGENTS.md`, `backend/README.md`, `docs/architecture/ARCHITECTURE.md`를 따른다. Python 3.12를 사용한다. 루트 uv 프로젝트에 속하므로 `backend/`에 별도 가상환경·requirements 파일을 만들지 않는다. `uv sync --locked`, `uv add`/`uv add --dev`, `uv run --locked`를 사용하며 pip로 직접 설치하지 않는다.
 - 백엔드는 Python + FastAPI, DB는 PostgreSQL로 확정했다. 다른 프레임워크·DB로 임의 교체하지 않는다. ORM·드라이버·마이그레이션 도구·LLM 공급자는 아직 선택하지 않았다.
 - `api`는 요청·응답, `application`은 사용 사례·인터페이스, `domain`은 공통 모델·순수 판정, `domains/<분야>`는 고유 규칙을 담당한다.
 - `domain`은 표준 라이브러리와 자기 모듈에만 의존한다. `application`은 `domain`과 자기 모듈을 사용하며 구체 어댑터를 import하지 않는다.
@@ -12,5 +12,5 @@
 - DB 변경은 `migrations/versions/`의 이력과 데이터 영향을 함께 검토한다. 공유 환경에 적용한 이력은 새 마이그레이션으로 고치고, import·서버 시작 시 자동 DDL로 대신하지 않는다. 운영 DB에 임의 적용하지 않는다.
 - DB 연결 문자열과 비밀값은 백엔드 환경 변수로 전달한다. `.env.example`은 가상 양식이며 실제 `.env`와 자격 증명은 Git·로그·프론트엔드에 넣지 않는다.
 - 기능 테스트는 `backend/tests/`에 추가하며 하위 테스트 패키지는 테스트 러너에서 실제 발견되게 구성한다. 도구를 바꾸면 공통 검사도 함께 갱신한다.
-- FastAPI 초기화 시 실제 HTTP 요청·응답·오류 계약을 검사한다. PostgreSQL 연동과 마이그레이션은 별도 테스트 DB에서 확인한다. 가상 저장소·SQLite로만 검사하고 PostgreSQL 검증 완료라고 보고하지 않는다.
+- 생존 확인·공통 오류는 실제 HTTP 요청·응답·오류 계약을 검사한다. 정책 API를 추가할 때 같은 검증을 확장한다. PostgreSQL 연동과 마이그레이션은 별도 테스트 DB에서 확인한다. 가상 저장소·SQLite로만 검사하고 PostgreSQL 검증 완료라고 보고하지 않는다.
 - 예외를 성공 응답으로 숨기지 않는다. 사용자 원문·소득·프롬프트·키 전체를 로그에 남기지 않는다.

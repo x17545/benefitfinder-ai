@@ -7,9 +7,10 @@
 - 작성: 이현서 (기획·프론트엔드)
 - 제출 마감일: 2026-11-25
 - 문서 상태: v2.5 (2026-10-28 사용자 요청으로 uv·pnpm 개발 도구와 실행 초기화 반영. 2026-10-28 사용자 설명에 따라 데이터 Agent의 원문 분석·중복 제한 추출 역할 반영. 팀 공유본. 첫 MVP는 만 19~39세 청년의 취업·주거 혜택만 다룬다. 생활/자산형성/교육·장학은 확장으로 미룬다. F01~F11·13단계·기존 스택 유지. 사용자 검색·계산은 검수된 규칙과 코드, 설명은 근거 템플릿 기본. 기술·계약 정렬은 개발용 초안으로 다음 회의 확인 필요)
-- 기반 문서: 프로젝트 기획서 v1.1, 요구명세 v1.0. 원문은 [기획서 아카이브](docs/PROJECT_PLAN_v1.1_ARCHIVE.md)와 [요구명세 아카이브](docs/REQUIREMENTS_v1_ARCHIVE.md)에 보존했고, 현재 진입 문서는 v2 기준으로 갱신했다. v2.1 기획 시나리오(가상 정책 5개·정답 8개) 원문은 [기획 시나리오 아카이브](docs/PLANNING_SCENARIOS_v2.1_ARCHIVE.md)에 보존했고 현행 수락 조건이 아니다
+- 기반 문서: 프로젝트 기획서 v1.1, 요구명세 v1.0. 원문은 [기획서 아카이브](../archive/PROJECT_PLAN_v1.1_ARCHIVE.md)와 [요구명세 아카이브](../archive/REQUIREMENTS_v1_ARCHIVE.md)에 보존했고, 현재 진입 문서는 v2 기준으로 갱신했다. v2.1 기획 시나리오(가상 정책 5개·정답 8개) 원문은 [기획 시나리오 아카이브](../archive/PLANNING_SCENARIOS_v2.1_ARCHIVE.md)에 보존했고 현행 수락 조건이 아니다
 - 계약 정렬 상태: `contracts/v1`은 현재 개발 기준 SSOT이며, 6장·11.2는 다음 회의 확정 대상 초안이다. 데이터 Agent의 모델·도구·평가 기준과 복잡한 중복 규칙의 표현·코드 지원 범위도 검토한다. RAG·임베딩·벡터 DB는 미확정이다. 계약 정렬을 기획자가 최종 승인한 것으로 쓰지 않는다
-- 클릭되는 화면 시안: `docs/prototype/index.html` (내려받아 브라우저로 열기)
+- 문서 안내: [문서 지도](../README.md), [기획 개요·일정·제출물](OVERVIEW.md). 이 파일은 현행 기능 명세이며 버전은 본문에서 관리한다. 목표 수락 조건과 [현재 구현 상태](../README.md#구현-상태)를 구분한다
+- 클릭되는 화면 시안: [docs/prototype/index.html](../prototype/index.html) (내려받아 브라우저로 열기)
 - 화면 표시 이름: 청년 정책 매니저 (프로젝트 이름은 AI 혜택 코치 그대로)
 
 ※ 이 기획 문서는 Claude(AI)와 작성했고, 결정은 작성자가 했다.
@@ -65,8 +66,7 @@
 팀원별 개발 방향을 일치시키고,
 기능 통합 및 최종 평가를 위한 기준으로 활용한다.
 
-기존 서비스(온통청년, 보조금24, 토스 등)는 **어떤 정책이 있는지** 알려 준다.
-이 서비스는 **어떤 지원금 조합을 받는 게 가장 이득인지** 계산해 준다.
+핵심 사용자 문제는 정책을 찾은 뒤에도 **내 조건에서 함께 받을 수 있는 조합과 총액, 상황 변화에 따른 차이를 직접 판단해야 한다**는 점이다. 문제의 원인과 해결 방향은 [기획 개요 2장](OVERVIEW.md#2-추진-배경과-문제-정의)을 따른다.
 
 ## 2. 서비스 핵심 흐름
 
@@ -85,7 +85,7 @@
 
 이 계산에 필요한 복잡한 중복 수급 제한·예외가 원천 API만으로 확보되는지는 실제 응답으로 확인한다. 부족한 정보는 공식 공고·사업 지침·FAQ를 보완 수집하고 **데이터 Agent로 원문을 분석해 규칙 후보를 추출 → 검증·사람 검수 → 버전별 게시**하는 방향으로 설계한다. 탁서윤의 데이터 분석·정제 이동은 이 AI 업무에 집중한다는 뜻이다. API에 제한이 없다는 이유로 동시 수급 허용을 추정하지 않는다.
 
-추출한 규칙은 적용 정책·방향·기간·조건·예외·금액 영향·원문 근거를 보존하며, 미지원·불명확·상충은 검수 대기와 확인 필요로 남긴다. 추천 이유와 '지금 할 일'은 검수된 근거와 코드 결과의 템플릿으로 작성한다. Agent 모델·도구·평가 기준은 비교 후 정하고 RAG·임베딩·벡터 DB를 자동으로 필수화하지 않는다. 상세와 인계 기준은 [정책 데이터 분석·정제 설계](docs/POLICY_DATA_PIPELINE.md)를 따른다. 이 설계는 아직 구현되지 않았으며 기획자 승인을 대신하지 않는다.
+추출한 규칙은 적용 정책·방향·기간·조건·예외·금액 영향·원문 근거를 보존하며, 미지원·불명확·상충은 검수 대기와 확인 필요로 남긴다. 추천 이유와 '지금 할 일'은 검수된 근거와 코드 결과의 템플릿으로 작성한다. Agent 모델·도구·평가 기준은 비교 후 정하고 RAG·임베딩·벡터 DB를 자동으로 필수화하지 않는다. 상세와 인계 기준은 [정책 데이터 분석·정제 설계](../architecture/POLICY_DATA_PIPELINE.md)를 따른다. 이 설계는 아직 구현되지 않았으며 기획자 승인을 대신하지 않는다.
 
 ### 2.2 데이터 출처
 
@@ -184,7 +184,7 @@ S1 시작 ─▶ S2 조건 선택 (1 ~ 13단계) ─▶ L 로딩 ─▶ S3 내 �
 
 ### 4.2 S1 시작
 
-![S1](docs/prototype/설계서/S1_시작.png)
+![S1](../prototype/설계서/S1_시작.png)
 
 | 번호 | 요소 | 내용·동작 |
 | --- | --- | --- |
@@ -233,7 +233,7 @@ S1 시작 ─▶ S2 조건 선택 (1 ~ 13단계) ─▶ L 로딩 ─▶ S3 내 �
 
 **S2-1 나이 (만 41세를 넣은 경우)**
 
-![S2-1](docs/prototype/설계서/S2-1_나이.png)
+![S2-1](../prototype/설계서/S2-1_나이.png)
 
 | 번호 | 요소 | 내용·동작 |
 | --- | --- | --- |
@@ -248,7 +248,7 @@ S1 시작 ─▶ S2 조건 선택 (1 ~ 13단계) ─▶ L 로딩 ─▶ S3 내 �
 
 **S2-6 사는 형태**
 
-![S2-6](docs/prototype/설계서/S2-6_사는형태.png)
+![S2-6](../prototype/설계서/S2-6_사는형태.png)
 
 | 번호 | 요소 | 내용·동작 |
 | --- | --- | --- |
@@ -260,7 +260,7 @@ S1 시작 ─▶ S2 조건 선택 (1 ~ 13단계) ─▶ L 로딩 ─▶ S3 내 �
 
 **S2-9 해당 조건 (여러 개 고르기)**
 
-![S2-9](docs/prototype/설계서/S2-9_해당조건.png)
+![S2-9](../prototype/설계서/S2-9_해당조건.png)
 
 | 번호 | 요소 | 내용·동작 |
 | --- | --- | --- |
@@ -271,7 +271,7 @@ S1 시작 ─▶ S2 조건 선택 (1 ~ 13단계) ─▶ L 로딩 ─▶ S3 내 �
 
 **S2-12 더 정확하게 (선택 단계)**
 
-![S2-12](docs/prototype/설계서/S2-12_부모님정보.png)
+![S2-12](../prototype/설계서/S2-12_부모님정보.png)
 
 | 번호 | 요소 | 내용·동작 |
 | --- | --- | --- |
@@ -283,7 +283,7 @@ S1 시작 ─▶ S2 조건 선택 (1 ~ 13단계) ─▶ L 로딩 ─▶ S3 내 �
 
 **S2-13 확인**
 
-![S2-13](docs/prototype/설계서/S2-13_확인.png)
+![S2-13](../prototype/설계서/S2-13_확인.png)
 
 | 번호 | 요소 | 내용·동작 |
 | --- | --- | --- |
@@ -293,7 +293,7 @@ S1 시작 ─▶ S2 조건 선택 (1 ~ 13단계) ─▶ L 로딩 ─▶ S3 내 �
 
 ### 4.4 L 로딩
 
-![L](docs/prototype/설계서/L_로딩.png)
+![L](../prototype/설계서/L_로딩.png)
 
 | 번호 | 요소 | 내용·동작 |
 | --- | --- | --- |
@@ -311,7 +311,7 @@ S1 시작 ─▶ S2 조건 선택 (1 ~ 13단계) ─▶ L 로딩 ─▶ S3 내 �
 
 ### 4.5 S3 내 지원금 조합
 
-![S3](docs/prototype/설계서/S3_조합.png)
+![S3](../prototype/설계서/S3_조합.png)
 
 | 번호 | 요소 | 내용·동작 |
 | --- | --- | --- |
@@ -341,7 +341,7 @@ S1 시작 ─▶ S2 조건 선택 (1 ~ 13단계) ─▶ L 로딩 ─▶ S3 내 �
 
 **S3-E 결과 없음**
 
-![S3-E](docs/prototype/설계서/E_결과없음.png)
+![S3-E](../prototype/설계서/E_결과없음.png)
 
 | 번호 | 요소 | 내용·동작 |
 | --- | --- | --- |
@@ -351,7 +351,7 @@ S1 시작 ─▶ S2 조건 선택 (1 ~ 13단계) ─▶ L 로딩 ─▶ S3 내 �
 
 ### 4.6 S4 상황이 바뀌면?
 
-![S4](docs/prototype/설계서/S4_상황변화.png)
+![S4](../prototype/설계서/S4_상황변화.png)
 
 | 번호 | 요소 | 내용·동작 |
 | --- | --- | --- |
@@ -371,7 +371,7 @@ S1 시작 ─▶ S2 조건 선택 (1 ~ 13단계) ─▶ L 로딩 ─▶ S3 내 �
 
 ### 4.7 S5 정책 상세
 
-![S5](docs/prototype/설계서/S5_상세.png)
+![S5](../prototype/설계서/S5_상세.png)
 
 | 번호 | 요소 | 내용·동작 |
 | --- | --- | --- |
@@ -831,7 +831,7 @@ S1 시작 ─▶ S2 조건 선택 (1 ~ 13단계) ─▶ L 로딩 ─▶ S3 내 �
 
 ### 6.1 사용자 조건 (화면 → 서버)
 
-정본: 요청 예제 [`contracts/fixtures/recommendation-request.json`](contracts/fixtures/recommendation-request.json), 스키마 [`contracts/v1/recommendation-request.schema.json`](contracts/v1/recommendation-request.schema.json) + [`contracts/v1/youth-profile.schema.json`](contracts/v1/youth-profile.schema.json). 아래 표는 기획 선택지(4.3·5장)의 의미를 계약 필드로 옮긴 것으로, 선택지 범위와 단위를 그대로 보존한다. 이 매핑은 개발용 정렬 초안이며 다음 회의에서 확정한다.
+정본: 요청 예제 [`contracts/fixtures/recommendation-request.json`](../../contracts/fixtures/recommendation-request.json), 스키마 [`contracts/v1/recommendation-request.schema.json`](../../contracts/v1/recommendation-request.schema.json) + [`contracts/v1/youth-profile.schema.json`](../../contracts/v1/youth-profile.schema.json). 아래 표는 기획 선택지(4.3·5장)의 의미를 계약 필드로 옮긴 것으로, 선택지 범위와 단위를 그대로 보존한다. 이 매핑은 개발용 정렬 초안이며 다음 회의에서 확정한다.
 
 | 기획 선택지 | 계약 필드 | 의미 보존 |
 | --- | --- | --- |
@@ -857,7 +857,7 @@ S1 시작 ─▶ S2 조건 선택 (1 ~ 13단계) ─▶ L 로딩 ─▶ S3 내 �
 
 ### 6.2 정책
 
-노출 형식의 정본은 [`contracts/v1/benefit.schema.json`](contracts/v1/benefit.schema.json)과 예제 [`contracts/fixtures/youth-benefit.json`](contracts/fixtures/youth-benefit.json)이다 (개발 기준, 회의 확인 필요 초안). 아래는 수집·검수용 기획 형식으로, 계약 형식과의 의미 매핑을 함께 둔다.
+노출 형식의 정본은 [`contracts/v1/benefit.schema.json`](../../contracts/v1/benefit.schema.json)과 예제 [`contracts/fixtures/youth-benefit.json`](../../contracts/fixtures/youth-benefit.json)이다 (개발 기준, 회의 확인 필요 초안). 아래는 수집·검수용 기획 형식으로, 계약 형식과의 의미 매핑을 함께 둔다.
 
 ```json
 {
@@ -901,11 +901,11 @@ S1 시작 ─▶ S2 조건 선택 (1 ~ 13단계) ─▶ L 로딩 ─▶ S3 내 �
 
 수치 조건의 연산자·상하한·복무 연장 규칙, 다음 모집 시기·신청 방법·접수 기관·준비 서류는 위 수집 초안의 기획 요구로 보존한다. 현재 공용 혜택 스키마에는 이 세부 항목의 자료형이 아직 없다. 구현 전에 담당자들이 조건 판정용 규칙과 상세 안내 계약을 함께 확장하고 fixtures·테스트로 확인한다. 현재 스키마에 없는 필드를 그대로 보내거나, 변환 중 정보를 버려서는 안 된다.
 
-`conflicts`도 현재는 근거가 있는 단순 금지 쌍만 표현한다. 조건부 예외·지급 기간·수급 이력·금액 차감은 적용 방향·시점·조건과 원문 버전을 보존한 규칙 후보로 검수하고, 내부 모델·계산 지원 범위·공유 계약을 정한 뒤 구현한다. 현 계약이 이 복잡한 규칙을 이미 지원한다고 간주하지 않는다. 상세는 [정책 데이터 분석·정제 설계](docs/POLICY_DATA_PIPELINE.md)를 따른다.
+`conflicts`도 현재는 근거가 있는 단순 금지 쌍만 표현한다. 조건부 예외·지급 기간·수급 이력·금액 차감은 적용 방향·시점·조건과 원문 버전을 보존한 규칙 후보로 검수하고, 내부 모델·계산 지원 범위·공유 계약을 정한 뒤 구현한다. 현 계약이 이 복잡한 규칙을 이미 지원한다고 간주하지 않는다. 상세는 [정책 데이터 분석·정제 설계](../architecture/POLICY_DATA_PIPELINE.md)를 따른다.
 
 ### 6.3 분석 결과 (조합)
 
-정본: [`contracts/v1/recommendation-response.schema.json`](contracts/v1/recommendation-response.schema.json), 예제 [`contracts/fixtures/recommendation-response.json`](contracts/fixtures/recommendation-response.json) · [`contracts/fixtures/fallback-response.json`](contracts/fixtures/fallback-response.json) · [`contracts/fixtures/empty-response.json`](contracts/fixtures/empty-response.json). 최종 JSON이 바로 이 계약 응답이다 (개발 기준, 회의 확인 필요 초안).
+정본: [`contracts/v1/recommendation-response.schema.json`](../../contracts/v1/recommendation-response.schema.json), 예제 [`contracts/fixtures/recommendation-response.json`](../../contracts/fixtures/recommendation-response.json) · [`contracts/fixtures/fallback-response.json`](../../contracts/fixtures/fallback-response.json) · [`contracts/fixtures/empty-response.json`](../../contracts/fixtures/empty-response.json). 최종 JSON이 바로 이 계약 응답이다 (개발 기준, 회의 확인 필요 초안).
 
 - `view`: 전역 초기 기준이며 `results[1y][pv_off]`의 표시 섹션과 일치한다. `portfolio`(조합 카드) / `fallback_list`(목록) / `empty`(결과 없음, S3-E)
 - `results`: `1y`·`2y`·`all` × `pv_off`·`pv_on` 6가지를 한 번에. 기간·현재가치 탭을 바꿀 때 다시 묻지 않고, 선택 탭의 `result_view`를 따라 렌더한다(portfolios가 있으면 카드, 없으면 그 탭의 `fallback_list`, 둘 다 없으면 비어 있음). 각 `result_view` 안에는 기획 기준 그대로 `portfolios`(최대 3개. 총액·구성·정책별 금액·진단·추천 이유·포기하는 지원금·확인 필요 쌍), `why`(1·2위 총액 차이·2위 총액·둘을 가른 중복 쌍), `excluded`(빠진 정책, 근거 필수), `not_eligible`(조건 미충족), `not_yet_reviewed`(검수 전·금액 미상 노출, 자격 요약), `closed_now`(모집 끝남, 지난 모집 기간·다음 모집 시기), `fallback_list`(그 탭의 목록, 최대 5개)를 둔다
@@ -916,7 +916,7 @@ S1 시작 ─▶ S2 조건 선택 (1 ~ 13단계) ─▶ L 로딩 ─▶ S3 내 �
 
 ### 6.4 상황 변화 결과
 
-정본: 요청 [`contracts/v1/simulation-request.schema.json`](contracts/v1/simulation-request.schema.json) + 예제 [`contracts/fixtures/simulation-request.json`](contracts/fixtures/simulation-request.json), 응답 [`contracts/v1/simulation-response.schema.json`](contracts/v1/simulation-response.schema.json) + 예제 [`contracts/fixtures/simulation-response.json`](contracts/fixtures/simulation-response.json) (개발 기준, 회의 확인 필요 초안).
+정본: 요청 [`contracts/v1/simulation-request.schema.json`](../../contracts/v1/simulation-request.schema.json) + 예제 [`contracts/fixtures/simulation-request.json`](../../contracts/fixtures/simulation-request.json), 응답 [`contracts/v1/simulation-response.schema.json`](../../contracts/v1/simulation-response.schema.json) + 예제 [`contracts/fixtures/simulation-response.json`](../../contracts/fixtures/simulation-response.json) (개발 기준, 회의 확인 필요 초안).
 
 - 요청: `{domain, profile(바뀌기 전 조건), scenario, options?, income_change?}`. `scenario`: `employed`(취업하면) / `income_up`(연 소득이 오르면) / `independent`(독립하면) / `age_plus_one`(나이가 1살 많아지면). 기간+현재가치 옵션은 추천 요청과 동일한 단일 `options` 위치에 둔다. 소득이 바뀌는 경우 연간 소득 대표값을 `income_change {from_won, to_won}`으로 함께 보낼 수 있다
 - 응답: `{scenario, basis_period, before_total_won, after_total_won, annual {before_won, after_won}, income_change|null, effective_marginal_rate|null, lost, gained, next_threshold|null, todo|null, calculation_note}`. `before/after_total_won`은 선택 기간(`basis_period`, S3에서 고른 기간) 카드합이고, `annual`은 연간 환산 지원금으로 분리한다. 선택 기간 총액과 연간 비교를 화면에서 구분해 표시한다
@@ -926,20 +926,20 @@ S1 시작 ─▶ S2 조건 선택 (1 ~ 13단계) ─▶ L 로딩 ─▶ S3 내 �
 
 ### 6.5 API
 
-정본 주소와 스키마는 `contracts/v1`과 [`contracts/README.md`](contracts/README.md)의 예정 HTTP 매핑을 개발 기준으로 따르고, 아래 표는 기획 화면과의 연결이다 (개발 기준, 회의 확인 필요 초안). 요청·응답은 JSON이며, 추천 분석만 POST fetch 스트림(SSE 형식)으로 받는다.
+`GET /health`와 공통 HTTP 오류 처리는 구현되어 있고, 아래 정책 API는 구현 전 설계다. 정본 주소와 스키마는 `contracts/v1`과 [`contracts/README.md`](../../contracts/README.md)의 예정 HTTP 매핑을 개발 기준으로 따르고, 아래 표는 기획 화면과의 연결이다 (개발 기준, 회의 확인 필요 초안). 요청·응답은 JSON이며, 추천 분석만 POST fetch 스트림(SSE 형식)으로 받는다.
 
 | 방식 | 주소 | 하는 일 | 요청·응답 |
 | --- | --- | --- | --- |
-| GET | `/health` | 서버 생존 확인(구현됨, DB 준비 상태 아님) | [`health.schema.json`](contracts/v1/health.schema.json), 200 `{"status":"ok"}` |
-| GET | `/api/v1/meta` | 데이터 마지막 갱신 시각, 기준금리(미확인이면 null + 상태 unknown), 오늘 남은 분석 횟수 | [`meta.schema.json`](contracts/v1/meta.schema.json) · 예제 [`meta.json`](contracts/fixtures/meta.json) |
-| GET | `/api/v1/options` | 지역 목록(행정표준코드), 소득·재산·보증금·월세·부모 소득·재산 구간 목록(`*_band` value는 계약 열거값과 일치) | [`options.schema.json`](contracts/v1/options.schema.json) · 예제 [`options.json`](contracts/fixtures/options.json) |
-| POST | `/api/v1/recommendations` | 분석 시작. 본문 6.1. POST fetch 스트림으로 `progress` 여러 번 → `result` 한 번 (또는 `error`) | 요청 [`recommendation-request.schema.json`](contracts/v1/recommendation-request.schema.json), 최종 `result` data는 6.3 계약 응답 |
+| GET | `/health` | 서버 생존 확인(구현됨, DB 준비 상태 아님) | [`health.schema.json`](../../contracts/v1/health.schema.json), 200 `{"status":"ok"}` |
+| GET | `/api/v1/meta` | 데이터 마지막 갱신 시각, 기준금리(미확인이면 null + 상태 unknown), 오늘 남은 분석 횟수 | [`meta.schema.json`](../../contracts/v1/meta.schema.json) · 예제 [`meta.json`](../../contracts/fixtures/meta.json) |
+| GET | `/api/v1/options` | 지역 목록(행정표준코드), 소득·재산·보증금·월세·부모 소득·재산 구간 목록(`*_band` value는 계약 열거값과 일치) | [`options.schema.json`](../../contracts/v1/options.schema.json) · 예제 [`options.json`](../../contracts/fixtures/options.json) |
+| POST | `/api/v1/recommendations` | 분석 시작. 본문 6.1. POST fetch 스트림으로 `progress` 여러 번 → `result` 한 번 (또는 `error`) | 요청 [`recommendation-request.schema.json`](../../contracts/v1/recommendation-request.schema.json), 최종 `result` data는 6.3 계약 응답 |
 | POST | `/api/v1/simulations` | 상황 변화 계산. 본문 6.4 | 요청·응답 스키마 6.4 참조 |
-| GET | `/api/v1/benefits/{benefit_id}` | 혜택 상세 | [`benefit.schema.json`](contracts/v1/benefit.schema.json) · 예제 [`youth-benefit.json`](contracts/fixtures/youth-benefit.json) |
+| GET | `/api/v1/benefits/{benefit_id}` | 혜택 상세 | [`benefit.schema.json`](../../contracts/v1/benefit.schema.json) · 예제 [`youth-benefit.json`](../../contracts/fixtures/youth-benefit.json) |
 
 SSE 진행 이벤트
 
-`progress` 이벤트의 data는 [`sse-progress.schema.json`](contracts/v1/sse-progress.schema.json) + 예제 [`sse-progress.json`](contracts/fixtures/sse-progress.json)을 따른다. `result` 이벤트의 data는 6.3 계약 응답, `error` 이벤트의 data는 아래 오류 계약을 따른다.
+`progress` 이벤트의 data는 [`sse-progress.schema.json`](../../contracts/v1/sse-progress.schema.json) + 예제 [`sse-progress.json`](../../contracts/fixtures/sse-progress.json)을 따른다. `result` 이벤트의 data는 6.3 계약 응답, `error` 이벤트의 data는 아래 오류 계약을 따른다.
 
 아래 `result`와 `error`는 서로 다른 종료 예시다. 한 요청에는 둘 중 하나만 한 번 보내고 종료한다. 스트림 시작 전 오류는 공통 HTTP 오류 응답으로, 시작 후 오류는 SSE `error`로 전달한다.
 
@@ -957,7 +957,7 @@ event: error
 data: { "request_id": "...", "code": "internal_error", "message": "..." }
 ```
 
-오류 (코드 명명 lower_snake_case, 정본 [`error.schema.json`](contracts/v1/error.schema.json) · 예제 [`error.json`](contracts/fixtures/error.json))
+오류 (코드 명명 lower_snake_case, 정본 [`error.schema.json`](../../contracts/v1/error.schema.json) · 예제 [`error.json`](../../contracts/fixtures/error.json))
 
 | HTTP | code | 언제 | 화면 |
 | --- | --- | --- | --- |
@@ -1095,9 +1095,9 @@ F01 ~ F11이 요구사항대로 동작하는지 확인한다.
 
 ### 8.3 정답이 정해진 테스트 사용자
 
-초기 MVP 계산 기준은 아래 **취업·주거 가상 정책 3개**와 사용자 8개(A와 A 2년 포함)다. 실제 정책의 조건·지급액이 아니며, 계약·시안·참조 테스트에 쓰는 계산 예시다. 이전 5개 정책 원문과 정답은 [v2.1 아카이브](docs/PLANNING_SCENARIOS_v2.1_ARCHIVE.md)에 보존하고 현행 MVP 수락 조건에서 제외한다.
+초기 MVP 계산 기준은 아래 **취업·주거 가상 정책 3개**와 사용자 8개(A와 A 2년 포함)다. 실제 정책의 조건·지급액이 아니며, 계약·시안·참조 테스트에 쓰는 계산 예시다. 이전 5개 정책 원문과 정답은 [v2.1 아카이브](../archive/PLANNING_SCENARIOS_v2.1_ARCHIVE.md)에 보존하고 현행 MVP 수락 조건에서 제외한다.
 
-정답 자료는 [`tests/fixtures/mvp_planning_rules.json`](tests/fixtures/mvp_planning_rules.json)이며 금액은 원 단위다. 이전 `tests/fixtures/planning_rules.json`은 과거·확장 회귀 검증에만 쓴다. 실제 정책 검수 후 정찬이 같은 방식으로 별도의 검증 자료를 만든다.
+정답 자료는 [`tests/fixtures/mvp_planning_rules.json`](../../tests/fixtures/mvp_planning_rules.json)이며 금액은 원 단위다. 이전 `tests/fixtures/planning_rules.json`은 과거·확장 회귀 검증에만 쓴다. 실제 정책 검수 후 정찬이 같은 방식으로 별도의 검증 자료를 만든다.
 
 **테스트용 가상 정책** (금액은 만 원, `domain`은 모두 `youth`)
 
@@ -1147,7 +1147,7 @@ F01 ~ F11이 요구사항대로 동작하는지 확인한다.
 - 기록: 조건 입력 시간, 막힌 단계, 이해 못 한 말 (실제 소득 등 조건은 기록하지 않음)
 - 설문: 이해(1위 이유, 포기하는 지원금, 현재가치, 상황 변화, 진단 표시, 신뢰), 사용 편의, 가치(다른 서비스 대비, 재사용, 추천), 주관식
 - 3명 이상이 같은 곳에서 막히면 반드시 고친다
-- 진행 순서, 관찰 기록표, 설문 전체: [docs/USER_TEST.md](docs/USER_TEST.md)
+- 진행 순서, 관찰 기록표, 설문 전체: [docs/product/USER_TEST.md](USER_TEST.md)
 
 ### 8.6 성공 기준
 
@@ -1160,7 +1160,7 @@ F01 ~ F11이 요구사항대로 동작하는지 확인한다.
 | 분석 성공률 | 95% 이상 (실패·시간 초과 5% 미만) | GA analyze_success / analyze_start |
 | 분석 시간 | 평균 15초 이하 | GA duration_ms |
 | 신청 링크 클릭 | 결과를 본 사람 중 30% 이상이 [신청하러 가기]를 1번 이상 누름 | GA apply_click |
-| 이해도 | 테스트 사용자 80% 이상이 "왜 이 조합이 1위인지 이해했다"에 그렇다 | 설문 ([docs/USER_TEST.md](docs/USER_TEST.md)) |
+| 이해도 | 테스트 사용자 80% 이상이 "왜 이 조합이 1위인지 이해했다"에 그렇다 | 설문 ([docs/product/USER_TEST.md](USER_TEST.md)) |
 | 만족도 | "다른 서비스보다 도움이 됐다" 5점 만점 평균 4점 이상 | 설문 |
 | 조건 입력 시간 | 중간값 3분 이하 (S1-03 문구 근거) | 사용자 테스트 때 시간 기록 |
 
@@ -1215,11 +1215,11 @@ F01 ~ F11이 요구사항대로 동작하는지 확인한다.
 
 ### 9.4 GitHub 협업 기준
 
-협업 절차의 원본은 [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md)과 [`docs/GIT_WORKFLOW.md`](docs/GIT_WORKFLOW.md)이며, 아래는 이 기획에서 쓰는 요약이다. 충돌하면 원본 문서를 따른다.
+협업 절차의 원본은 [`CONTRIBUTING.md`](../../CONTRIBUTING.md)과 [`docs/development/GIT_WORKFLOW.md`](../development/GIT_WORKFLOW.md)이며, 아래는 이 기획에서 쓰는 요약이다. 충돌하면 원본 문서를 따른다.
 
 1. `main`에는 직접 올리지 않는다. PR로만 합친다.
-2. 브랜치: `feat/{영역}-{할 일}`, `fix/{영역}-{내용}`, `docs/{내용}` 등으로 시작한다 (예: `feat/backend-optimize`). 허용 접두어와 금지 규칙은 `docs/GIT_WORKFLOW.md` 3장을 따른다
-3. 커밋: `type(scope): 한국어 설명` (예: `feat(search): ...`). 형식 원본은 `docs/GIT_WORKFLOW.md` 4장을 따른다
+2. 브랜치: `feat/{영역}-{할 일}`, `fix/{영역}-{내용}`, `docs/{내용}` 등으로 시작한다 (예: `feat/backend-optimize`). 허용 접두어와 금지 규칙은 `docs/development/GIT_WORKFLOW.md` 3장을 따른다
+3. 커밋: `type(scope): 한국어 설명` (예: `feat(search): ...`). 형식 원본은 `docs/development/GIT_WORKFLOW.md` 4장을 따른다
 4. AI 사용은 새 PR 본문 또는 기존 PR의 추가 리뷰 댓글에 도구·변경 범위·직접 확인한 내용을 기록하고, 필요하면 커밋 본문 트레일러에 남긴다. 커밋 제목은 `type(scope): 설명`을 유지하며 `[AI]` 접미사를 강제하지 않는다. 설명하지 못하는 AI 코드는 올리지 않는다.
 5. **리뷰어는 다른 축 1명**이 브랜치를 받아 **직접 실행**해 보고 승인한다.
    - 축: 자동화·백엔드(하정, 조장) / 정책데이터·분석·정제(정찬, 서윤) / 기획·판단·기능 추가(현서)
@@ -1310,7 +1310,7 @@ F01 ~ F11이 요구사항대로 동작하는지 확인한다.
 
 ### 11.4 결정 기록
 
-기존 기획자의 결정과 이후 팀 회의 결정을 순서대로 보존한다. 충돌하는 범위는 최근 범위 결정(26번), 역할 정리(27번)와 데이터 Agent에 관한 사용자 보충 설명(28번)을 따른다.
+이 절은 결정이 바뀐 경위를 보존한 기록이다. 과거 결정만 떼어 현재 요구로 해석하지 않는다. 현재 수락 조건은 이 명세 본문, 기술·협업의 기준은 [문서 지도](../README.md)를 따른다. 기존 기획자의 결정과 이후 팀 회의 결정을 순서대로 보존한다. 충돌하는 범위는 최근 범위 결정(26번), 역할 정리(27번)와 데이터 Agent에 관한 사용자 보충 설명(28번)을 따른다.
 
 1. 입력 방식: 문장 입력 대신 선택지 (팀 요구명세 M01·M02 변경)
 2. 데이터 필드 이름과 자료형: 회의에서 한 번에 확정 (6장이 초안)
@@ -1363,3 +1363,5 @@ F01 ~ F11이 요구사항대로 동작하는지 확인한다.
 | v2.4 | 2026-10-28 | 데이터 Agent 역할 정정 작업본 | 수정 이유: 사용자가 설명한 조합 비교의 핵심과 서윤의 역할 이동 취지를 반영. API 외 공식 원문에서 중복 제한·조건·예외 규칙 후보를 Agent로 추출하고 검증·사람 검수·버전별 게시하는 데이터 준비 흐름을 명시. 사용자 요청은 검수 데이터와 코드로 계산. 모델·도구·복잡한 규칙 계약/지원 범위는 검토 항목이며 기존 기능·스택·가상 계산 정답은 유지 |
 | v2.5 | 2026-10-28 | 개발 환경 초기화 작업본 | 수정 이유: 팀원 개발 시작과 uv·pnpm 사용을 요청받음. React/Vite·FastAPI 실행 뼈대, 도구·lockfile·실행 안내·에이전트 지침·CI를 정렬. 생존 확인 스키마와 405 공통 오류 추가. 제품 기능·기획 수락 조건·가상 정답은 유지 |
 | v2.5 보완 | 2026-10-28 | HTTP 오류 회귀 수정 | 수정 이유: PR 리뷰에서 400·503이 500으로 변경되고 Retry-After가 사라지는 오류를 확인. 명시적 HTTP 상태·응답 헤더 보존, 안전한 공통 본문과 범용 http_error 코드, 회귀 검증 추가. 기능 범위·계산 규칙 유지 |
+| v2.5 문서 정리 | 2026-10-28 | 문서 구조 정리 작업본 | 수정 이유: 중복 진입점·흩어진 문서·구현 상태 불일치로 인한 에이전트 혼동을 줄임. 현행 명세를 docs/product/REQUIREMENTS.md로 이동하고 기능 ID·장 번호·계산·수락 조건은 유지. 기획서의 배경·일정·제출물은 OVERVIEW로 정리하고 이전 전체 본문·구 ID 대응표는 archive에 보존. 개발·협업 안내 통합, 참조 경로·fixture 출처·구현 상태 정정. 새 기획 결정이나 기획자 승인으로 기록하지 않음 |
+| v2.5 문제 정의 보강 | 2026-10-29 | README·기획 설명 보강 작업본 | 수정 이유: 처음 읽는 사람이 기능보다 사용자 문제를 먼저 이해하도록 요청받음. v1 제안서의 ‘혜택 발견 이후 조합 선택·상황 변화 비교’ 관점을 현행 v2의 취업·주거 범위로 설명하고 README·기획 개요·문서 목적을 정렬. 조합 원리용 예시는 실제 정책·기획 정답과 구분. 기능 ID·입력 단계·범위·계산 규칙·계약·수락 조건은 유지하며 기획자 확인 전 작업본으로 기록 |

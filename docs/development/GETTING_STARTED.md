@@ -106,4 +106,4 @@ PR 전에는 최신 main을 작업 브랜치에 반영하고 커밋한 뒤 `uv r
 - 빌드 미리보기: `pnpm build` 후 `pnpm --filter @benefitfinder/web preview`를 쓴다. preview는 API 프록시·운영 배포를 제공하지 않으므로 API 연결 개발은 `pnpm dev`로 확인한다.
 - 첫 설치의 다운로드 실패: 네트워크·공식 레지스트리 연결을 확인한다. 실패를 피하려고 잠금 파일·검사를 지우지 않는다.
 
-설치·생성물 제외 정책은 [저장소 설정](REPOSITORY_SETTINGS.md), 영역별 설명은 [웹](../apps/web/README.md)·[백엔드](../backend/README.md)를 따른다.
+설치·생성물 제외 정책은 [저장소 설정](REPOSITORY_SETTINGS.md), 영역별 설명은 [웹](../../apps/web/README.md)·[백엔드](../../backend/README.md)를 따른다.

@@ -1,6 +1,6 @@
 {
   "meta": {
-    "source": "REQUIREMENTS_v2.md 8.3",
+    "source": "docs/archive/PLANNING_SCENARIOS_v2.1_ARCHIVE.md 8.3",
     "unit": "won",
     "note": "All amounts are integers in KRW (won). Planning tables state values in man-won; this fixture stores won = man_won * 10000. Virtual planning data for answer regression only, not real policy data.",
     "planning_scope": "F01-F11, 13-step choice input, ages 19-39, best combination / present value / effective rate, memory/storage/GA/SSE/auto-refresh retained Existing 5-policy answers retained as history and expansion regression; first-MVP employment-housing answers live in tests/fixtures/mvp_planning_rules.json."
