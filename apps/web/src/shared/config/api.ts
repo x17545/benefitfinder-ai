@@ -18,3 +18,6 @@ export const OPTIONS_PATH = `${API_PREFIX}/options`;
 
 /** POST 추천 분석. contracts/v1 recommendation-request / response */
 export const RECOMMENDATIONS_PATH = `${API_PREFIX}/recommendations`;
+
+/** GET 정책 상세. 경로 뒤에 /{benefit_id}. contracts/v1 benefit */
+export const BENEFITS_PATH = `${API_PREFIX}/benefits`;
