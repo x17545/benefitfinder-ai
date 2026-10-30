@@ -22,6 +22,7 @@ from benefitfinder.application.collection import (
 from benefitfinder.ingestion.collect import collect_youthcenter
 from benefitfinder.ingestion.versioning import record_sha256
 from benefitfinder.ingestion.youthcenter import (
+    YOUTHCENTER_POLICY_LIST,
     PageParseError,
     YouthcenterApiConfig,
     page_request,
@@ -55,7 +56,8 @@ class FakeFetcher:
 
     def fetch(self, request: SourceRequest) -> SourceResponse:
         self.requests.append(request)
-        outcome = self.pages[int(request.params["page"])]
+        page = request.params.get("page") or request.params["pageNum"]
+        outcome = self.pages[int(page)]
         if isinstance(outcome, Exception):
             raise outcome
         return outcome
@@ -245,6 +247,71 @@ class CollectTests(unittest.TestCase):
                 CONFIG, FakeFetcher({}), FakeSnapshotStore(), FakeVersionStore(),
                 lambda: datetime(2026, 10, 30),
             )
+
+
+    def test_short_page_before_total_stops_with_error(self) -> None:
+        result, *_ = run({1: ok(page_body([A], 5))})
+        self.assertFalse(result.complete)
+        self.assertEqual(result.errors[0].code, "short_page")
+
+
+class SourceSettingTests(unittest.TestCase):
+    """실제 표본에서 확인한 필드 이름에 가상 값을 넣어 설정을 검증한다."""
+
+    def body(self, items: list[dict[str, object]], total: int, code: object = 200) -> bytes:
+        document = {
+            "resultCode": code,
+            "resultMessage": "가상 응답",
+            "result": {
+                "pagging": {"totCount": total, "pageNum": 1, "pageSize": 100},
+                "youthPolicyList": items,
+            },
+        }
+        return json.dumps(document, ensure_ascii=False).encode("utf-8")
+
+    def policy(self, number: str, views: str = "1", manager: str = "") -> dict[str, object]:
+        return {
+            "plcyNo": number,
+            "plcyNm": "가상 청년 정책",
+            "lclsfNm": "일자리",
+            "inqCnt": views,
+            "sprvsnInstPicNm": manager,
+            "operInstPicNm": manager,
+        }
+
+    def collect(self, body: bytes, previous: Mapping[str, str] | None = None):
+        fetcher = FakeFetcher({1: ok(body)})
+        versions = FakeVersionStore(previous)
+        result = collect_youthcenter(
+            YOUTHCENTER_POLICY_LIST, fetcher, FakeSnapshotStore(), versions, clock
+        )
+        return result, fetcher
+
+    def test_request_uses_verified_params_without_key(self) -> None:
+        request = page_request(YOUTHCENTER_POLICY_LIST, 1)
+        self.assertEqual(
+            request.params, {"rtnType": "json", "pageNum": "1", "pageSize": "100"}
+        )
+        self.assertNotIn("apiKeyNm", request.params)
+
+    def test_collects_with_verified_paths_and_drops_manager_names(self) -> None:
+        result, _ = self.collect(self.body([self.policy("V-1", manager="가상 담당자")], 1))
+        self.assertTrue(result.complete)
+        record = result.records[0]
+        self.assertEqual(record.external_id, "V-1")
+        self.assertNotIn("sprvsnInstPicNm", record.fields)
+        self.assertNotIn("operInstPicNm", record.fields)
+
+    def test_view_count_change_is_not_a_policy_change(self) -> None:
+        first, _ = self.collect(self.body([self.policy("V-1", views="1")], 1))
+        previous = {"V-1": first.records[0].record_sha256}
+        second, _ = self.collect(self.body([self.policy("V-1", views="999")], 1), previous)
+        self.assertEqual(second.changes[0].kind, ChangeKind.UNCHANGED)
+
+    def test_failed_result_code_is_an_error(self) -> None:
+        result, _ = self.collect(self.body([], 0, code=500))
+        self.assertFalse(result.complete)
+        self.assertEqual(result.errors[0].code, "parse_failed")
 
 
 if __name__ == "__main__":

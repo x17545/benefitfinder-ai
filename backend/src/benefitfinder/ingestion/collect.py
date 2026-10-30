@@ -25,8 +25,10 @@ from benefitfinder.ingestion.youthcenter import (
     PageParseError,
     YouthcenterApiConfig,
     external_id_of,
+    hashed_fields,
     page_request,
     parse_page,
+    stored_fields,
 )
 
 
@@ -113,10 +115,10 @@ def collect_youthcenter(
             record = CollectedRecord(
                 source_name=SOURCE_NAME,
                 external_id=external_id,
-                record_sha256=record_sha256(fields),
+                record_sha256=record_sha256(hashed_fields(config, fields)),
                 snapshot_ref=snapshot_ref,
                 fetched_at=fetched_at,
-                fields=fields,
+                fields=stored_fields(config, fields),
             )
             existing = records.get(external_id)
             if existing is None and external_id not in conflicted:
@@ -140,6 +142,12 @@ def collect_youthcenter(
                 break
             if page * config.page_size >= total:
                 finished = True
+                break
+            if len(page_records) < config.page_size:
+                errors.append(
+                    CollectionError(page, "short_page", "요청보다 적은 건수, 페이지 크기 확인 필요",
+                                    snapshot_ref)
+                )
                 break
         elif len(page_records) < config.page_size:
             finished = True
