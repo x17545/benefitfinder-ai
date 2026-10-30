@@ -1,11 +1,23 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FLOW_SESSION_KEY } from '../src/features/profile/flowSession.ts';
 import type { RecommendationRequest } from '../src/shared/api/recommendations.ts';
+import { isRecommendationResponse } from '../src/shared/api/recommendations.ts';
 import fixtureText from '../../../contracts/fixtures/recommendation-response.json?raw';
 
 const RESULT_KEY = 'ypm.lastResult';
 const FIXTURE: unknown = JSON.parse(fixtureText);
 const REQUEST: RecommendationRequest = { domain: 'youth', profile: { age: 25 } };
+
+function brokenResult(): unknown {
+  if (!isRecommendationResponse(FIXTURE)) { throw new Error('invalid synthetic fixture'); }
+  return {
+    ...FIXTURE,
+    results: {
+      ...FIXTURE.results,
+      '1y': { ...FIXTURE.results['1y'], pv_off: { ...FIXTURE.results['1y'].pv_off, portfolios: [{}] } },
+    },
+  };
+}
 
 function memoryStorage(): Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> & { data: Map<string, string> } {
   const data = new Map<string, string>();
@@ -50,6 +62,29 @@ async function analyzedFlow(): Promise<typeof import('../src/features/profile/fl
 }
 
 describe('tab-scoped conditions and analysis', () => {
+  it('discards a malformed nested result cache while retaining valid tab conditions', async () => {
+    const flow = await import('../src/features/profile/flowStore.ts');
+    flow.updateFlowState({ consent: true });
+    flow.updateAnswers({ age: 25 });
+    session.setItem(RESULT_KEY, JSON.stringify({ result: brokenResult(), isSample: false }));
+    vi.resetModules();
+    const restored = await import('../src/features/profile/flowStore.ts');
+    analysis = await import('../src/features/benefits/analysisStore.ts');
+    expect(restored.getFlowState().answers.age).toBe(25);
+    expect(analysis.getAnalysisState()).toEqual({ status: 'idle' });
+    expect(session.getItem(RESULT_KEY)).toBeNull();
+  });
+
+  it('shows analysis failure and leaves no result cache when the server returns broken policies', async () => {
+    await analyzedFlow();
+    vi.stubGlobal('fetch', async () => new Response(JSON.stringify(brokenResult()), {
+      headers: { 'Content-Type': 'application/json' },
+    }));
+    analysis?.startAnalysis(REQUEST);
+    await vi.waitFor(() => { expect(analysis?.getAnalysisState()).toEqual({ status: 'failed', reason: 'error' }); });
+    expect(session.getItem(RESULT_KEY)).toBeNull();
+  });
+
   it('restores an unfinished form, consent and unknown choices without enabling local storage', async () => {
     const flow = await import('../src/features/profile/flowStore.ts');
     flow.updateFlowState({ consent: true, remember: false });

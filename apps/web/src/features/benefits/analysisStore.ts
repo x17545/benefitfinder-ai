@@ -38,6 +38,11 @@ function readLastResult(): AnalysisState {
   } catch {
     // 저장소를 못 쓰는 환경이면 새로 분석한다
   }
+  try {
+    window.sessionStorage.removeItem(LAST_RESULT_KEY);
+  } catch {
+    // 손상된 값도 저장소가 허용하는 경우에만 지울 수 있다.
+  }
   return { status: 'idle' };
 }
 

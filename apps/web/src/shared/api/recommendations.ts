@@ -3,8 +3,10 @@ import type { RecommendationRequest } from './generated/recommendation-request.t
 import type { RecommendationResponse } from './generated/recommendation-response.ts';
 import type { SSEProgressEventData } from './generated/sse-progress.ts';
 import { RECOMMENDATIONS_PATH } from '../config/api.ts';
+import { isRecommendationResponse } from './recommendationValidation.ts';
 
 export type { RecommendationRequest, RecommendationResponse, SSEProgressEventData };
+export { isRecommendationResponse };
 
 /** 서버 오류 코드 + 화면에서 구분할 두 가지 (연결 실패, 약속과 다른 응답) */
 export type RecommendationErrorCode = PublicErrorResponse['code'] | 'network_error' | 'invalid_response';
@@ -33,29 +35,6 @@ export class RecommendationError extends Error {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
-}
-
-function isResultView(value: unknown): boolean {
-  return isRecord(value) && Array.isArray(value.portfolios) && typeof value.calculation_status === 'string';
-}
-
-function isPeriodResult(value: unknown): boolean {
-  return isRecord(value) && isResultView(value.pv_off) && isResultView(value.pv_on);
-}
-
-/** 추천 결과가 약속(contracts/v1)의 큰 틀과 맞는지 확인한다 */
-export function isRecommendationResponse(value: unknown): value is RecommendationResponse {
-  if (!isRecord(value) || !isRecord(value.results)) {
-    return false;
-  }
-  const { results } = value;
-  return (
-    typeof value.request_id === 'string' &&
-    (value.view === 'portfolio' || value.view === 'fallback_list' || value.view === 'empty') &&
-    isPeriodResult(results['1y']) &&
-    isPeriodResult(results['2y']) &&
-    isPeriodResult(results.all)
-  );
 }
 
 function isProgress(value: unknown): value is SSEProgressEventData {

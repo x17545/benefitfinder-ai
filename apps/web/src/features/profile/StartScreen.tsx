@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { JSX } from 'react';
 import { navigate, paths } from '../../app/router.ts';
 import { Button } from '../../shared/ui/Button.tsx';
@@ -13,13 +13,6 @@ import './StartScreen.css';
 export function StartScreen(): JSX.Element {
   const { consent, remember } = useFlowState();
   const [saved, setSaved] = useState(() => loadSavedConditions());
-
-  // 기억해 둔 조건이 있으면 기억하기를 켠 채로 보여 준다
-  useEffect(() => {
-    if (saved !== null) {
-      updateFlowState({ remember: true });
-    }
-  }, [saved]);
 
   function clear(): void {
     clearMyData();

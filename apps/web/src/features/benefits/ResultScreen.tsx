@@ -41,25 +41,33 @@ function ResultTopBar(): JSX.Element {
   );
 }
 
-/** S3-E 결과 없음 (문구 S3-E1, S3-E2) */
+/** S3-E 결과 없음 (문구 S3-E1, S3-E2). 빈 기간 탭에서도 같은 안내를 쓴다. */
+function EmptyResultContent(): JSX.Element {
+  return (
+    <>
+      <h1 className="screen__title">지금 다루는 정책 중엔 맞는 게 없어요</h1>
+      <p className="s2-desc">첫 MVP는 취업·주거 분야를 다뤄요 (생활·자산형성·교육장학은 확장 예정)</p>
+      <div className="s3-empty__actions">
+        <Button size="large" block onClick={editConditions}>
+          조건 바꾸기
+        </Button>
+        <a className="ui-button ui-button--secondary ui-button--large ui-button--block" href="https://www.youthcenter.go.kr" target="_blank" rel="noopener noreferrer">
+          온통청년에서 더 찾아보기 ↗
+        </a>
+        <a className="ui-button ui-button--secondary ui-button--large ui-button--block" href="https://www.bokjiro.go.kr" target="_blank" rel="noopener noreferrer">
+          복지로에서 더 찾아보기 ↗
+        </a>
+      </div>
+    </>
+  );
+}
+
 function EmptyResult(): JSX.Element {
   return (
     <div className="page-width screen">
       <ResultTopBar />
       <main className="s3-empty">
-        <h1 className="screen__title">지금 다루는 정책 중엔 맞는 게 없어요</h1>
-        <p className="s2-desc">첫 MVP는 취업·주거 분야를 다뤄요 (생활·자산형성·교육장학은 확장 예정)</p>
-        <div className="s3-empty__actions">
-          <Button size="large" block onClick={editConditions}>
-            조건 바꾸기
-          </Button>
-          <a className="ui-button ui-button--secondary ui-button--large ui-button--block" href="https://www.youthcenter.go.kr" target="_blank" rel="noopener noreferrer">
-            온통청년에서 더 찾아보기 ↗
-          </a>
-          <a className="ui-button ui-button--secondary ui-button--large ui-button--block" href="https://www.bokjiro.go.kr" target="_blank" rel="noopener noreferrer">
-            복지로에서 더 찾아보기 ↗
-          </a>
-        </div>
+        <EmptyResultContent />
       </main>
       <SiteFooter onClearData={clearMyData} />
     </div>
@@ -92,8 +100,9 @@ export function ResultScreen(): JSX.Element {
     return <></>;
   }
 
-  const firstView = pickView(result, '1y', false);
-  if (result.view === 'empty' || !hasResults(firstView)) {
+  // view는 초기 1년의 표시 형식이다. 다른 기간에 결과가 있으면 탭을 남긴다.
+  const anyResults = Object.values(result.results).some((item) => hasResults(item.pv_off) || hasResults(item.pv_on));
+  if (!anyResults) {
     return <EmptyResult />;
   }
 
@@ -160,11 +169,13 @@ export function ResultScreen(): JSX.Element {
 
         <section className="s3-heading">
           {summary !== '' ? <p className="s3-summary">{summary}</p> : null}
-          <h1 className="screen__title">
-            {portfolios.length > 0
-              ? `함께 받을 수 있는 조합 ${String(portfolios.length)}개를 찾았어요`
-              : `받을 수 있는 지원금 ${String(fallback.length)}개를 찾았어요`}
-          </h1>
+          {hasResults(view) ? (
+            <h1 className="screen__title">
+              {portfolios.length > 0
+                ? `함께 받을 수 있는 조합 ${String(portfolios.length)}개를 찾았어요`
+                : `받을 수 있는 지원금 ${String(fallback.length)}개를 찾았어요`}
+            </h1>
+          ) : null}
         </section>
 
         {top !== undefined ? (
@@ -235,6 +246,10 @@ export function ResultScreen(): JSX.Element {
           <p className="s3-note s3-note--check">
             ? 이 기준으로는 계산할 수 없어요. 지급 시점이나 기준금리를 확인하지 못했어요.
           </p>
+        ) : null}
+
+        {view.calculation_status === 'available' && !hasResults(view) ? (
+          <section className="s3-empty"><EmptyResultContent /></section>
         ) : null}
 
         {portfolios.length > 0 ? (
