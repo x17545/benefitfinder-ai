@@ -9,7 +9,8 @@
 - 페이지·레코드 오류(응답 상태, 형식, ID 누락, 같은 ID의 다른 내용, 페이지 상한)는 성공 데이터와 분리한다. 하나라도 실패하면 `complete=False`이며 삭제 감지를 하지 않는다.
 - 2026-10-30 실제 응답 표본으로 확인한 설정은 `YOUTHCENTER_POLICY_LIST`다. 정책 ID는 `plcyNo`, 목록은 `result.youthPolicyList`, 전체 건수는 `result.pagging.totCount`이고 `resultCode`가 200이 아니면 실패로 처리한다. 테스트는 같은 필드 이름에 가상 값을 넣는다.
 - 조회수(`inqCnt`)는 정책 내용과 무관하게 바뀌므로 변경 판정 해시에서 뺀다. 담당자 이름(`sprvsnInstPicNm`, `operInstPicNm`)은 수집 레코드에 저장하지 않는다. 원본 스냅숏에는 응답 전체가 남으므로 원본 보관 위치·기간은 개인정보 기준으로 별도 정한다.
-- 한 페이지 최대 건수는 아직 확인하지 않았다. 서버가 요청보다 적게 주면 `short_page` 오류로 멈추고 누락을 정상 완료로 보지 않는다.
+- 한 페이지 최대 건수는 아직 확인하지 않았다. 마지막 페이지까지 예상 건수를 확인하며 부족하면 `short_page`·`unexpected_empty_page` 오류로 멈춘다. 수집 중 전체 건수가 바뀌거나 최종 고유 ID 수가 전체 건수와 다르면 정상 완료·삭제 감지를 허용하지 않는다.
+- 저장소에는 레코드와 별도로 시간대가 있는 실행 확인 시각(`checked_at`)을 전달한다. 정상 응답이 0건이어도 기존 정책의 삭제 감지 시각을 기록하고 활성 목록에서 제외한다.
 
 원천 API 응답의 파싱·정규화·중복 처리·품질 검증과 게시 흐름을 둔다. API만으로 확인되지 않는 중복 제한·예외는 공식 공고·지침·FAQ를 보완 수집하고 Agent 추출 인터페이스로 연결한다. 조건·방향·기간·예외·금액 영향·근거 버전을 보존한 후보를 검증·사람 검수 후 게시한다. 상세는 [정책 데이터 분석·정제](../../../../docs/architecture/POLICY_DATA_PIPELINE.md)를 따른다.
 
@@ -30,7 +31,10 @@ uv run --locked python -m benefitfinder.jobs collect-youthcenter
 | `data/raw/youthcenter/snapshots/` | 페이지별 원본 응답과 `.meta.json`(요청 파라미터·수집 시각·상태·해시, 키 제외) |
 | `data/processed/youthcenter/records.json` | 정책 ID별 최신 레코드(담당자 이름 제외), 마지막 확인 시각, 삭제 감지 시각 |
 | `data/processed/youthcenter/changes.jsonl` | 신규·변경·삭제 이력 |
+| `data/processed/youthcenter/pending.json` | 저장 중단 시 복구에 쓰는 임시 기록. 정상 저장·복구 후 삭제 |
 | `data/processed/youthcenter/records.csv` | 최신 레코드 CSV(엑셀용 UTF-8 BOM) |
 | `data/processed/youthcenter/fields.csv` | 필드별 채워진 건수·서로 다른 값 수·예시. 구조 공유용 |
 
 전체 수집에 성공하면 종료 코드 0, 일부 실패하면 성공분만 저장하고 1을 돌려준다. 요청 사이에는 0.5초 간격을 둔다. 공식 서버가 가끔 일시적인 500을 돌려주므로(2026-10-30 실행에서 확인), 같은 요청이 5xx·연결 오류면 2·4·8초 간격으로 최대 3번 다시 시도한다. 그래도 실패하면 그 페이지에서 멈추고, 다시 실행하면 받은 레코드는 `unchanged`로 이어진다. 실제 데이터 파일은 PR에 첨부하지 않고 공유 방법은 팀에서 정한다.
+
+로컬 저장은 복구 기록을 먼저 남긴 뒤 변경 이력과 최신 레코드를 반영한다. 파일 쓰기·교체에 실패하면 예외로 종료하며, 다음 저장소 읽기나 재실행 때 미완료 저장을 먼저 복구한다. 부분 기록·재실행으로 변경 이력이 빠지거나 중복되지 않도록 기존 이력의 끝 위치부터 복구한다. 같은 `--data-dir`에는 한 번에 한 수집 프로세스만 실행한다.

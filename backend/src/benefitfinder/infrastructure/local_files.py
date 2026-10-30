@@ -4,8 +4,9 @@
 - 최신 레코드: ``<processed_root>/<출처>/records.json`` (정책 ID별 최신 버전)
 - 변경 이력: ``<processed_root>/<출처>/changes.jsonl`` (신규·변경·삭제만)
 
-경로는 ``data/raw``·``data/processed`` 같은 Git 제외 경로를 넘겨 사용한다. 파일은 임시
-파일에 쓴 뒤 교체해 중간에 실패해도 직전 성공본을 덮어쓰지 않는다.
+경로는 ``data/raw``·``data/processed`` 같은 Git 제외 경로를 넘겨 사용한다. 최신 레코드와
+변경 이력은 복구 기록을 먼저 남기고 저장하며, 중단된 저장은 다음 읽기 전에 완료한다.
+같은 경로에는 한 번에 한 수집 프로세스만 실행한다.
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ import csv
 import json
 import os
 from collections.abc import Mapping, Sequence
+from datetime import datetime
 from pathlib import Path
 
 from benefitfinder.application.collection import (
@@ -25,12 +27,16 @@ from benefitfinder.application.collection import (
 
 RECORDS_FILE = "records.json"
 CHANGES_FILE = "changes.jsonl"
+PENDING_FILE = "pending.json"
 
 
 def _write_atomic(path: Path, data: bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(f".{path.name}.tmp")
-    temporary.write_bytes(data)
+    with temporary.open("wb") as handle:
+        handle.write(data)
+        handle.flush()
+        os.fsync(handle.fileno())
     os.replace(temporary, path)
 
 
@@ -80,6 +86,7 @@ class JsonFileVersionStore:
         return self._root / source_name / CHANGES_FILE
 
     def load_records(self, source_name: str) -> dict[str, dict[str, object]]:
+        self._recover_source(source_name)
         path = self.records_path(source_name)
         if not path.exists():
             return {}
@@ -96,8 +103,14 @@ class JsonFileVersionStore:
         }
 
     def save_versions(
-        self, records: Sequence[CollectedRecord], changes: Sequence[RecordChange]
+        self,
+        records: Sequence[CollectedRecord],
+        changes: Sequence[RecordChange],
+        *,
+        checked_at: datetime,
     ) -> None:
+        if checked_at.tzinfo is None or checked_at.utcoffset() is None:
+            raise ValueError("checked_at은 시간대가 있는 시각이어야 합니다.")
         sources = {record.source_name for record in records} | {
             change.source_name for change in changes
         }
@@ -106,6 +119,7 @@ class JsonFileVersionStore:
                 source_name,
                 [record for record in records if record.source_name == source_name],
                 [change for change in changes if change.source_name == source_name],
+                checked_at=checked_at,
             )
 
     def _save_source(
@@ -113,6 +127,8 @@ class JsonFileVersionStore:
         source_name: str,
         records: Sequence[CollectedRecord],
         changes: Sequence[RecordChange],
+        *,
+        checked_at: datetime,
     ) -> None:
         stored = self.load_records(source_name)
         for record in records:
@@ -123,34 +139,54 @@ class JsonFileVersionStore:
                 "missing_detected_at": None,
                 "fields": dict(record.fields),
             }
-        detected_at = max((r.fetched_at for r in records), default=None)
         for change in changes:
             if change.kind is ChangeKind.MISSING and change.external_id in stored:
-                stored[change.external_id]["missing_detected_at"] = (
-                    detected_at.isoformat() if detected_at else None
-                )
-        _write_atomic(self.records_path(source_name), _json_bytes(stored))
+                stored[change.external_id]["missing_detected_at"] = checked_at.isoformat()
 
-        logged = [change for change in changes if change.kind is not ChangeKind.UNCHANGED]
-        if logged:
-            path = self.changes_path(source_name)
-            path.parent.mkdir(parents=True, exist_ok=True)
-            with path.open("a", encoding="utf-8", newline="\n") as handle:
-                for change in logged:
-                    handle.write(
-                        json.dumps(
-                            {
-                                "recorded_at": detected_at.isoformat() if detected_at else None,
-                                "external_id": change.external_id,
-                                "kind": change.kind.value,
-                                "previous_sha256": change.previous_sha256,
-                                "current_sha256": change.current_sha256,
-                                "snapshot_ref": change.snapshot_ref,
-                            },
-                            ensure_ascii=False,
-                        )
-                        + "\n"
-                    )
+        logged = [
+            {
+                "recorded_at": checked_at.isoformat(),
+                "external_id": change.external_id,
+                "kind": change.kind.value,
+                "previous_sha256": change.previous_sha256,
+                "current_sha256": change.current_sha256,
+                "snapshot_ref": change.snapshot_ref,
+            }
+            for change in changes
+            if change.kind is not ChangeKind.UNCHANGED
+        ]
+        history = self.changes_path(source_name)
+        pending = {
+            "records": stored,
+            "changes_offset": history.stat().st_size if history.exists() else 0,
+            "changes": logged,
+        }
+        _write_atomic(self._root / source_name / PENDING_FILE, _json_bytes(pending))
+        self._recover_source(source_name)
+
+    def _recover_source(self, source_name: str) -> None:
+        """저장 중단 지점부터 이력과 레코드를 복구한 뒤에만 최신 버전을 노출한다."""
+        journal = self._root / source_name / PENDING_FILE
+        if not journal.exists():
+            return
+        pending = json.loads(journal.read_text(encoding="utf-8"))
+        if pending["changes"]:
+            history = self.changes_path(source_name)
+            lines = "".join(
+                json.dumps(change, ensure_ascii=False) + "\n" for change in pending["changes"]
+            ).encode("utf-8")
+            with history.open("r+b" if history.exists() else "w+b") as handle:
+                offset = pending["changes_offset"]
+                if handle.seek(0, os.SEEK_END) < offset:
+                    raise ValueError("변경 이력이 복구 기록보다 짧습니다.")
+                # 부분 기록이나 이미 기록한 이벤트도 같은 위치에 덮어써 중복을 막는다.
+                handle.seek(offset)
+                handle.write(lines)
+                handle.truncate()
+                handle.flush()
+                os.fsync(handle.fileno())
+        _write_atomic(self.records_path(source_name), _json_bytes(pending["records"]))
+        journal.unlink()
 
 
 def _field_names(records: Mapping[str, Mapping[str, object]]) -> list[str]:

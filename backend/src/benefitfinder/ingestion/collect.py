@@ -75,6 +75,7 @@ def collect_youthcenter(
     conflicted: set[str] = set()
     errors: list[CollectionError] = []
     finished = False
+    expected_total: int | None = None
 
     for page in range(1, config.max_pages + 1):
         request = page_request(config, page)
@@ -134,20 +135,41 @@ def collect_youthcenter(
                 )
 
         if total is not None:
-            if not page_records and page * config.page_size < total:
+            if expected_total is None:
+                expected_total = total
+            elif total != expected_total:
+                errors.append(
+                    CollectionError(page, "total_changed", "수집 중 전체 건수가 바뀜", snapshot_ref)
+                )
+                break
+            expected_count = min(
+                config.page_size, max(0, total - (page - 1) * config.page_size)
+            )
+            if not page_records and expected_count:
                 errors.append(
                     CollectionError(page, "unexpected_empty_page", "전체 건수보다 일찍 끝남",
                                     snapshot_ref)
                 )
                 break
-            if page * config.page_size >= total:
-                finished = True
-                break
-            if len(page_records) < config.page_size:
+            if len(page_records) < expected_count:
                 errors.append(
                     CollectionError(page, "short_page", "요청보다 적은 건수, 페이지 크기 확인 필요",
                                     snapshot_ref)
                 )
+                break
+            if len(page_records) > expected_count:
+                errors.append(
+                    CollectionError(page, "page_count_mismatch", "예상보다 많은 페이지 건수",
+                                    snapshot_ref)
+                )
+                break
+            if page * config.page_size >= total:
+                if len(records) != total:
+                    errors.append(
+                        CollectionError(page, "record_count_mismatch", "전체 건수와 고유 ID 수 불일치",
+                                        snapshot_ref)
+                    )
+                finished = True
                 break
         elif len(page_records) < config.page_size:
             finished = True
@@ -162,7 +184,7 @@ def collect_youthcenter(
     previous = version_store.latest_hashes(SOURCE_NAME)
     changes = tuple(diff_records(SOURCE_NAME, previous, collected, complete=complete))
     if collected or changes:
-        version_store.save_versions(collected, changes)
+        version_store.save_versions(collected, changes, checked_at=_now(clock))
     return CollectionResult(
         source_name=SOURCE_NAME,
         started_at=started_at,

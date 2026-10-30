@@ -77,15 +77,21 @@ class FakeVersionStore:
         self.previous = dict(previous or {})
         self.saved_records: list[CollectedRecord] = []
         self.saved_changes: list[RecordChange] = []
+        self.checked_at: datetime | None = None
 
     def latest_hashes(self, source_name: str) -> Mapping[str, str]:
         return self.previous
 
     def save_versions(
-        self, records: Sequence[CollectedRecord], changes: Sequence[RecordChange]
+        self,
+        records: Sequence[CollectedRecord],
+        changes: Sequence[RecordChange],
+        *,
+        checked_at: datetime,
     ) -> None:
         self.saved_records.extend(records)
         self.saved_changes.extend(changes)
+        self.checked_at = checked_at
 
 
 def ok(body: bytes) -> SourceResponse:
@@ -217,9 +223,11 @@ class CollectTests(unittest.TestCase):
 
     def test_duplicates_are_merged_or_held_back(self) -> None:
         same = {1: ok(page_body([A, B], 4)), 2: ok(page_body([A, C], 4))}
-        result, *_ = run(same)
-        self.assertTrue(result.complete)
+        result, *_ = run(same, {"P-GONE": "old-hash"})
+        self.assertFalse(result.complete)
         self.assertEqual(len(result.records), 3)
+        self.assertEqual([e.code for e in result.errors], ["record_count_mismatch"])
+        self.assertNotIn(ChangeKind.MISSING, {c.kind for c in result.changes})
 
         changed_a = {"policyId": "P-A", "name": "내용이 다른 A"}
         conflict = {1: ok(page_body([A, B], 4)), 2: ok(page_body([changed_a, C], 4))}
@@ -253,6 +261,45 @@ class CollectTests(unittest.TestCase):
         result, *_ = run({1: ok(page_body([A], 5))})
         self.assertFalse(result.complete)
         self.assertEqual(result.errors[0].code, "short_page")
+
+    def test_incomplete_final_pages_do_not_detect_deletions(self) -> None:
+        cases = (
+            ({1: ok(page_body([A], 2))}, "short_page"),
+            ({1: ok(page_body([], 1))}, "unexpected_empty_page"),
+            ({1: ok(page_body([A, B], 3)), 2: ok(page_body([], 3))},
+             "unexpected_empty_page"),
+            ({1: ok(page_body([A, B], 4)), 2: ok(page_body([C], 4))}, "short_page"),
+        )
+        for pages, error_code in cases:
+            with self.subTest(error_code=error_code, pages=len(pages)):
+                result, *_ = run(pages, {"P-GONE": "old-hash"})
+                self.assertFalse(result.complete)
+                self.assertEqual([e.code for e in result.errors], [error_code])
+                self.assertNotIn(ChangeKind.MISSING, {c.kind for c in result.changes})
+
+    def test_changed_totals_do_not_detect_deletions(self) -> None:
+        for total in (2, 4):
+            with self.subTest(total=total):
+                pages = {1: ok(page_body([A, B], 3)), 2: ok(page_body([C], total))}
+                result, *_ = run(pages, {"P-GONE": "old-hash"})
+                self.assertFalse(result.complete)
+                self.assertEqual([e.code for e in result.errors], ["total_changed"])
+                self.assertEqual(len(result.records), 3)
+                self.assertNotIn(ChangeKind.MISSING, {c.kind for c in result.changes})
+
+    def test_excess_page_records_are_not_a_complete_collection(self) -> None:
+        for total in (0, 1):
+            with self.subTest(total=total):
+                result, *_ = run({1: ok(page_body([A, B], total))})
+                self.assertFalse(result.complete)
+                self.assertEqual([e.code for e in result.errors], ["page_count_mismatch"])
+
+    def test_zero_total_is_complete_and_saves_collection_time(self) -> None:
+        result, _, _, versions = run({1: ok(page_body([], 0))}, {"P-GONE": "old-hash"})
+        self.assertTrue(result.complete)
+        self.assertEqual(result.records, ())
+        self.assertEqual([c.kind for c in result.changes], [ChangeKind.MISSING])
+        self.assertEqual(versions.checked_at, clock())
 
 
 class SourceSettingTests(unittest.TestCase):

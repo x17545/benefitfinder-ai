@@ -106,7 +106,14 @@ class RecordVersionStore(Protocol):
         ...
 
     def save_versions(
-        self, records: Sequence[CollectedRecord], changes: Sequence[RecordChange]
+        self,
+        records: Sequence[CollectedRecord],
+        changes: Sequence[RecordChange],
+        *,
+        checked_at: datetime,
     ) -> None:
-        """Store collected records and their change events."""
+        """Store records and events together, recovering unfinished writes before reads.
+
+        ``checked_at`` is the timezone-aware collection time, including empty runs.
+        """
         ...

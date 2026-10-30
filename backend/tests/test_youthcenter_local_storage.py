@@ -28,13 +28,16 @@ from benefitfinder.application.collection import (
     SourceResponse,
 )
 from benefitfinder.infrastructure.local_files import (
+    CHANGES_FILE,
+    PENDING_FILE,
+    RECORDS_FILE,
     JsonFileSnapshotStore,
     JsonFileVersionStore,
     write_field_summary_csv,
     write_records_csv,
 )
 from benefitfinder.infrastructure.youthcenter_http import YouthcenterHttpFetcher
-from benefitfinder.ingestion.collect import collect_youthcenter
+from benefitfinder.ingestion.collect import CollectionResult, collect_youthcenter
 from benefitfinder.ingestion.youthcenter import SOURCE_NAME, YOUTHCENTER_POLICY_LIST
 from benefitfinder.jobs.__main__ import main as jobs_main
 
@@ -192,12 +195,14 @@ class LocalFileTests(unittest.TestCase):
         store.save_versions(
             [record("P-A", "h1"), record("P-B", "h2")],
             [change("P-A", ChangeKind.NEW), change("P-B", ChangeKind.NEW)],
+            checked_at=datetime(2026, 10, 30, 3, 0, tzinfo=KST),
         )
         self.assertEqual(store.latest_hashes(SOURCE_NAME), {"P-A": "h1", "P-B": "h2"})
 
         store.save_versions(
             [record("P-A", "h1")],
             [change("P-A", ChangeKind.UNCHANGED), change("P-B", ChangeKind.MISSING)],
+            checked_at=datetime(2026, 10, 30, 4, 0, tzinfo=KST),
         )
         self.assertEqual(store.latest_hashes(SOURCE_NAME), {"P-A": "h1"})
         saved = store.load_records(SOURCE_NAME)
@@ -268,10 +273,11 @@ class PartialFailureTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.tmp.cleanup()
 
-    def body(self, policy: dict[str, object], total: int) -> bytes:
+    def body(self, policy: dict[str, object] | None, total: int) -> bytes:
         document = {
             "resultCode": 200,
-            "result": {"pagging": {"totCount": total}, "youthPolicyList": [policy]},
+            "result": {"pagging": {"totCount": total},
+                       "youthPolicyList": [policy] if policy is not None else []},
         }
         return json.dumps(document, ensure_ascii=False).encode("utf-8")
 
@@ -318,6 +324,134 @@ class PartialFailureTests(unittest.TestCase):
         self.assertEqual(self.versions.records_path(SOURCE_NAME).read_bytes(), before)
         self.assertFalse(self.versions.changes_path(SOURCE_NAME).read_text(encoding="utf-8")
                          .count("2026-10-30T04"))
+
+    def test_empty_success_marks_all_records_missing_once(self) -> None:
+        a = {"plcyNo": "V-A", "plcyNm": "가상 A"}
+        self.collect({1: SourceResponse(200, self.body(a, 1), "application/json")}, hour=3)
+        empty_page = {1: SourceResponse(200, self.body(None, 0), "application/json")}
+        result = self.collect(empty_page, hour=4)
+        self.assertTrue(result.complete)
+        self.assertEqual([c.kind for c in result.changes], [ChangeKind.MISSING])
+        self.assertEqual(self.versions.latest_hashes(SOURCE_NAME), {})
+        saved = self.versions.load_records(SOURCE_NAME)["V-A"]
+        self.assertEqual(saved["missing_detected_at"], "2026-10-30T04:00:00+09:00")
+        self.assertEqual(saved["last_checked_at"], "2026-10-30T03:00:00+09:00")
+        again = self.collect(empty_page, hour=5)
+        self.assertTrue(again.complete)
+        self.assertEqual(again.changes, ())
+        lines = self.versions.changes_path(SOURCE_NAME).read_text(encoding="utf-8").splitlines()
+        history = [json.loads(line) for line in lines]
+        self.assertEqual([event["kind"] for event in history], ["new", "missing"])
+        self.assertEqual(history[-1]["recorded_at"], saved["missing_detected_at"])
+
+
+class VersionRecoveryTests(unittest.TestCase):
+    """이력 쓰기·레코드 교체·정리 실패 뒤 재실행해도 변경 이벤트를 한 번만 남긴다."""
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.versions = JsonFileVersionStore(self.root / "processed")
+        self.snapshots = JsonFileSnapshotStore(self.root / "raw")
+        self.collect("가상 A")
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def collect(self, name: str) -> CollectionResult:
+        payload = json.dumps({
+            "resultCode": 200,
+            "result": {
+                "pagging": {"totCount": 1},
+                "youthPolicyList": [{"plcyNo": "V-A", "plcyNm": name}],
+            },
+        }, ensure_ascii=False).encode("utf-8")
+
+        class OnePage:
+            def fetch(self, request: SourceRequest) -> SourceResponse:
+                return SourceResponse(200, payload, "application/json")
+
+        return collect_youthcenter(
+            YOUTHCENTER_POLICY_LIST, OnePage(), self.snapshots, self.versions,
+            lambda: datetime(2026, 10, 30, 4, 0, tzinfo=KST),
+        )
+
+    def assert_recovered_once(self) -> None:
+        # 새 저장소 인스턴스로 다시 실행해 메모리에 의존하지 않는 복구를 확인한다.
+        self.versions = JsonFileVersionStore(self.root / "processed")
+        retried = self.collect("가상 A 수정")
+        self.assertTrue(retried.complete)
+        self.assertEqual([c.kind for c in retried.changes], [ChangeKind.UNCHANGED])
+        saved = self.versions.load_records(SOURCE_NAME)["V-A"]
+        self.assertEqual(saved["fields"]["plcyNm"], "가상 A 수정")
+        lines = self.versions.changes_path(SOURCE_NAME).read_text(encoding="utf-8").splitlines()
+        self.assertEqual([json.loads(line)["kind"] for line in lines], ["new", "changed"])
+        self.assertFalse((self.root / "processed" / SOURCE_NAME / PENDING_FILE).exists())
+
+    def test_history_open_failure_keeps_old_records_and_recovers_on_retry(self) -> None:
+        before = self.versions.records_path(SOURCE_NAME).read_bytes()
+        original_open = Path.open
+
+        def fail_history(path: Path, *args: object, **kwargs: object) -> object:
+            if path.name == CHANGES_FILE:
+                raise OSError("가상 이력 파일 쓰기 실패")
+            return original_open(path, *args, **kwargs)
+
+        with mock.patch.object(Path, "open", fail_history):
+            with self.assertRaises(OSError):
+                self.collect("가상 A 수정")
+        self.assertEqual(self.versions.records_path(SOURCE_NAME).read_bytes(), before)
+        self.assert_recovered_once()
+
+    def test_partial_history_write_is_replaced_on_retry(self) -> None:
+        original_open = Path.open
+
+        def partial_history(path: Path, *args: object, **kwargs: object) -> object:
+            handle = original_open(path, *args, **kwargs)
+            if path.name != CHANGES_FILE:
+                return handle
+            writer = mock.MagicMock(wraps=handle)
+            writer.__enter__.return_value = writer
+            writer.__exit__.side_effect = lambda *args: handle.close()
+
+            def partial_write(data: bytes) -> int:
+                handle.write(data[:10])
+                handle.flush()
+                raise OSError("가상 이력 일부 쓰기 실패")
+
+            writer.write.side_effect = partial_write
+            return writer
+
+        with mock.patch.object(Path, "open", partial_history):
+            with self.assertRaises(OSError):
+                self.collect("가상 A 수정")
+        self.assert_recovered_once()
+
+    def test_record_replace_failure_does_not_duplicate_history_on_retry(self) -> None:
+        original_replace = os.replace
+
+        def fail_records(source: Path, destination: Path) -> None:
+            if destination.name == RECORDS_FILE:
+                raise OSError("가상 레코드 교체 실패")
+            original_replace(source, destination)
+
+        with mock.patch("benefitfinder.infrastructure.local_files.os.replace", fail_records):
+            with self.assertRaises(OSError):
+                self.collect("가상 A 수정")
+        self.assert_recovered_once()
+
+    def test_journal_cleanup_failure_does_not_duplicate_history_on_retry(self) -> None:
+        original_unlink = Path.unlink
+
+        def fail_cleanup(path: Path, *args: object, **kwargs: object) -> None:
+            if path.name == PENDING_FILE:
+                raise OSError("가상 복구 기록 정리 실패")
+            original_unlink(path, *args, **kwargs)
+
+        with mock.patch.object(Path, "unlink", fail_cleanup):
+            with self.assertRaises(OSError):
+                self.collect("가상 A 수정")
+        self.assert_recovered_once()
 
 
 class JobsCommandTests(unittest.TestCase):
