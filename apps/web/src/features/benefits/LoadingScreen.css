@@ -1,0 +1,106 @@
+/* L 로딩 */
+.l-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-block: 56px 32px;
+  word-break: keep-all;
+}
+
+.l-spinner {
+  width: 52px;
+  height: 52px;
+  margin-bottom: 20px;
+  border: 5px solid var(--color-sub);
+  border-top-color: var(--color-accent);
+  border-radius: 50%;
+  animation: l-spin 0.9s linear infinite;
+}
+
+@keyframes l-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .l-spinner {
+    animation-duration: 3s;
+  }
+}
+
+.l-steps {
+  list-style: none;
+  margin: 20px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.l-step {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 16px;
+}
+
+.l-step__mark {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.l-step--done .l-step__mark {
+  background: var(--color-ok-soft);
+  color: var(--color-ok);
+}
+
+.l-step--running {
+  font-weight: 700;
+}
+
+.l-step--running .l-step__mark {
+  border: 3px solid var(--color-sub);
+  border-top-color: var(--color-accent);
+  animation: l-spin 0.9s linear infinite;
+}
+
+.l-step--failed .l-step__mark {
+  background: var(--color-no-soft);
+  color: var(--color-no);
+}
+
+.l-step__detail {
+  margin-left: auto;
+  font-size: var(--text-sub);
+  font-weight: 400;
+  color: var(--color-muted);
+}
+
+.l-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.l-dev {
+  margin-top: 24px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--color-check-soft);
+  color: var(--color-check);
+  font-size: var(--text-sub);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
