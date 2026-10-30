@@ -1,7 +1,8 @@
 """온통청년 API HTTP 어댑터 (application.collection.SourceFetcher 구현).
 
 인증키는 이 어댑터만 알고, 요청 기록·스냅숏·오류에는 남기지 않는다. 표준 라이브러리만
-사용하며 요청 사이에 최소 간격을 둬 공식 서버에 부담을 주지 않는다.
+사용하며 요청 사이에 최소 간격을 둬 공식 서버에 부담을 주지 않는다. 같은 요청이 5xx나
+연결 오류로 실패하면 간격을 늘려 몇 번만 다시 시도한다. 실행 단위 재시도·스케줄은 jobs가 맡는다.
 """
 
 from __future__ import annotations
@@ -29,6 +30,8 @@ class YouthcenterHttpFetcher:
         min_interval_seconds: float = 0.5,
         user_agent: str = DEFAULT_USER_AGENT,
         require_https: bool = True,
+        max_retries: int = 3,
+        retry_backoff_seconds: float = 2.0,
         sleep: Callable[[float], None] = time.sleep,
         monotonic: Callable[[], float] = time.monotonic,
     ) -> None:
@@ -40,6 +43,10 @@ class YouthcenterHttpFetcher:
         self._min_interval = min_interval_seconds
         self._user_agent = user_agent
         self._require_https = require_https
+        if max_retries < 0 or retry_backoff_seconds < 0:
+            raise ValueError("재시도 횟수와 대기 시간은 0 이상이어야 합니다.")
+        self._max_retries = max_retries
+        self._retry_backoff = retry_backoff_seconds
         self._sleep = sleep
         self._monotonic = monotonic
         self._last_request_at: float | None = None
@@ -64,6 +71,20 @@ class YouthcenterHttpFetcher:
         http_request = urllib.request.Request(
             url, headers={"User-Agent": self._user_agent, "Accept": "application/json"}
         )
+        for attempt in range(self._max_retries + 1):
+            if attempt:
+                self._sleep(self._retry_backoff * 2 ** (attempt - 1))
+            try:
+                response = self._send(http_request)
+            except (urllib.error.URLError, TimeoutError):
+                if attempt == self._max_retries:
+                    raise
+                continue
+            if response.status_code < 500 or attempt == self._max_retries:
+                return response
+        raise AssertionError("도달하지 않는 경로")
+
+    def _send(self, http_request: urllib.request.Request) -> SourceResponse:
         self._wait_turn()
         try:
             with urllib.request.urlopen(http_request, timeout=self._timeout) as response:

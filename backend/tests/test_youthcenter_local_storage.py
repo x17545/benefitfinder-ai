@@ -44,12 +44,17 @@ FAKE_KEY = "virtual-test-key-0000"
 class RecordingHandler(BaseHTTPRequestHandler):
     seen: list[tuple[str, dict[str, list[str]], str | None]] = []
     status = 200
+    failures_before_success = 0
 
     def do_GET(self) -> None:  # noqa: N802 - http.server 규약
         query = parse_qs(urlparse(self.path).query)
         RecordingHandler.seen.append((self.path, query, self.headers.get("Accept")))
-        body = b'{"resultCode": 200}' if self.status == 200 else b"busy"
-        self.send_response(self.status)
+        status = self.status
+        if RecordingHandler.failures_before_success > 0:
+            RecordingHandler.failures_before_success -= 1
+            status = 500
+        body = b'{"resultCode": 200}' if status == 200 else b"busy"
+        self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
@@ -63,6 +68,7 @@ class FetcherTests(unittest.TestCase):
     def setUp(self) -> None:
         RecordingHandler.seen = []
         RecordingHandler.status = 200
+        RecordingHandler.failures_before_success = 0
         self.server = HTTPServer(("127.0.0.1", 0), RecordingHandler)
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
         self.url = f"http://127.0.0.1:{self.server.server_port}/getPlcy"
@@ -73,7 +79,8 @@ class FetcherTests(unittest.TestCase):
 
     def fetcher(self, **kwargs: object) -> YouthcenterHttpFetcher:
         return YouthcenterHttpFetcher(
-            FAKE_KEY, require_https=False, min_interval_seconds=0, **kwargs
+            FAKE_KEY, require_https=False, min_interval_seconds=0,
+            retry_backoff_seconds=0, **kwargs,
         )
 
     def test_adds_key_only_at_request_time(self) -> None:
@@ -88,9 +95,32 @@ class FetcherTests(unittest.TestCase):
         self.assertNotIn("apiKeyNm", request.params)
 
     def test_http_error_is_returned_not_raised(self) -> None:
-        RecordingHandler.status = 503
+        RecordingHandler.status = 404
         response = self.fetcher().fetch(SourceRequest(self.url, {}))
-        self.assertEqual((response.status_code, response.body), (503, b"busy"))
+        self.assertEqual((response.status_code, response.body), (404, b"busy"))
+        self.assertEqual(len(RecordingHandler.seen), 1)
+
+    def test_retries_temporary_server_errors(self) -> None:
+        RecordingHandler.failures_before_success = 2
+        response = self.fetcher().fetch(SourceRequest(self.url, {}))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(RecordingHandler.seen), 3)
+
+    def test_gives_up_after_retries(self) -> None:
+        RecordingHandler.status = 503
+        response = self.fetcher(max_retries=2).fetch(SourceRequest(self.url, {}))
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(len(RecordingHandler.seen), 3)
+
+    def test_retry_waits_grow(self) -> None:
+        RecordingHandler.failures_before_success = 2
+        waits: list[float] = []
+        fetcher = YouthcenterHttpFetcher(
+            FAKE_KEY, require_https=False, min_interval_seconds=0,
+            retry_backoff_seconds=1.5, sleep=waits.append,
+        )
+        fetcher.fetch(SourceRequest(self.url, {}))
+        self.assertEqual(waits, [1.5, 3.0])
 
     def test_guards(self) -> None:
         with self.assertRaises(ValueError):
