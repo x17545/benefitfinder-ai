@@ -2,7 +2,7 @@
 
 작업 전에는 루트 지침과 이 경로의 [추가 에이전트 지침](AGENTS.md)을 함께 읽는다.
 
-현재 구현: 온통청년 정책 목록의 원천 수집·원본 보관·버전 비교(`youthcenter.py`, `versioning.py`, `collect.py`). 네트워크·원본 저장·버전 저장은 `application/collection.py`의 인터페이스로 주입받으며, 실제 HTTP·저장 어댑터와 jobs 연결, 공고 원문 수집, 정규화·검수는 아직 구현하지 않았다.
+현재 구현: 온통청년 정책 목록의 원천 수집·원본 보관·버전 비교(`youthcenter.py`, `versioning.py`, `collect.py`). 네트워크·원본 저장·버전 저장은 `application/collection.py`의 인터페이스로 주입받는다. 공용 DB가 정해지기 전까지는 infrastructure의 HTTP 어댑터와 로컬 JSON 파일 저장소로 실행한다. 스케줄·재시도·알림, 공고 원문 수집, 정규화·검수, PostgreSQL 저장은 아직 구현하지 않았다.
 
 - `collect_youthcenter()`는 모든 응답을 해석 없이 스냅숏(요청 파라미터·수집 시각·상태·SHA-256)으로 보관하고 정책 ID별 레코드 해시로 신규·변경·유지·삭제를 구분한다.
 - API 키는 요청 파라미터·스냅숏·오류에 넣지 않는다. 어댑터가 직접 추가하고, 어댑터 예외는 형식 이름만 기록한다.
@@ -16,3 +16,21 @@
 네트워크·저장 어댑터는 주입받고 실행 주기는 jobs가 담당한다. API 필드 누락을 동시 수급 허용으로 해석하지 않으며, 미지원·상충·불명확은 검수 대기로 남긴다. 실제 원본·정제 결과는 Git 제외 경로에서 다룬다.
 
 윤정찬은 API·공식 원문 수집·출처·버전을, 탁서윤은 수집 후 분석·조건 구조화·정제·품질 검증과 ai 원문 분석·추출·평가를 중심으로 협업한다. 검수된 조건·금액·중복 제한·원문 근거를 백엔드에 넘기고, 실행 함수와 실패·재검수 결과를 양승현의 자동화에 연결한다. 김하정은 API·DB·계산 연동을 맡는다. 작업은 Issue에서 파일별로 나눈다.
+
+## 로컬 수집 실행
+
+```bash
+uv run --locked python -m benefitfinder.jobs collect-youthcenter
+```
+
+인증키는 환경 변수 `YOUTHCENTER_API_KEY`로만 전달한다. 저장소 루트에서 실행하면 아래 Git 제외 경로에 결과가 생긴다.
+
+| 경로 | 내용 |
+|---|---|
+| `data/raw/youthcenter/snapshots/` | 페이지별 원본 응답과 `.meta.json`(요청 파라미터·수집 시각·상태·해시, 키 제외) |
+| `data/processed/youthcenter/records.json` | 정책 ID별 최신 레코드(담당자 이름 제외), 마지막 확인 시각, 삭제 감지 시각 |
+| `data/processed/youthcenter/changes.jsonl` | 신규·변경·삭제 이력 |
+| `data/processed/youthcenter/records.csv` | 최신 레코드 CSV(엑셀용 UTF-8 BOM) |
+| `data/processed/youthcenter/fields.csv` | 필드별 채워진 건수·서로 다른 값 수·예시. 구조 공유용 |
+
+전체 수집에 성공하면 종료 코드 0, 일부 실패하면 성공분만 저장하고 1을 돌려준다. 요청 사이에는 0.5초 간격을 둔다. 실제 데이터 파일은 PR에 첨부하지 않고 공유 방법은 팀에서 정한다.
