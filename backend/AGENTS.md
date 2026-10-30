@@ -2,6 +2,7 @@
 
 - 루트 `AGENTS.md`, `backend/README.md`, `docs/architecture/ARCHITECTURE.md`를 따른다. Python 3.12를 사용한다. 루트 uv 프로젝트에 속하므로 `backend/`에 별도 가상환경·requirements 파일을 만들지 않는다. `uv sync --locked`, `uv add`/`uv add --dev`, `uv run --locked`를 사용하며 pip로 직접 설치하지 않는다.
 - 백엔드는 Python + FastAPI, DB는 PostgreSQL로 확정했다. 다른 프레임워크·DB로 임의 교체하지 않는다. ORM·드라이버·마이그레이션 도구·LLM 공급자는 아직 선택하지 않았다.
+- 양승현은 FastAPI·검색·자격 진단·조합 계산·통합·배포, 윤정찬은 원천 수집·PostgreSQL 적재, 탁서윤은 정제·AI·자동화를 맡는다. 적재의 구체 DB 구현도 `infrastructure/database/`에 두고 저장 모델·마이그레이션은 승현·정찬이 함께 검토한다. 역할에 맞춘 별도 서버나 중복 저장소를 만들지 않는다. 상세 인계는 기능 명세 9장을 따른다.
 - `api`는 요청·응답, `application`은 사용 사례·인터페이스, `domain`은 공통 모델·순수 판정, `domains/<분야>`는 고유 규칙을 담당한다.
 - `domain`은 표준 라이브러리와 자기 모듈에만 의존한다. `application`은 `domain`과 자기 모듈을 사용하며 구체 어댑터를 import하지 않는다.
 - `api`는 `application`·`domain`을 사용한다. `ai`·`ingestion`·`infrastructure`는 서로를 직접 import하지 않고 인터페이스로 연결한다.

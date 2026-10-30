@@ -55,6 +55,6 @@ backend/
 - 실행은 DB·LLM 키 없이 된다. 저장소 루트에서 `uv run --locked uvicorn benefitfinder.main:app --reload --reload-dir backend/src --host 127.0.0.1 --port 8000`으로 실행한다. 런타임 의존성 버전·관리는 루트 uv 프로젝트가 담당하며, `GET /health`는 liveness일 뿐이고 DB-ready를 보장하지 않는다. 설치는 루트 `uv sync --locked`, 두 서버 동시 실행은 `pnpm dev`, API만 실행은 `pnpm dev:api`다. pip로 직접 설치하거나 별도 requirements 파일을 만들지 않는다. 자세한 안내는 [처음 개발 시작하기](../docs/development/GETTING_STARTED.md)를 따른다.
 - 가상 저장소를 이용한 단위 검증과 실제 PostgreSQL 연동 검증을 구분한다. 실제 DB 구현은 별도 테스트 DB에서 스키마 적용·읽기·쓰기를 확인한다.
 
-2026-10-28 역할 기준: 김하정은 API·검색·판정·조합 계산·DB 연동, 양승현은 jobs 실행·스케줄·재시도·실패 알림, 윤정찬은 원천 수집·출처·버전, 탁서윤은 ingestion 분석·정제와 ai 원문 분석·규칙 후보 추출·평가를 맡는다.
+2026-10-29 역할 기준: 양승현은 FastAPI·검색·자격 판정·조합 계산·통합 테스트·배포, 윤정찬은 원천 수집·원본/출처/버전 관리·PostgreSQL 적재, 탁서윤은 ingestion 정제·ai 원문 분석/중복 수혜 규칙 추출·jobs 자동화를 맡는다. 저장 모델·마이그레이션은 조회와 적재의 영향을 승현·정찬이 함께 검토한다. 김하정은 React 화면에서 API·SSE를 연결하고, 이현서는 요구사항·사용자 흐름·화면 설계를 맡는다. 상세 인계는 [기능 명세 9장](../docs/product/REQUIREMENTS.md#9-팀원별-담당-기능-및-협업-기준)을 따른다.
 
 제품의 핵심은 중복 수급 제한을 반영한 지원금 조합의 총액순 비교다. 데이터 Agent로 원문 규칙 후보를 추출하고 검증·사람 검수 후 게시한다. 사용자 검색·계산·템플릿 설명은 검수 데이터를 쓰는 일반 코드로 수행한다. 구체 모델·Agent 도구·벡터 검색은 미확정이며 기능은 아직 구현되지 않았다. 데이터 처리와 모듈 경계는 [정책 데이터 분석·정제](../docs/architecture/POLICY_DATA_PIPELINE.md)를 따른다.
