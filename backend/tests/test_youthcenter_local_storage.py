@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import contextlib
+import dataclasses
 import io
 import json
 import os
@@ -252,6 +253,71 @@ class LocalFileTests(unittest.TestCase):
         self.assertEqual(second.changes[0].kind, ChangeKind.UNCHANGED)
         saved = versions.load_records(SOURCE_NAME)["V-1"]["fields"]
         self.assertNotIn("operInstPicNm", saved)
+
+
+class PartialFailureTests(unittest.TestCase):
+    """일부 페이지가 실패해도 이전에 저장한 성공 데이터가 그대로 남는지 확인한다."""
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.versions = JsonFileVersionStore(self.root / "processed")
+        self.snapshots = JsonFileSnapshotStore(self.root / "raw")
+        self.config = dataclasses.replace(YOUTHCENTER_POLICY_LIST, page_size=1)
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def body(self, policy: dict[str, object], total: int) -> bytes:
+        document = {
+            "resultCode": 200,
+            "result": {"pagging": {"totCount": total}, "youthPolicyList": [policy]},
+        }
+        return json.dumps(document, ensure_ascii=False).encode("utf-8")
+
+    def collect(self, pages: dict[int, SourceResponse], hour: int):
+        class Pages:
+            def fetch(self, request: SourceRequest) -> SourceResponse:
+                return pages[int(request.params["pageNum"])]
+
+        clock = lambda: datetime(2026, 10, 30, hour, 0, tzinfo=KST)  # noqa: E731
+        return collect_youthcenter(self.config, Pages(), self.snapshots, self.versions, clock)
+
+    def test_failed_page_keeps_previous_records_untouched(self) -> None:
+        a = {"plcyNo": "V-A", "plcyNm": "가상 A"}
+        b = {"plcyNo": "V-B", "plcyNm": "가상 B"}
+        first = self.collect(
+            {1: SourceResponse(200, self.body(a, 2), "application/json"),
+             2: SourceResponse(200, self.body(b, 2), "application/json")},
+            hour=3,
+        )
+        self.assertTrue(first.complete)
+        before = self.versions.load_records(SOURCE_NAME)
+
+        changed_a = {"plcyNo": "V-A", "plcyNm": "가상 A 수정"}
+        second = self.collect(
+            {1: SourceResponse(200, self.body(changed_a, 2), "application/json"),
+             2: SourceResponse(500, b"<html>error</html>", "text/html")},
+            hour=4,
+        )
+        self.assertFalse(second.complete)
+        self.assertEqual([c.kind for c in second.changes], [ChangeKind.CHANGED])
+        after = self.versions.load_records(SOURCE_NAME)
+        self.assertEqual(after["V-B"], before["V-B"])
+        self.assertIsNone(after["V-B"]["missing_detected_at"])
+        self.assertEqual(after["V-A"]["fields"]["plcyNm"], "가상 A 수정")
+        self.assertEqual(after["V-A"]["last_checked_at"], "2026-10-30T04:00:00+09:00")
+        self.assertEqual(self.versions.latest_hashes(SOURCE_NAME).keys(), {"V-A", "V-B"})
+
+    def test_failure_before_any_record_changes_nothing(self) -> None:
+        a = {"plcyNo": "V-A", "plcyNm": "가상 A"}
+        self.collect({1: SourceResponse(200, self.body(a, 1), "application/json")}, hour=3)
+        before = self.versions.records_path(SOURCE_NAME).read_bytes()
+        result = self.collect({1: SourceResponse(503, b"busy", "text/plain")}, hour=4)
+        self.assertFalse(result.complete)
+        self.assertEqual(self.versions.records_path(SOURCE_NAME).read_bytes(), before)
+        self.assertFalse(self.versions.changes_path(SOURCE_NAME).read_text(encoding="utf-8")
+                         .count("2026-10-30T04"))
 
 
 class JobsCommandTests(unittest.TestCase):
