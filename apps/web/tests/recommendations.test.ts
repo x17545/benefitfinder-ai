@@ -36,6 +36,25 @@ describe('createSseParser', () => {
       { event: 'result', data: '{}' },
     ]);
   });
+
+  it('keeps CRLF together at every possible chunk boundary', () => {
+    const stream = 'event: progress\r\ndata: {"step":"search"}\r\n\r\nevent: result\r\ndata: {}\r\n\r\n';
+    for (let split = 0; split <= stream.length; split += 1) {
+      const parser = createSseParser();
+      expect([...parser.push(stream.slice(0, split)), ...parser.push(stream.slice(split))]).toEqual([
+        { event: 'progress', data: '{"step":"search"}' },
+        { event: 'result', data: '{}' },
+      ]);
+    }
+  });
+
+  it('accepts one-character chunks, comments, CR-only and multiline data', () => {
+    const parser = createSseParser();
+    const stream = ': heartbeat\r\nevent: result\rdata: first\r\ndata: second\r\n\r\n';
+    expect([...stream].flatMap((char) => parser.push(char))).toEqual([
+      { event: 'result', data: 'first\nsecond' },
+    ]);
+  });
 });
 
 describe('postRecommendations', () => {
@@ -59,6 +78,34 @@ describe('postRecommendations', () => {
       }),
     ).resolves.toEqual(FIXTURE);
     expect(steps).toEqual(['search_policies']);
+  });
+
+  it('reads a real byte stream split inside CRLF and Korean UTF-8 characters', async () => {
+    const text =
+      'event: progress\r\ndata: {"step":"search_policies","state":"done","label":"정책 찾기"}\r\n\r\n' +
+      `event: result\r\ndata: ${JSON.stringify(FIXTURE)}\r\n\r\n`;
+    const bytes = new TextEncoder().encode(text);
+    const fetchFn: typeof fetch = async () => new Response(new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (const byte of bytes) {
+          controller.enqueue(Uint8Array.of(byte));
+        }
+        controller.close();
+      },
+    }), { headers: { 'Content-Type': 'text/event-stream' } });
+    const labels: string[] = [];
+    await expect(postRecommendations(REQUEST, {
+      fetchFn,
+      onProgress: (progress) => { labels.push(progress.label); },
+    })).resolves.toEqual(FIXTURE);
+    expect(labels).toEqual(['정책 찾기']);
+  });
+
+  it('keeps an SSE error terminal even when a result follows in the same chunk', async () => {
+    const error = { request_id: 'r', code: 'daily_limit_exceeded', message: 'limit' };
+    const text = `event: error\r\ndata: ${JSON.stringify(error)}\r\n\r\nevent: result\r\ndata: ${JSON.stringify(FIXTURE)}\r\n\r\n`;
+    const fetchFn: typeof fetch = async () => textResponse(text, 200, 'text/event-stream');
+    await expect(postRecommendations(REQUEST, { fetchFn })).rejects.toMatchObject({ code: 'daily_limit_exceeded' });
   });
 
   it('turns HTTP 429 into the daily limit code', async () => {

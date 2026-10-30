@@ -8,6 +8,51 @@ export type ResultView = RecommendationResponse['results']['1y']['pv_off'];
 export type Portfolio = ResultView['portfolios'][number];
 export type PortfolioPolicy = Portfolio['policies'][number];
 
+type ExcludedItem = NonNullable<ResultView['excluded']>[number];
+export interface PortfolioExclusion {
+  policy_id: ExcludedItem['policy_id'];
+  amount_won: number | null;
+  reason: string | null;
+  evidence: ExcludedItem['evidence'][number][];
+}
+
+/** 제외 여부·금액은 선택한 조합의 서버 응답을 쓰고, 근거만 공개 상세에서 연결한다. */
+export function portfolioExclusions(
+  view: ResultView,
+  selected: Portfolio | undefined,
+  info: ReadonlyMap<string, NormalizedBenefit>,
+): PortfolioExclusion[] {
+  if (selected === undefined) {
+    return [];
+  }
+  const selectedIds = new Set(selected.policies.map((policy) => policy.policy_id));
+  const givenUp = selected.given_up ?? [];
+  const ids = new Set(givenUp.map((item) => item.policy_id));
+  // view.excluded의 설명은 추천 조합 기준이다. 대안 조합에 그대로 재사용하지 않는다.
+  if (selected.rank === 1) {
+    view.excluded?.forEach((item) => ids.add(item.policy_id));
+  }
+  return [...ids].filter((id) => !selectedIds.has(id)).map((id) => {
+    const detail = selected.rank === 1 ? view.excluded?.find((item) => item.policy_id === id) : undefined;
+    const evidence = detail?.evidence ?? [
+      ...(info.get(id)?.conflicts ?? [])
+        .filter((conflict) => selectedIds.has(conflict.policy_id))
+        .flatMap((conflict) => conflict.evidence),
+      ...selected.policies.flatMap((policy) =>
+        (info.get(policy.policy_id)?.conflicts ?? [])
+          .filter((conflict) => conflict.policy_id === id)
+          .flatMap((conflict) => conflict.evidence),
+      ),
+    ];
+    return {
+      policy_id: id,
+      amount_won: givenUp.find((item) => item.policy_id === id)?.amount_won ?? null,
+      reason: detail?.reason ?? null,
+      evidence,
+    };
+  });
+}
+
 export function pickView(result: RecommendationResponse, period: Period, presentValue: boolean): ResultView {
   const periodResult = result.results[period];
   return presentValue ? periodResult.pv_on : periodResult.pv_off;

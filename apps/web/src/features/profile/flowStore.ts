@@ -1,4 +1,6 @@
 import { useSyncExternalStore } from 'react';
+import { clearAnalysis } from '../benefits/analysisStore.ts';
+import { clearFlowSession, loadFlowSession, saveFlowSession } from './flowSession.ts';
 import type {
   AssetBand,
   ContractType,
@@ -78,7 +80,7 @@ export const EMPTY_ANSWERS: ConditionAnswers = {
 
 /**
  * 조건 고르기 흐름에서 화면끼리 함께 쓰는 값.
- * 서버로 보내지 않고 이 브라우저 탭의 메모리에만 둔다.
+ * 메모리와 sessionStorage에 두어 새로고침에도 유지한다. 탭을 닫으면 사라진다.
  */
 export interface FlowState {
   /** S1 필수 동의 */
@@ -88,7 +90,12 @@ export interface FlowState {
   answers: ConditionAnswers;
 }
 
-let state: FlowState = { consent: false, remember: false, answers: EMPTY_ANSWERS };
+const restored = loadFlowSession();
+let state: FlowState = restored ?? { consent: false, remember: false, answers: EMPTY_ANSWERS };
+// 입력 조건 없이 남은 과거 결과는 현재 조건의 결과로 재사용하지 않는다.
+if (restored === null) {
+  clearAnalysis();
+}
 const listeners = new Set<() => void>();
 
 function emit(): void {
@@ -103,12 +110,30 @@ export function getFlowState(): FlowState {
 
 export function updateFlowState(patch: Partial<Omit<FlowState, 'answers'>>): void {
   state = { ...state, ...patch };
+  if (!state.consent) {
+    clearAnalysis();
+  }
+  saveFlowSession(state);
   emit();
 }
 
 /** 고른 값 일부를 바꾼다. 나머지 값은 그대로 */
 export function updateAnswers(patch: Partial<ConditionAnswers>): void {
-  state = { ...state, answers: { ...state.answers, ...patch } };
+  const answers = { ...state.answers, ...patch };
+  if (JSON.stringify(answers) === JSON.stringify(state.answers)) {
+    return;
+  }
+  clearAnalysis();
+  state = { ...state, answers };
+  saveFlowSession(state);
+  emit();
+}
+
+/** [내 정보 지우기]는 새로고침용 입력과 동의도 함께 지운다. */
+export function clearFlowState(): void {
+  clearAnalysis();
+  state = { consent: false, remember: false, answers: EMPTY_ANSWERS };
+  clearFlowSession();
   emit();
 }
 

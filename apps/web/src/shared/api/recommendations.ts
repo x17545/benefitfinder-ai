@@ -90,9 +90,18 @@ export interface SseEvent {
 /** SSE 글자를 받는 대로 넣으면 끝난 이벤트만 돌려준다 (빈 줄이 이벤트 끝) */
 export function createSseParser(): { push: (text: string) => SseEvent[] } {
   let buffer = '';
+  let afterCR = false;
   return {
     push(text: string): SseEvent[] {
-      buffer += text.replace(/\r\n?/g, '\n');
+      // CRLF가 서로 다른 청크에 나뉘어도 하나의 줄바꿈으로 처리한다.
+      for (const char of text) {
+        if (char === '\n' && afterCR) {
+          afterCR = false;
+          continue;
+        }
+        buffer += char === '\r' ? '\n' : char;
+        afterCR = char === '\r';
+      }
       const events: SseEvent[] = [];
       let end = buffer.indexOf('\n\n');
       while (end !== -1) {

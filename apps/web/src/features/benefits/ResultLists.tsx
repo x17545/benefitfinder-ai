@@ -4,7 +4,7 @@ import { conditionLabel } from '../../domains/youth/conditionLabels.ts';
 import type { NormalizedBenefit } from '../../shared/api/benefits.ts';
 import { StatusChip } from '../../shared/ui/StatusChip.tsx';
 import { formatManWon } from './format.ts';
-import { policyName } from './resultModel.ts';
+import { policyName, portfolioExclusions } from './resultModel.ts';
 import type { Portfolio, ResultView } from './resultModel.ts';
 
 interface FoldProps {
@@ -36,7 +36,7 @@ interface ResultListsProps {
 
 /** 접기 목록 4개: 빠진 정책 · 모집 끝남 · 조건 안 맞음 · 계산 전. 0개인 목록은 숨긴다 */
 export function ResultLists({ view, selected, info }: ResultListsProps): JSX.Element {
-  const excluded = view.excluded ?? [];
+  const excluded = portfolioExclusions(view, selected, info);
   const closed = view.closed_now ?? [];
   const notEligible = view.not_eligible ?? [];
   const notReviewed = view.not_yet_reviewed ?? [];
@@ -45,20 +45,18 @@ export function ResultLists({ view, selected, info }: ResultListsProps): JSX.Ele
     <div className="s3-folds">
       {excluded.length > 0 ? (
         <Fold title={`이 조합에서 빠진 정책 ${String(excluded.length)}개`}>
-          {excluded.map((item) => {
-            const cost = selected?.given_up?.find((given) => given.policy_id === item.policy_id)?.amount_won;
-            return (
-              <li key={item.policy_id}>
-                <a className="s3-fold__name" href={paths.policy(item.policy_id)}>
-                  {policyName(item.policy_id, info)}
-                </a>
-                <span>
-                  {item.reason} (공고 원문 근거)
-                  {cost !== null && cost !== undefined ? `. 이 조합의 기회비용 ${formatManWon(cost)}` : ''}
-                </span>
-              </li>
-            );
-          })}
+          {excluded.map((item) => (
+            <li key={item.policy_id}>
+              <a className="s3-fold__name" href={paths.policy(item.policy_id)}>
+                {policyName(item.policy_id, info)}
+              </a>
+              <span>
+                {item.reason ?? item.evidence[0]?.quote ?? '함께 받을 수 없는 근거는 정책 상세에서 확인해 주세요.'}
+                {item.evidence.length > 0 ? ' (공고 원문 근거)' : ''}
+                {item.amount_won !== null ? `. 이 조합의 기회비용 ${formatManWon(item.amount_won)}` : ''}
+              </span>
+            </li>
+          ))}
         </Fold>
       ) : null}
 

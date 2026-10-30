@@ -70,7 +70,7 @@ function mergeProgress(list: SSEProgressEventData[], item: SSEProgressEventData)
 
 /** 분석을 시작한다. 이미 하고 있던 분석은 취소한다 */
 export function startAnalysis(request: RecommendationRequest): void {
-  cancelAnalysis();
+  clearAnalysis();
   const current = new AbortController();
   controller = current;
   let timedOut = false;
