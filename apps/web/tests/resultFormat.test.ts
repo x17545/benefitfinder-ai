@@ -55,4 +55,11 @@ describe('S3 result model', () => {
     expect(portfolioLabel(1)).toBe('추천 조합');
     expect(portfolioLabel(3)).toBe('대안 2');
   });
+
+  it('only enumerates the three supported periods even if an internal caller supplies extra keys', () => {
+    if (!isRecommendationResponse(result)) { throw new Error('invalid fixture'); }
+    const extended = structuredClone(result);
+    Reflect.set(extended.results, 'extra', null);
+    expect(allPolicyIds(extended)).toEqual(allPolicyIds(result));
+  });
 });

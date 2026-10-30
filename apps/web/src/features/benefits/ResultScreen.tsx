@@ -78,6 +78,13 @@ function hasResults(view: ResultView): boolean {
   return view.portfolios.length > 0 || (view.fallback_list?.length ?? 0) > 0;
 }
 
+/** 계산할 조합이 없어도 보완 목록과 계산 불가 사유는 결과 화면에 남긴다. */
+function hasResultContent(view: ResultView): boolean {
+  return hasResults(view) || view.calculation_status === 'unavailable' ||
+    (view.not_yet_reviewed?.length ?? 0) > 0 || (view.closed_now?.length ?? 0) > 0 ||
+    (view.not_eligible?.length ?? 0) > 0;
+}
+
 /** S3 내 지원금 조합 (기획서 4.5) */
 export function ResultScreen(): JSX.Element {
   const analysis = useAnalysis();
@@ -101,8 +108,11 @@ export function ResultScreen(): JSX.Element {
   }
 
   // view는 초기 1년의 표시 형식이다. 다른 기간에 결과가 있으면 탭을 남긴다.
-  const anyResults = Object.values(result.results).some((item) => hasResults(item.pv_off) || hasResults(item.pv_on));
-  if (!anyResults) {
+  const anyContent = PERIOD_TABS.some(({ value: key }) => {
+    const item = result.results[key];
+    return hasResultContent(item.pv_off) || hasResultContent(item.pv_on);
+  });
+  if (!anyContent) {
     return <EmptyResult />;
   }
 
@@ -128,6 +138,7 @@ export function ResultScreen(): JSX.Element {
   const conflict = view.why?.deciding_conflict ?? [];
   const pvSuffix = presentValue ? ' (현재가치 기준)' : '';
   const fallback = view.fallback_list ?? [];
+  const hasPendingReview = (view.not_yet_reviewed?.length ?? 0) > 0;
 
   // F10: 조합 카드와 지금 고른 조합의 지원금만 그림으로 저장한다 (조건은 넣지 않는다)
   function saveImage(): void {
@@ -175,6 +186,8 @@ export function ResultScreen(): JSX.Element {
                 ? `함께 받을 수 있는 조합 ${String(portfolios.length)}개를 찾았어요`
                 : `받을 수 있는 지원금 ${String(fallback.length)}개를 찾았어요`}
             </h1>
+          ) : hasPendingReview ? (
+            <h1 className="screen__title">아직 조합 계산 전인 정책</h1>
           ) : null}
         </section>
 
@@ -248,7 +261,7 @@ export function ResultScreen(): JSX.Element {
           </p>
         ) : null}
 
-        {view.calculation_status === 'available' && !hasResults(view) ? (
+        {view.calculation_status === 'available' && !hasResults(view) && !hasPendingReview ? (
           <section className="s3-empty"><EmptyResultContent /></section>
         ) : null}
 

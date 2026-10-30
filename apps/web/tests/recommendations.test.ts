@@ -42,6 +42,10 @@ describe('isRecommendationResponse', () => {
     expect(isRecommendationResponse({ request_id: 'x', view: 'portfolio', results: {} })).toBe(false);
   });
 
+  it.each(['extra', '3y', 'summary'])('rejects an unvalidated results.%s key', (key) => {
+    expect(isRecommendationResponse(replaceField(['results', key], {}))).toBe(false);
+  });
+
   it.each([emptyText, fallbackText, unavailableText])('accepts empty, nullable fallback and unavailable fixtures', (text) => {
     const result: unknown = JSON.parse(text);
     expect(isRecommendationResponse(result)).toBe(true);
@@ -105,6 +109,13 @@ describe('createSseParser', () => {
 });
 
 describe('postRecommendations', () => {
+  it.each(['application/json', 'text/event-stream'])('rejects extra result branches from %s', async (type) => {
+    const json = JSON.stringify(replaceField(['results', 'extra'], {}));
+    const body = type === 'application/json' ? json : `event: result\ndata: ${json}\n\n`;
+    const fetchFn: typeof fetch = async () => textResponse(body, 200, type);
+    await expect(postRecommendations(REQUEST, { fetchFn })).rejects.toMatchObject({ code: 'invalid_response' });
+  });
+
   it.each(['application/json', 'text/event-stream'])('rejects a malformed nested result from %s', async (type) => {
     const broken = replaceField(['results', '1y', 'pv_off', 'portfolios'], [{}]);
     const json = JSON.stringify(broken);

@@ -1,58 +1,8 @@
 import type { RecommendationResponse } from './generated/recommendation-response.ts';
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function isString(value: unknown): value is string {
-  return typeof value === 'string';
-}
-
-function isNonEmptyString(value: unknown): value is string {
-  return isString(value) && value.length > 0;
-}
-
-function isMoney(value: unknown): boolean {
-  return typeof value === 'number' && Number.isInteger(value) && value >= 0;
-}
-
-function isNullableMoney(value: unknown): boolean {
-  return value === null || isMoney(value);
-}
-
-function isNullableString(value: unknown): boolean {
-  return value === null || isString(value);
-}
-
-function optional(value: unknown, check: (item: unknown) => boolean): boolean {
-  return value === undefined || check(value);
-}
-
-function arrayOf(value: unknown, check: (item: unknown) => boolean, min = 0, max = Infinity): value is unknown[] {
-  return Array.isArray(value) && value.length >= min && value.length <= max && value.every(check);
-}
-
-function isDateTime(value: unknown): boolean {
-  return isNonEmptyString(value) && !Number.isNaN(Date.parse(value));
-}
-
-function isSource(value: unknown): boolean {
-  if (!isRecord(value) || !isNonEmptyString(value.url)) {
-    return false;
-  }
-  try {
-    const url = new URL(value.url);
-    return (url.protocol === 'https:' || url.protocol === 'http:') &&
-      isDateTime(value.checked_at) && isNonEmptyString(value.document_version);
-  } catch {
-    return false;
-  }
-}
-
-function isEvidence(value: unknown): boolean {
-  return isRecord(value) && isNonEmptyString(value.quote) && isSource(value.source) &&
-    optional(value.location, isNonEmptyString);
-}
+import {
+  arrayOf, isDateTime, isEvidence, isMoney, isNonEmptyString, isNullableMoney,
+  isNullableString, isRecord, isSource, isString, optional,
+} from './responseValidation.ts';
 
 function isEligibilityStatus(value: unknown): boolean {
   return value === 'met' || value === 'not_met' || value === 'needs_review';
@@ -139,6 +89,9 @@ function isPeriodResult(value: unknown): boolean {
 /** API와 캐시의 값은 unknown이다. 화면이 읽는 6개 분기와 중첩 필드를 검증한다. */
 export function isRecommendationResponse(value: unknown): value is RecommendationResponse {
   if (!isRecord(value) || !isRecord(value.results)) {
+    return false;
+  }
+  if (!Object.keys(value.results).every((key) => key === '1y' || key === '2y' || key === 'all')) {
     return false;
   }
   return isNonEmptyString(value.request_id) && isString(value.domain) && /^[a-z][a-z0-9_-]*$/.test(value.domain) &&

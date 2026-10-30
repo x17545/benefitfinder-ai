@@ -99,6 +99,58 @@ describe('remember choice on S1', () => {
 });
 
 describe('period-specific empty results', () => {
+  it.each(['met', 'not_met', 'needs_review'] as const)('keeps unreviewed policies and their %s summary when no amounts can be calculated', async (status) => {
+    const result = fixture(emptyText);
+    result.results['1y'].pv_off.not_yet_reviewed = [{ policy_id: 'youth:example:P120', eligibility_summary: status }];
+    screen.result = result;
+    const html = await renderResult();
+    expect(html).toContain('아직 조합 계산 전인 정책 1개');
+    expect(html).toContain('정책 P120');
+    expect(html).toContain(`ui-status--${status}`);
+    expect(html).toContain('role="tablist"');
+    expect(html).not.toContain('지금 다루는 정책 중엔 맞는 게 없어요');
+    expect(html).not.toContain('aria-label="추천 조합 요약"');
+    expect(html).not.toContain('0만 원');
+  });
+
+  it('keeps closed and ineligible policy lists without a calculated portfolio', async () => {
+    const result = fixture(emptyText);
+    result.results['1y'].pv_off.closed_now = [{ policy_id: 'youth:example:P9', last_period: '가상 지난 모집', next_expected: null }];
+    result.results['1y'].pv_off.not_eligible = [{ policy_id: 'youth:example:P5', failed: ['age'] }];
+    screen.result = result;
+    const html = await renderResult();
+    expect(html).toContain('지금은 모집이 끝난 정책 1개');
+    expect(html).toContain('가상 지난 모집');
+    expect(html).toContain('조건이 맞지 않는 정책 1개');
+    expect(html).toContain('ui-status--not_met');
+  });
+
+  it('keeps tabs when only a later period has supplementary policies', async () => {
+    const result = fixture(emptyText);
+    result.results['2y'].pv_off.not_yet_reviewed = [{ policy_id: 'youth:example:P120', eligibility_summary: 'needs_review' }];
+    screen.result = result;
+    const initial = await renderResult();
+    expect(initial).toContain('role="tablist"');
+    expect(initial).not.toContain('정책 P120');
+    screen.period = '2y';
+    expect(await renderResult()).toContain('정책 P120');
+  });
+
+  it('does not turn unavailable calculations into a no-eligible-policy claim', async () => {
+    const result = fixture(emptyText);
+    for (const period of Object.values(result.results)) {
+      for (const view of [period.pv_off, period.pv_on]) {
+        view.calculation_status = 'unavailable';
+        view.unavailable_reason = 'unknown_payment_timing';
+      }
+    }
+    screen.result = result;
+    const html = await renderResult();
+    expect(html).toContain('이 기준으로는 계산할 수 없어요');
+    expect(html).toContain('role="tablist"');
+    expect(html).not.toContain('지금 다루는 정책 중엔 맞는 게 없어요');
+  });
+
   it('keeps tabs when 1y is empty and shows the 2y portfolio when selected', async () => {
     const result = fixture(fixtureText);
     result.view = 'empty';

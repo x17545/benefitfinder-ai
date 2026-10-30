@@ -1,24 +1,60 @@
 import type { NormalizedBenefit } from './generated/benefit.ts';
 import { BENEFITS_PATH } from '../config/api.ts';
+import {
+  arrayOf, isEvidence, isHttpUrl, isMoney, isNonEmptyString, isNullableMoney,
+  isNullableString, isRecord, isSource, optional,
+} from './responseValidation.ts';
 
 export type { NormalizedBenefit };
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
+function isNullableDate(value: unknown): boolean {
+  if (value === null) { return true; }
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) { return false; }
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
 
-/** 정책 상세가 약속(contracts/v1 benefit)의 필수 모양인지 확인한다 */
+function isApplication(value: unknown): boolean {
+  return isRecord(value) &&
+    (value.status === 'open' || value.status === 'closed' || value.status === 'upcoming' || value.status === 'unknown') &&
+    isNullableDate(value.starts_on) && isNullableDate(value.ends_on) &&
+    (value.url === null || isHttpUrl(value.url));
+}
+
+function isCondition(value: unknown): boolean {
+  return isRecord(value) && isNonEmptyString(value.id) && isNonEmptyString(value.description) &&
+    arrayOf(value.evidence, isEvidence, 1);
+}
+
+function isBenefitAmount(value: unknown): boolean {
+  return value === null || (isRecord(value) &&
+    optional(value.type, (item) => item === null || item === 'monthly' || item === 'lump_sum' || item === 'maturity' || item === 'interest') &&
+    optional(value.amount_won, isNullableMoney) && optional(value.max_total_won, isNullableMoney) &&
+    optional(value.period_months, (item) => item === null || (isMoney(item) && typeof item === 'number' && item >= 1)) &&
+    optional(value.pay_timing, (item) => item === null || item === 'monthly_from_start' || item === 'at_maturity' || item === 'yearly' || item === 'once') &&
+    optional(value.amount_text, isNullableString) &&
+    optional(value.amount_status, (item) => item === 'verified' || item === 'unknown'));
+}
+
+function isConflict(value: unknown): boolean {
+  return isRecord(value) && isNonEmptyString(value.policy_id) && arrayOf(value.evidence, isEvidence, 1);
+}
+
+function isNullableBoolean(value: unknown): boolean {
+  return value === null || typeof value === 'boolean';
+}
+
+/** 정책 상세의 필수 값과 화면이 읽는 금액·모집·중복 제한의 중첩 구조를 확인한다. */
 export function isNormalizedBenefit(value: unknown): value is NormalizedBenefit {
   return (
     isRecord(value) &&
-    typeof value.id === 'string' &&
-    typeof value.title === 'string' &&
-    typeof value.provider === 'string' &&
-    Array.isArray(value.categories) &&
-    isRecord(value.application) &&
-    typeof value.application.status === 'string' &&
-    isRecord(value.source) &&
-    typeof value.source.url === 'string'
+    isNonEmptyString(value.id) && isNonEmptyString(value.domain) && /^[a-z][a-z0-9_-]*$/.test(value.domain) &&
+    isNonEmptyString(value.title) && isNonEmptyString(value.summary) && isNonEmptyString(value.provider) &&
+    arrayOf(value.categories, isNonEmptyString) && new Set(value.categories).size === value.categories.length &&
+    isApplication(value.application) && arrayOf(value.eligibility_conditions, isCondition) && isSource(value.source) &&
+    isRecord(value.domain_data) && optional(value.benefit_amount, isBenefitAmount) &&
+    optional(value.reviewed, isNullableBoolean) && optional(value.lifetime_once, isNullableBoolean) &&
+    optional(value.conflicts, (item) => item === null || arrayOf(item, isConflict))
   );
 }
 

@@ -36,7 +36,7 @@
 
 | 항목 | 상태 |
 |---|---|
-| React + TypeScript strict + Vite | S1·S2 13단계·L 진행/오류·S3 조합/목록/기간별 빈 결과, 라우팅·추천 중첩 응답 검증 구현 |
+| React + TypeScript strict + Vite | S1·S2 13단계·L 진행/오류·S3 조합/목록/기간별 빈 결과·검수 대기 등 보완 목록, 라우팅·추천/정책 상세 중첩 응답 검증 구현 |
 | FastAPI | `GET /health`, 공통 오류·HTTP 상태/헤더 보존, OpenAPI 구현 |
 | 개발 도구 | uv·pnpm, lockfile, 계약 타입 생성, 공통 검사·GitHub CI 구성 |
 | 정책 API·자격 진단·조합 계산·상황 변화·정책 상세 | 웹 요청·결과 표시 있음, 서버 정책 API와 S4·S5 화면 구현 전 |

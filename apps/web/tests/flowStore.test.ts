@@ -62,6 +62,22 @@ async function analyzedFlow(): Promise<typeof import('../src/features/profile/fl
 }
 
 describe('tab-scoped conditions and analysis', () => {
+  it('discards a cached response containing an unsupported result period', async () => {
+    const flow = await import('../src/features/profile/flowStore.ts');
+    flow.updateFlowState({ consent: true });
+    flow.updateAnswers({ age: 25 });
+    if (!isRecommendationResponse(FIXTURE)) { throw new Error('invalid synthetic fixture'); }
+    const result = structuredClone(FIXTURE);
+    Reflect.set(result.results, 'extra', {});
+    session.setItem(RESULT_KEY, JSON.stringify({ result, isSample: false }));
+    vi.resetModules();
+    const restored = await import('../src/features/profile/flowStore.ts');
+    analysis = await import('../src/features/benefits/analysisStore.ts');
+    expect(restored.getFlowState().answers.age).toBe(25);
+    expect(analysis.getAnalysisState()).toEqual({ status: 'idle' });
+    expect(session.getItem(RESULT_KEY)).toBeNull();
+  });
+
   it('discards a malformed nested result cache while retaining valid tab conditions', async () => {
     const flow = await import('../src/features/profile/flowStore.ts');
     flow.updateFlowState({ consent: true });

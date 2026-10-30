@@ -1,7 +1,7 @@
 // 서버 결과에서 화면에 필요한 값만 꺼낸다. 순위·금액은 서버가 계산한 값을 그대로 쓴다.
 import type { NormalizedBenefit } from '../../shared/api/benefits.ts';
 import type { RecommendationResponse } from '../../shared/api/recommendations.ts';
-import { shortPolicyId } from './format.ts';
+import { PERIOD_TABS, shortPolicyId } from './format.ts';
 import type { Period } from './format.ts';
 
 export type ResultView = RecommendationResponse['results']['1y']['pv_off'];
@@ -61,7 +61,8 @@ export function pickView(result: RecommendationResponse, period: Period, present
 /** 결과 안에 나오는 모든 정책 id (이름을 받아 오려고) */
 export function allPolicyIds(result: RecommendationResponse): string[] {
   const ids = new Set<string>();
-  for (const period of Object.values(result.results)) {
+  for (const { value: key } of PERIOD_TABS) {
+    const period = result.results[key];
     for (const view of [period.pv_off, period.pv_on]) {
       for (const portfolio of view.portfolios) {
         portfolio.policies.forEach((policy) => ids.add(policy.policy_id));
