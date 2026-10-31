@@ -2,6 +2,8 @@
 
 기능 구현 시 application·domain·domains·ai·ingestion·api별 테스트를 추가한다. 외부 LLM·DB 없이 검증할 수 있는 순수 규칙과 경계 테스트를 우선한다. 현재 공용 데이터 계약 검증은 저장소 루트 tests에 있다.
 
+`test_policy_rule_review.py`는 가상 공식 문서·가짜 추출기로 근거·정책 연결·미지원 규칙·배치 상충·명시적 검수·원문 변경과 추출 실패를 검증한다. 실제 정책 사실·LLM 추출 품질·누락률·PostgreSQL·게시 연동은 검증하지 않는다.
+
 ## 부트스트랩 API 테스트
 
 `test_api.py`는 FastAPI 부트스트랩의 실제 HTTP 동작을 검증한다. 외부 DB·LLM·네트워크 없이 `TestClient`로 확인하며, 입력 검증·500 처리에 쓰는 가상 라우트는 테스트 안에서 `create_app()`이 반환한 앱에만 추가한다.
