@@ -130,3 +130,28 @@ class RuleExtractor(Protocol):
 class RulePreparationResult:
     reviews: tuple[CandidateReview, ...]
     error_code: str | None = None
+
+
+@dataclass(frozen=True)
+class RuleReviewBatch:
+    """Complete, locally imported documents, policy catalog, and draft candidates."""
+
+    documents: tuple[SourceDocument, ...]
+    policies: tuple[PolicyReference, ...]
+    candidates: tuple[RuleCandidate, ...]
+
+
+class ReviewOperation(StrEnum):
+    PREPARED = "prepared"
+    APPROVED = "approved"
+    REFRESHED = "refreshed"
+
+
+@dataclass(frozen=True)
+class RuleReviewSnapshot:
+    """One immutable local review artifact; not a published policy version."""
+
+    batch: RuleReviewBatch
+    reviews: tuple[CandidateReview, ...]
+    created_at: datetime
+    operation: ReviewOperation
