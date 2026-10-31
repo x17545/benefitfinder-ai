@@ -308,11 +308,14 @@ def refresh_review(
     """Revalidate before using a review; revoke approvals on evidence changes.
 
     Recollection of identical text/version does not advance the review timestamp.
+    Existing review issues stay pending until a new batch is prepared and reviewed;
+    refreshing evidence alone cannot resolve a person's outstanding concern.
     Missing sources fail closed. Extraction/collection failures must not overwrite
     stored successful records; persistence remains the caller's responsibility.
     """
     issues = list(validate_candidate(review.candidate, documents, policies))
     issues.extend(_current_batch_issues(review.candidate, candidates))
+    issues.extend(review.issues)
     if review.approval is not None:
         if not _candidate_shape_valid(
             review.candidate
@@ -322,17 +325,6 @@ def refresh_review(
             review.approval.documents_sha256 != _documents_sha256(documents)
         ):
             issues.append(ReviewIssue("documents_changed"))
-    else:
-        # Batch-level ambiguity cannot disappear by refreshing just one candidate.
-        issues.extend(
-            item
-            for item in review.issues
-            if item.code
-            in {
-                "conflicting_candidates",
-                "duplicate_candidate_id",
-            }
-        )
     return replace(
         review,
         issues=tuple(dict.fromkeys(issues)),

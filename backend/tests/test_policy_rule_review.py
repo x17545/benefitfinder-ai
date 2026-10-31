@@ -967,6 +967,78 @@ class RefreshReviewTest(unittest.TestCase):
         self.assertIsNone(refreshed.approval)
         self.assertTrue(refreshed.issues)
 
+    def test_refresh_preserves_unresolved_review_issue_until_new_preparation(self) -> None:
+        documents, policies, candidate = valid_fixture()
+        pending = CandidateReview(candidate, (ReviewIssue("conflicting_sources"),))
+        refreshed = refresh_review(pending, documents, policies, candidates=(candidate,))
+
+        self.assertIn("conflicting_sources", codes(refreshed.issues))
+        self.assertEqual(refreshed.status, "needs_review")
+        with self.assertRaisesRegex(ValueError, "^candidate_not_approvable$"):
+            approve_candidate(
+                refreshed,
+                documents,
+                policies,
+                candidates=(candidate,),
+                reviewer="virtual-reviewer",
+                reviewed_at=REVIEWED_AT,
+            )
+
+        prepared = prepare_rule_reviews(documents, policies, StaticExtractor((candidate,)))
+        approved = approve_candidate(
+            prepared.reviews[0],
+            documents,
+            policies,
+            candidates=(candidate,),
+            reviewer="virtual-reviewer",
+            reviewed_at=REVIEWED_AT,
+        )
+        self.assertEqual(approved.status, "approved")
+
+    def test_new_issue_suspends_existing_approval_and_survives_refresh(self) -> None:
+        approved, documents, policies = self.approve()
+        flagged = dataclasses.replace(approved, issues=(ReviewIssue("conflicting_sources"),))
+        self.assertEqual(flagged.status, "needs_review")
+
+        refreshed = refresh_review(flagged, documents, policies, candidates=(flagged.candidate,))
+        self.assertIsNone(refreshed.approval)
+        self.assertIn("conflicting_sources", codes(refreshed.issues))
+        self.assertEqual(refreshed.status, "needs_review")
+        self.assertEqual(approved.status, "approved")
+
+    def test_document_change_reason_survives_repeated_refresh(self) -> None:
+        documents, policies, original = valid_fixture()
+        candidate = dataclasses.replace(original, citations=(original.citations[0],))
+        prepared = prepare_rule_reviews(documents, policies, StaticExtractor((candidate,)))
+        approved = approve_candidate(
+            prepared.reviews[0],
+            documents,
+            policies,
+            candidates=(candidate,),
+            reviewer="virtual-reviewer",
+            reviewed_at=REVIEWED_AT,
+        )
+        changed = (
+            documents[0],
+            dataclasses.replace(documents[1], text="changed virtual supplemental notice"),
+        )
+        revoked = refresh_review(approved, changed, policies, candidates=(candidate,))
+        self.assertIsNone(revoked.approval)
+        self.assertIn("documents_changed", codes(revoked.issues))
+
+        refreshed = refresh_review(revoked, changed, policies, candidates=(candidate,))
+        self.assertIn("documents_changed", codes(refreshed.issues))
+        self.assertEqual(refreshed.status, "needs_review")
+        with self.assertRaisesRegex(ValueError, "^candidate_not_approvable$"):
+            approve_candidate(
+                refreshed,
+                changed,
+                policies,
+                candidates=(candidate,),
+                reviewer="virtual-reviewer",
+                reviewed_at=REVIEWED_AT,
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

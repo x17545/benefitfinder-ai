@@ -117,7 +117,7 @@ class CandidateReview:
 
     @property
     def status(self) -> str:
-        return "approved" if self.approval is not None else "needs_review"
+        return "approved" if self.approval is not None and not self.issues else "needs_review"
 
 
 class RuleExtractor(Protocol):
