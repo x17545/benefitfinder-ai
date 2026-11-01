@@ -1,5 +1,5 @@
 # 사용 사례와 인터페이스
 
-공식 출처 수집용 `collection.py`(원천 요청·응답, 원본 스냅숏·레코드 버전 저장소)는 ingestion이 사용하고 infrastructure가 구현한다. `policy_rules.py`는 공식 문서·규칙 후보·검수 기록과 추출기 인터페이스를 정의하며, 게시 계약·DB 스키마와 구분한다. 추천·상세 조회 사용 사례는 아직 구현하지 않았다.
+공식 출처 수집용 `collection.py`(원천 요청·응답, 원본 스냅숏·레코드 버전 저장소)는 ingestion이 사용하고 infrastructure가 구현한다. `policy_rules.py`는 공식 문서·규칙 후보·검수 기록과 추출기 인터페이스, 로컬 파일 작업의 전체 입력(`RuleReviewBatch`)과 결과(`RuleReviewSnapshot`)를 정의한다. 게시 계약·DB 스키마와 구분하며 추천·상세 조회 사용 사례는 아직 구현하지 않았다.
 
 추천·상세 조회 같은 사용 사례를 조율한다. 검색·혜택 저장소·조건 판정·AI 기능의 인터페이스를 필요한 것부터 정의한다. 구체 어댑터는 조립 지점에서 주입하며 ai나 infrastructure의 구체 클래스를 직접 import하지 않는다.
