@@ -244,6 +244,70 @@ class ReviewCommandTests(unittest.TestCase):
         self.assertIn("rule_review_io_error", stderr)
         self.assertNotIn(secret, stdout + stderr)
 
+    def test_refresh_cannot_restore_an_approval_invalid_in_the_stored_batch(self) -> None:
+        source, snapshot, output = (self.root / name for name in ("input", "stale", "output"))
+        original = approved()
+        rival = replace(original.batch.candidates[0], id="virtual-rival")
+        stale = replace(
+            original,
+            batch=replace(original.batch, candidates=(*original.batch.candidates, rival)),
+        )
+        write_rule_snapshot(snapshot, stale)
+        write_rule_batch(source, original.batch)
+        before = snapshot.read_bytes()
+
+        status, stdout, _ = self.run_command(
+            "refresh", "--snapshot", str(snapshot), "--input", str(source), "--output", str(output)
+        )
+        self.assertEqual(status, 0)
+        self.assertIn("승인 0건", stdout)
+        refreshed = load_rule_snapshot(output)
+        self.assertIsNone(refreshed.reviews[0].approval)
+        self.assertIn(
+            "conflicting_candidates", {issue.code for issue in refreshed.reviews[0].issues}
+        )
+        self.assertEqual(snapshot.read_bytes(), before)
+
+    def test_impossible_stored_review_time_is_rejected_without_writing(self) -> None:
+        source, snapshot, output = (self.root / name for name in ("input", "bad-time", "output"))
+        original = approved()
+        later = replace(original.reviews[0].approval, reviewed_at=AT + timedelta(days=2))
+        inconsistent = replace(original, reviews=(replace(original.reviews[0], approval=later),))
+        write_rule_snapshot(snapshot, inconsistent)
+        write_rule_batch(source, original.batch)
+        before = snapshot.read_bytes()
+        commands = (
+            ("show", "--snapshot", str(snapshot)),
+            (
+                "approve",
+                "--snapshot",
+                str(snapshot),
+                "--candidate-id",
+                "virtual-a-b",
+                "--reviewer",
+                "virtual-reviewer",
+                "--output",
+                str(output),
+            ),
+            (
+                "refresh",
+                "--snapshot",
+                str(snapshot),
+                "--input",
+                str(source),
+                "--output",
+                str(output),
+            ),
+        )
+        for arguments in commands:
+            with self.subTest(command=arguments[0]):
+                status, stdout, stderr = self.run_command(*arguments)
+                self.assertEqual(status, 1)
+                self.assertIn("review_time_follows_snapshot", stderr)
+                self.assertNotIn(original.batch.documents[0].text, stdout + stderr)
+                self.assertEqual(snapshot.read_bytes(), before)
+                self.assertFalse(output.exists())
+
 
 if __name__ == "__main__":
     unittest.main()

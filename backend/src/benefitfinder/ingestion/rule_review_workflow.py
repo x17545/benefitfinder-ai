@@ -67,6 +67,13 @@ def inspect_snapshot(snapshot: RuleReviewSnapshot) -> RuleReviewSnapshot:
     This checks the embedded batch, not the live state of an official website.
     A fresh complete batch must be imported with refresh_snapshot after collection.
     """
+    _check_time(snapshot.created_at, snapshot.batch)
+    for review in snapshot.reviews:
+        if review.approval is not None:
+            if review.approval.reviewed_at.utcoffset() is None:
+                raise RuleReviewWorkflowError("review_time_requires_timezone")
+            if review.approval.reviewed_at > snapshot.created_at:
+                raise RuleReviewWorkflowError("review_time_follows_snapshot")
     reviews = tuple(
         refresh_review(
             review,
@@ -127,5 +134,7 @@ def refresh_snapshot(
     as reviewed records. Re-extraction goes into a separately prepared artifact.
     """
     _check_time(at, batch, snapshot)
-    refreshed = inspect_snapshot(replace(snapshot, batch=batch))
-    return replace(refreshed, created_at=at, operation=ReviewOperation.REFRESHED)
+    checked = inspect_snapshot(snapshot)
+    return inspect_snapshot(
+        replace(checked, batch=batch, created_at=at, operation=ReviewOperation.REFRESHED)
+    )

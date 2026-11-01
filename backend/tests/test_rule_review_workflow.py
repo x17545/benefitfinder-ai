@@ -138,6 +138,42 @@ class ReviewWorkflowTests(unittest.TestCase):
         self.assertIsNone(restored.reviews[0].approval)
         self.assertTrue(restored.reviews[0].issues)
 
+    def test_refresh_preserves_concerns_from_the_stored_batch_before_replacing_it(self) -> None:
+        original = approved()
+        rival = replace(original.batch.candidates[0], id="virtual-rival")
+        stale = replace(
+            original,
+            batch=replace(original.batch, candidates=(*original.batch.candidates, rival)),
+        )
+        self.assertEqual(inspect_snapshot(stale).reviews[0].status, "needs_review")
+
+        refreshed = refresh_snapshot(stale, original.batch, at=AT + timedelta(hours=1))
+        self.assertIsNone(refreshed.reviews[0].approval)
+        self.assertIn(
+            "conflicting_candidates", {issue.code for issue in refreshed.reviews[0].issues}
+        )
+        self.assertEqual(stale.batch.candidates[-1], rival)
+        self.assertIsNotNone(stale.reviews[0].approval)
+
+    def test_inspection_rejects_events_later_than_snapshot_creation(self) -> None:
+        original = approved()
+        future = AT + timedelta(hours=1)
+        later_approval = replace(original.reviews[0].approval, reviewed_at=future)
+        later_document = replace(original.batch.documents[0], collected_at=future)
+        for snapshot, code in (
+            (
+                replace(original, reviews=(replace(original.reviews[0], approval=later_approval),)),
+                "review_time_follows_snapshot",
+            ),
+            (
+                replace(original, batch=replace(original.batch, documents=(later_document,))),
+                "review_precedes_collection",
+            ),
+        ):
+            with self.subTest(code=code):
+                with self.assertRaisesRegex(RuleReviewWorkflowError, f"^{code}$"):
+                    inspect_snapshot(snapshot)
+
     def test_operation_time_must_be_aware_and_not_backdated(self) -> None:
         original = prepared()
         with self.assertRaisesRegex(RuleReviewWorkflowError, "^review_time_requires_timezone$"):
