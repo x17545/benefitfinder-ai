@@ -19,6 +19,13 @@ from benefitfinder.api.schemas import ErrorCode, ErrorResponse
 from benefitfinder.api.v1.routers.health import router as health_router
 from benefitfinder.api.v1.routers.recommendations import router as recommendations_router
 
+from functools import partial
+
+from benefitfinder.application.recommendation_service import (
+    recommend_mvp_all_periods,
+)
+from benefitfinder.domains.youth.policy_evaluator import evaluate_policies
+
 NOT_FOUND_MESSAGE = "요청한 리소스를 찾을 수 없습니다."
 INVALID_REQUEST_MESSAGE = "요청 값이 올바르지 않습니다."
 INTERNAL_ERROR_MESSAGE = "내부 오류가 발생했습니다. 잠시 후 다시 시도해 주세요."
@@ -33,9 +40,7 @@ HTTP_ERROR_RESPONSES: dict[int, tuple[ErrorCode, str]] = {
 
 def error_body(code: ErrorCode, message: str) -> dict[str, Any]:
     """Build a common-format error payload with a fresh UUID request id."""
-    return ErrorResponse(
-        request_id=str(uuid.uuid4()), code=code, message=message
-    ).model_dump()
+    return ErrorResponse(request_id=str(uuid.uuid4()), code=code, message=message).model_dump()
 
 
 def create_app() -> FastAPI:
@@ -55,9 +60,7 @@ def create_app() -> FastAPI:
     )
 
     @app.exception_handler(StarletteHTTPException)
-    async def http_exception_handler(
-        request: Request, exc: StarletteHTTPException
-    ) -> JSONResponse:
+    async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
         # Keep HTTP semantics while replacing detail with a safe public message.
         # Status alone cannot identify domain errors such as unsupported_domain.
         code, message = HTTP_ERROR_RESPONSES.get(
@@ -66,9 +69,8 @@ def create_app() -> FastAPI:
         headers = {
             name: value
             for name, value in (exc.headers or {}).items()
-            if name.lower() not in {
-                "content-type", "content-length", "content-encoding", "transfer-encoding"
-            }
+            if name.lower()
+            not in {"content-type", "content-length", "content-encoding", "transfer-encoding"}
         }
         return JSONResponse(
             status_code=exc.status_code,
@@ -91,6 +93,11 @@ def create_app() -> FastAPI:
             status_code=500,
             content=error_body("internal_error", INTERNAL_ERROR_MESSAGE),
         )
+
+    app.state.recommendation_service = partial(
+        recommend_mvp_all_periods,
+        evaluate_policies=evaluate_policies,
+    )
 
     app.include_router(health_router)
     app.include_router(recommendations_router)

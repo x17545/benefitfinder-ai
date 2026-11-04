@@ -4,6 +4,10 @@
 from __future__ import annotations
 
 from typing import Any
+from uuid import uuid4
+
+from benefitfinder.application.recommendation_service import MVP_PAYMENTS
+from benefitfinder.domain.present_value import calculate_period_value
 
 
 MVP_POLICY_SOURCES = {
@@ -125,12 +129,6 @@ def map_portfolio(
     }
 
 
-from benefitfinder.domain.present_value import calculate_period_value
-from benefitfinder.application.recommendation_service import (
-    MVP_PAYMENTS,
-)
-
-
 def map_all_results(
     calculation: dict[str, Any],
     annual_rate: float | None,
@@ -187,10 +185,6 @@ def map_all_results(
         mapped_results[period] = mapped_period
 
     return mapped_results
-
-
-from datetime import datetime, timezone
-from uuid import uuid4
 
 
 def build_recommendation_response(

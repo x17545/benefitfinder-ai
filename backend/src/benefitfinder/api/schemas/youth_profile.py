@@ -55,9 +55,6 @@ class HouseholdInfo(BaseModel):
     ] | None = None
 
 
-from pydantic import Field, model_validator
-
-
 class MilitaryMonthsRange(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

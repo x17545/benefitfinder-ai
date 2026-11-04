@@ -1,9 +1,8 @@
-
 """첫 번째 MVP 가상 정책 자격 평가."""
 
 from __future__ import annotations
+from typing import Protocol
 
-from benefitfinder.api.schemas.recommendation import UserProfile
 from benefitfinder.domains.youth.eligibility import (
     check_age_with_military,
     check_job_seeker,
@@ -16,7 +15,16 @@ from benefitfinder.domains.youth.eligibility import (
 )
 
 
-def evaluate_policies(profile: UserProfile) -> dict:
+class YouthProfileLike(Protocol):
+    """청년정책 평가에 필요한 사용자 조건의 최소 인터페이스."""
+
+    age: int | None
+    income_band: str | None
+    employment_status: str | None
+    domain_data: object | None
+
+
+def evaluate_policies(profile: YouthProfileLike) -> dict:
     """P1, P3, P6의 조건별 상태와 종합 상태를 반환한다."""
 
     data = profile.domain_data
@@ -35,15 +43,9 @@ def evaluate_policies(profile: UserProfile) -> dict:
     parent_income = household.parent_income_band if household else None
 
     common_age = {
-        "P1": check_age_with_military(
-            profile.age, 19, 34, military_min, military_max, True
-        ),
-        "P3": check_age_with_military(
-            profile.age, 19, 34, military_min, military_max, True
-        ),
-        "P6": check_age_with_military(
-            profile.age, 19, 39, military_min, military_max, False
-        ),
+        "P1": check_age_with_military(profile.age, 19, 34, military_min, military_max, True),
+        "P3": check_age_with_military(profile.age, 19, 34, military_min, military_max, True),
+        "P6": check_age_with_military(profile.age, 19, 39, military_min, military_max, False),
     }
 
     conditions = {
