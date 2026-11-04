@@ -1,0 +1,65 @@
+/* 청년 정책 매니저 · 네이비옐로 테마
+   화면에서는 색을 직접 쓰지 않고 이 변수 이름만 쓴다. */
+:root {
+  /* 바탕 */
+  --color-bg: #dde6f5;
+  --color-card: #ffffff;
+  --color-sub: #c3d2ec;
+  --color-line: #d2def2;
+
+  /* 글자 */
+  --color-ink: #151b2b;
+  --color-muted: #3e4e70;
+
+  /* 버튼 · 강조 */
+  --color-primary: #1f2a44;
+  --color-on-primary: #ffffff;
+  --color-accent: #ffd45c;
+  --color-accent-soft: #ffe9a8;
+  --color-accent-ink: #2b3c63;
+  --color-disabled-bg: #aabbdb;
+  --color-disabled-ink: #3e4e70;
+
+  /* 상태 표시: ✓ 충족 / ✕ 미충족 / ? 확인 필요 */
+  --color-ok: #1e7b45;
+  --color-ok-soft: #e3f2e8;
+  --color-no: #b3261e;
+  --color-no-soft: #f8e3e0;
+  --color-check: #9a5200;
+  --color-check-soft: #fbebd6;
+
+  /* S3 요약 카드 · 아이콘 */
+  --color-hero-bg: #1f2a44;
+  --color-hero-ink: #ffffff;
+  --color-hero-muted: #b8c1d6;
+  --color-icon-bg: #e6edf8;
+  --color-icon-ink: #2b3c63;
+
+  /* 금액 비율 막대 */
+  --color-bar-1: #1f2a44;
+  --color-bar-2: #ffd45c;
+  --color-bar-3: #8fa3c7;
+
+  /* 글꼴 · 글자 크기 */
+  --font-sans: 'Pretendard Variable', Pretendard, -apple-system, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+  --text-title: 26px;
+  --text-body: 15px;
+  --text-sub: 13px;
+  --text-tiny: 12px;
+
+  /* 모양 · 크기 */
+  --radius-card: 18px;
+  --radius-button: 16px;
+  --radius-chip: 12px;
+  --button-height: 56px;
+
+  /* 화면 폭: 휴대폰 여백 20px, 넓은 화면 여백 48px, 내용 최대 1400px */
+  --gutter: 20px;
+  --content-max: 1400px;
+}
+
+@media (min-width: 768px) {
+  :root {
+    --gutter: 48px;
+  }
+}

@@ -1,0 +1,96 @@
+> 과거 기록: 문서 정리 전 요구명세 진입 안내 v2.5 전체 본문이다. 구현 기준으로 사용하지 않는다. 현행 기준은 [문서 지도](../README.md)에서 확인한다. 아래 본문의 경로·구현 상태·결정 문구는 당시 기록이며, Markdown 링크만 이동 후 위치에 맞췄다.
+
+# AI 혜택 코치 (BenefitFinder AI)
+## 기능 요구 명세서 (현행 진입점)
+
+- 문서 상태: 현행 진입점 (2026-10-28 데이터 Agent 역할 보충 설명 반영)
+- 기획 원본 작성자: 이현서 / 채택 근거: 2026-10-27 사용자의 v2 기획 유지 요청
+- 현행 상세 기준: [REQUIREMENTS_v2.md](../product/REQUIREMENTS.md) v2.5 (데이터 Agent의 규칙 추출·검수와 사용자 코드 계산 구분)
+- 현행 기획: [PROJECT_PLAN.md](../product/OVERVIEW.md)
+- 기록 보존: 2026-10-26 이전 요구명세 원문은 [REQUIREMENTS_v1_ARCHIVE.md](REQUIREMENTS_v1_ARCHIVE.md)에 그대로 둔다. 아카이브는 현행 결정이 아니다.
+
+이 문서는 결정이 아니라 안내이다. 두 요구명세가 권한 경쟁을 하지 않도록, 구현과 검증의 기준은 REQUIREMENTS_v2.md 하나로 둔다. 화면과 데이터 형식, 기능별 처리 규칙을 이 문서에서 따로 정의하지 않는다.
+
+옛 기준의 효력: 자연어 문장 입력과 AI 조건 추출, 관련 정책 묶음 중심의 Must 8개와 Should, Could 단계화는 현행 기준이 아니다. 해당 내용은 아카이브에만 남긴다. 이 문서 어디에서도 옛 자연어 필수와 Should, Could 단계화를 기준으로 삼아 지시하지 않는다.
+
+---
+
+## 1. 이 문서를 읽는 법
+
+| 사람 | 먼저 읽을 곳 |
+|---|---|
+| 전체 흐름 파악 | [PROJECT_PLAN.md](../product/OVERVIEW.md) 1장부터 5장 |
+| 화면 설계와 문구 | [REQUIREMENTS_v2.md](../product/REQUIREMENTS.md) 4장 |
+| 기능별 처리 규칙과 완료 기준 | [REQUIREMENTS_v2.md](../product/REQUIREMENTS.md) 5장 |
+| 데이터 형식과 API | [REQUIREMENTS_v2.md](../product/REQUIREMENTS.md) 6장 (필드 이름과 자료형은 다음 회의 확정 대상, 현재 개발 초안 기준) |
+| 품질과 안전, 테스트 | [REQUIREMENTS_v2.md](../product/REQUIREMENTS.md) 7장과 8장 |
+| 담당과 협업 | [REQUIREMENTS_v2.md](../product/REQUIREMENTS.md) 9장, [CONTRIBUTING.md](../../CONTRIBUTING.md) |
+| 사용자 테스트 진행 | [USER_TEST.md](../product/USER_TEST.md) |
+
+---
+
+## 2. 현행 기능 범위 F01부터 F11
+
+2026-10-27 추가 회의 결정으로 초기 MVP는 청년 취업·주거 혜택만 다룬다. 생활·자산형성·교육·장학 등은 확장 단계다. F01부터 F11과 13단계 입력은 취업·주거 두 분야에 유지한다.
+
+| ID | 기능명 | 상세 위치 |
+|---|---|---|
+| F01 | 조건 선택 입력 | REQUIREMENTS_v2.md 4.3, 5장 F01 |
+| F02 | 정책 검색 | REQUIREMENTS_v2.md 5장 F02 |
+| F03 | 분석 흐름·진행 상태 | REQUIREMENTS_v2.md 5장 F03 |
+| F04 | 자격 진단 | REQUIREMENTS_v2.md 5장 F04 |
+| F05 | 최적 조합 | REQUIREMENTS_v2.md 5장 F05 |
+| F06 | 상황 변화 분석 | REQUIREMENTS_v2.md 5장 F06 |
+| F07 | 정책 상세와 신청 안내 | REQUIREMENTS_v2.md 5장 F07 |
+| F08 | 매일 자동 갱신 | REQUIREMENTS_v2.md 5장 F08 |
+| F09 | 이 기기에 기억하기 | REQUIREMENTS_v2.md 5장 F09 |
+| F10 | 결과 이미지 저장 | REQUIREMENTS_v2.md 5장 F10 |
+| F11 | 배포와 통합 | REQUIREMENTS_v2.md 5장 F11 |
+
+핵심 수치 기준: 대상 나이 만 19세부터 39세, 13단계 선택 입력, 추천 1개와 대안 2개, 기간 1년과 2년, 전체, 현재가치 할인율은 한국은행 기준금리, 전국 취업·주거 정책 수집과 두 분야 안에서 30개 검수 목표, 하루 사용 상한 서버 전체 100회.
+
+---
+
+## 3. 기능 ID 대응 기록
+
+구 식별자와 현행 식별자의 대응을 남긴다. 대응 기록은 식별자 추적용이며, 구 기능 정의가 현행 기준이 되는 것은 아니다.
+
+| 구 ID | 구 기능명 | 현 ID |
+|---|---|---|
+| M01, M02 | 자연어 상황 입력, 조건 추출과 보완 | F01 |
+| M03 | RAG 정책 검색 | F02 |
+| M04 | AI Agent 도구 활용 | F03 |
+| M05 | 자격 진단과 결과 카드 | F04 |
+| M06 | 혜택 포트폴리오 | F05 |
+| M07 | 신청 준비 안내 | F07 |
+| M08 | 웹서비스 배포와 통합 | F11 |
+
+새로 들어온 현행 기능: F06 상황 변화 분석, F08 매일 자동 갱신, F09 기억하기, F10 결과 이미지 저장. 구 Should와 Could 항목은 현행 기준으로 쓰지 않는다.
+
+---
+
+## 4. 현행 원본 위치
+
+| 내용 | 원본 |
+|---|---|
+| 현행 기획 | [PROJECT_PLAN.md](../product/OVERVIEW.md) |
+| 현행 상세 요구 | [REQUIREMENTS_v2.md](../product/REQUIREMENTS.md) |
+| 아키텍처와 모듈 경계 | [ARCHITECTURE.md](../architecture/ARCHITECTURE.md) |
+| 협업과 리뷰 절차 | [CONTRIBUTING.md](../../CONTRIBUTING.md), [GIT_WORKFLOW.md](../development/GIT_WORKFLOW.md) |
+| 교환 형식과 가상 예제 | [데이터 계약](../../contracts/README.md) |
+| 사용자 테스트 진행 | [USER_TEST.md](../product/USER_TEST.md) |
+| 옛 기획서와 요구명세 | [PROJECT_PLAN_v1.1_ARCHIVE.md](PROJECT_PLAN_v1.1_ARCHIVE.md), [REQUIREMENTS_v1_ARCHIVE.md](REQUIREMENTS_v1_ARCHIVE.md) |
+
+계약과 기술 정렬 상태는 현재 개발 초안 기준이며 기획자 최종 승인으로 쓰지 않는다. 6장 필드 이름과 자료형, 11.2 임시 기본값, 복잡한 중복 규칙의 표현·코드 지원 범위와 데이터 Agent의 모델·도구·평가·검수 기준은 다음 회의 검토 항목이다. 데이터 Agent는 공식 원문의 중복 제한·예외를 추출·정제하는 방향이며 서윤의 역할 이동도 이 작업에 집중한다는 뜻이다. F02·F03은 검수·게시된 데이터와 일반 백엔드로 구현하고 설명은 근거 템플릿을 기본으로 한다. 상세는 [정책 데이터 분석·정제](../architecture/POLICY_DATA_PIPELINE.md)를 따른다.
+
+---
+
+## 5. 변경 이력
+
+| 날짜 | 내용 |
+|---|---|
+| 2026-10-26 | 요구명세 v1.0 초안 작성 (원문은 아카이브로 보존) |
+| 2026-10-27 | 사용자 요청에 따른 v2 기획 반영: 이 문서를 현행 진입점으로 정리하고, 상세 기준을 REQUIREMENTS_v2.md v2.1 하나로 둠. 옛 Must, Should, Could 단계화는 현행 기준에서 제외 |
+| 2026-10-27 | 추가 회의 결정 반영: 초기 MVP를 청년 취업·주거로 한정하고 나머지 분류를 확장 단계로 이동. 기능 F01~F11과 13단계 입력은 두 분야에 유지 |
+| 2026-10-28 | 역할 변경과 구현 방식 정리: 서윤은 데이터 분석·정제, 승현은 자동화 추가. F02·F03은 검색·분석 흐름으로 유지하고 AI 필수 조건을 제거(상세 v2.3) |
+| 2026-10-28 | 사용자 보충 설명 반영: 데이터 Agent의 중복 제한·예외 규칙 후보 추출·정제·평가와 검수·게시를 명시하고 사용자 요청의 코드 계산과 구분(상세 v2.4). 이전 AI 전체 선택 사항 표현을 정정 |

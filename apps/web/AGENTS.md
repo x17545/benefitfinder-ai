@@ -1,7 +1,7 @@
 # 프론트엔드 추가 지침
 
 - 초기 관심 분야 선택과 정책 노출은 취업·주거만 지원한다. 생활·자산형성·교육·장학은 확장 대상이다. 13단계와 F01~F11을 두 분야에 적용하고 과거 수혜 이력 질문을 추천 대상과 혼동하지 않는다.
-- 루트 `AGENTS.md`와 `apps/web/README.md`를 먼저 따른다. 주 책임은 기획 프론트엔드이며, 공용 영역에 영향을 주면 관련 담당과 조율한다.
+- 루트 `AGENTS.md`와 `apps/web/README.md`를 먼저 따른다. 김하정이 UI 디자인·React 화면·API 연결을, 이현서가 요구사항·사용자 흐름·화면 구조·프로토타입을 맡는다. 백엔드 API는 양승현과 연결하며, 공용 영역에 영향을 주면 관련 담당과 조율한다. 상세 인계는 기능 명세 9장을 따른다.
 - 스택은 React + TypeScript strict + Vite SPA, 패키지 관리자 pnpm으로 확정했다 (최신 요청으로 기존 npm 규칙을 대체한다). 임의로 바꾸지 않는다. 큰 스택 변경이 필요하면 팀 합의로 정한다. 루트에서 pnpm 11.25.0을 pin하고 Node 24를 기준으로 한다. 웹 패키지 이름은 `@benefitfinder/web`이다.
 - 명령은 저장소 루트 기준으로 작성한다: `pnpm dev:web`, `pnpm --filter @benefitfinder/web dev|lint|typecheck|build|preview|test`. 설치는 루트에서 `pnpm install --frozen-lockfile`, 추가는 `pnpm --filter @benefitfinder/web add`/`add -D`로 하고 `pnpm-lock.yaml`을 함께 커밋한다. npm·npx·yarn을 사용하지 않는다.
 - 백엔드 확정은 FastAPI + PostgreSQL이다. 프론트엔드는 DB에 직접 접근하지 않고 `/api/v1` 경유로만 연결한다. 생존 확인은 same-origin 상대 경로 `/health`로 호출한다.
@@ -13,7 +13,7 @@
 - 개발 시작 화면은 React TS strict Vite SPA 최소 화면으로 두고, 백엔드 `GET /health` 연결 상태·재시도·실패 표시를 포함한다. 백엔드 없이도 웹은 실행되고 연결 안내만 실패로 표시된다. 실제 정책·추천 기능과 가상 정책을 실제처럼 표시하는 구현은 금지한다. 최소 CSS와 실제 필요한 의존성만 둔다.
 - `VITE_`는 공개값이다. 비밀값과 토큰과 개인정보를 넣지 않으며 `.env.example`에는 `API_PROXY_TARGET` 같은 개발 서버 전용 예시만 둔다.
 - 정책 자격과 지원금 계산을 화면에 재구현하지 않는다. 서버의 판정 상태와 근거를 그대로 표시한다.
-- 화면·문구·13단계 선택 입력은 `REQUIREMENTS_v2.md`가 기준이다. 화면 시안의 HTML은 제품 스택을 바꾸는 근거가 아니다. 원본 시안·PNG를 보존하고 React 컴포넌트로 구현한다.
+- 화면·문구·13단계 선택 입력은 `docs/product/REQUIREMENTS.md`가 기준이다. 화면 시안의 HTML은 제품 스택을 바꾸는 근거가 아니다. 원본 시안·PNG를 보존하고 React 컴포넌트로 구현한다.
 - 분석은 POST `fetch`의 SSE 응답 스트림으로 진행·결과·오류를 읽는다 (제품 기능 구현 시 적용). 프로필을 URL에 넣지 않는다. 기억하기 동의·30일 만료·전체 삭제와 sessionStorage 결과 캐시를 구분하고, 특수 조건·부모님 정보를 GA 이벤트로 보내지 않는다.
 - `contracts` 예제로 서버 없이 개발할 수 있다. 가상 결과와 실제 결과를 구분하며 기본 실행에서 가상 정책을 실제처럼 제공하지 않는다.
 - 입력과 로딩과 빈 결과와 오류와 추가 확인 필요 상태를 함께 구현하고 키보드 접근과 입력 레이블을 확인한다.

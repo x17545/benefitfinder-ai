@@ -1,0 +1,189 @@
+/* S1 시작 화면 */
+.s1-header {
+  display: flex;
+  align-items: center;
+  min-height: 56px;
+}
+
+.s1-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--color-ink);
+  font-size: 17px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.s1-brand__mark {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: var(--color-primary);
+  color: var(--color-accent);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.s1-intro {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 24px;
+}
+
+.s1-intro__title {
+  margin: 0;
+  max-width: 11em;
+  font-size: 30px;
+  line-height: 1.32;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  text-wrap: balance;
+}
+
+.s1-intro__desc {
+  margin: 0;
+  color: var(--color-muted);
+}
+
+.s1-steps {
+  list-style: none;
+  margin: 24px 0 0;
+  padding: 4px 16px;
+}
+
+.s1-steps__item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-block: 14px;
+}
+
+.s1-steps__item + .s1-steps__item {
+  border-top: 1px solid var(--color-line);
+}
+
+.s1-steps__num {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--color-accent-soft);
+  color: var(--color-accent-ink);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.s1-steps__time {
+  color: var(--color-muted);
+}
+
+.s1-notice {
+  margin: 12px 0 0;
+  font-size: var(--text-sub);
+  color: var(--color-muted);
+}
+
+.s1-notice a,
+.s1-consent__link {
+  color: inherit;
+  text-underline-offset: 3px;
+}
+
+/* 동의 + 시작하기: 휴대폰은 위아래, 넓은 화면은 왼쪽 동의 · 오른쪽 버튼 */
+.s1-actions {
+  margin-top: auto;
+  padding-top: 24px;
+  display: grid;
+  gap: 14px;
+}
+
+.s1-consents {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.s1-consent {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+}
+
+.s1-consent input {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}
+
+.s1-consent label {
+  flex: 1;
+  cursor: pointer;
+}
+
+.s1-consent__hint {
+  display: block;
+  font-size: var(--text-sub);
+  color: var(--color-muted);
+}
+
+.s1-consent__link {
+  flex: none;
+  font-size: var(--text-sub);
+  color: var(--color-muted);
+}
+
+@media (min-width: 768px) {
+  .s1-actions {
+    grid-template-columns: 1fr minmax(280px, 360px);
+    align-items: end;
+    column-gap: 40px;
+  }
+}
+
+/* 한글이 단어 중간에서 끊기지 않게 */
+.s1-intro,
+.s1-notice,
+.s1-consent {
+  word-break: keep-all;
+}
+
+/* 지난 조건 카드 (저장된 조건이 있을 때만) */
+.s1-saved {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+  word-break: keep-all;
+}
+
+.s1-saved__title {
+  margin: 0;
+  font-size: var(--text-sub);
+  font-weight: 700;
+  color: var(--color-accent-ink);
+}
+
+.s1-saved__summary {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.s1-saved__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
