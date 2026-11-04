@@ -400,6 +400,12 @@ class CreateOnlyWriteTest(unittest.TestCase):
         path = self.root / "a" / "b" / "batch.json"
         write_rule_batch(path, batch)
         self.assertTrue(path.is_file())
+
+        if os.name == "nt":
+            self.skipTest(
+                "Windows는 POSIX 파일 권한을 지원하지 않으므로 mode 600 검사를 건너뜁니다."
+            )
+
         mode = stat.S_IMODE(os.stat(path).st_mode)
         self.assertEqual(mode, 0o600)
 
