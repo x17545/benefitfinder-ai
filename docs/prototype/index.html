@@ -8,7 +8,7 @@
 <meta property="og:description" content="받을 수 있는 지원금, 가장 이득인 조합으로 찾아 드려요">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
 <style>
-/* 화면·기능 명세 v0.2 클릭 시안. 해시 주소(#/result 등)로 화면 전환, 데이터는 전부 가상 */
+/* 기능 요구 명세서 v3.0 클릭 시안 (S6·AI 맞춤 설명 추가). 해시 주소(#/result 등)로 화면 전환, 데이터는 전부 가상 */
 :root {
   --primary: #3B424C;
   --primary-press: #2C323A;
@@ -157,6 +157,14 @@ footer.foot button { border: 0; background: none; padding: 0; color: var(--muted
 .logo i { width: 26px; height: 26px; border-radius: 8px; background: var(--primary); display: grid; place-items: center; color: var(--gold); font-style: normal; font-size: 14px; }
 .how { display: flex; flex-direction: column; gap: 10px; }
 .how div { display: flex; gap: 12px; align-items: center; background: var(--card); border-radius: 16px; padding: 14px 16px; font-size: 15px; }
+/* ?shot: 그림 캡처용. 화면 높이와 상관없이 내용 길이만큼만 그리고, 하단 버튼은 앱 맨 아래에 붙인다 */
+.shot .app { min-height: auto; }
+.shot .cta { position: absolute; }
+.svc-sum { background: var(--card); border-radius: 18px; padding: 18px; display: flex; flex-direction: column; gap: 4px; border: 1.5px solid var(--gold); }
+.svc-sum strong { font-size: 26px; letter-spacing: -0.03em; }
+.ai-reason { background: var(--bg); border-radius: 12px; padding: 10px 12px; font-size: 14px; display: flex; flex-direction: column; gap: 4px; }
+.basis { font-size: 12.5px; color: var(--muted); background: var(--bg); border-radius: 10px; padding: 8px 10px; }
+.btn.svc { background: var(--gold-soft); color: var(--gold-ink); display: flex; justify-content: space-between; align-items: center; text-align: left; }
 .how b { width: 28px; height: 28px; border-radius: 50%; background: var(--gold-soft); color: var(--gold-ink); display: grid; place-items: center; flex: none; font-size: 14px; }
 </style>
 </head>
@@ -179,6 +187,24 @@ const POLICIES = {
         elig: [["met", "나이"], ["needs_review", "전세 계약"]],
         reason: "전세로 옮길 계획이 있다면 월세 지원 대신 고를 수 있어요" },
 };
+// F13 AI 맞춤 설명 (가상 문장). 실서비스에서는 요청마다 원문 조항을 검색해 AI가 쓰고, 숫자는 코드 결과와 같은지 검사한다
+const AI_REASON = {
+  P1: ["혼자 월세로 살고 집이 없어서 지원 대상 조건에 맞아요. 부모님 소득은 아직 확인되지 않아 신청 전에 원가구 소득 기준을 확인해야 해요.", "「지원 대상」 · 「소득 기준」 조항"],
+  P3: ["지금 취업 준비 중이고 소득이 없어서 조건 3개를 모두 충족해요. 받는 동안 구직활동 계획서를 내야 하니 신청할 때 함께 준비해 두세요.", "「지원 대상」 · 「구직활동 의무」 조항"],
+  P6: ["전세로 옮길 계획이 있다면 고를 수 있는 지원이에요. 전세 계약서가 있어야 확인되는 조건이 남아 있어요.", "「지원 대상」 · 「제출 서류」 조항"],
+};
+// F14 지원금이 아닌 서비스 (가상). 환산 금액 = 단가 × 횟수 (코드 계산). 단가 근거가 없으면 금액을 보여 주지 않는다
+const SERVICES = {
+  V1: { title: "청년 면접 정장 대여", org: "지방자치단체", cat: "취업", tag: ["open", "모집 중"], item: "면접 정장 한 벌 대여 (3박 4일)", unit: "회", qty: 3, unitWon: 40000,
+        basis: "시중 정장 대여료 1회 평균", basisSrc: "[가상] 시중 대여점 3곳 가격", verified: "11/01", source: "온통청년", elig: [["met", "나이"], ["met", "구직 상태"]] },
+  V2: { title: "청년 이사 차량 지원", org: "지방자치단체", cat: "주거", tag: ["due", "마감 D-9"], item: "1톤 이사 차량과 인력 1회", unit: "회", qty: 1, unitWon: 250000,
+        basis: "시중 1톤 소형 이사 비용", basisSrc: "[가상] 이사 업체 3곳 견적 평균", verified: "11/01", source: "보조금24", elig: [["met", "나이"], ["needs_review", "전입 신고"]] },
+  V3: { title: "취업 증명사진 촬영 지원", org: "지방자치단체", cat: "취업", tag: ["open", "상시"], item: "증명사진 촬영과 보정 1회", unit: "회", qty: 1, unitWon: 30000,
+        basis: "시중 증명사진 촬영 요금", basisSrc: "[가상] 사진관 3곳 가격", verified: "11/01", source: "온통청년", elig: [["met", "나이"]] },
+  V4: { title: "청년 1:1 취업 컨설팅", org: "고용노동부", cat: "취업", tag: ["open", "모집 중"], item: "전문 상담사 1:1 상담 최대 5회", unit: "회", qty: 5, unitWon: null,
+        basis: "", basisSrc: "", verified: "11/01", source: "온통청년", elig: [["met", "나이"], ["met", "구직 상태"]] },
+};
+const svcWon = (v) => v.unitWon == null ? null : v.unitWon * v.qty;
 // 정책 이름은 가상이라 링크는 출처 포털로 연결한다. 실서비스에서는 정책별 공식 신청 URL(source_url)
 const SRC_URL = { "온통청년": "https://www.youthcenter.go.kr", "보조금24": "https://www.gov.kr/portal/rcvfvrSvc/main" };
 const CAT_ICON = { "주거": "🏠", "취업": "💼" };
@@ -233,6 +259,7 @@ const go = (h) => { location.hash = h; };
 const ensureDemo = () => { if (!S.cond.age) S.cond = JSON.parse(JSON.stringify(demo)); };
 
 // ===== 공통 조각 =====
+const COM_AI = "검수한 정책과 입력 조건으로 계산한 참고 결과예요. [AI] 표시가 붙은 설명은 AI가 공고 원문을 찾아 작성했어요. 최종 자격과 최신 조건은 신청 기관에서 확인해 주세요.";
 const bar = (title, back, right = "") => `<div class="proto">화면 시안 · 계산·저장은 데모 · 모든 정책 이름과 금액은 가상의 값</div>
   <header class="bar">${back ? `<button class="back" onclick="history.back()" aria-label="뒤로">‹</button>` : ""}<span class="title">${title}</span>${right}</header>`;
 const foot = () => `<footer class="foot"><button onclick="go('#/about')">이용 안내</button><button onclick="go('#/privacy')">개인정보 처리방침</button><button onclick="clearMine()">내 정보 지우기</button><span>데이터 출처 온통청년 · 보조금24 · 매일 새벽 3시 갱신</span></footer>`;
@@ -326,7 +353,7 @@ function refreshCta() { const a = +S.cond.age; if (ageNote(a) !== refreshCta.k) 
   const b = document.querySelector(".cta .btn"); if (b) b.disabled = !a || (a >= 35 && !S.cond.military); }
 
 // ===== 로딩 =====
-const LOAD = [["내 조건에 맞는 정책 찾는 중", "3개 찾음 (가상 예시)", ""], ["자격 조건 비교", "", ""], ["함께 받을 수 있는 조합 계산", "", ""], ["추천 이유 정리", "", ""]];
+const LOAD = [["내 조건에 맞는 정책 찾는 중", "3개 찾음 (가상 예시)", ""], ["자격 조건 비교", "", ""], ["함께 받을 수 있는 조합 계산", "", ""], ["AI가 원문을 보고 설명 쓰는 중", "", ""]];
 function loading(frozen) {
   const k = frozen ? 2 : (loading.k || 0);
   return bar("분석 중", false) + `<main><h2>가장 이득인 조합을<br>계산하고 있어요</h2><p class="muted">아래 단계로 정책을 찾고 계산하고 있어요</p>
@@ -379,7 +406,7 @@ function s3() {
       </div>
       ${x.type === "maturity" ? `<span class="small" style="color:var(--gold-ink)">만기 시 지급</span>` : ""}
       <div class="st">${x.elig.map(statusChip).join("")}</div>
-      <p class="small">${x.reason}</p>
+      <div class="ai-reason"><span><span class="ai">AI</span>${AI_REASON[id][0]}</span><span class="src">근거: 공고 원문 ${AI_REASON[id][1]}</span></div>
       <span class="src">출처 ${x.source} · ${x.verified} 확인${x.stale ? ` · <span style="color:var(--ck)">⚠ 최신 내용은 공식 페이지에서 확인</span>` : ""}</span>
       <div class="iact"><button class="btn sm ghost2" onclick="go('#/policy/${id}')">자세히 보기</button><a class="btn sm" href="${SRC_URL[x.source]}" target="_blank" rel="noopener">신청하러 가기 ↗</a></div>
     </div>`; }).join("")}</div>
@@ -389,10 +416,11 @@ function s3() {
       return ex.length ? fold("ex", `이 조합에서 빠진 정책 ${ex.length}개`, ex.map(([n, r]) => `<div><b>${n}</b><br><span class="muted">${r}</span></div>`).join("")) : ""; })()}
     ${fold("cl", "지금은 모집이 끝난 정책 1개", `<p class="muted">다음 모집 때 받을 수 있어요.</p><div><b>청년 이사비 지원</b><br><span class="muted">지난 모집 2026.03.30 ~ 05.29 · 다음 모집 미정</span></div>`)}
     ${fold("ne", "조건이 맞지 않는 정책 3개", NOT_ELIGIBLE.map(([n, r]) => `<div><b>${n}</b><br><span class="s not_met">✕ 미충족</span> <span class="muted">${r}</span></div>`).join(""))}
-    ${fold("nr", "아직 조합 계산 전인 정책 2개", `<p class="muted">금액·중복 여부를 검수 중이에요. 정책별 자격 진단은 볼 수 있어요.</p><div><b>청년 면접 정장 대여</b> <span class="s met">✓ 자격 충족</span></div><div><b>청년 주거 이전 지원</b> <span class="s needs_review">? 확인 필요</span></div>`)}
+    ${fold("nr", "아직 조합 계산 전인 정책 1개", `<p class="muted">금액·중복 여부를 검수 중이에요. 정책별 자격 진단은 볼 수 있어요.</p><div><b>청년 주거 이전 지원</b> <span class="s needs_review">? 확인 필요</span></div>`)}
     <button class="btn line" onclick="go('#/what-if')">상황이 바뀌면 어떻게 될까?</button>
+    <button class="btn svc" onclick="go('#/services')"><span>돈 말고 받을 수 있는 도움 ${Object.keys(SERVICES).length}개</span><span>›</span></button>
     <button class="btn ghost" onclick="toast('결과 이미지를 저장했어요 (시안: 실제 저장 생략)')">결과 이미지로 저장</button>
-    <p class="disclaimer">검수한 정책과 입력 조건으로 계산한 참고 결과예요. 최종 자격은 신청 기관에서 확인해 주세요.</p>
+    <p class="disclaimer">${COM_AI}</p>
   </main>${foot()}`;
 }
 
@@ -426,6 +454,7 @@ function s4() {
 
 // ===== S5 상세 =====
 function s5(id) {
+  if (SERVICES[id]) return s5svc(id);
   const x = POLICIES[id];
   if (!x) return notFound("찾는 정책이 없어요", "마감됐거나 주소가 바뀌었을 수 있어요");
   const hasCond = !!S.cond.age, met = x.elig.filter(e => e[0] === "met").length;
@@ -440,19 +469,63 @@ function s5(id) {
     <div class="card"><b>신청 방법</b><dl class="kv"><dt>신청 기간</dt><dd>2026.10.01 ~ 2026.12.31</dd><dt>방법</dt><dd>온라인 신청</dd><dt>접수 기관</dt><dd>${x.org}</dd></dl></div>
     <div class="card"><b>준비 서류</b><p class="muted">공식 자료에 서류 안내가 없어요. 신청 페이지에서 확인해 주세요.</p></div>
     <div class="card sub"><b>확인이 필요한 것</b>${x.elig.filter(e => e[0] === "needs_review").map(e => `<p>? ${e[1]}: 입력하지 않았거나 공식 기준이 불명확해요</p>`).join("") || "<p class='muted'>없어요</p>"}</div>
+    ${hasCond ? `<div class="card"><b>내 상황에서 볼 점</b><p><span class="ai">AI</span>${AI_REASON[id][0]}</p><span class="src">근거: 공고 원문 ${AI_REASON[id][1]}</span></div>` : ""}
     <span class="src">출처 ${x.source} · 마지막 확인 ${x.verified} · https://...</span>
-    <p class="disclaimer">검수한 정책과 입력 조건으로 계산한 참고 결과예요. 최종 자격과 최신 조건은 신청 기관에서 확인해 주세요.</p>
+    <p class="disclaimer">${COM_AI}</p>
   </main>${foot()}${cta("신청하러 가기 ↗", `window.open('${SRC_URL[x.source]}', '_blank', 'noopener')`)}`;
+}
+// S5 (서비스형): 지원 내용 자리에 받는 것과 환산 금액
+function s5svc(id) {
+  const v = SERVICES[id], w = svcWon(v), met = v.elig.filter(e => e[0] === "met").length;
+  return bar(v.title, true) + `<main>
+    <div class="row"><span class="muted">${v.org}</span><span class="tag ${v.tag[0]}">${v.tag[1]}</span></div>
+    <h2 style="margin-top:0">${v.title}</h2>
+    <div class="card"><b>조건 ${v.elig.length}개 중 ${met}개 충족${v.elig.length - met ? `, ${v.elig.length - met}개 확인 필요` : ""}</b>
+      ${v.elig.map(e => `<div>${statusChip(e)}<blockquote>「지원 대상」 공고 원문 조항이 그대로 인용되는 자리</blockquote></div>`).join("")}</div>
+    <div class="card"><b>받을 수 있는 것</b><p>${v.item}</p><blockquote>「지원 내용」 원문 문장</blockquote></div>
+    <div class="card"><b>돈으로 치면</b>${w == null ? `<p class="muted">환산 기준이 없어 금액으로 바꾸지 않았어요.</p>` : `<p><b>약 ${(w / 10000).toLocaleString()}만 원</b></p><div class="basis">${v.basis} 약 ${v.unitWon.toLocaleString()}원 × ${v.qty}${v.unit} · 기준 ${v.basisSrc} · ${v.verified} 확인</div>`}
+      <p class="muted small">지원금 조합 총액에는 더하지 않았어요.</p></div>
+    <div class="card"><b>신청 방법</b><dl class="kv"><dt>신청 기간</dt><dd>2026.10.01 ~ 2026.12.31</dd><dt>방법</dt><dd>온라인 신청</dd><dt>접수 기관</dt><dd>${v.org}</dd></dl></div>
+    <span class="src">출처 ${v.source} · 마지막 확인 ${v.verified} · https://...</span>
+    <p class="disclaimer">${COM_AI}</p>
+  </main>${foot()}${cta("신청하러 가기 ↗", `window.open('${SRC_URL[v.source]}', '_blank', 'noopener')`)}`;
+}
+
+// ===== S6 돈 말고 받을 수 있는 도움 (F14) =====
+function s6() {
+  ensureDemo();
+  // 환산 금액 큰 순, 같으면 모집 중 먼저. 환산 기준 없는 것은 맨 뒤
+  const list = Object.entries(SERVICES).sort(([, a], [, b]) => (svcWon(b) ?? -1) - (svcWon(a) ?? -1) || (a.tag[0] === "open" ? -1 : 1));
+  const total = list.reduce((t, [, v]) => t + (svcWon(v) || 0), 0);
+  return bar("돈 말고 받을 수 있는 도움", true) + `<main>
+    <h2 style="margin-top:0">돈 말고 받을 수 있는 도움</h2>
+    <p class="muted">정장 대여, 상담처럼 돈으로 주지 않는 지원이에요. 얼마짜리인지 시중 가격으로 바꿔 봤어요.</p>
+    <div class="svc-sum"><span class="muted small">돈으로 치면 모두</span><strong>약 ${(total / 10000).toLocaleString()}만 원</strong>
+      <span class="small" style="color:var(--gold-ink)">이 금액은 지원금 조합 총액에 더하지 않았어요.</span></div>
+    <div class="list">${list.map(([id, v]) => { const w = svcWon(v); return `<div class="item">
+      <div class="itop" onclick="go('#/policy/${id}')">
+        <span class="ico">${CAT_ICON[v.cat] || "•"}</span>
+        <div class="imid"><b>${v.title}</b><span class="muted small">${v.item}</span></div>
+        <div class="iamt">${w == null ? `<b class="muted" style="font-size:14px">환산 기준 없음</b>` : `<b>약 ${(w / 10000).toLocaleString()}만 원</b>`}<span class="tag ${v.tag[0]}">${v.tag[1]}</span></div>
+      </div>
+      <div class="st">${v.elig.map(statusChip).join("")}</div>
+      ${w == null ? `<span class="src">시중 가격 근거를 찾지 못해 금액으로 바꾸지 않았어요. 합계에서도 뺐어요.</span>`
+        : `<div class="fold ${S.open["b" + id] ? "open" : ""}" style="background:var(--bg)"><button style="padding:10px 12px;font-size:13px" onclick="S.open['b${id}']=!S.open['b${id}']; render()"><span>환산 기준</span><span class="arr">›</span></button>
+          <div class="body" style="padding:0 12px 10px"><span class="small">시중 가격 1${v.unit} 약 ${v.unitWon.toLocaleString()}원 × ${v.qty}${v.unit} · 기준 ${v.basisSrc} · ${v.verified} 확인</span></div></div>`}
+    </div>`; }).join("")}</div>
+    <p class="disclaimer">환산 금액은 이해를 돕기 위한 참고값이에요. 실제로 돈을 주는 것은 아니에요.<br>${COM_AI}</p>
+  </main>${foot()}`;
 }
 
 // ===== 공통 페이지 =====
 function about() { return bar("이용 안내", true) + `<main><h2>청년 정책 매니저는<br>이렇게 만들어졌어요</h2>
   <div class="card"><b>정책을 찾고 계산하는 방법</b><p>선택한 조건과 정책 데이터를 비교하고, 함께 받을 수 있는 지원금 조합을 계산해요. 추천 이유는 판정 결과와 공고 근거로 정리해요.</p></div>
   <div class="card"><b>최종 자격 확인</b><p>결과는 신청 준비를 돕는 참고 정보예요. 최종 자격과 최신 조건은 신청 기관에서 확인해 주세요.</p></div>
-  <div class="card"><b>데이터</b><p>온통청년·보조금24 API와 연결된 공식 공고·사업 지침을 확인해요. AI가 중복 제한과 예외 조건 정리를 돕고, 사람이 검수한 규칙으로 계산해요. 매일 새벽 3시에 갱신해요.</p></div>
+  <div class="card"><b>AI를 쓰는 곳</b><p><span class="ai">AI</span>정책 원문을 AI가 읽고 조건·금액·중복 제한을 정리해요. 사람이 검수한 것만 계산에 써요.</p><p><span class="ai">AI</span>결과 화면의 설명은 AI가 공고 원문을 찾아 써요. [AI] 표시로 구분해요.</p><p class="muted small">자격 판정과 금액 계산은 AI가 아니라 정해진 계산식이 해요.</p></div>
+  <div class="card"><b>데이터</b><p>온통청년·보조금24 API와 연결된 공식 공고·사업 지침을 확인해요. 매일 새벽 3시에 자동으로 갱신해요.</p></div>
   <div class="card"><b>한계</b><p>두 API에 없는 정책은 다루지 않아요. 금액·중복 여부를 검수한 정책만 조합에 들어가요.</p></div></main>${foot()}`; }
 function privacy() { return bar("개인정보 처리방침", true) + `<main><h2>개인정보 처리방침 (시안)</h2>
-  <div class="card"><dl class="kv"><dt>받는 정보</dt><dd>선택한 조건 (나이, 지역, 상황, 소득·재산 구간 등)</dd><dt>저장 위치</dt><dd>'기억하기'를 켠 경우 사용자 브라우저에만 30일. 서버에는 저장하지 않아요</dd><dt>외부 전달</dt><dd>선택한 조건은 계산을 위해 서버로 보내요. 생성형 AI API로 보내지 않으며, 민감 조건은 서버 판정에만 사용해요</dd><dt>이용 통계</dt><dd>구글 애널리틱스 (쿠키 사용, 조건 값은 보내지 않아요)</dd><dt>지우기</dt><dd>하단 '내 정보 지우기'를 누르면 바로 지워져요</dd></dl></div></main>${foot()}`; }
+  <div class="card"><dl class="kv"><dt>받는 정보</dt><dd>선택한 조건 (나이, 지역, 상황, 소득·재산 구간 등)</dd><dt>저장 위치</dt><dd>'기억하기'를 켠 경우 사용자 브라우저에만 30일. 서버에는 저장하지 않아요</dd><dt>외부 전달</dt><dd>선택한 조건은 계산을 위해 서버로 보내요. 민감 조건은 서버 판정에만 사용해요</dd><dt>AI로 보내는 것</dt><dd>설명을 쓰기 위해 조건별 판정 결과(충족·확인 필요)와 정책 원문만 보내요. 소득·재산 금액, 해당 조건(수급·장애 등), 부모님 정보는 보내지 않아요</dd><dt>이용 통계</dt><dd>구글 애널리틱스 (쿠키 사용, 조건 값은 보내지 않아요)</dd><dt>지우기</dt><dd>하단 '내 정보 지우기'를 누르면 바로 지워져요</dd></dl></div></main>${foot()}`; }
 function notFound(t = "페이지를 찾을 수 없어요", d = "주소를 다시 확인해 주세요") { return bar("", true) + `<main><div class="empty"><span class="big">🔎</span><h2>${t}</h2><p class="muted">${d}</p></div></main>${cta("처음으로", "go('#/')")}`; }
 function emptyResult() { return bar("추천 조합", true) + `<main><div class="empty"><span class="big">📭</span><h2>지금 다루는 정책 중엔<br>맞는 게 없어요</h2><p class="muted">초기에는 취업·주거 혜택만 다뤄요. 나머지 분야는 확장 예정이에요</p></div>
   <button class="btn line" onclick="go('#/conditions/13')">조건 바꾸기</button><button class="btn ghost" onclick="toast('온통청년으로 이동 (시안)')">온통청년에서 더 찾아보기 ↗</button><button class="btn ghost" onclick="toast('복지로로 이동 (시안)')">복지로에서 더 찾아보기 ↗</button></main>${foot()}`; }
@@ -467,27 +540,28 @@ const ANNOT = {
   s2_12: [[".bar .link"], ["main h2"], ["main .chips", 0], ["main .chips", 1], ["main .chips", 2], [".cta .btn"]],
   s2_13: [["main h2"], ["main .card .row", 0], [".cta .btn"]],
   load: [["main h2"], [".steps > div", 0], [".steps > div", 2], [".steps small", 0]],
-  s3: [["main > p.muted"], [".bar .link"], ["main > .tabs"], [".pvt"], [".combo", 0], [".cgive", 0], [".segbar", 0], [".why"], [".item", 0], [".item .st", 0], [".item p.small", 0], [".iact a", 0], [".warnbox"], [".fold", 0], ["main > .btn.line"], ["main > .btn.ghost"], ["main > .disclaimer"]],
+  s3: [["main > p.muted"], [".bar .link"], ["main > .tabs"], [".pvt"], [".combo", 0], [".cgive", 0], [".segbar", 0], [".why"], [".item", 0], [".item .st", 0], [".item .ai-reason", 0], [".iact a", 0], [".warnbox"], [".fold", 0], ["main > .btn.line"], ["main > .btn.svc", 0, "15-1"], ["main > .btn.ghost", 0, "16"], ["main > .disclaimer", 0, "17"]],
   s4: [["main .chips"], ["main > .card", 0], [".emtr"], [".emtr .emeter"], [".s.not_met"], [".s.needs_review"], ["main > .card.sub"], ["main > .disclaimer"]],
-  s5: [["main > .row"], ["main > h2"], ["main > .card", 0], ["blockquote", 0], ["main > .card", 1], ["main > .card", 2], ["main > .card", 3], ["main > .card", 4], ["main > .card", 5], ["main > .src"], [".cta .btn"]],
+  s5: [["main > .row"], ["main > h2"], ["main > .card", 0], ["blockquote", 0], ["main > .card", 1], ["main > .card", 2], ["main > .card", 3], ["main > .card", 4], ["main > .card", 5], ["main > .card", 6, "9-1"], ["main > .src", 0, "10"], [".cta .btn", 0, "11"]],
+  s6: [["main > h2"], [".svc-sum"], [".item", 0], [".item .fold", 0], [".item", 3], ["main > .disclaimer"]],
   empty: [["main .empty h2"], ["main > .btn.line"], ["main > .btn.ghost", 0]],
 };
 function annotKey() {
   const h = location.hash || "#/", m = h.match(/^#\/conditions\/(\d+)$/);
   if (h === "#/") return "s1";
   if (m) return ANNOT["s2_" + m[1]] ? "s2_" + m[1] : null;
-  return { "#/loading-static": "load", "#/result": "s3", "#/what-if": "s4", "#/result-empty": "empty" }[h] || (h.startsWith("#/policy/") ? "s5" : null);
+  return { "#/loading-static": "load", "#/result": "s3", "#/what-if": "s4", "#/result-empty": "empty", "#/services": "s6" }[h] || (h.startsWith("#/policy/") ? "s5" : null);
 }
 function annotate() {
   if (!location.search.includes("annot")) return;
   document.querySelectorAll(".anb").forEach(e => e.remove());
   const list = ANNOT[annotKey()] || [];
-  list.forEach(([sel, n], i) => {
+  list.forEach(([sel, n, label], i) => {
     const el = document.querySelectorAll(sel)[n || 0]; if (!el) return;
-    const fixed = !!el.closest(".cta"), r = el.getBoundingClientRect(), x = r.left + (fixed ? 0 : scrollX), y = r.top + (fixed ? 0 : scrollY), pos = fixed ? "fixed" : "absolute";
+    const ctaEl = el.closest(".cta"), fixed = !!ctaEl && getComputedStyle(ctaEl).position === "fixed", r = el.getBoundingClientRect(), x = r.left + (fixed ? 0 : scrollX), y = r.top + (fixed ? 0 : scrollY), pos = fixed ? "fixed" : "absolute";
     const box = document.createElement("div"); box.className = "anb";
     box.style.cssText = `position:${pos};left:${x - 3}px;top:${y - 3}px;width:${r.width + 6}px;height:${r.height + 6}px;border:2px dashed #E5484D;border-radius:10px;pointer-events:none;z-index:50`;
-    const b = document.createElement("div"); b.className = "anb"; b.textContent = i + 1;
+    const b = document.createElement("div"); b.className = "anb"; b.textContent = label || i + 1;
     b.style.cssText = `position:${pos};left:${x - 12}px;top:${y - 12}px;min-width:22px;height:22px;padding:0 5px;border-radius:11px;background:#E5484D;color:#fff;font:700 12px/22px Pretendard,sans-serif;text-align:center;z-index:51;pointer-events:none;box-shadow:0 0 0 2px #fff`;
     // 화면 아래 고정 버튼은 아래쪽 기준으로 붙여야 캡처 때 어긋나지 않는다
     if (fixed) { box.style.top = b.style.top = "auto"; box.style.bottom = (innerHeight - r.bottom - 3) + "px"; b.style.bottom = (innerHeight - r.top + 12 - 22) + "px";
@@ -506,6 +580,7 @@ function render() {
   else if (h === "#/result") app.innerHTML = s3();
   else if (h === "#/result-empty") app.innerHTML = emptyResult();
   else if (h === "#/what-if") { ensureDemo(); app.innerHTML = s4(); }
+  else if (h === "#/services") app.innerHTML = s6();
   else if ((m = h.match(/^#\/policy\/(\w+)$/))) app.innerHTML = s5(m[1]);
   else if (h === "#/about") app.innerHTML = about();
   else if (h === "#/privacy") app.innerHTML = privacy();
@@ -515,9 +590,10 @@ function render() {
 // 시안 그림용 미리 채우기: ?demo 를 붙이면 조건이 채워진 상태로 시작
 if (location.search.includes("pv")) S.pv = true;
 if (location.search.includes("cliff")) S.whatif = "연 소득이 오르면";
+if (location.search.includes("shot")) document.body.classList.add("shot");
 if (location.search.includes("demo")) { S.cond = JSON.parse(JSON.stringify(demo)); S.consent = true; S.remember = true; }
 if (location.search.includes("old")) S.cond.age = 41;
-if (location.search.includes("open")) { S.open = { ex: true, ne: true }; }
+if (location.search.includes("open")) { S.open = { ex: true, ne: true, bV2: true }; }
 window.addEventListener("hashchange", () => { window.scrollTo(0, 0); render(); if (location.hash === "#/loading") runLoading(); });
 render(); if (location.hash === "#/loading") runLoading();
 </script>
