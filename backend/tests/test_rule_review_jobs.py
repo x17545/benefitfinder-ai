@@ -13,11 +13,13 @@ import unittest
 from unittest.mock import patch
 
 from backend.tests.test_rule_review_workflow import AT, approved, prepared
-from benefitfinder.application.policy_facts import PolicyFactsDraft
-from benefitfinder.application.policy_rules import ReviewIssue
+from benefitfinder.application.policy_facts import PolicyAmountCandidate, PolicyFactsDraft
+from benefitfinder.application.policy_rules import ReviewIssue, RuleCitation
+from benefitfinder.ingestion.rule_review_workflow import prepare_snapshot
 from benefitfinder.infrastructure.policy_rule_files import (
     load_rule_batch,
     load_rule_snapshot,
+    write_f12_review_pair,
     write_rule_batch,
     write_rule_snapshot,
 )
@@ -75,6 +77,11 @@ class ReviewCommandTests(unittest.TestCase):
         )
         self.assertEqual(source.read_bytes(), original)
 
+        status, stdout, stderr = self.run_command("show-all", "--input-dir", str(output))
+        self.assertEqual(status, 0, stderr)
+        self.assertEqual(stdout.count("근거 후보 없음 (not_found)"), 3)
+        self.assertIn("고정 월 지급일: 미확인", stdout)
+
         with patch("benefitfinder.jobs.__main__.OllamaChat") as chat:
             status, _, stderr = self.run_command(*args)
         self.assertEqual(status, 1)
@@ -109,6 +116,93 @@ class ReviewCommandTests(unittest.TestCase):
         self.assertEqual(status, 1)
         self.assertIn("policy_facts_unverified_submission", stderr)
         self.assertFalse(output.exists())
+
+    def _make_review_pair(self) -> Path:
+        batch = example_rule_batch()
+        (original,) = batch.documents
+        (candidate,) = batch.candidates
+        condition = "가상 수당 수혜 중에는 동시 참여 불가"
+        exception = "가상 수당 수혜 종료 후 신청 가능"
+        lines = (
+            f"{condition}. 단, {exception}.",
+            "가상 지역에 거주해야 합니다.",
+            "지원 금액은 70,000원입니다.",
+            "매월 17일 지급합니다.",
+            "인용 범위 밖 가상 문장입니다.",
+        )
+        document = replace(original, text="\n".join(lines))
+        rule, eligibility, amount, timing = (
+            RuleCitation(
+                document.id, document.document_version, document.content_sha256, line, f"line {i}"
+            )
+            for i, line in enumerate(lines[:4], 1)
+        )
+        candidate = replace(
+            candidate,
+            description=rule.quote,
+            conditions=(condition,),
+            exceptions=(exception,),
+            citations=(rule,),
+        )
+        snapshot = prepare_snapshot(
+            replace(batch, documents=(document,), candidates=(candidate,)), at=AT
+        )
+        facts = PolicyFactsDraft(
+            document, (eligibility,), (PolicyAmountCandidate(amount, (70_000,)),), (timing,), 17
+        )
+        output = self.root / "review"
+        write_f12_review_pair(output, snapshot, facts)
+        return output
+
+    def test_show_all_displays_both_files_and_citations_without_changing_them(self) -> None:
+        output = self._make_review_pair()
+        files = tuple(sorted(output.iterdir()))
+        before = [path.read_bytes() for path in files]
+        with patch("benefitfinder.jobs.__main__.OllamaChat") as chat:
+            status, stdout, stderr = self.run_command("show-all", "--input-dir", str(output))
+        self.assertEqual((status, stderr), (0, ""))
+        chat.assert_not_called()
+        self.assertEqual(tuple(sorted(output.iterdir())), files)
+        self.assertEqual([path.read_bytes() for path in files], before)
+        for expected in (
+            "[중복 제한·예외]",
+            "[자격 조건]",
+            "[지원 금액]",
+            "[지급 시점]",
+            "needs_review",
+            "제한 조건: 가상 수당 수혜 중에는 동시 참여 불가",
+            "예외: 가상 수당 수혜 종료 후 신청 가능",
+            "원문 근거 (line 1)",
+            "가상 지역에 거주해야 합니다.",
+            "명시 금액: 70,000원",
+            "지원 금액은 70,000원입니다.",
+            "고정 월 지급일: 매월 17일",
+            "매월 17일 지급합니다.",
+        ):
+            self.assertIn(expected, stdout)
+        self.assertNotIn("인용 범위 밖 가상 문장", stdout)
+
+    def test_show_all_rejects_mismatched_source_or_unverified_quote_before_display(self) -> None:
+        output = self._make_review_pair()
+        facts = output / "facts-pending.json"
+        original = facts.read_bytes()
+        for bad_field in ("source hash", "citation quote", "missing file"):
+            with self.subTest(bad_field=bad_field):
+                payload = json.loads(original)
+                if bad_field == "source hash":
+                    payload["source"]["content_sha256"] = "a" * 64
+                elif bad_field == "citation quote":
+                    payload["eligibility"]["items"][0]["evidence"]["quote"] = (
+                        "원문에 없는 가상 문구"
+                    )
+                if bad_field == "missing file":
+                    facts.unlink()
+                    error = "rule_review_io_error"
+                else:
+                    facts.write_text(json.dumps(payload), encoding="utf-8")
+                    error = "invalid_rule_review_file"
+                status, stdout, stderr = self.run_command("show-all", "--input-dir", str(output))
+                self.assertEqual((status, stdout, stderr), (1, "", f"검수 작업 실패: {error}\n"))
 
     def test_example_prepare_approve_show_and_refresh_use_new_files(self) -> None:
         source = self.root / "input.json"

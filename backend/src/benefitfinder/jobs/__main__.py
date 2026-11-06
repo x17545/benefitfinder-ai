@@ -32,6 +32,7 @@ from benefitfinder.infrastructure.ollama_chat import OllamaChat
 from benefitfinder.infrastructure.policy_rule_files import (
     RULE_REVIEW_OUTPUT_EXISTS,
     RuleReviewFileError,
+    load_f12_review_pair,
     load_rule_batch,
     load_rule_snapshot,
     write_f12_review_pair,
@@ -49,6 +50,7 @@ from benefitfinder.ingestion.rule_review_workflow import (
     refresh_snapshot,
 )
 from benefitfinder.ingestion.youthcenter import SOURCE_NAME, YOUTHCENTER_POLICY_LIST
+from benefitfinder.jobs.f12_review_display import format_f12_review
 from benefitfinder.jobs.rule_review_example import example_rule_batch
 
 API_KEY_ENV = "YOUTHCENTER_API_KEY"
@@ -165,6 +167,10 @@ def rule_review_command(args: argparse.Namespace) -> int:
             result = inspect_snapshot(load_rule_snapshot(args.snapshot))
             _print_review_summary(result)
             return 0
+        elif args.review_action == "show-all":
+            snapshot, draft = load_f12_review_pair(args.input_dir)
+            print(format_f12_review(inspect_snapshot(snapshot), draft))
+            return 0
         else:
             return 2
         write_rule_snapshot(args.output, result)
@@ -221,6 +227,10 @@ def _add_rule_review_commands(commands: argparse._SubParsersAction) -> None:
     refresh.add_argument("--output", type=Path, required=True, help="새 파일 경로")
     show = actions.add_parser("show", help="저장된 전체 입력으로 상태 재검사·요약 (읽기 전용)")
     show.add_argument("--snapshot", type=Path, required=True)
+    show_all = actions.add_parser(
+        "show-all", help="두 검수 파일의 후보와 원문 근거 조회 (읽기 전용)"
+    )
+    show_all.add_argument("--input-dir", type=Path, required=True, help="extract-all 결과 디렉터리")
 
 
 def main(argv: Sequence[str] | None = None) -> int:

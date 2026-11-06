@@ -37,6 +37,8 @@ RULE_REVIEW_OUTPUT_EXISTS: str = "rule_review_output_exists"
 RULE_REVIEW_IO_ERROR: str = "rule_review_io_error"
 
 _HEX_DIGITS: frozenset[str] = frozenset("0123456789abcdefABCDEF")
+_RULES_PENDING = "rules-pending.json"
+_FACTS_PENDING = "facts-pending.json"
 
 
 class RuleReviewFileError(ValueError):
@@ -754,6 +756,106 @@ def _check_citation(citation: RuleCitation, document: SourceDocument) -> None:
         _fail_invalid()
 
 
+def _facts_source(document: SourceDocument) -> dict[str, object]:
+    return {
+        "id": document.id,
+        "url": document.source_url,
+        "document_version": document.document_version,
+        "content_sha256": document.content_sha256,
+        "collected_at": _to_iso(document.collected_at),
+    }
+
+
+def _fact_items(
+    section: object, *, timing: bool = False, amount: bool = False
+) -> list[dict[str, object]]:
+    if not isinstance(section, dict):
+        _fail_invalid()
+    keys = {"status", "items", "scheduled_monthly_day"} if timing else {"status", "items"}
+    _check_only_allowed(section, keys)
+    items = section.get("items")
+    if not isinstance(items, list) or section.get("status") != (
+        "extracted" if items else "not_found"
+    ):
+        _fail_invalid()
+    for item in items:
+        if not isinstance(item, dict):
+            _fail_invalid()
+        _check_only_allowed(item, {"evidence", "amounts_won"} if amount else {"evidence"})
+    return items
+
+
+def _fact_evidence(item: dict[str, object], document: SourceDocument) -> RuleCitation:
+    citation = _parse_citation(item.get("evidence"))
+    _check_citation(citation, document)
+    return citation
+
+
+def _load_policy_facts(path: Path, document: SourceDocument) -> PolicyFactsDraft:
+    data = _read_json_object(path)
+    _check_only_allowed(
+        data,
+        {
+            "format_version",
+            "policy_id",
+            "status",
+            "source",
+            "eligibility",
+            "benefit_amount",
+            "payment_timing",
+        },
+    )
+    _check_format_version(data)
+    if (
+        data.get("status") != "needs_review"
+        or data.get("policy_id") != document.policy_id
+        or data.get("source") != _facts_source(document)
+    ):
+        _fail_invalid()
+
+    eligibility = tuple(
+        _fact_evidence(item, document) for item in _fact_items(data.get("eligibility"))
+    )
+    amounts = []
+    for item in _fact_items(data.get("benefit_amount"), amount=True):
+        values = item.get("amounts_won")
+        if not isinstance(values, list) or any(type(value) is not int for value in values):
+            _fail_invalid()
+        amounts.append(PolicyAmountCandidate(_fact_evidence(item, document), tuple(values)))
+    timing_section = data.get("payment_timing")
+    if not isinstance(timing_section, dict):
+        _fail_invalid()
+    timing = tuple(
+        _fact_evidence(item, document) for item in _fact_items(timing_section, timing=True)
+    )
+    day = _require_present(timing_section, "scheduled_monthly_day")
+    if day is not None and (type(day) is not int or not 1 <= day <= 31 or not timing):
+        _fail_invalid()
+    return PolicyFactsDraft(document, eligibility, tuple(amounts), timing, day)
+
+
+def load_f12_review_pair(directory: Path) -> tuple[RuleReviewSnapshot, PolicyFactsDraft]:
+    """Read both pending files and check their citations against the same saved notice."""
+    snapshot = load_rule_snapshot(directory / _RULES_PENDING)
+    if (
+        snapshot.operation != ReviewOperation.PREPARED
+        or len(snapshot.batch.documents) != 1
+        or not snapshot.reviews
+        or any(review.approval is not None for review in snapshot.reviews)
+    ):
+        _fail_invalid()
+    (document,) = snapshot.batch.documents
+    if not document.official:
+        _fail_invalid()
+    for review in snapshot.reviews:
+        candidate = review.candidate
+        if candidate.source_policy_id != document.policy_id or not candidate.citations:
+            _fail_invalid()
+        for citation in candidate.citations:
+            _check_citation(citation, document)
+    return snapshot, _load_policy_facts(directory / _FACTS_PENDING, document)
+
+
 def _checked_section(items: tuple[RuleCitation, ...], document: SourceDocument) -> dict[str, object]:
     if not isinstance(items, tuple):
         _fail_invalid()
@@ -814,13 +916,7 @@ def write_policy_facts(path: Path, draft: PolicyFactsDraft) -> None:
         "format_version": FORMAT_VERSION,
         "policy_id": document.policy_id,
         "status": "needs_review",
-        "source": {
-            "id": document.id,
-            "url": document.source_url,
-            "document_version": document.document_version,
-            "content_sha256": document.content_sha256,
-            "collected_at": _to_iso(document.collected_at),
-        },
+        "source": _facts_source(document),
         "eligibility": eligibility,
         "benefit_amount": benefit_amount,
         "payment_timing": {
@@ -850,8 +946,8 @@ def write_f12_review_pair(
     try:
         directory.parent.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(prefix=".f12-pair-", dir=directory.parent) as temp:
-            rules = Path(temp) / "rules-pending.json"
-            facts = Path(temp) / "facts-pending.json"
+            rules = Path(temp) / _RULES_PENDING
+            facts = Path(temp) / _FACTS_PENDING
             write_rule_snapshot(rules, snapshot)
             write_policy_facts(facts, draft)
             try:
