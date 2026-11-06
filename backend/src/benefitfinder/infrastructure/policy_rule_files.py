@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import tempfile
 from contextlib import suppress
 from datetime import datetime
@@ -46,6 +47,7 @@ RULE_REVIEW_IO_ERROR: str = "rule_review_io_error"
 _HEX_DIGITS: frozenset[str] = frozenset("0123456789abcdefABCDEF")
 _RULES_PENDING = "rules-pending.json"
 _FACTS_PENDING = "facts-pending.json"
+_NUMBERED_CITATION = re.compile(r"(?:line ([0-9]{1,6})|lines ([0-9]{1,6})-([0-9]{1,6}))")
 
 
 class RuleReviewFileError(ValueError):
@@ -757,9 +759,23 @@ def _check_citation(citation: RuleCitation, document: SourceDocument) -> None:
         _fail_invalid()
     if citation.content_sha256 != document.content_sha256:
         _fail_invalid()
-    if not isinstance(citation.quote, str):
+    if not isinstance(citation.quote, str) or not citation.quote.strip():
         _fail_invalid()
-    if not citation.quote or citation.quote not in document.text:
+    location = citation.location
+    if not isinstance(location, str) or not location.strip():
+        _fail_invalid()
+    if location.split(maxsplit=1)[0].casefold() in {"line", "lines"}:
+        match = _NUMBERED_CITATION.fullmatch(location)
+        if match is None:
+            _fail_invalid()
+        start = int(match[1] or match[2])
+        end = int(match[3]) if match[3] else start
+        lines = document.text.split("\n")
+        if not 1 <= start <= end <= len(lines) or citation.quote != "\n".join(
+            lines[start - 1 : end]
+        ):
+            _fail_invalid()
+    elif citation.quote not in document.text:
         _fail_invalid()
 
 

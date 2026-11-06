@@ -186,7 +186,7 @@ class ReviewCommandTests(unittest.TestCase):
         output = self._make_review_pair()
         facts = output / "facts-pending.json"
         original = facts.read_bytes()
-        for bad_field in ("source hash", "citation quote", "missing file"):
+        for bad_field in ("source hash", "citation quote", "citation location", "missing file"):
             with self.subTest(bad_field=bad_field):
                 payload = json.loads(original)
                 if bad_field == "source hash":
@@ -195,6 +195,8 @@ class ReviewCommandTests(unittest.TestCase):
                     payload["eligibility"]["items"][0]["evidence"]["quote"] = (
                         "원문에 없는 가상 문구"
                     )
+                elif bad_field == "citation location":
+                    payload["eligibility"]["items"][0]["evidence"]["location"] = "line 3"
                 if bad_field == "missing file":
                     facts.unlink()
                     error = "rule_review_io_error"

@@ -72,3 +72,19 @@ class PolicyFactsAgentTests(TestCase):
         chat = Mock(return_value=_reply(12))
         with self.assertRaisesRegex(ValueError, "policy_facts_unverified_submission"):
             extract_policy_facts(batch, chat=chat)
+
+    def test_monthly_day_does_not_turn_alternatives_or_deadlines_into_a_fixed_day(self) -> None:
+        for wording in (
+            "매월 10일 또는 25일 지급",
+            "매월 10일 또는 매월 25일 지급",
+            "매월 10일(조기 대상)에 지급 또는 25일 지급",
+            "매월 10일~25일 사이에 지급",
+            "매월 25일~말일 사이에 지급",
+            "매월 25일까지 지급",
+            "매월 25일 전후 지급",
+        ):
+            with self.subTest(wording=wording):
+                timing = "지급 시기: " + wording
+                result = extract_policy_facts(_batch(timing), chat=Mock(return_value=_reply(1)))
+                self.assertEqual(result.payment_timing[0].quote, timing)
+                self.assertIsNone(result.scheduled_monthly_day)

@@ -29,8 +29,12 @@ _UNITS = {
     "억": 100_000_000,
 }
 _COMPOSITE_PREFIX = re.compile(r"\d\s*(?:억|만|천|백)\s*$")
-_MONTHLY_DAY = re.compile(
-    r"(?:매월|매달|지급기간에\s*속한\s*월의)\s*(\d{1,2})일(?!\s*(?:이후|이전|이내|부터|경))"
+_MONTHLY_DAY = re.compile(r"(?:매월|매달|지급기간에\s*속한\s*월의)\s*(\d{1,2})\s*일")
+_NON_FIXED_DAY_SUFFIX = re.compile(
+    r"\s*(?:이후|이전|이내|부터|까지|전까지|안에|전후|경|쯤|무렵"
+    r"|(?:[（(][^()（）\n]*[)）]\s*)?(?:에?\s*지급\s*)?"
+    r"(?:[~∼〜]|또는|혹은|내지|(?:[–—/,·−-]|및|에서|[과와])\s*"
+    r"(?:(?:매월|매달)\s*)?(?:\d{1,2}\s*일|말일|월말)))"
 )
 
 _SUBMIT = {
@@ -205,6 +209,17 @@ def _explicit_amounts(quote: str) -> tuple[int, ...]:
     return tuple(dict.fromkeys(amounts))
 
 
+def _fixed_monthly_day(timing: tuple[RuleCitation, ...]) -> int | None:
+    days = set()
+    for citation in timing:
+        for match in _MONTHLY_DAY.finditer(citation.quote):
+            day = int(match[1])
+            if not 1 <= day <= 31 or _NON_FIXED_DAY_SUFFIX.match(citation.quote, match.end()):
+                return None
+            days.add(day)
+    return next(iter(days)) if len(days) == 1 else None
+
+
 def extract_policy_facts(batch: RuleReviewBatch, *, chat: Chat) -> PolicyFactsDraft:
     """Keep literal evidence and only directly stated numeric values in the draft."""
     if len(batch.documents) != 1:
@@ -254,12 +269,6 @@ def extract_policy_facts(batch: RuleReviewBatch, *, chat: Chat) -> PolicyFactsDr
         chat,
         keep_context=timing_sections,
     )
-    days = {
-        int(match[1])
-        for citation in timing
-        for match in _MONTHLY_DAY.finditer(citation.quote)
-        if 1 <= int(match[1]) <= 31
-    }
     return PolicyFactsDraft(
         document=document,
         eligibility=eligibility,
@@ -269,5 +278,5 @@ def extract_policy_facts(batch: RuleReviewBatch, *, chat: Chat) -> PolicyFactsDr
             if (values := _explicit_amounts(citation.quote))
         ),
         payment_timing=timing,
-        scheduled_monthly_day=next(iter(days)) if len(days) == 1 else None,
+        scheduled_monthly_day=_fixed_monthly_day(timing),
     )
