@@ -19,6 +19,7 @@ from pathlib import Path
 from time import monotonic
 from zoneinfo import ZoneInfo
 
+from benefitfinder.ai.policy_facts_agent import extract_policy_facts
 from benefitfinder.ai.policy_rule_agent import extract_rule_batch
 from benefitfinder.application.policy_rules import RuleReviewSnapshot
 from benefitfinder.infrastructure.local_files import (
@@ -32,6 +33,7 @@ from benefitfinder.infrastructure.policy_rule_files import (
     RuleReviewFileError,
     load_rule_batch,
     load_rule_snapshot,
+    write_policy_facts,
     write_rule_batch,
     write_rule_snapshot,
 )
@@ -121,6 +123,16 @@ def rule_review_command(args: argparse.Namespace) -> int:
             print(f"모델 {args.model}: {' → '.join(trace)} ({monotonic() - started:.1f}초)")
             print(f"규칙 후보 {len(batch.candidates)}건. 다음 단계: rule-review prepare")
             return 0
+        if args.review_action == "extract-facts":
+            started = monotonic()
+            draft = extract_policy_facts(load_rule_batch(args.input), chat=OllamaChat(args.model))
+            write_policy_facts(args.output, draft)
+            print(
+                f"모델 {args.model} ({monotonic() - started:.1f}초): "
+                f"자격 {len(draft.eligibility)}건, 금액 {len(draft.amounts)}건, "
+                f"지급 시점 {len(draft.payment_timing)}건. 검수 대기."
+            )
+            return 0
         if args.review_action == "prepare":
             batch = load_rule_batch(args.input)
             result = prepare_snapshot(batch, at=datetime.now(KST))
@@ -167,6 +179,10 @@ def _add_rule_review_commands(commands: argparse._SubParsersAction) -> None:
     extract.add_argument("--target-id", required=True, help="입력 정책 목록에 있는 상대 정책 ID")
     extract.add_argument("--model", required=True, help="로컬 Ollama에 설치된 모델 이름")
     extract.add_argument("--output", type=Path, required=True, help="새 파일 경로")
+    facts = actions.add_parser("extract-facts", help="공식 원문의 자격·금액·지급 시점 후보 생성")
+    facts.add_argument("--input", type=Path, required=True, help="공식 문서 한 건이 있는 입력")
+    facts.add_argument("--model", required=True, help="로컬 Ollama에 설치된 모델 이름")
+    facts.add_argument("--output", type=Path, required=True, help="새 로컬 검수 후보 파일 경로")
     prepare = actions.add_parser("prepare", help="전체 원문·정책·후보 파일로 검수 자료 준비")
     prepare.add_argument("--input", type=Path, required=True)
     prepare.add_argument("--output", type=Path, required=True, help="새 파일 경로")

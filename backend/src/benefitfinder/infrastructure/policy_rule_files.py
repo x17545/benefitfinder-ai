@@ -26,6 +26,8 @@ from benefitfinder.application.policy_rules import RuleKind
 from benefitfinder.application.policy_rules import RuleReviewBatch
 from benefitfinder.application.policy_rules import RuleReviewSnapshot
 from benefitfinder.application.policy_rules import SourceDocument
+from benefitfinder.application.policy_facts import PolicyAmountCandidate
+from benefitfinder.application.policy_facts import PolicyFactsDraft
 
 FORMAT_VERSION: int = 1
 INVALID_RULE_REVIEW_FILE: str = "invalid_rule_review_file"
@@ -733,4 +735,97 @@ def write_rule_snapshot(path: Path, snapshot: RuleReviewSnapshot) -> None:
     if not isinstance(snapshot, RuleReviewSnapshot):
         _fail_invalid()
     payload = _snapshot_to_json(snapshot)
+    _write_create_only(Path(path), payload)
+
+
+def _check_citation(citation: RuleCitation, document: SourceDocument) -> None:
+    if not isinstance(citation, RuleCitation):
+        _fail_invalid()
+    if citation.document_id != document.id:
+        _fail_invalid()
+    if citation.document_version != document.document_version:
+        _fail_invalid()
+    if citation.content_sha256 != document.content_sha256:
+        _fail_invalid()
+    if not isinstance(citation.quote, str):
+        _fail_invalid()
+    if not citation.quote or citation.quote not in document.text:
+        _fail_invalid()
+
+
+def _checked_section(items: tuple[RuleCitation, ...], document: SourceDocument) -> dict[str, object]:
+    if not isinstance(items, tuple):
+        _fail_invalid()
+    for item in items:
+        _check_citation(item, document)
+    status = "extracted" if items else "not_found"
+    return {
+        "status": status,
+        "items": [{"evidence": _citation_to_json(item)} for item in items],
+    }
+
+
+def _checked_amount(candidate: PolicyAmountCandidate, document: SourceDocument) -> dict[str, object]:
+    if not isinstance(candidate, PolicyAmountCandidate):
+        _fail_invalid()
+    _check_citation(candidate.evidence, document)
+    if not isinstance(candidate.amounts_won, tuple):
+        _fail_invalid()
+    for amount in candidate.amounts_won:
+        if type(amount) is not int:
+            _fail_invalid()
+    return {
+        "evidence": _citation_to_json(candidate.evidence),
+        "amounts_won": list(candidate.amounts_won),
+    }
+
+
+def _checked_amounts(items: tuple[PolicyAmountCandidate, ...], document: SourceDocument) -> dict[str, object]:
+    if not isinstance(items, tuple):
+        _fail_invalid()
+    status = "extracted" if items else "not_found"
+    return {
+        "status": status,
+        "items": [_checked_amount(item, document) for item in items],
+    }
+
+
+def write_policy_facts(path: Path, draft: PolicyFactsDraft) -> None:
+    """Store one local F12 fact file without overwriting existing results."""
+    if not isinstance(draft, PolicyFactsDraft):
+        _fail_invalid()
+    document = draft.document
+    if not isinstance(document, SourceDocument):
+        _fail_invalid()
+    eligibility = _checked_section(draft.eligibility, document)
+    benefit_amount = _checked_amounts(draft.amounts, document)
+    timing = _checked_section(draft.payment_timing, document)
+    day = draft.scheduled_monthly_day
+    if day is None:
+        scheduled = None
+    else:
+        if type(day) is not int or not 1 <= day <= 31:
+            _fail_invalid()
+        if not draft.payment_timing:
+            _fail_invalid()
+        scheduled = day
+    payload: dict[str, object] = {
+        "format_version": FORMAT_VERSION,
+        "policy_id": document.policy_id,
+        "status": "needs_review",
+        "source": {
+            "id": document.id,
+            "url": document.source_url,
+            "document_version": document.document_version,
+            "content_sha256": document.content_sha256,
+            "collected_at": _to_iso(document.collected_at),
+        },
+        "eligibility": eligibility,
+        "benefit_amount": benefit_amount,
+        "payment_timing": {
+            "status": timing["status"],
+            "items": timing["items"],
+            "scheduled_monthly_day": scheduled,
+        },
+    }
     _write_create_only(Path(path), payload)

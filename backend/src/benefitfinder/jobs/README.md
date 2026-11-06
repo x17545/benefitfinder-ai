@@ -19,6 +19,18 @@ uv run --locked python -m benefitfinder.jobs rule-review prepare \
 
 Ollama가 `127.0.0.1:11434`에서 실행 중이고 도구 호출을 지원하는 로컬 모델이 설치되어 있어야 한다. 모델은 검색된 줄과 앞뒤 문맥을 함께 보고, 여러 줄에 걸친 제한·기간·예외를 연속된 원문 범위로 인용할 수 있다. 선택한 근거의 명시적 허용은 제한 조건과 구분해 `exceptions`에 저장한다. 예외가 조건에 섞이거나 선택한 근거에서 빠지면 모델에 재제출을 요청한다. 콘솔에는 모델·도구 순서·소요 시간만 남긴다. 모델이 낸 해석은 사람이 검수하며, 이 명령은 승인하거나 게시하지 않는다. 실제 원문과 후보는 `data/` 같은 Git 제외 경로에 보관한다.
 
+## 자격·금액·지급 시점 후보 만들기
+
+공식 공고 한 건을 담은 기존 검수 입력으로 실행한다. 상대 정책 이름과 ID는 필요 없다.
+
+```bash
+uv run --locked python -m benefitfinder.jobs rule-review extract-facts \
+  --input data/processed/rule-reviews/notice-input.json --model gemma4:e4b \
+  --output data/processed/rule-reviews/notice-facts-pending.json
+```
+
+모델은 자격 조건·지원 금액·지급 시점에 해당하는 원문 줄을 고른다. 결과는 원문 인용, 줄 번호, 문서 버전·해시가 붙은 별도 `needs_review` 파일이다. 금액 숫자는 인용에 직접 적힌 원화 표기만 옮긴다. 월 금액과 기간을 곱해 총액을 만들거나, 지급 시점의 상대 조건을 고정 지급일로 바꾸지 않는다. 근거를 찾지 못한 항목은 `not_found`, 명시된 고정 월 지급일이 없거나 하나로 확정할 수 없으면 `scheduled_monthly_day: null`이다. `not_found`는 후보에서 근거를 찾지 못했다는 뜻이며 원문 전체에 조건이 없다는 판정이 아니다. 이 파일은 아래 중복 제한 검수 명령의 승인·게시 입력이 아니다.
+
 ## 로컬 규칙 검수 실행
 
 다음 예제는 실제 정책과 무관한 가상 자료이며 DB·LLM·네트워크 없이 실행한다. 저장소 루트에서 실행하고, 기존 파일이 있으면 새 경로를 사용한다.
