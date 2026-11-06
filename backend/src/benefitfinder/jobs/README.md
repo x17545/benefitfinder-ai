@@ -2,6 +2,22 @@
 
 현재 구현: `python -m benefitfinder.jobs collect-youthcenter`가 온통청년 목록 수집을 한 번 실행한다(사용법은 [ingestion](../ingestion/README.md#로컬-수집-실행)). `rule-review`는 로컬 검수 자료의 준비·명시적 승인·재검수·상태 조회를 실행한다. 두 명령 모두 `__main__.py`에서 구체 파일 어댑터와 순수 처리 함수를 조립한다. 매일 실행·실패 알림은 구현하지 않았다.
 
+## 로컬 모델로 후보 만들기
+
+`rule-review extract`는 이미 확보한 공식 공고 텍스트 한 건과 상대 정책 한 건으로 중복 제한 후보 하나를 만든다. 검수 입력 v1과 같은 형식으로 공식 `documents` 한 건, 두 정책의 `policies`, 빈 `candidates`를 준비한다. `rule-review example`의 가상 출력에서 필드 구조를 확인할 수 있다. 두 정책 모두 청년 취업·주거 범위에 있어야 하고, 상대 정책의 이름과 ID는 입력자가 공식 자료로 확인한다. 아래 이름·ID는 가상이다.
+
+```bash
+uv run --locked python -m benefitfinder.jobs rule-review extract \
+  --input data/processed/rule-reviews/notice-input.json \
+  --target-name '가상 정책 B' --target-id virtual-b --model gemma4:e2b \
+  --output data/processed/rule-reviews/notice-candidates.json
+uv run --locked python -m benefitfinder.jobs rule-review prepare \
+  --input data/processed/rule-reviews/notice-candidates.json \
+  --output data/processed/rule-reviews/notice-pending.json
+```
+
+Ollama가 `127.0.0.1:11434`에서 실행 중이고 도구 호출을 지원하는 로컬 모델이 설치되어 있어야 한다. 모델이 먼저 검색·정책 조회 결과를 받은 다음 후보를 제출한다. 코드는 그 검색 결과에서 인용문을 그대로 가져오며 콘솔에는 모델·도구 순서·소요 시간만 남긴다. 모델이 낸 해석은 사람이 검수하며, 이 명령은 승인하거나 게시하지 않는다. 실제 원문과 후보는 `data/` 같은 Git 제외 경로에 보관한다.
+
 ## 로컬 규칙 검수 실행
 
 다음 예제는 실제 정책과 무관한 가상 자료이며 DB·LLM·네트워크 없이 실행한다. 저장소 루트에서 실행하고, 기존 파일이 있으면 새 경로를 사용한다.
