@@ -474,6 +474,97 @@ class ReviewCommandTests(unittest.TestCase):
                 self.assertEqual(snapshot.read_bytes(), before)
                 self.assertFalse(output.exists())
 
+    def _decide(
+        self,
+        pair: Path,
+        output: Path,
+        item_id: str,
+        decision: str,
+        reason: str,
+        previous: Path | None = None,
+    ) -> tuple[int, str, str]:
+        return self.run_command(
+            "decide",
+            "--input-dir",
+            str(pair),
+            "--item-id",
+            item_id,
+            "--decision",
+            decision,
+            "--reviewer",
+            "virtual-reviewer",
+            "--reason",
+            reason,
+            "--output",
+            str(output),
+            *(("--decisions", str(previous)) if previous else ()),
+        )
+
+    def test_decide_chains_approve_and_reject_without_touching_pair(self) -> None:
+        pair = self._make_review_pair()
+        before = {path.name: path.read_bytes() for path in sorted(pair.iterdir())}
+        first, second = self.root / "first.json", self.root / "second.json"
+        status, _, stderr = self._decide(pair, first, "eligibility:1", "approve", "가상 승인 사유")
+        self.assertEqual(status, 0, stderr)
+        first_before = first.read_bytes()
+        status, _, stderr = self._decide(
+            pair, second, "amount:1", "reject", "가상 반려 사유", first
+        )
+        self.assertEqual(status, 0, stderr)
+        self.assertEqual(first.read_bytes(), first_before)
+        status, stdout, stderr = self.run_command(
+            "show-all", "--input-dir", str(pair), "--decisions", str(second)
+        )
+        self.assertEqual((status, stderr), (0, ""))
+        self.assertIn("eligibility:1 · 승인 (approve)", stdout)
+        self.assertIn("amount:1 · 반려 (reject)", stdout)
+        self.assertIn("timing:1 · needs_review", stdout)
+        self.assertEqual(stdout.count("검수자: virtual-reviewer"), 2)
+        self.assertIn("가상 승인 사유", stdout)
+        self.assertIn("가상 반려 사유", stdout)
+        second_before = second.read_bytes()
+        third = self.root / "third.json"
+        status, _, stderr = self._decide(pair, third, "amount:1", "approve", "가상 재검수", second)
+        self.assertEqual(status, 0, stderr)
+        status, stdout, stderr = self.run_command(
+            "show-all", "--input-dir", str(pair), "--decisions", str(third)
+        )
+        self.assertEqual((status, stderr), (0, ""))
+        self.assertIn("amount:1 · 승인 (approve)", stdout)
+        self.assertIn("가상 재검수", stdout)
+        self.assertEqual(second.read_bytes(), second_before)
+        self.assertEqual({path.name: path.read_bytes() for path in sorted(pair.iterdir())}, before)
+
+    def test_decide_rejects_unknown_item_blank_reason_and_existing_output(self) -> None:
+        pair = self._make_review_pair()
+        before = [path.read_bytes() for path in sorted(pair.iterdir())]
+        output = self.root / "decisions.json"
+        for item_id, reason in (("rule:9", "가상 사유"), ("eligibility:1", "   ")):
+            with self.subTest(item_id=item_id, reason=reason):
+                status, _, _ = self._decide(pair, output, item_id, "approve", reason)
+                self.assertEqual(status, 1)
+                self.assertFalse(output.exists())
+        output.write_bytes(b"previous-success")
+        status, _, stderr = self._decide(pair, output, "timing:1", "approve", "가상 사유")
+        self.assertEqual(status, 1)
+        self.assertIn("rule_review_output_exists", stderr)
+        self.assertEqual(output.read_bytes(), b"previous-success")
+        self.assertEqual([path.read_bytes() for path in sorted(pair.iterdir())], before)
+
+    def test_decision_file_is_bound_to_candidates_even_when_source_is_unchanged(self) -> None:
+        pair = self._make_review_pair()
+        output = self.root / "decisions.json"
+        status, _, stderr = self._decide(pair, output, "timing:1", "approve", "가상 사유")
+        self.assertEqual(status, 0, stderr)
+        facts = pair / "facts-pending.json"
+        draft = json.loads(facts.read_bytes())
+        draft["payment_timing"]["scheduled_monthly_day"] = None
+        facts.write_text(json.dumps(draft), encoding="utf-8")
+        status, _, stderr = self.run_command("show-all", "--input-dir", str(pair))
+        self.assertEqual(status, 0, stderr)
+        result = self.run_command("show-all", "--input-dir", str(pair), "--decisions", str(output))
+        self.assertEqual(result, (1, "", "검수 작업 실패: f12_review_pair_mismatch\n"))
+
 
 if __name__ == "__main__":
     unittest.main()

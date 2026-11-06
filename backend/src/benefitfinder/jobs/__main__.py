@@ -21,6 +21,7 @@ from zoneinfo import ZoneInfo
 
 from benefitfinder.ai.policy_facts_agent import extract_policy_facts
 from benefitfinder.ai.policy_rule_agent import extract_rule_batch
+from benefitfinder.application.f12_review import F12ReviewDecision
 from benefitfinder.application.policy_rules import RuleReviewSnapshot
 from benefitfinder.infrastructure.local_files import (
     JsonFileSnapshotStore,
@@ -32,9 +33,11 @@ from benefitfinder.infrastructure.ollama_chat import OllamaChat
 from benefitfinder.infrastructure.policy_rule_files import (
     RULE_REVIEW_OUTPUT_EXISTS,
     RuleReviewFileError,
+    load_f12_decisions,
     load_f12_review_pair,
     load_rule_batch,
     load_rule_snapshot,
+    write_f12_decisions,
     write_f12_review_pair,
     write_policy_facts,
     write_rule_batch,
@@ -167,9 +170,24 @@ def rule_review_command(args: argparse.Namespace) -> int:
             result = inspect_snapshot(load_rule_snapshot(args.snapshot))
             _print_review_summary(result)
             return 0
-        elif args.review_action == "show-all":
+        elif args.review_action in {"show-all", "decide"}:
             snapshot, draft = load_f12_review_pair(args.input_dir)
-            print(format_f12_review(inspect_snapshot(snapshot), draft))
+            checked = inspect_snapshot(snapshot)
+            decisions = (
+                load_f12_decisions(args.decisions, snapshot, draft) if args.decisions else ()
+            )
+            if args.review_action == "decide":
+                entry = F12ReviewDecision(
+                    args.item_id,
+                    args.decision,
+                    args.reviewer.strip(),
+                    args.reason.strip(),
+                    datetime.now(KST),
+                )
+                write_f12_decisions(args.output, snapshot, draft, (*decisions, entry))
+                print(f"{entry.item_id}: 로컬 검수 판단 저장 ({entry.decision})")
+            else:
+                print(format_f12_review(checked, draft, decisions))
             return 0
         else:
             return 2
@@ -231,6 +249,15 @@ def _add_rule_review_commands(commands: argparse._SubParsersAction) -> None:
         "show-all", help="두 검수 파일의 후보와 원문 근거 조회 (읽기 전용)"
     )
     show_all.add_argument("--input-dir", type=Path, required=True, help="extract-all 결과 디렉터리")
+    show_all.add_argument("--decisions", type=Path, help="함께 표시할 로컬 판단 기록")
+    decide = actions.add_parser("decide", help="F12 항목 하나의 사람 검수 판단을 새 파일에 기록")
+    decide.add_argument("--input-dir", type=Path, required=True, help="extract-all 결과 디렉터리")
+    decide.add_argument("--item-id", required=True, help="show-all에 표시된 항목 ID")
+    decide.add_argument("--decision", choices=("approve", "reject"), required=True)
+    decide.add_argument("--reviewer", required=True, help="검수자 식별자")
+    decide.add_argument("--reason", required=True, help="승인 또는 반려 사유")
+    decide.add_argument("--decisions", type=Path, help="이어 쓸 이전 로컬 판단 기록")
+    decide.add_argument("--output", type=Path, required=True, help="새 판단 기록 파일 경로")
 
 
 def main(argv: Sequence[str] | None = None) -> int:

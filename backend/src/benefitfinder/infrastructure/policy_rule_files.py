@@ -7,6 +7,7 @@ ever overwriting an existing result.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import tempfile
@@ -15,6 +16,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import NoReturn
 
+from benefitfinder.application.f12_review import F12ReviewDecision, validate_f12_decisions
 from benefitfinder.application.policy_rules import CandidateReview
 from benefitfinder.application.policy_rules import PolicyReference
 from benefitfinder.application.policy_rules import ReviewIssue
@@ -893,8 +895,7 @@ def _checked_amounts(items: tuple[PolicyAmountCandidate, ...], document: SourceD
     }
 
 
-def write_policy_facts(path: Path, draft: PolicyFactsDraft) -> None:
-    """Store one local F12 fact file without overwriting existing results."""
+def _policy_facts_payload(draft: PolicyFactsDraft) -> dict[str, object]:
     if not isinstance(draft, PolicyFactsDraft):
         _fail_invalid()
     document = draft.document
@@ -912,7 +913,7 @@ def write_policy_facts(path: Path, draft: PolicyFactsDraft) -> None:
         if not draft.payment_timing:
             _fail_invalid()
         scheduled = day
-    payload: dict[str, object] = {
+    return {
         "format_version": FORMAT_VERSION,
         "policy_id": document.policy_id,
         "status": "needs_review",
@@ -925,7 +926,76 @@ def write_policy_facts(path: Path, draft: PolicyFactsDraft) -> None:
             "scheduled_monthly_day": scheduled,
         },
     }
-    _write_create_only(Path(path), payload)
+
+
+def write_policy_facts(path: Path, draft: PolicyFactsDraft) -> None:
+    """Store one local F12 fact file without overwriting existing results."""
+    _write_create_only(path, _policy_facts_payload(draft))
+
+
+def _f12_pair_digest(snapshot: RuleReviewSnapshot, draft: PolicyFactsDraft) -> str:
+    payload = {"rules": _snapshot_to_json(snapshot), "facts": _policy_facts_payload(draft)}
+    return hashlib.sha256(_dump_payload(payload)).hexdigest()
+
+
+def load_f12_decisions(
+    path: Path, snapshot: RuleReviewSnapshot, draft: PolicyFactsDraft
+) -> tuple[F12ReviewDecision, ...]:
+    """Read a local decision history only for the exact candidate pair it refers to."""
+    data = _read_json_object(path)
+    _check_only_allowed(data, {"format_version", "pair_sha256", "decisions"})
+    _check_format_version(data)
+    if _require_str(data, "pair_sha256") != _f12_pair_digest(snapshot, draft):
+        raise RuleReviewFileError("f12_review_pair_mismatch")
+    entries = data.get("decisions")
+    if not isinstance(entries, list) or not entries:
+        _fail_invalid()
+    decisions = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            _fail_invalid()
+        _check_only_allowed(entry, {"item_id", "decision", "reviewer", "reason", "reviewed_at"})
+        decisions.append(
+            F12ReviewDecision(
+                item_id=_require_str(entry, "item_id"),
+                decision=_require_str(entry, "decision"),
+                reviewer=_require_str(entry, "reviewer"),
+                reason=_require_str(entry, "reason"),
+                reviewed_at=_parse_datetime(entry.get("reviewed_at")),
+            )
+        )
+    result = tuple(decisions)
+    validate_f12_decisions(snapshot, draft, result)
+    return result
+
+
+def write_f12_decisions(
+    path: Path,
+    snapshot: RuleReviewSnapshot,
+    draft: PolicyFactsDraft,
+    decisions: tuple[F12ReviewDecision, ...],
+) -> None:
+    """Create a new decision file without modifying the pair or any prior history."""
+    if not decisions:
+        _fail_invalid()
+    validate_f12_decisions(snapshot, draft, decisions)
+    _write_create_only(
+        path,
+        {
+            "format_version": FORMAT_VERSION,
+            "pair_sha256": _f12_pair_digest(snapshot, draft),
+            "decisions": [
+                {
+                    "item_id": entry.item_id,
+                    "decision": entry.decision,
+                    "reviewer": entry.reviewer,
+                    "reason": entry.reason,
+                    "reviewed_at": _to_iso(entry.reviewed_at),
+                }
+                for entry in decisions
+            ],
+        },
+    )
 
 
 def write_f12_review_pair(

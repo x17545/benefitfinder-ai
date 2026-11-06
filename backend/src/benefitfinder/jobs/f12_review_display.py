@@ -2,6 +2,7 @@
 
 import re
 
+from benefitfinder.application.f12_review import F12ReviewDecision, f12_item_ids
 from benefitfinder.application.policy_facts import PolicyFactsDraft
 from benefitfinder.application.policy_rules import RuleCitation, RuleReviewSnapshot
 
@@ -17,10 +18,27 @@ def _quote(citation: RuleCitation) -> list[str]:
     ]
 
 
-def format_f12_review(snapshot: RuleReviewSnapshot, facts: PolicyFactsDraft) -> str:
+def _decision_lines(item_id: str, entry: F12ReviewDecision | None) -> list[str]:
+    if entry is None:
+        return [f"- {item_id} · needs_review"]
+    label = "승인" if entry.decision == "approve" else "반려"
+    return [
+        f"- {item_id} · {label} ({entry.decision})",
+        f"  검수자: {_terminal_text(entry.reviewer)} · {entry.reviewed_at.isoformat()}",
+        f"  판단 사유: {_terminal_text(entry.reason)}",
+    ]
+
+
+def format_f12_review(
+    snapshot: RuleReviewSnapshot,
+    facts: PolicyFactsDraft,
+    decisions: tuple[F12ReviewDecision, ...] = (),
+) -> str:
     document = facts.document
+    ids = f12_item_ids(snapshot, facts)
+    latest = {entry.item_id: entry for entry in decisions}
     lines = [
-        "F12 검수 자료 · 로컬 검수 대기",
+        "F12 검수 자료 · 로컬 후보",
         f"정책: {_terminal_text(document.policy_id)}",
         f"공식 출처: {_terminal_text(document.source_url)}",
         f"문서: {_terminal_text(document.id)} · 버전: {_terminal_text(document.document_version)}",
@@ -28,10 +46,11 @@ def format_f12_review(snapshot: RuleReviewSnapshot, facts: PolicyFactsDraft) -> 
         "",
         "[중복 제한·예외]",
     ]
-    for review in snapshot.reviews:
+    for item_id, review in zip(ids["rule"], snapshot.reviews, strict=True):
+        lines.extend(_decision_lines(item_id, latest.get(item_id)))
         rule = review.candidate
         targets = ", ".join(map(_terminal_text, rule.target_policy_ids))
-        lines.append(f"- {_terminal_text(rule.id)} · {review.status} · 상대 정책: {targets}")
+        lines.append(f"  규칙 후보: {_terminal_text(rule.id)} · 상대 정책: {targets}")
         lines.append(f"  규칙 유형: {rule.kind.value} · 방향: {rule.direction.value}")
         for label, items in (("제한 조건", rule.conditions), ("예외", rule.exceptions)):
             lines.append(f"  {label}: " + ("; ".join(map(_terminal_text, items)) or "후보 없음"))
@@ -44,24 +63,27 @@ def format_f12_review(snapshot: RuleReviewSnapshot, facts: PolicyFactsDraft) -> 
         for citation in rule.citations:
             lines.extend(_quote(citation))
 
-    lines.extend(("", "[자격 조건] · needs_review"))
-    for citation in facts.eligibility:
+    lines.extend(("", "[자격 조건]"))
+    for item_id, citation in zip(ids["eligibility"], facts.eligibility, strict=True):
+        lines.extend(_decision_lines(item_id, latest.get(item_id)))
         lines.extend(_quote(citation))
     if not facts.eligibility:
         lines.append("  근거 후보 없음 (not_found)")
 
-    lines.extend(("", "[지원 금액] · needs_review"))
-    for amount in facts.amounts:
+    lines.extend(("", "[지원 금액]"))
+    for item_id, amount in zip(ids["amount"], facts.amounts, strict=True):
+        lines.extend(_decision_lines(item_id, latest.get(item_id)))
         values = ", ".join(f"{value:,}원" for value in amount.amounts_won)
-        lines.append(f"- 명시 금액: {values or '미확인'}")
+        lines.append(f"  명시 금액: {values or '미확인'}")
         lines.extend(_quote(amount.evidence))
     if not facts.amounts:
         lines.append("  근거 후보 없음 (not_found)")
 
     day = facts.scheduled_monthly_day
-    lines.extend(("", "[지급 시점] · needs_review"))
+    lines.extend(("", "[지급 시점]"))
     lines.append(f"  고정 월 지급일: {f'매월 {day}일' if day is not None else '미확인'}")
-    for citation in facts.payment_timing:
+    for item_id, citation in zip(ids["timing"], facts.payment_timing, strict=True):
+        lines.extend(_decision_lines(item_id, latest.get(item_id)))
         lines.extend(_quote(citation))
     if not facts.payment_timing:
         lines.append("  근거 후보 없음 (not_found)")

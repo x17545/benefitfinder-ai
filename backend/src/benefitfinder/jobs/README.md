@@ -26,6 +26,26 @@ uv run --locked python -m benefitfinder.jobs rule-review show-all \
 
 두 파일의 공고 버전·해시와 인용을 저장된 원문으로 확인한 뒤 중복 제한·예외, 자격 조건, 지원 금액, 지급 시점을 검수 대기 상태와 함께 보여 준다. 공식 출처와 인용 위치를 표시하며, 추출된 근거가 없으면 `not_found`, 고정 월 지급일이 확인되지 않으면 `미확인`으로 표시한다. 파일이 빠졌거나 서로 다른 공고의 파일을 섞으면 내용을 출력하기 전에 실패한다. 조회는 읽기 전용이며 모델이나 공식 사이트를 호출하지 않는다. 중복 제한 상태 요약만 보려면 기존 `rule-review show --snapshot <경로>`를 사용한다.
 
+### 항목별로 승인·반려 사유 남기기
+
+`show-all`에 표시된 항목 ID를 고른다. `rule`은 예외를 포함한 중복 제한 후보, `eligibility`는 자격 근거, `amount`는 금액과 근거, `timing`은 지급 시점 근거다. `not_found`에는 검수할 후보가 없어 ID를 부여하지 않는다. `decide`에는 승인(`approve`) 또는 반려(`reject`), 검수자, 사유를 모두 명시한다. 아래 값은 가상 예시다.
+
+```bash
+review_dir=data/processed/rule-reviews/notice-review
+uv run --locked python -m benefitfinder.jobs rule-review decide \
+  --input-dir "$review_dir" --item-id rule:1 --decision approve \
+  --reviewer virtual-reviewer --reason '원문과 제한 조건·예외가 일치함' \
+  --output "$review_dir/decisions-1.json"
+uv run --locked python -m benefitfinder.jobs rule-review decide \
+  --input-dir "$review_dir" --item-id amount:1 --decision reject \
+  --reviewer virtual-reviewer --reason '지급 한도를 함께 확인해야 함' \
+  --decisions "$review_dir/decisions-1.json" --output "$review_dir/decisions-2.json"
+uv run --locked python -m benefitfinder.jobs rule-review show-all \
+  --input-dir "$review_dir" --decisions "$review_dir/decisions-2.json"
+```
+
+이전 기록을 `--decisions`로 넘기면 새 판단을 덧붙인 파일을 만든다. 같은 항목을 다시 판단해도 이력은 남고, 조회에는 마지막 판단과 사유를 표시한다. 판단이 없는 항목은 `needs_review`로 표시된다. 두 입력 파일이나 이전 기록을 덮어쓰지 않으며 원문 또는 후보가 바뀐 다른 결과에 기존 판단을 적용하지 않는다. 이 기록은 로컬 후보 검수용이며 `approve --snapshot`의 규칙 승인 기록이나 운영 게시에 연결되지 않는다. 원문·후보·판단 기록은 모두 Git 제외 경로에 둔다.
+
 ## 로컬 모델로 후보 만들기
 
 `rule-review extract`는 이미 확보한 공식 공고 텍스트 한 건과 상대 정책 한 건으로 중복 제한 후보 하나를 만든다. 검수 입력 v1과 같은 형식으로 공식 `documents` 한 건, 두 정책의 `policies`, 빈 `candidates`를 준비한다. `rule-review example`의 가상 출력에서 필드 구조를 확인할 수 있다. 두 정책 모두 청년 취업·주거 범위에 있어야 하고, 상대 정책의 이름과 ID는 입력자가 공식 자료로 확인한다. 공고가 같은 정책을 다른 이름으로 부르면 확인된 표기를 `--target-alias`로 반복해서 넘길 수 있다. 모르는 별칭을 유사성만으로 정책에 연결하지 않는다. 아래 이름·ID는 가상이다.
