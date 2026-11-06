@@ -37,6 +37,7 @@ from benefitfinder.infrastructure.policy_rule_files import (
     load_f12_review_pair,
     load_rule_batch,
     load_rule_snapshot,
+    write_f12_approved_export,
     write_f12_decisions,
     write_f12_review_pair,
     write_policy_facts,
@@ -170,9 +171,13 @@ def rule_review_command(args: argparse.Namespace) -> int:
             result = inspect_snapshot(load_rule_snapshot(args.snapshot))
             _print_review_summary(result)
             return 0
-        elif args.review_action in {"show-all", "decide"}:
+        elif args.review_action in {"show-all", "decide", "export-approved"}:
             snapshot, draft = load_f12_review_pair(args.input_dir)
             checked = inspect_snapshot(snapshot)
+            if args.review_action == "export-approved":
+                count = write_f12_approved_export(args.output, snapshot, draft, args.decisions)
+                print(f"승인 항목 {count}건을 로컬 파일로 내보냈습니다.")
+                return 0
             decisions = (
                 load_f12_decisions(args.decisions, snapshot, draft) if args.decisions else ()
             )
@@ -258,6 +263,12 @@ def _add_rule_review_commands(commands: argparse._SubParsersAction) -> None:
     decide.add_argument("--reason", required=True, help="승인 또는 반려 사유")
     decide.add_argument("--decisions", type=Path, help="이어 쓸 이전 로컬 판단 기록")
     decide.add_argument("--output", type=Path, required=True, help="새 판단 기록 파일 경로")
+    export = actions.add_parser(
+        "export-approved", help="사람이 승인한 항목과 근거만 로컬 파일로 저장"
+    )
+    export.add_argument("--input-dir", type=Path, required=True, help="extract-all 결과 디렉터리")
+    export.add_argument("--decisions", type=Path, required=True, help="최신 로컬 판단 기록")
+    export.add_argument("--output", type=Path, required=True, help="새 로컬 내보내기 파일 경로")
 
 
 def main(argv: Sequence[str] | None = None) -> int:

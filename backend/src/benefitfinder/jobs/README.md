@@ -46,6 +46,18 @@ uv run --locked python -m benefitfinder.jobs rule-review show-all \
 
 이전 기록을 `--decisions`로 넘기면 새 판단을 덧붙인 파일을 만든다. 같은 항목을 다시 판단해도 이력은 남고, 조회에는 마지막 판단과 사유를 표시한다. 판단이 없는 항목은 `needs_review`로 표시된다. 두 입력 파일이나 이전 기록을 덮어쓰지 않으며 원문 또는 후보가 바뀐 다른 결과에 기존 판단을 적용하지 않는다. 이 기록은 로컬 후보 검수용이며 `approve --snapshot`의 규칙 승인 기록이나 운영 게시에 연결되지 않는다. 원문·후보·판단 기록은 모두 Git 제외 경로에 둔다.
 
+### 승인 항목만 로컬 파일로 내보내기
+
+같은 두 후보 파일과 최신 판단 기록을 지정한다.
+
+```bash
+uv run --locked python -m benefitfinder.jobs rule-review export-approved \
+  --input-dir "$review_dir" --decisions "$review_dir/decisions-2.json" \
+  --output "$review_dir/approved-export.json"
+```
+
+가장 최근 판단이 승인인 항목만 새 JSON에 저장한다. 각 항목에 검수자·시각·사유, 원문 인용과 위치를 남기고, 공고의 출처·버전·해시를 함께 담는다. 반려와 검수 대기 항목, 공고 전문은 포함하지 않는다. 승인 후 반려한 항목도 제외한다. 승인 항목이 없으면 `f12_no_approved_items`로 실패하고 파일을 만들지 않는다. 기존 자료를 덮어쓰거나 새 승인을 생성하지 않는다. 이 파일은 Git 제외 경로에 두는 로컬 검수 산출물이며 운영 게시에 연결되지 않는다.
+
 ## 로컬 모델로 후보 만들기
 
 `rule-review extract`는 이미 확보한 공식 공고 텍스트 한 건과 상대 정책 한 건으로 중복 제한 후보 하나를 만든다. 검수 입력 v1과 같은 형식으로 공식 `documents` 한 건, 두 정책의 `policies`, 빈 `candidates`를 준비한다. `rule-review example`의 가상 출력에서 필드 구조를 확인할 수 있다. 두 정책 모두 청년 취업·주거 범위에 있어야 하고, 상대 정책의 이름과 ID는 입력자가 공식 자료로 확인한다. 공고가 같은 정책을 다른 이름으로 부르면 확인된 표기를 `--target-alias`로 반복해서 넘길 수 있다. 모르는 별칭을 유사성만으로 정책에 연결하지 않는다. 아래 이름·ID는 가상이다.

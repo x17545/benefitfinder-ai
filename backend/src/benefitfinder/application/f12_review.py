@@ -51,3 +51,7 @@ def validate_f12_decisions(
         if entry.reviewed_at < earliest:
             raise ValueError("invalid_f12_review_decision_time")
         earliest = entry.reviewed_at
+
+
+def latest_f12_decisions(decisions: tuple[F12ReviewDecision, ...]) -> dict[str, F12ReviewDecision]:
+    return {entry.item_id: entry for entry in decisions}

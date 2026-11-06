@@ -2,7 +2,11 @@
 
 import re
 
-from benefitfinder.application.f12_review import F12ReviewDecision, f12_item_ids
+from benefitfinder.application.f12_review import (
+    F12ReviewDecision,
+    f12_item_ids,
+    latest_f12_decisions,
+)
 from benefitfinder.application.policy_facts import PolicyFactsDraft
 from benefitfinder.application.policy_rules import RuleCitation, RuleReviewSnapshot
 
@@ -36,7 +40,7 @@ def format_f12_review(
 ) -> str:
     document = facts.document
     ids = f12_item_ids(snapshot, facts)
-    latest = {entry.item_id: entry for entry in decisions}
+    latest = latest_f12_decisions(decisions)
     lines = [
         "F12 검수 자료 · 로컬 후보",
         f"정책: {_terminal_text(document.policy_id)}",

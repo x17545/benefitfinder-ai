@@ -564,6 +564,76 @@ class ReviewCommandTests(unittest.TestCase):
         self.assertEqual(status, 0, stderr)
         result = self.run_command("show-all", "--input-dir", str(pair), "--decisions", str(output))
         self.assertEqual(result, (1, "", "검수 작업 실패: f12_review_pair_mismatch\n"))
+        exported = self.root / "export.json"
+        self.assertEqual(self._export(pair, output, exported), result)
+        self.assertFalse(exported.exists())
+
+    def _export(self, pair: Path, decisions: Path, output: Path) -> tuple[int, str, str]:
+        return self.run_command(
+            "export-approved",
+            "--input-dir",
+            str(pair),
+            "--decisions",
+            str(decisions),
+            "--output",
+            str(output),
+        )
+
+    def test_export_approved_uses_latest_decision_only(self) -> None:
+        pair = self._make_review_pair()
+        first, second, latest = (self.root / name for name in ("d1.json", "d2.json", "d3.json"))
+        output = self.root / "export.json"
+        self.assertEqual(self._decide(pair, first, "eligibility:1", "approve", "가상 승인")[0], 0)
+        self.assertEqual(
+            self._decide(pair, second, "timing:1", "approve", "가상 승인 유지", first)[0], 0
+        )
+        self.assertEqual(
+            self._decide(pair, latest, "eligibility:1", "reject", "가상 철회", second)[0], 0
+        )
+        status, _, stderr = self._export(pair, latest, output)
+        self.assertEqual(status, 0, stderr)
+        payload = json.loads(output.read_text(encoding="utf-8"))
+        self.assertEqual(
+            set(payload), {"format_version", "kind", "pair_sha256", "policy_id", "source", "items"}
+        )
+        self.assertEqual(
+            (payload["format_version"], payload["kind"]), (1, "f12_approved_review_export")
+        )
+        self.assertEqual(payload["policy_id"], "youth:virtual:a")
+        decisions = json.loads(latest.read_text(encoding="utf-8"))
+        self.assertEqual(payload["pair_sha256"], decisions["pair_sha256"])
+        self.assertNotIn("text", payload["source"])
+        (item,) = payload["items"]
+        self.assertEqual((item["item_id"], item["kind"]), ("timing:1", "timing"))
+        self.assertEqual(
+            (item["approval"]["reviewer"], item["approval"]["reason"]),
+            ("virtual-reviewer", "가상 승인 유지"),
+        )
+        self.assertIn("reviewed_at", item["approval"])
+        evidence = item["candidate"]["evidence"]
+        self.assertEqual(evidence["quote"], "매월 17일 지급합니다.")
+        self.assertEqual(evidence["content_sha256"], payload["source"]["content_sha256"])
+        raw = output.read_text(encoding="utf-8")
+        self.assertIn("매월 17일 지급합니다.", raw)
+        self.assertNotIn("인용 범위 밖 가상 문장", raw)
+        self.assertNotIn("가상 지역에 거주해야 합니다.", raw)
+
+    def test_export_approved_rejects_empty_and_existing_output(self) -> None:
+        pair = self._make_review_pair()
+        rejected = self.root / "rejected.json"
+        approved = self.root / "approved-log.json"
+        output = self.root / "export.json"
+        self.assertEqual(self._decide(pair, rejected, "timing:1", "reject", "가상 반려")[0], 0)
+        status, _, stderr = self._export(pair, rejected, output)
+        self.assertEqual(status, 1)
+        self.assertIn("f12_no_approved_items", stderr)
+        self.assertFalse(output.exists())
+        self.assertEqual(self._decide(pair, approved, "timing:1", "approve", "가상 승인")[0], 0)
+        output.write_bytes(b"previous-success")
+        status, _, stderr = self._export(pair, approved, output)
+        self.assertEqual(status, 1)
+        self.assertIn("rule_review_output_exists", stderr)
+        self.assertEqual(output.read_bytes(), b"previous-success")
 
 
 if __name__ == "__main__":

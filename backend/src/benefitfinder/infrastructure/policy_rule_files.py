@@ -16,7 +16,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import NoReturn
 
-from benefitfinder.application.f12_review import F12ReviewDecision, validate_f12_decisions
+from benefitfinder.application.f12_review import (
+    F12ReviewDecision,
+    f12_item_ids,
+    latest_f12_decisions,
+    validate_f12_decisions,
+)
 from benefitfinder.application.policy_rules import CandidateReview
 from benefitfinder.application.policy_rules import PolicyReference
 from benefitfinder.application.policy_rules import ReviewIssue
@@ -996,6 +1001,61 @@ def write_f12_decisions(
             ],
         },
     )
+
+
+def write_f12_approved_export(
+    path: Path,
+    snapshot: RuleReviewSnapshot,
+    draft: PolicyFactsDraft,
+    decisions_path: Path,
+) -> int:
+    """Write only the candidates last approved by a person in the verified local history."""
+    latest = latest_f12_decisions(load_f12_decisions(decisions_path, snapshot, draft))
+    ids = f12_item_ids(snapshot, draft)
+    groups = (
+        ("rule", (_candidate_to_json(review.candidate) for review in snapshot.reviews)),
+        (
+            "eligibility",
+            ({"evidence": _citation_to_json(citation)} for citation in draft.eligibility),
+        ),
+        ("amount", (_checked_amount(amount, draft.document) for amount in draft.amounts)),
+        (
+            "timing",
+            ({"evidence": _citation_to_json(citation)} for citation in draft.payment_timing),
+        ),
+    )
+    items = []
+    for kind, candidates in groups:
+        for item_id, candidate in zip(ids[kind], candidates, strict=True):
+            entry = latest.get(item_id)
+            if entry is None or entry.decision != "approve":
+                continue
+            items.append(
+                {
+                    "item_id": item_id,
+                    "kind": kind,
+                    "approval": {
+                        "reviewer": entry.reviewer,
+                        "reason": entry.reason,
+                        "reviewed_at": _to_iso(entry.reviewed_at),
+                    },
+                    "candidate": candidate,
+                }
+            )
+    if not items:
+        raise RuleReviewFileError("f12_no_approved_items")
+    _write_create_only(
+        path,
+        {
+            "format_version": FORMAT_VERSION,
+            "kind": "f12_approved_review_export",
+            "pair_sha256": _f12_pair_digest(snapshot, draft),
+            "policy_id": draft.document.policy_id,
+            "source": _facts_source(draft.document),
+            "items": items,
+        },
+    )
+    return len(items)
 
 
 def write_f12_review_pair(
