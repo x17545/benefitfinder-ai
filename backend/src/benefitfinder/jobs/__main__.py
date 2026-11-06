@@ -114,6 +114,7 @@ def rule_review_command(args: argparse.Namespace) -> int:
                 load_rule_batch(args.input),
                 target_name=args.target_name,
                 target_id=args.target_id,
+                target_aliases=tuple(args.target_alias),
                 chat=OllamaChat(args.model),
             )
             write_rule_batch(args.output, batch)
@@ -159,7 +160,10 @@ def _add_rule_review_commands(commands: argparse._SubParsersAction) -> None:
     example.add_argument("--output", type=Path, required=True, help="새 파일 경로")
     extract = actions.add_parser("extract", help="로컬 모델로 공식 원문 한 건의 규칙 후보 생성")
     extract.add_argument("--input", type=Path, required=True, help="공식 문서 한 건과 빈 후보 목록")
-    extract.add_argument("--target-name", required=True, help="원문에 쓰인 상대 정책 이름")
+    extract.add_argument("--target-name", required=True, help="상대 정책의 확인된 이름")
+    extract.add_argument(
+        "--target-alias", action="append", default=[], help="같은 정책의 확인된 별칭 (반복 가능)"
+    )
     extract.add_argument("--target-id", required=True, help="입력 정책 목록에 있는 상대 정책 ID")
     extract.add_argument("--model", required=True, help="로컬 Ollama에 설치된 모델 이름")
     extract.add_argument("--output", type=Path, required=True, help="새 파일 경로")
