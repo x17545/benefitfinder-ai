@@ -1,5 +1,6 @@
 """F12 rule extraction tests using virtual notices."""
 
+from dataclasses import replace
 from datetime import datetime, timezone
 from unittest import TestCase
 from unittest.mock import Mock
@@ -139,6 +140,51 @@ class PolicyRuleAgentF12Tests(TestCase):
                 chat=chat,
                 target_aliases=(TARGET_ALIAS,),
             )
+
+    def test_preserves_the_whole_parenthetical_permission_from_adjacent_evidence(self) -> None:
+        general = "가상 과정 종료 후 2개월이 지나면 참여 가능"
+        note = "달빛 수당을 중도 포기했다면 가상 과정 종료 후 2개월이 지나면 참여 가능"
+        lines = (
+            "가상 산들 지원금 안내",
+            "달빛 수당 수혜 중에는 동시 참여 불가",
+            general,
+            f"({note})",
+            "- 다음 항목: 온라인 자료 신청 가능",
+        )
+        document = replace(self.batch.documents[0], text="\n".join(lines))
+        original = replace(self.batch, documents=(document,))
+        for submitted_end in (3, 4):
+            with self.subTest(submitted_end=submitted_end):
+                submit = good_submit() | {
+                    "end_line": submitted_end,
+                    "condition": "달빛 수당 수혜 중에는 동시 참여 불가",
+                    "exceptions": [general],
+                    "period": "",
+                }
+                chat = Mock(
+                    side_effect=[
+                        reply(
+                            ("lookup_policy", {"name": TARGET_ALIAS}),
+                            ("find_clauses", {"query": TARGET_ALIAS}),
+                        ),
+                        reply(("submit_rule", submit)),
+                    ]
+                )
+                batch, _ = extract_rule_batch(
+                    original,
+                    target_name=TARGET_NAME,
+                    target_id=TARGET_ID,
+                    chat=chat,
+                    target_aliases=(TARGET_ALIAS,),
+                )
+                (candidate,) = batch.candidates
+                (citation,) = candidate.citations
+                self.assertEqual(chat.call_count, 2)
+                self.assertEqual(citation.quote, "\n".join(lines[1:4]))
+                self.assertEqual(citation.location, "lines 2-4")
+                self.assertEqual(citation.content_sha256, document.content_sha256)
+                self.assertEqual(candidate.conditions, (submit["condition"],))
+                self.assertEqual(candidate.exceptions, (general, note))
 
     def test_mixed_exception_is_not_adopted_before_correction(self) -> None:
         self.assertIn(EXCEPTION_PHRASE, str(bad_submit()["condition"]))

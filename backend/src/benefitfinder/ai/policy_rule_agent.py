@@ -7,6 +7,7 @@ import json
 import re
 from collections.abc import Callable
 from dataclasses import replace
+from itertools import pairwise
 from unicodedata import normalize
 
 from benefitfinder.application.policy_rules import (
@@ -33,6 +34,7 @@ _ALLOWANCE = re.compile(
     r"(?:신청|참여|중복|지원|수혜|수급)\s*(?:이\s*)?(?:가능|허용|할\s*수\s*있)"
     r"(?!\s*하지)|예외(?:로)?\s*(?:인정|허용|처리)"
 )
+_PARENTHETICAL = re.compile(r"\s*[(（](.+)[)）]\s*[.。]?\s*")
 
 
 def _tool(name: str, description: str, fields: dict[str, object]) -> dict[str, object]:
@@ -140,6 +142,16 @@ def _contexts(
         if len(result) == 5:
             break
     return found, result
+
+
+def _continuation_permission(previous: str, line: str) -> str | None:
+    """Find a standalone parenthesis attached to a restriction or permission line."""
+    note = _PARENTHETICAL.fullmatch(line)
+    if note and (_RESTRICTION.search(previous) or _ALLOWANCE.search(previous)):
+        text = note[1].strip()
+        if len(text) <= 500 and _ALLOWANCE.search(_name_key(text)):
+            return text
+    return None
 
 
 def _submission_feedback(quote: str, condition: str, exceptions: tuple[str, ...]) -> str | None:
@@ -304,8 +316,24 @@ def extract_rule_batch(
                     )
                 ):
                     raise ValueError("agent_invalid_arguments")
-                exceptions = tuple(dict.fromkeys(item.strip() for item in raw_exceptions))
-                if feedback := _submission_feedback(quote, condition, exceptions):
+                # Preserve adjacent permissions from evidence the model has already seen.
+                while end - start < 2 * _CONTEXT_RADIUS and _continuation_permission(
+                    lines[end - 1], prior_found.get(end + 1, "")
+                ):
+                    end += 1
+                quote = "\n".join(lines[start - 1 : end])
+                exceptions = list(dict.fromkeys(item.strip() for item in raw_exceptions))
+                for previous, line in pairwise(lines[start - 1 : end]):
+                    note = _continuation_permission(previous, line)
+                    if note and not any(_name_key(note) in _name_key(item) for item in exceptions):
+                        exceptions.append(note)
+                if _continuation_permission(lines[end - 1], prior_found.get(end + 1, "")):
+                    feedback = "Shorten the cited range so it can include the following parenthesized permission."
+                elif len(exceptions) > 5:
+                    feedback = "Use at most five distinct exceptions, preserving all the cited permissions."
+                else:
+                    feedback = _submission_feedback(quote, condition, tuple(exceptions))
+                if feedback:
                     trace.append(name)
                     messages.append(
                         {
@@ -335,7 +363,7 @@ def extract_rule_batch(
                     direction=direction,
                     description=quote,
                     conditions=(condition,) if condition else (),
-                    exceptions=exceptions,
+                    exceptions=tuple(exceptions),
                     period=_string(args, "period") or None,
                     amount_effect=_string(args, "amount_effect") or None,
                     citations=(
