@@ -30,9 +30,11 @@ from benefitfinder.infrastructure.local_files import (
 )
 from benefitfinder.infrastructure.ollama_chat import OllamaChat
 from benefitfinder.infrastructure.policy_rule_files import (
+    RULE_REVIEW_OUTPUT_EXISTS,
     RuleReviewFileError,
     load_rule_batch,
     load_rule_snapshot,
+    write_f12_review_pair,
     write_policy_facts,
     write_rule_batch,
     write_rule_snapshot,
@@ -110,15 +112,26 @@ def rule_review_command(args: argparse.Namespace) -> int:
             write_rule_batch(args.output, example_rule_batch())
             print("[가상] 규칙 검수 입력 예제를 생성했습니다. 실제 정책 자료가 아닙니다.")
             return 0
-        if args.review_action == "extract":
+        if args.review_action in {"extract", "extract-all"}:
+            if args.review_action == "extract-all" and os.path.lexists(args.output_dir):
+                raise RuleReviewFileError(RULE_REVIEW_OUTPUT_EXISTS)
             started = monotonic()
+            original = load_rule_batch(args.input)
+            chat = OllamaChat(args.model)
             batch, trace = extract_rule_batch(
-                load_rule_batch(args.input),
+                original,
                 target_name=args.target_name,
                 target_id=args.target_id,
                 target_aliases=tuple(args.target_alias),
-                chat=OllamaChat(args.model),
+                chat=chat,
             )
+            if args.review_action == "extract-all":
+                draft = extract_policy_facts(original, chat=chat)
+                snapshot = prepare_snapshot(batch, at=datetime.now(KST))
+                write_f12_review_pair(args.output_dir, snapshot, draft)
+                print(f"모델 {args.model}: {' → '.join(trace)} ({monotonic() - started:.1f}초)")
+                print("rules-pending.json · facts-pending.json 저장. 둘 다 검수 대기.")
+                return 0
             write_rule_batch(args.output, batch)
             print(f"모델 {args.model}: {' → '.join(trace)} ({monotonic() - started:.1f}초)")
             print(f"규칙 후보 {len(batch.candidates)}건. 다음 단계: rule-review prepare")
@@ -165,20 +178,31 @@ def rule_review_command(args: argparse.Namespace) -> int:
         return 1
 
 
+def _add_overlap_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--input", type=Path, required=True, help="공식 문서 한 건과 빈 후보 목록")
+    parser.add_argument("--target-name", required=True, help="상대 정책의 확인된 이름")
+    parser.add_argument(
+        "--target-alias", action="append", default=[], help="같은 정책의 확인된 별칭 (반복 가능)"
+    )
+    parser.add_argument("--target-id", required=True, help="입력 정책 목록에 있는 상대 정책 ID")
+    parser.add_argument("--model", required=True, help="로컬 Ollama에 설치된 모델 이름")
+
+
 def _add_rule_review_commands(commands: argparse._SubParsersAction) -> None:
     review = commands.add_parser("rule-review", help="로컬 규칙 검수 자료 준비·승인·재검수")
     actions = review.add_subparsers(dest="review_action", required=True)
     example = actions.add_parser("example", help="실제 정책이 아닌 가상 입력 파일 생성")
     example.add_argument("--output", type=Path, required=True, help="새 파일 경로")
     extract = actions.add_parser("extract", help="로컬 모델로 공식 원문 한 건의 규칙 후보 생성")
-    extract.add_argument("--input", type=Path, required=True, help="공식 문서 한 건과 빈 후보 목록")
-    extract.add_argument("--target-name", required=True, help="상대 정책의 확인된 이름")
-    extract.add_argument(
-        "--target-alias", action="append", default=[], help="같은 정책의 확인된 별칭 (반복 가능)"
-    )
-    extract.add_argument("--target-id", required=True, help="입력 정책 목록에 있는 상대 정책 ID")
-    extract.add_argument("--model", required=True, help="로컬 Ollama에 설치된 모델 이름")
+    _add_overlap_arguments(extract)
     extract.add_argument("--output", type=Path, required=True, help="새 파일 경로")
+    combined = actions.add_parser(
+        "extract-all", help="중복 제한과 자격·금액·지급 시점 검수 자료 생성"
+    )
+    _add_overlap_arguments(combined)
+    combined.add_argument(
+        "--output-dir", type=Path, required=True, help="새 로컬 검수 결과 디렉터리"
+    )
     facts = actions.add_parser("extract-facts", help="공식 원문의 자격·금액·지급 시점 후보 생성")
     facts.add_argument("--input", type=Path, required=True, help="공식 문서 한 건이 있는 입력")
     facts.add_argument("--model", required=True, help="로컬 Ollama에 설치된 모델 이름")

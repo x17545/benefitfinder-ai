@@ -13,6 +13,7 @@ import unittest
 from unittest.mock import patch
 
 from backend.tests.test_rule_review_workflow import AT, approved, prepared
+from benefitfinder.application.policy_facts import PolicyFactsDraft
 from benefitfinder.application.policy_rules import ReviewIssue
 from benefitfinder.infrastructure.policy_rule_files import (
     load_rule_batch,
@@ -37,6 +38,77 @@ class ReviewCommandTests(unittest.TestCase):
                 review_clock.now.return_value = AT + timedelta(days=1)
                 status = main(["rule-review", *arguments])
         return status, stdout.getvalue(), stderr.getvalue()
+
+    def test_extract_all_saves_both_pending_files_for_the_same_notice(self) -> None:
+        candidates = example_rule_batch()
+        (document,) = candidates.documents
+        source = self.root / "input.json"
+        output = self.root / "review"
+        write_rule_batch(source, replace(candidates, candidates=()))
+        original = source.read_bytes()
+        facts = PolicyFactsDraft(document, (), (), ())
+        args = (
+            "extract-all",
+            "--input",
+            str(source),
+            "--target-name",
+            "가상 B",
+            "--target-id",
+            "youth:virtual:b",
+            "--model",
+            "gemma4:e4b",
+            "--output-dir",
+            str(output),
+        )
+        with (
+            patch("benefitfinder.jobs.__main__.extract_rule_batch", return_value=(candidates, ())),
+            patch("benefitfinder.jobs.__main__.extract_policy_facts", return_value=facts),
+        ):
+            status, _, stderr = self.run_command(*args)
+        self.assertEqual(status, 0, stderr)
+        rules = load_rule_snapshot(output / "rules-pending.json")
+        saved_facts = json.loads((output / "facts-pending.json").read_text(encoding="utf-8"))
+        self.assertEqual(rules.reviews[0].status, "needs_review")
+        self.assertEqual(saved_facts["status"], "needs_review")
+        self.assertEqual(
+            saved_facts["source"]["content_sha256"], rules.batch.documents[0].content_sha256
+        )
+        self.assertEqual(source.read_bytes(), original)
+
+        with patch("benefitfinder.jobs.__main__.OllamaChat") as chat:
+            status, _, stderr = self.run_command(*args)
+        self.assertEqual(status, 1)
+        self.assertIn("rule_review_output_exists", stderr)
+        chat.assert_not_called()
+
+    def test_extract_all_does_not_save_rules_when_facts_extraction_fails(self) -> None:
+        candidates = example_rule_batch()
+        source = self.root / "input.json"
+        output = self.root / "review"
+        write_rule_batch(source, replace(candidates, candidates=()))
+        with (
+            patch("benefitfinder.jobs.__main__.extract_rule_batch", return_value=(candidates, ())),
+            patch(
+                "benefitfinder.jobs.__main__.extract_policy_facts",
+                side_effect=ValueError("policy_facts_unverified_submission"),
+            ),
+        ):
+            status, _, stderr = self.run_command(
+                "extract-all",
+                "--input",
+                str(source),
+                "--target-name",
+                "가상 B",
+                "--target-id",
+                "youth:virtual:b",
+                "--model",
+                "gemma4:e4b",
+                "--output-dir",
+                str(output),
+            )
+        self.assertEqual(status, 1)
+        self.assertIn("policy_facts_unverified_submission", stderr)
+        self.assertFalse(output.exists())
 
     def test_example_prepare_approve_show_and_refresh_use_new_files(self) -> None:
         source = self.root / "input.json"

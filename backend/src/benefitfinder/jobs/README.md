@@ -2,6 +2,19 @@
 
 현재 구현: `python -m benefitfinder.jobs collect-youthcenter`가 온통청년 목록 수집을 한 번 실행한다(사용법은 [ingestion](../ingestion/README.md#로컬-수집-실행)). `rule-review`는 로컬 검수 자료의 준비·명시적 승인·재검수·상태 조회를 실행한다. 두 명령 모두 `__main__.py`에서 구체 파일 어댑터와 순수 처리 함수를 조립한다. 매일 실행·실패 알림은 구현하지 않았다.
 
+## 한 번에 F12 검수 자료 만들기
+
+공식 공고 한 건, 두 정책의 ID와 빈 후보 목록을 담은 검수 입력을 준비한다. 아래 이름과 ID는 가상이다. Ollama에서 도구 호출을 지원하는 로컬 모델을 실행한 뒤 저장소 루트에서 실행한다.
+
+```bash
+uv run --locked python -m benefitfinder.jobs rule-review extract-all \
+  --input data/processed/rule-reviews/notice-input.json \
+  --target-name '가상 정책 B' --target-alias '가상 B' --target-id youth:virtual:b \
+  --model gemma4:e4b --output-dir data/processed/rule-reviews/notice-review
+```
+
+같은 원문으로 중복 제한과 자격·금액·지급 시점을 각각 추출한 뒤 새 `--output-dir`에 `rules-pending.json`과 `facts-pending.json`을 저장한다. 중복 제한 파일은 `rule-review show --snapshot <경로>`로 확인할 수 있고, 자격·금액·지급 시점 파일에는 `status: needs_review`가 있다. 한쪽 추출이 실패하면 결과를 저장하지 않으며 기존 디렉터리는 덮어쓰지 않는다. 원문과 두 결과 모두 Git 제외 경로에 둔다.
+
 ## 로컬 모델로 후보 만들기
 
 `rule-review extract`는 이미 확보한 공식 공고 텍스트 한 건과 상대 정책 한 건으로 중복 제한 후보 하나를 만든다. 검수 입력 v1과 같은 형식으로 공식 `documents` 한 건, 두 정책의 `policies`, 빈 `candidates`를 준비한다. `rule-review example`의 가상 출력에서 필드 구조를 확인할 수 있다. 두 정책 모두 청년 취업·주거 범위에 있어야 하고, 상대 정책의 이름과 ID는 입력자가 공식 자료로 확인한다. 공고가 같은 정책을 다른 이름으로 부르면 확인된 표기를 `--target-alias`로 반복해서 넘길 수 있다. 모르는 별칭을 유사성만으로 정책에 연결하지 않는다. 아래 이름·ID는 가상이다.

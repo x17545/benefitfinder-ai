@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+from contextlib import suppress
 from datetime import datetime
 from pathlib import Path
 from typing import NoReturn
@@ -829,3 +830,47 @@ def write_policy_facts(path: Path, draft: PolicyFactsDraft) -> None:
         },
     }
     _write_create_only(Path(path), payload)
+
+
+def write_f12_review_pair(
+    directory: Path, snapshot: RuleReviewSnapshot, draft: PolicyFactsDraft
+) -> None:
+    """Save two pending files for one document in a new directory."""
+    if (
+        not isinstance(snapshot, RuleReviewSnapshot)
+        or not isinstance(draft, PolicyFactsDraft)
+        or snapshot.operation != ReviewOperation.PREPARED
+        or snapshot.batch.documents != (draft.document,)
+        or not snapshot.reviews
+        or any(review.approval is not None for review in snapshot.reviews)
+    ):
+        _fail_invalid()
+    if os.path.lexists(directory):
+        _fail_exists()
+    try:
+        directory.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix=".f12-pair-", dir=directory.parent) as temp:
+            rules = Path(temp) / "rules-pending.json"
+            facts = Path(temp) / "facts-pending.json"
+            write_rule_snapshot(rules, snapshot)
+            write_policy_facts(facts, draft)
+            try:
+                directory.mkdir(mode=0o700)
+            except FileExistsError:
+                _fail_exists()
+
+            linked: list[Path] = []
+            try:
+                for staged in (rules, facts):
+                    destination = directory / staged.name
+                    os.link(staged, destination)
+                    linked.append(destination)
+            except OSError:
+                for destination in linked:
+                    with suppress(OSError):
+                        destination.unlink()
+                with suppress(OSError):
+                    directory.rmdir()
+                raise
+    except OSError:
+        _fail_io()
