@@ -7,9 +7,10 @@
 `rule-review extract`는 이미 확보한 공식 공고 텍스트 한 건과 상대 정책 한 건으로 중복 제한 후보 하나를 만든다. 검수 입력 v1과 같은 형식으로 공식 `documents` 한 건, 두 정책의 `policies`, 빈 `candidates`를 준비한다. `rule-review example`의 가상 출력에서 필드 구조를 확인할 수 있다. 두 정책 모두 청년 취업·주거 범위에 있어야 하고, 상대 정책의 이름과 ID는 입력자가 공식 자료로 확인한다. 아래 이름·ID는 가상이다.
 
 ```bash
+ollama pull gemma4:e4b
 uv run --locked python -m benefitfinder.jobs rule-review extract \
   --input data/processed/rule-reviews/notice-input.json \
-  --target-name '가상 정책 B' --target-id virtual-b --model gemma4:e2b \
+  --target-name '가상 정책 B' --target-id virtual-b --model gemma4:e4b \
   --output data/processed/rule-reviews/notice-candidates.json
 uv run --locked python -m benefitfinder.jobs rule-review prepare \
   --input data/processed/rule-reviews/notice-candidates.json \
