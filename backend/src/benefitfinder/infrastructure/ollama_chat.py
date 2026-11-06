@@ -22,16 +22,17 @@ class OllamaChat:
     def __call__(
         self, messages: list[dict[str, object]], tools: list[dict[str, object]]
     ) -> dict[str, object]:
-        body = json.dumps(
-            {
-                "model": self._model,
-                "messages": messages,
-                "tools": tools,
-                "stream": False,
-                "options": {"temperature": 0},
-            },
-            ensure_ascii=False,
-        ).encode("utf-8")
+        payload: dict[str, object] = {
+            "model": self._model,
+            "messages": messages,
+            "tools": tools,
+            "stream": False,
+            "options": {"temperature": 0},
+        }
+        # With its default thinking mode, E4B can stop before submitting a rule.
+        if self._model.casefold() == "gemma4:e4b":
+            payload["think"] = False
+        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         connection = HTTPConnection("127.0.0.1", 11434, timeout=60)
         try:
             connection.request("POST", "/api/chat", body, {"Content-Type": "application/json"})
