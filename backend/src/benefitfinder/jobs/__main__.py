@@ -20,6 +20,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from benefitfinder.application.policy_rules import RuleReviewSnapshot
+from benefitfinder.infrastructure.discord_webhook import DiscordWebhook, DiscordWebhookError
 from benefitfinder.infrastructure.local_files import (
     JsonFileSnapshotStore,
     JsonFileVersionStore,
@@ -47,6 +48,7 @@ from benefitfinder.jobs.rule_review_example import example_rule_batch
 from benefitfinder.jobs.youthcenter_refresh import (
     STATUS_FILE,
     RefreshError,
+    refresh_notification,
     run_youthcenter_refresh,
 )
 
@@ -90,7 +92,7 @@ def collect_youthcenter_command(data_dir: Path) -> int:
     return 0
 
 
-def refresh_youthcenter_command(data_dir: Path) -> int:
+def _refresh_youthcenter(data_dir: Path) -> int:
     api_key = os.environ.get(API_KEY_ENV, "").strip()
     if not api_key:
         print(f"환경 변수 {API_KEY_ENV}에 인증키를 설정하세요.", file=sys.stderr)
@@ -133,6 +135,26 @@ def refresh_youthcenter_command(data_dir: Path) -> int:
         return 1
     print(f"온통청년 갱신 완료: {root / STATUS_FILE}")
     return 0
+
+
+def refresh_youthcenter_command(data_dir: Path, *, notify_discord: bool = False) -> int:
+    started_at = datetime.now(KST)
+    code = _refresh_youthcenter(data_dir)
+    if notify_discord:
+        webhook = os.environ.get("DISCORD_WEBHOOK_URL", "").strip()
+        if not webhook:
+            print("F08 알림 실패: discord_webhook_missing", file=sys.stderr)
+            return code or 1
+        try:
+            message = refresh_notification(
+                data_dir / "processed" / "f08-youthcenter", code, started_at
+            )
+            DiscordWebhook(webhook).send(message)
+        except DiscordWebhookError as exc:
+            print(f"F08 알림 실패: {exc}", file=sys.stderr)
+            return code or 1
+        print("F08 디스코드 결과 알림 전송 완료")
+    return code
 
 
 def _print_review_summary(snapshot: RuleReviewSnapshot) -> None:
@@ -218,12 +240,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         "refresh-youthcenter", help="완전한 온통청년 수집만 최신본으로 전환"
     )
     refresh.add_argument("--data-dir", type=Path, default=Path("data"))
+    refresh.add_argument(
+        "--notify-discord", action="store_true", help="디스코드 웹훅으로 결과 알림"
+    )
     _add_rule_review_commands(commands)
     args = parser.parse_args(argv)
     if args.command == "collect-youthcenter":
         return collect_youthcenter_command(args.data_dir)
     if args.command == "refresh-youthcenter":
-        return refresh_youthcenter_command(args.data_dir)
+        return refresh_youthcenter_command(args.data_dir, notify_discord=args.notify_discord)
     if args.command == "rule-review":
         return rule_review_command(args)
     return 2

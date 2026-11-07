@@ -1,6 +1,6 @@
 # 작업 실행
 
-현재 구현: `collect-youthcenter`는 [수동 수집](../ingestion/README.md#로컬-수집-실행)을, `refresh-youthcenter`는 [이전 성공본을 보존하는 F08 갱신](#f08-온통청년-갱신-한-번-실행)을 실행한다. `rule-review`는 로컬 검수 자료의 준비·명시적 승인·재검수·상태 조회를 실행한다. 매일 실행과 외부 알림은 아직 연결하지 않았다.
+현재 구현: `collect-youthcenter`는 [수동 수집](../ingestion/README.md#로컬-수집-실행)을, `refresh-youthcenter`는 [이전 성공본을 보존하는 F08 갱신](#f08-온통청년-갱신-한-번-실행)을 실행한다. F08은 선택적으로 디스코드 결과 알림을 보내고 macOS의 `launchd`로 매일 실행할 수 있다. `rule-review`는 로컬 검수 자료의 준비·명시적 승인·재검수·상태 조회를 실행한다.
 
 ## 로컬 규칙 검수 실행
 
@@ -56,6 +56,39 @@ uv run --locked python -m benefitfinder.jobs refresh-youthcenter
 - 응답 원본은 `data/raw/f08-youthcenter/`에 보관한다. 이 명령은 수동 수집과 다른 경로를 쓰며, 결과는 원천 목록이다. 서비스에 노출할 취업·주거 분류, 검수·게시 데이터는 후속 단계에서 처리한다.
 - 같은 데이터 디렉터리의 갱신은 `.refresh-lock`으로 중복 실행을 막는다. 강제 종료로 빈 잠금 디렉터리가 남았다면 실행 중인 프로세스가 없는 것을 확인한 뒤 제거한다. 종료 코드 `0`은 성공, `1`은 갱신 실패 또는 잠금 중, `2`는 키 누락 또는 잘못된 명령 인자다.
 
-현재 범위는 온통청년 원천 목록의 로컬 갱신 실행이다. 매일 03:00 KST 스케줄, 보조금24, 기준금리, 공고 원문 재분석, PostgreSQL 적재, 디스코드 보고는 아직 연결하지 않았다.
+### 디스코드 성공·실패 알림
+
+`data/local/f08.env`에 `YOUTHCENTER_API_KEY`와 `DISCORD_WEBHOOK_URL`을 넣고 파일 권한을 `600`으로 제한한다. 실제 값은 Git이나 명령 인자로 전달하지 않는다. `uv`가 파일을 읽어 실행 환경에 넣는다.
+
+```bash
+uv run --locked --env-file data/local/f08.env python -m benefitfinder.jobs \
+  refresh-youthcenter --notify-discord
+```
+
+성공·실패, 실행 시각, 시도 횟수, 성공한 수집·변경 건수 또는 고정 오류 코드만 전송한다. 공고 본문·정책 ID·키·웹훅 주소는 메시지에 넣지 않는다. [Discord의 전송 확인 옵션](https://docs.discord.com/developers/resources/webhook#execute-webhook)을 사용하며 멘션은 비활성화한다. 갱신 실패는 종료 코드와 함께 유지한다. 알림 전송만 실패해도 종료 코드는 `1`이며, 완료된 수집을 다시 실행하거나 마지막 성공본을 되돌리지 않는다.
+
+### macOS에서 매일 03:00 KST 실행
+
+`launchd` 달력은 Mac의 시간대를 따르므로 시스템 시간대가 한국 표준시인 경우에만 설정 파일을 생성한다. 개발 브랜치 전환이 실행 코드를 바꾸지 않도록 커밋별 로컬 실행 사본을 만든다. 실제 데이터와 비밀값은 이 사본에 복사하지 않는다.
+
+```bash
+repo_dir="$PWD"
+runtime_dir="$repo_dir/data/local/f08-runtime/$(git rev-parse --short HEAD)"
+mkdir -p "$runtime_dir/backend"
+cp pyproject.toml uv.lock README.md "$runtime_dir/"
+cp -R backend/src "$runtime_dir/backend/"
+uv sync --locked --no-dev --project "$runtime_dir"
+uv run --locked python scripts/f08_launchagent.py \
+  --project-dir "$runtime_dir" --env-file "$repo_dir/data/local/f08.env" \
+  --data-dir "$repo_dir/data" --output "$repo_dir/data/local/f08.plist"
+plutil -lint data/local/f08.plist
+mkdir -p "$HOME/Library/LaunchAgents"
+cp data/local/f08.plist "$HOME/Library/LaunchAgents/dev.benefitfinder.f08.plist"
+launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/dev.benefitfinder.f08.plist"
+```
+
+생성기는 파일만 만들며 스케줄 등록은 마지막 명령이 수행한다. 설치 시 즉시 수집하지 않고 다음 03:00에 실행한다. 로그는 `data/logs/f08.stdout.log`와 `f08.stderr.log`에 남는다. 중지하려면 `launchctl bootout "gui/$(id -u)/dev.benefitfinder.f08"`을 실행한다. 갱신할 때에는 기존 작업을 먼저 중지하고 새 커밋의 실행 사본과 설정 파일을 만든다.
+
+이 설정은 로그인한 Mac에서 동작한다. [Apple 문서](https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/ScheduledJobs.html)에 따라 예정 시각에 잠자기 상태였다면 깨어날 때 실행되며, 전원이 꺼져 있으면 실행하지 못한다. 보조금24·기준금리·공고 원문 재분석·PostgreSQL 적재는 아직 연결하지 않았다.
 
 자동화 주 담당은 탁서윤이다(2026-10-29). 실행·스케줄·재시도·실패 알림을 맡고, 윤정찬의 수집·원본 관리·PostgreSQL 적재와 Agent 분석·정제 흐름을 연결한다. 양승현은 API·계산 연동과 배포 환경의 통합 테스트를 맡는다. Agent 초안과 검수·게시 결과를 구분하고 미지원·상충·불명확은 검수 대기로 남긴다. 기존 모듈 의존 방향을 유지하며 jobs가 ai 내부를 직접 import하지 않고 조립 지점과 application 인터페이스로 연결한다.

@@ -24,6 +24,61 @@ class RefreshError(ValueError):
     """Fixed error code safe to print without file or source contents."""
 
 
+def refresh_notification(root: Path, code: int, started_at: datetime) -> str:
+    """Allow only aggregate counts and fixed codes into the outbound status message."""
+    lines = [
+        "[F08] 온통청년 갱신 " + ("성공" if code == 0 else "실패"),
+        f"실행 시각: {started_at.isoformat()}",
+        f"종료 코드: {code}",
+    ]
+    try:
+        state = json.loads((root / STATUS_FILE).read_text(encoding="utf-8"))
+        attempt = state["last_attempt"]
+        attempt_at = datetime.fromisoformat(attempt["started_at"])
+        if attempt_at < started_at:
+            return "\n".join(lines)
+        expected = "success" if code == 0 else "failed"
+        if attempt["status"] != expected:
+            return "\n".join(lines)
+        if type(attempt.get("attempts")) is int and attempt["attempts"] in (1, 2):
+            lines.append(f"시도: {attempt['attempts']}회")
+        if code == 0:
+            count = state["last_success"]["record_count"]
+            if type(count) is int and count >= 0:
+                lines.append(f"수집: {count}건")
+            changes = attempt.get("changes", {})
+            for name, label in (("new", "신규"), ("changed", "변경"), ("missing", "누락")):
+                count = changes.get(name, 0)
+                if type(count) is int and count >= 0:
+                    lines.append(f"{label}: {count}건")
+        else:
+            allowed = {
+                "fetch_failed",
+                "http_status",
+                "parse_failed",
+                "missing_external_id",
+                "conflicting_duplicate",
+                "total_changed",
+                "unexpected_empty_page",
+                "short_page",
+                "page_count_mismatch",
+                "record_count_mismatch",
+                "page_limit",
+                "refresh_attempt_failed",
+                "refresh_incomplete",
+            }
+            errors = attempt.get("error_codes", [])
+            if isinstance(errors, list):
+                codes = sorted(
+                    {item for item in errors if isinstance(item, str) and item in allowed}
+                )
+                if codes:
+                    lines.append("오류 코드: " + ", ".join(codes))
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        pass
+    return "\n".join(lines)
+
+
 def _last_success(root: Path) -> tuple[dict[str, object] | None, Path | None]:
     try:
         raw = (root / STATUS_FILE).read_text(encoding="utf-8")
