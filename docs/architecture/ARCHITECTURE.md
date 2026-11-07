@@ -130,13 +130,13 @@ DB 스키마 변경은 `backend/migrations/versions/`에 이력으로 관리한�
 
 ## 7. API 경계와 구현 상태
 
-`GET /health`는 구현했다. 아래 `/api/v1` 정책 경로는 기획 명세를 버전 경계에 맞춘 설계이며 아직 구현하지 않았다. 현재 개발용 필드·자료형과 이벤트 데이터의 원본은 `contracts/v1/`이다. 6장의 필드·형식과 11.2의 임시 기본값은 다음 회의에서 확인할 초안으로 유지한다.
+`GET /health`와 공식 지역 목록 `GET /api/v1/options`, 가상 MVP 정책의 `POST /api/v1/recommendations`는 구현했다. 추천은 JSON 응답이며 실제 지역별 정책·PostgreSQL 연결은 후속이다. 그 외 아래 `/api/v1` 경로와 SSE는 목표 설계다. 현재 개발용 필드·자료형과 이벤트 데이터의 원본은 `contracts/v1/`이다. 6장의 필드·형식과 11.2의 임시 기본값은 다음 회의에서 확인할 초안으로 유지한다.
 
 | Method | 경로 | 용도 |
 |---|---|---|
 | GET | `/health` | 서버 동작 확인 (구현됨, DB 준비 확인 아님) |
 | GET | `/api/v1/meta` | 마지막 갱신·기준금리·분석 이용량 정보 |
-| GET | `/api/v1/options` | 지역 코드와 선택지·금액 구간 |
+| GET | `/api/v1/options` | 공식 법정동코드 기반 시도·자치 시군구와 선택 구간 (구현됨, 원천·갱신 기준은 [백엔드 안내](../../backend/README.md#실제-지역-선택-api)) |
 | POST | `/api/v1/recommendations` | 선택 조건으로 분석, SSE 진행·조합 결과 |
 | POST | `/api/v1/simulations` | 같은 조건과 변경 시나리오의 전후 비교 |
 | GET | `/api/v1/benefits/{benefit_id}` | 공통 혜택 상세 조회 |
@@ -200,7 +200,7 @@ pgvector는 PostgreSQL에서 의미 검색이 필요해질 때 검토하는 선�
 
 ### 구현·검증 상태
 
-- `pnpm dev`가 Vite(5173)와 FastAPI(8000)를 함께 실행한다. `bootstrap.create_app()`에서 서버를 조립하고 `main:app`을 ASGI 진입점으로 쓴다. 생존 확인(`/health`)과 FastAPI 문서(`/docs`·`/redoc`·`/openapi.json`), 공통 오류 처리를 기본 제공하며 가상 정책 추천·F13 설명과 게시 조항 PostgreSQL 조회·명시적 SQL 마이그레이션을 제공한다. 실제 정책 자료·계산 DB·데이터 Agent는 후속이다.
+- `pnpm dev`가 Vite(5173)와 FastAPI(8000)를 함께 실행한다. `bootstrap.create_app()`에서 서버를 조립하고 `main:app`을 ASGI 진입점으로 쓴다. 생존 확인(`/health`), 공식 지역 옵션과 FastAPI 문서(`/docs`·`/redoc`·`/openapi.json`), 공통 오류 처리를 기본 제공하며 가상 정책 추천·F13 설명과 게시 조항 PostgreSQL 조회·명시적 SQL 마이그레이션을 제공한다. 실제 정책 자료·계산 DB·데이터 Agent는 후속이다.
 - `pyproject.toml`·`uv.lock`은 Python, 루트/웹 `package.json`·`pnpm-workspace.yaml`·`pnpm-lock.yaml`은 웹 실행·의존성을 정의한다. 공유 의존성은 담당 영역과 조율한다. `pip`·`npm` 설치나 별도 lockfile을 추가하지 않는다. 실행 안내는 [처음 개발 시작하기](../development/GETTING_STARTED.md)를 따른다.
 - `contracts/v1/*.schema.json`에서 `json-schema-to-typescript`로 `apps/web/src/shared/api/generated/*.ts`를 생성한다. `pnpm types:generate` 후 생성물을 커밋한다. `pnpm types:check`는 최신 여부를 검사하며 실제 HTTP의 Pydantic 모델과 JSON Schema 일치는 API 테스트로 확인한다.
 - `uv run --locked python scripts/check.py`는 Git·파일·직접 import·계약·가상 계산 정답·API HTTP·Ruff·웹 lint/타입/테스트/빌드를 검사한다. PR 준비 검사는 `--pr`이며 자세한 범위는 [저장소 운영 설정](../development/REPOSITORY_SETTINGS.md)을 따른다. CI는 두 lockfile로 설치한 뒤 같은 검사를 실행한다.

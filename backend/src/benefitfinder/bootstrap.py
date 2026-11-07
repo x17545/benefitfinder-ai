@@ -18,6 +18,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from benefitfinder.api.schemas import ErrorCode, ErrorResponse
 from benefitfinder.api.v1.routers.health import router as health_router
+from benefitfinder.api.v1.routers.options import router as options_router
 from benefitfinder.api.v1.routers.recommendations import router as recommendations_router
 from benefitfinder.ai.policy_explanation import GroundedPolicyExplainer
 from benefitfinder.application.policy_explanations import (
@@ -35,6 +36,8 @@ from benefitfinder.infrastructure.published_clauses import InMemoryPublishedClau
 from benefitfinder.infrastructure.database.repositories.published_clauses import (
     PostgresPublishedClauses,
 )
+from benefitfinder.application.region_options import RegionCatalog
+from benefitfinder.infrastructure.region_codes import OfficialRegionCatalog
 
 NOT_FOUND_MESSAGE = "요청한 리소스를 찾을 수 없습니다."
 INVALID_REQUEST_MESSAGE = "요청 값이 올바르지 않습니다."
@@ -60,6 +63,7 @@ def create_app(
     explanation_generator: ExplanationGenerator | None = None,
     explanation_timeout_seconds: float = 5,
     explanation_database_url: str | None = None,
+    region_catalog: RegionCatalog | None = None,
 ) -> FastAPI:
     """Assemble and return a new FastAPI application.
 
@@ -136,6 +140,9 @@ def create_app(
     )
     app.state.recommendation_explainer = explainer
 
+    app.state.region_catalog = region_catalog if region_catalog is not None else OfficialRegionCatalog()
+
     app.include_router(health_router)
+    app.include_router(options_router)
     app.include_router(recommendations_router)
     return app
