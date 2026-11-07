@@ -17,3 +17,8 @@ psql "$DATABASE_URL" -X --command='TABLE public.benefitfinder_schema_migrations;
 실패 복구는 트랜잭션 롤백을 기본으로 한다. 공유 데이터가 생긴 후에는 되돌리기용 새 마이그레이션을 검토하며 테이블 DROP 명령을 자동 제공하지 않는다. 운영·공유 DB 적용과 파괴적 변경은 승인된 별도 작업이다.
 
 [전용 테스트 DB 검증](../integration/README.md)은 실제 PostgreSQL에서 생성·읽기·쓰기·버전 전환·검수/게시 제외·장애를 확인한다. 가상 사례만 사용하고 원문·결과·덤프·자격 증명은 Git에 넣지 않는다.
+
+`testing/0001_f12_review_imports.sql`은 [F12 미게시 검증](../integration/README.md#실제-f12-승인-근거의-미게시-검증)에만
+쓰는 출처 이력이다. 로컬의 별도 `_test` DB에서 versions/0001 다음에 명시적으로 적용한다.
+원본 ID·후보·승인 사유·원문/쌍/내보내기 해시를 보존하며 반려·대기 항목은 적재하지 않는다.
+게시 상태를 바꾸지 않으며 운영용 마이그레이션 실행 목록에 포함하지 않는다.
