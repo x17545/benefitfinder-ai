@@ -111,7 +111,11 @@ pnpm --filter @benefitfinder/web test           # vitest run
 pnpm --filter @benefitfinder/web test
 ```
 
-`tests/policyExplanation.test.ts`는 생성 성공·기본 안내·부분 실패·이전 응답 호환, 인용·출처·확인일, HTML 이스케이프와 링크 중첩 방지를 검증한다.
+### F12 승인 preview (not_yet_reviewed 선택 설명)
+
+아직 조합 계산 전 목록에 메인이 주입한 preview가 있으면 ResultLists에서 실제 policy_name과 검증용 · 조합/자격/금액 확정 전·review_scope·기존 PolicyExplanation 재사용(AI/기본 안내·원문 quote·url·version·date)만 보여준다. 설명 없는 기존 항목은 기존 동작(짧은 이름·자격 진단 칩)을 유지하며, 생산 기본 추천 동작은 바꾸지 않는다. preview 설명 정책은 금액 null·원액 null·amount_status unknown·eligibility 빈 배열 구성이며, policy_id 동일·확정 금액 없음·자격 미확정(needs_review)은 isRecommendationResponse 런타임 검사로 보장하고 어기면 분석 실패로 처리한다. 수급·신청 보장 CTA는 추가하지 않는다.
+
+`tests/policyExplanation.test.ts`는 생성 성공·기본 안내·부분 실패·이전 응답 호환, 인용·출처·확인일, HTML 이스케이프와 링크 중첩 방지를 검증한다. `tests/notYetReviewedPreview.test.ts`는 가상 데이터로 preview AI 출처·실패 fallback·범위 노출과 ID·확정 금액 불일치 거부를 검증한다.
 
 13단계의 ‘내 조합 찾기’에서 실제 입력을 추천 요청으로 변환해 분석·결과 화면으로 이어진다. 개발 모드의 StrictMode가 분석 화면 effect를 즉시 정리하고 다시 실행하더라도 첫 시작 예약을 취소해 요청을 중복 전송하지 않는다. 이전 결과는 예약 전에 즉시 무효화하고, 화면을 떠나면 시작 예약과 진행 요청을 취소한다. `tests/loadingLifecycle.test.ts`에서 이 시작·취소 흐름을 검증한다.
 
