@@ -8,6 +8,7 @@ import { removeSavedConditions, saveConditions } from '../profile/savedCondition
 import { toRecommendationRequest } from '../profile/toRequest.ts';
 import {
   cancelAnalysis,
+  clearAnalysis,
   getAnalysisState,
   showSampleResult,
   startAnalysis,
@@ -42,8 +43,12 @@ export function LoadingScreen(): JSX.Element {
       navigate(paths.conditions(13), { replace: true });
       return;
     }
-    start();
+    // StrictMode의 즉시 정리·재실행 때 첫 요청이 서버까지 중복 전송되지 않게 한다.
+    // 예약을 기다리는 동안에도 지난 결과로 이동하지 않도록 즉시 무효화한다.
+    clearAnalysis();
+    const timer = window.setTimeout(start, 0);
     return () => {
+      window.clearTimeout(timer);
       cancelAnalysis();
     };
   }, []);
