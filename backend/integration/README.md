@@ -47,3 +47,64 @@ pnpm dev
 선행 PR #16은 F13 코어·화면, 별도 PR #19는 실제 지역 API다. #16 미병합 동안 이 작업 브랜치는 그 커밋을 선행 의존성으로 포함한다. #19는 이 브랜치에 포함하지 않으므로 main에 지역 API가 없는 시점의 13단계 검증은 화면에 명시된 개발용 가상 지역을 사용한다. 실제 지역 연결 완료와 혼동하지 않는다.
 
 원문·DB 데이터 디렉터리·검증 요청/결과·로그·캡처는 `data/local/f13-postgres/` 같은 Git 제외 경로에 둔다. 결과 화면의 정책·금액·근거는 가상 검증 자료이며 실제 정책 신청 정확성은 실제 게시 자료 연결 후 별도로 검수한다.
+
+## 실제 F12 승인 근거의 미게시 검증
+
+`backend.integration.f12_review`는 명시적으로 실행하는 로컬 검증 도구다. production
+`benefitfinder.main`은 이 모드를 활성화하지 않는다. 로컬 호스트/Unix 소켓의 이름이 `_test`로
+끝나는 별도 DB만 허용한다. 가상 fixture 검사는 별도 가상 DB에서 실행하고, 실제 승인 자료가
+있는 DB에 `seed_test_database`를 실행하지 않는다.
+
+화면 검증용 `serve`는 실제 지역 API PR #19가 포함된 결합 브랜치에서 실행한다. 지역 구현이
+없으면 시작을 거부하며 가상 목록으로 대체하지 않는다. 파서·DB 검사와 import는 #19 없이도 실행된다.
+
+F12 PR #14에서 사람이 명시한 항목별 승인·반려 및 범위를 기록하고 `export-approved`로
+해당 후보/원문 해시에 연결된 승인 항목만 내보낸다. 내보내기 파일은 인증된 서명이 아니므로
+실제 검수 기록과 사유를 함께 확인한다. 이 도구는 새 승인을 만들지 않는다.
+
+빈 전용 DB를 관리자가 따로 준비한 뒤 실행한다. 연결 문자열은 환경 변수로만 전달한다.
+
+```sh
+# F13_REVIEW_TEST_DATABASE_URL: 로컬 전용 *_test DB의 관리 역할
+uv run --locked python -m backend.integration.f12_review migrate
+uv run --locked python -m backend.integration.f12_review import-approved \
+  --document employment '가상 취업 정책' data/local/reviews/employment/approved-export.json \
+  --document housing '가상 주거 정책' data/local/reviews/housing/approved-export.json
+```
+
+`migrate`는 versions/0001과 [검증 출처 스키마](../migrations/testing/0001_f12_review_imports.sql)를
+한 트랜잭션에서 명시적으로 적용하며 기존 스키마를 덮어쓰지 않는다. import도 한 트랜잭션이며
+기존 버전/항목 충돌은 전체 롤백한다. 문서·조항은 **draft, published_at=NULL**로 두고 기존
+검수자·검수일·사유·후보·원문/쌍/내보내기 해시를 보존한다. F12 원본 정책 ID를 보존하며 API
+ID에만 `youth:`를 붙인다. 가상 P1/P3/P6로 치환하지 않는다. 공고 전문과 반려·대기 항목은 넣지
+않는다. 기본 `PostgresPublishedClauses` 게시 조회는 이 자료를 0건으로 조회한다.
+
+서버에는 별도 SELECT 전용 역할을 사용한다. 관리 역할에서 해당 역할에 public 스키마 USAGE와
+`f13_policy_documents`, `f13_clauses`, `f13_test_review_imports`의 SELECT만 부여한다.
+
+```sh
+# F13_REVIEW_TEST_DATABASE_URL: 위 DB의 SELECT 전용 역할
+uv run --locked python -m backend.integration.f12_review serve --model gemma4:e4b
+# 다른 터미널
+pnpm dev:web
+```
+
+13단계는 production 공식 지역 라우터/어댑터를 사용한다. 이 검증용 추천 API는 관심 분야의 실제
+정책을 `not_yet_reviewed`에 표시한다. 정책 목록은 시작할 때 DB에서 읽은 버전으로 고정하고,
+근거와 승인 범위는 매 요청 DB에서 새로 읽는다. 승인 근거가 없어지면 정책도 응답에서 제외한다.
+같은 정책/버전/분류의 미게시·승인 조항과 검증 출처가
+일치해야 한다. 최대 5개를 조회하고 지급 조건 우선의 한 조항으로 설명해 서로 다른 승인 범위를
+섞지 않는다. published 플래그는 false다. 일반 게시 조회와 분리된 경로다.
+검색/모델을 포함한 5초 제한·실패 시 기본 안내를 적용하고 인용·출처·승인 범위를 표시한다.
+
+**자격은 확인 전, 금액 null, 조합 없음, 계산 unavailable**로 유지한다. 모델에는 프로필·부모·
+특수조건·소득/재산을 보내지 않는다. 사업 개요 승인으로 상세 자격을 확정하거나 정기 지급일
+승인으로 최초 지급을 추정하지 않는다. 운영 게시나 실제 수급 가능·금액 계산의 검증이 아니다.
+
+기존 PostgreSQL 검사와 추가 검사는 다음 명령으로 실행한다. 추가 검사는 별도 임시 DB와 가상
+승인 자료만 사용한다. 검사 변수 `F13_TEST_DATABASE_URL`과 실제 승인 자료 검증 변수
+`F13_REVIEW_TEST_DATABASE_URL`을 구분한다. 원문·기록·응답·로그·캡처는 로컬 제외 경로에만 둔다.
+
+```sh
+uv run --locked python -m unittest discover -s backend/integration -v
+```
