@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import shutil
 import sys
 from collections import Counter
 from collections.abc import Sequence
@@ -33,7 +34,7 @@ from benefitfinder.infrastructure.policy_rule_files import (
     write_rule_snapshot,
 )
 from benefitfinder.infrastructure.youthcenter_http import YouthcenterHttpFetcher
-from benefitfinder.ingestion.collect import collect_youthcenter
+from benefitfinder.ingestion.collect import CollectionResult, collect_youthcenter
 from benefitfinder.ingestion.rule_review_workflow import (
     RuleReviewWorkflowError,
     approve_snapshot,
@@ -43,6 +44,11 @@ from benefitfinder.ingestion.rule_review_workflow import (
 )
 from benefitfinder.ingestion.youthcenter import SOURCE_NAME, YOUTHCENTER_POLICY_LIST
 from benefitfinder.jobs.rule_review_example import example_rule_batch
+from benefitfinder.jobs.youthcenter_refresh import (
+    STATUS_FILE,
+    RefreshError,
+    run_youthcenter_refresh,
+)
 
 API_KEY_ENV = "YOUTHCENTER_API_KEY"
 KST = ZoneInfo("Asia/Seoul")
@@ -81,6 +87,51 @@ def collect_youthcenter_command(data_dir: Path) -> int:
         print("일부 실패: 성공한 레코드만 저장했고 삭제 감지는 하지 않았습니다.", file=sys.stderr)
         return 1
     print("전체 수집 완료")
+    return 0
+
+
+def refresh_youthcenter_command(data_dir: Path) -> int:
+    api_key = os.environ.get(API_KEY_ENV, "").strip()
+    if not api_key:
+        print(f"환경 변수 {API_KEY_ENV}에 인증키를 설정하세요.", file=sys.stderr)
+        return 2
+
+    root = data_dir / "processed" / "f08-youthcenter"
+    fetcher = YouthcenterHttpFetcher(api_key)
+    snapshots = JsonFileSnapshotStore(data_dir / "raw" / "f08-youthcenter")
+
+    def clock() -> datetime:
+        return datetime.now(KST)
+
+    def build(staging: Path, previous: Path | None) -> CollectionResult:
+        versions = JsonFileVersionStore(staging)
+        records_path = versions.records_path(SOURCE_NAME)
+        if previous is not None:
+            records_path.parent.mkdir(parents=True)
+            shutil.copyfile(JsonFileVersionStore(previous).records_path(SOURCE_NAME), records_path)
+
+        result = collect_youthcenter(YOUTHCENTER_POLICY_LIST, fetcher, snapshots, versions, clock)
+        if result.complete:
+            records = versions.load_records(SOURCE_NAME)
+            if not records_path.exists():  # 첫 정상 응답이 0건이면 저장할 레코드가 없다.
+                records_path.parent.mkdir(parents=True, exist_ok=True)
+                records_path.write_text("{}\n", encoding="utf-8")
+            write_records_csv(records, records_path.with_name("records.csv"))
+            write_field_summary_csv(records, records_path.with_name("fields.csv"))
+        return result
+
+    try:
+        complete = run_youthcenter_refresh(root, build, clock)
+    except RefreshError as exc:
+        print(f"온통청년 갱신 실패: {exc}", file=sys.stderr)
+        return 1
+    except OSError:
+        print("온통청년 갱신 실패: refresh_io_error", file=sys.stderr)
+        return 1
+    if not complete:
+        print(f"온통청년 갱신 실패. 마지막 성공본 유지: {root / STATUS_FILE}", file=sys.stderr)
+        return 1
+    print(f"온통청년 갱신 완료: {root / STATUS_FILE}")
     return 0
 
 
@@ -163,10 +214,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     commands = parser.add_subparsers(dest="command", required=True)
     collect = commands.add_parser("collect-youthcenter", help="온통청년 정책 목록 전체 수집")
     collect.add_argument("--data-dir", type=Path, default=Path("data"))
+    refresh = commands.add_parser(
+        "refresh-youthcenter", help="완전한 온통청년 수집만 최신본으로 전환"
+    )
+    refresh.add_argument("--data-dir", type=Path, default=Path("data"))
     _add_rule_review_commands(commands)
     args = parser.parse_args(argv)
     if args.command == "collect-youthcenter":
         return collect_youthcenter_command(args.data_dir)
+    if args.command == "refresh-youthcenter":
+        return refresh_youthcenter_command(args.data_dir)
     if args.command == "rule-review":
         return rule_review_command(args)
     return 2
