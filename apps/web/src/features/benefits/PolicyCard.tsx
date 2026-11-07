@@ -4,6 +4,7 @@ import { conditionLabel } from '../../domains/youth/conditionLabels.ts';
 import type { NormalizedBenefit } from '../../shared/api/benefits.ts';
 import { StatusChip } from '../../shared/ui/StatusChip.tsx';
 import { formatManWon, isStale, monthDay, recruitTag, sourceName } from './format.ts';
+import { PolicyExplanation } from './PolicyExplanation.tsx';
 import { policyName } from './resultModel.ts';
 import type { PortfolioPolicy } from './resultModel.ts';
 
@@ -75,14 +76,9 @@ export function PolicyCard({ policy, info, aiGenerated }: PolicyCardProps): JSX.
             ))}
           </span>
         ) : null}
-
-        {policy.ai_reason !== null && policy.ai_reason !== undefined && policy.ai_reason !== '' ? (
-          <span className="s3-policy__reason">
-            {aiGenerated ? <span className="s3-ai">AI</span> : null}
-            {policy.ai_reason}
-          </span>
-        ) : null}
       </a>
+
+      <PolicyExplanation policy={policy} aiGenerated={aiGenerated} />
 
       <span className="s3-policy__source">
         출처 {sourceName(policy.source.url)} · {monthDay(policy.source.checked_at)} 확인

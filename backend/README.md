@@ -2,11 +2,13 @@
 
 작업 전에는 루트 지침과 이 경로의 [추가 에이전트 지침](AGENTS.md)을 함께 읽는다.
 
-Python + FastAPI와 PostgreSQL을 사용하는 백엔드 구조다. FastAPI 실행 앱(생존 확인·공통 오류)을 초기화했다. Python 의존성은 루트 uv 프로젝트에서 관리하고 DB 연결은 아직 구현하지 않았다.
+Python + FastAPI와 PostgreSQL을 사용하는 백엔드 구조다. 생존 확인·공통 오류와 가상 정책 추천 API를 제공하며, F13 설명은 환경 변수 `DATABASE_URL`로 PostgreSQL 게시 조항을 조회하거나 미설정 시 가상 메모리 예제를 사용한다. Python 의존성은 루트 uv 프로젝트에서 관리한다. 실제 정책 후보·자격·조합 계산의 DB 연결은 후속이다.
 
 `src/benefitfinder/`의 모듈을 한 애플리케이션으로 통합한다. AI·데이터 수집은 담당 디렉터리를 가지며 각각 별도 서버로 배포할 필요는 없다.
 
-기능은 [기획 명세 v2](../docs/product/REQUIREMENTS.md)의 F01~F11을 따른다. 선택 프로필에서 검색·자격·조합·현재가치·상황 변화·상세를 조율하고, HTTP 경계에서 SSE 진행·결과를 제공한다. 매일 갱신·검수 해제는 같은 패키지의 jobs/ingestion으로 구현한다. 정책 API·계산기·스케줄러는 아직 없다.
+F13의 저장 모델·게시/버전 조회·시간 제한·읽기 역할은 [PostgreSQL 어댑터](src/benefitfinder/infrastructure/database/README.md), 적용 절차는 [마이그레이션](migrations/README.md), 가상 취업·주거 사례의 실제 DB→E4B→화면 재현은 [PostgreSQL 통합 검증](integration/README.md)을 따른다. 원문·결과·DB 파일·덤프는 로컬 Git 제외 경로에만 둔다.
+
+기능은 [기획 명세 v2](../docs/product/REQUIREMENTS.md)의 F01~F11과 사용자가 요청한 F13 연결을 따른다. 가상 정책의 자격·조합·현재가치를 계산해 JSON으로 반환하며, 실제 정책·상황 변화·상세·SSE 연결은 후속 작업이다. 매일 갱신·검수 해제는 같은 패키지의 jobs/ingestion 영역이다.
 
 ```text
 backend/
@@ -33,7 +35,7 @@ backend/
   tests/test_api.py               부트스트랩 TestClient 검증
 ```
 
-`bootstrap.py`·`main.py`·`GET /health`·공통 오류 변환은 동작하며, 저장소·정책 API·스케줄러는 아직 없다.
+`bootstrap.py`·`main.py`에서 `GET /health`, 공통 오류와 `POST /api/v1/recommendations`를 조립한다. F13은 기본 문구로 동작하며 선택한 로컬 E4B 모델로 설명을 생성할 수 있다. [실행과 실패 시 동작](src/benefitfinder/api/README.md#f13-설명-실행)을 따른다. 실제 PostgreSQL·게시 자료·운영 스케줄 연결은 별도 검증이 필요하다.
 
 | 모듈 | 배치할 코드 |
 |---|---|

@@ -346,10 +346,12 @@ export function ResultScreen(): JSX.Element {
           </section>
         ) : null}
 
-        <ResultLists view={view} selected={selected} info={info} />
+        <ResultLists view={view} selected={selected} info={info} aiGenerated={result.ai_generated} />
 
         <p className="s3-disclaimer">
-          검수한 정책과 입력 조건으로 계산한 참고 결과예요. 최종 자격과 최신 조건은 신청 기관에서 확인해 주세요.
+          {view.not_yet_reviewed?.some((item) => item.verification_only === true)
+            ? '사람이 승인한 일부 원문 근거를 확인하는 검증 화면이에요. 자격·금액·조합은 계산하지 않았어요.'
+            : '검수한 정책과 입력 조건으로 계산한 참고 결과예요. 최종 자격과 최신 조건은 신청 기관에서 확인해 주세요.'}
         </p>
       </main>
 

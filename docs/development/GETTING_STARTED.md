@@ -1,6 +1,6 @@
 # 처음 개발 시작하기
 
-모든 명령은 저장소 루트(`benefitfinder-ai/`)의 터미널에서 실행한다. 웹과 API는 DB·AI 키 없이 실행할 수 있다. 웹은 시작·조건 입력·분석·결과 화면을 제공하며, 기본 백엔드는 생존 확인 API만 제공한다. 실제 정책 추천 API·DB·데이터 Agent는 후속 구현이다.
+모든 명령은 저장소 루트(`benefitfinder-ai/`)의 터미널에서 실행한다. 웹과 API는 DB·AI 키 없이 실행할 수 있다. 웹은 시작·조건 입력·분석·결과 화면을 제공하며, 백엔드는 생존 확인과 가상 정책 추천 API를 제공한다. F13 게시 조항의 PostgreSQL 조회를 지원하며 실제 정책 추천 DB는 후속이다. DB 설정·마이그레이션·화면 검증은 [통합 검증 안내](../../backend/integration/README.md)를 따른다. F13의 기본 문구·선택적 로컬 모델 실행은 [API 안내](../../backend/src/benefitfinder/api/README.md#f13-설명-실행)를 따른다.
 
 ## 1. 도구 설치 (처음 한 번)
 
@@ -66,13 +66,13 @@ pnpm dev
 
 두 서버를 함께 실행하며 `Ctrl+C`로 종료한다. 파일 변경은 Vite·Uvicorn이 반영한다. 각각 실행하려면 터미널 두 개에서 `pnpm dev:web`과 `pnpm dev:api`를 실행한다. API만 작업할 때는 아래 명령도 같다.
 
-기본 백엔드에는 `/api/v1/options`·`/api/v1/recommendations`·정책 상세 API가 아직 없다. `pnpm dev`에서는 지역을 못 받으면 `[가상]` 목록을 표시한다. 분석 실패 화면의 [예제 결과로 보기]는 가상 계약으로 결과 화면을 확인하는 개발 전용 버튼이다. 이 흐름을 실제 정책 추천 성공으로 보고하지 않는다.
+기본 백엔드에는 가상 정책의 `/api/v1/recommendations`가 있다. `/api/v1/options`·정책 상세 API는 아직 없다. `pnpm dev`에서는 지역을 못 받으면 `[가상]` 목록을 표시한다. 분석 실패 화면의 [예제 결과로 보기]는 가상 계약으로 결과 화면을 확인하는 개발 전용 버튼이다. 가상 응답을 실제 정책 추천 성공으로 보고하지 않는다.
 
 ```sh
 uv run --locked uvicorn benefitfinder.main:app --reload --reload-dir backend/src --host 127.0.0.1 --port 8000
 ```
 
-기본 실행에 `.env` 복사는 필요 없다. 서버 주소를 바꾸면 `apps/web/.env.example`을 같은 폴더의 `.env`로 복사해 `API_PROXY_TARGET`을 수정하고 Vite를 다시 실행한다. `/api/v1`·`/health`는 개발 프록시를 사용한다. `backend/.env.example`은 향후 DB 설정 양식이고 현재 앱은 DB 환경 변수를 읽거나 접속하지 않는다. `/health`는 DB·데이터·LLM 준비 상태를 확인하지 않는다.
+기본 실행에 `.env` 복사는 필요 없다. 서버 주소를 바꾸면 `apps/web/.env.example`을 같은 폴더의 `.env`로 복사해 `API_PROXY_TARGET`을 수정하고 Vite를 다시 실행한다. `/api/v1`·`/health`는 개발 프록시를 사용한다. `backend/.env.example`은 향후 DB 설정 양식이고 현재 앱은 `DATABASE_URL`을 서버에 전달하면 F13 게시 조항을 PostgreSQL에서 조회한다. 미설정 시 가상 메모리 예제를 사용하며 자동 DDL은 실행하지 않는다. `/health`는 DB·데이터·LLM 준비 상태를 확인하지 않는다.
 
 ## 4. 매일 쓰는 검사
 
