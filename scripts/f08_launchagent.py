@@ -46,6 +46,10 @@ def parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
 def build_plist(uv: str, project_dir: Path, env_file: Path, data_dir: Path) -> dict[str, object]:
     out_log = data_dir / "logs" / "f08.stdout.log"
     err_log = data_dir / "logs" / "f08.stderr.log"
+    # uv interprets --env-file as a whitespace-delimited list, even in one argv entry.
+    env_argument = "".join(
+        "\\" + char if char == "\\" or char.isspace() else char for char in str(env_file)
+    )
     program = [
         uv,
         "run",
@@ -54,7 +58,7 @@ def build_plist(uv: str, project_dir: Path, env_file: Path, data_dir: Path) -> d
         "--project",
         str(project_dir),
         "--env-file",
-        str(env_file),
+        env_argument,
         "python",
         "-m",
         "benefitfinder.jobs",

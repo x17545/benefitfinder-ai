@@ -69,25 +69,30 @@ uv run --locked --env-file data/local/f08.env python -m benefitfinder.jobs \
 
 ### macOS에서 매일 03:00 KST 실행
 
-`launchd` 달력은 Mac의 시간대를 따르므로 시스템 시간대가 한국 표준시인 경우에만 설정 파일을 생성한다. 개발 브랜치 전환이 실행 코드를 바꾸지 않도록 커밋별 로컬 실행 사본을 만든다. 실제 데이터와 비밀값은 이 사본에 복사하지 않는다.
+`launchd` 달력은 Mac의 시간대를 따르므로 시스템 시간대가 한국 표준시인 경우에만 설정 파일을 생성한다. 개발 브랜치 전환이 실행 코드를 바꾸지 않도록 커밋별 로컬 실행 사본을 만든다. 백그라운드 작업이 개발용 Documents 폴더에 의존하지 않도록 실행 코드·Python·환경 설정·운영 데이터는 `Library/Application Support/BenefitFinder/F08` 아래에 둔다. 비밀값과 운영 데이터는 코드 실행 사본과 분리한다.
 
 ```bash
 repo_dir="$PWD"
-runtime_dir="$repo_dir/data/local/f08-runtime/$(git rev-parse --short HEAD)"
+service_dir="$HOME/Library/Application Support/BenefitFinder/F08"
+runtime_dir="$service_dir/runtime/$(git rev-parse --short HEAD)"
 mkdir -p "$runtime_dir/backend"
 cp pyproject.toml uv.lock README.md "$runtime_dir/"
 cp -R backend/src "$runtime_dir/backend/"
-uv sync --locked --no-dev --project "$runtime_dir"
+cp data/local/f08.env "$service_dir/f08.env"
+chmod 600 "$service_dir/f08.env"
+UV_PYTHON_INSTALL_DIR="$service_dir/python" uv python install 3.12 --no-bin
+f08_python=$(UV_PYTHON_INSTALL_DIR="$service_dir/python" uv python find --managed-python 3.12)
+uv sync --locked --no-dev --project "$runtime_dir" --python "$f08_python"
 uv run --locked python scripts/f08_launchagent.py \
-  --project-dir "$runtime_dir" --env-file "$repo_dir/data/local/f08.env" \
-  --data-dir "$repo_dir/data" --output "$repo_dir/data/local/f08.plist"
+  --project-dir "$runtime_dir" --env-file "$service_dir/f08.env" \
+  --data-dir "$service_dir/data" --output "$repo_dir/data/local/f08.plist"
 plutil -lint data/local/f08.plist
 mkdir -p "$HOME/Library/LaunchAgents"
 cp data/local/f08.plist "$HOME/Library/LaunchAgents/dev.benefitfinder.f08.plist"
 launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/dev.benefitfinder.f08.plist"
 ```
 
-생성기는 파일만 만들며 스케줄 등록은 마지막 명령이 수행한다. 설치 시 즉시 수집하지 않고 다음 03:00에 실행한다. 로그는 `data/logs/f08.stdout.log`와 `f08.stderr.log`에 남는다. 중지하려면 `launchctl bootout "gui/$(id -u)/dev.benefitfinder.f08"`을 실행한다. 갱신할 때에는 기존 작업을 먼저 중지하고 새 커밋의 실행 사본과 설정 파일을 만든다.
+생성기는 파일만 만들며 스케줄 등록은 마지막 명령이 수행한다. 설치 시 즉시 수집하지 않고 다음 03:00에 실행한다. 로그는 서비스 데이터 폴더의 `data/logs/f08.stdout.log`와 `f08.stderr.log`에 남는다. 키·웹훅을 변경하면 설치된 서비스의 `f08.env`도 갱신한다. 중지하려면 `launchctl bootout "gui/$(id -u)/dev.benefitfinder.f08"`을 실행한다. 갱신할 때에는 기존 작업을 먼저 중지하고 새 커밋의 실행 사본과 설정 파일을 만든다.
 
 이 설정은 로그인한 Mac에서 동작한다. [Apple 문서](https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/ScheduledJobs.html)에 따라 예정 시각에 잠자기 상태였다면 깨어날 때 실행되며, 전원이 꺼져 있으면 실행하지 못한다. 보조금24·기준금리·공고 원문 재분석·PostgreSQL 적재는 아직 연결하지 않았다.
 
