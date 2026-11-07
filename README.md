@@ -44,7 +44,9 @@ B와 C는 함께 받을 수 있다고 가정하면, 단독 금액이 가장 큰 
 
 현재 웹에는 **시작·13단계 조건 입력·분석 진행/오류·조합 결과 화면**과 조건 기억하기·삭제·결과 이미지 저장이 있다. 입력값과 마지막 결과는 탭 안에서 새로고침 후 복원하며, 조건을 바꾸면 이전 결과를 지운다. FastAPI는 생존 확인·공통 오류와 가상 정책 추천 API를 제공하고, [F13 기본 문구·선택적 로컬 E4B 설명](backend/src/benefitfinder/api/README.md#f13-설명-실행)을 연결했다.
 
-별도 수동 명령으로 온통청년 목록 수집·원본 보관·버전 비교와 로컬 JSON·CSV 저장을 실행할 수 있다. 규칙 후보의 근거 검사·사람 검수·원문 변경 시 승인 해제와 [로컬 검수 파일 준비·승인·재검수 명령](backend/src/benefitfinder/jobs/README.md#로컬-규칙-검수-실행)도 제공한다. 실데이터 추천·PostgreSQL 연동·공고 원문 수집·매일 자동 갱신과 상황 변화·정책 상세 화면은 후속 구현이다. 자세한 구현 상태와 문서별 기준은 [문서 지도](docs/README.md)를 본다.
+별도 수동 명령으로 온통청년 목록 수집·원본 보관·버전 비교와 로컬 JSON·CSV 저장을 실행할 수 있다. 규칙 후보의 근거 검사·사람 검수·원문 변경 시 승인 해제와 [로컬 검수 파일 준비·승인·재검수 명령](backend/src/benefitfinder/jobs/README.md#로컬-규칙-검수-실행)도 제공한다. 실데이터 추천·수집/계산의 PostgreSQL 연동·공고 원문 수집·매일 자동 갱신과 상황 변화·정책 상세 화면은 후속 구현이다. 자세한 구현 상태와 문서별 기준은 [문서 지도](docs/README.md)를 본다.
+
+F13은 `DATABASE_URL` 설정 시 [PostgreSQL 게시 조항](backend/src/benefitfinder/infrastructure/database/README.md)을 조회한다. [실제 DB 검증·재현](backend/integration/README.md)은 가상 취업·주거 조항과 로컬 E4B를 사용하며 실제 정책 사실 검증과 구분한다.
 
 ## 로컬 실행
 

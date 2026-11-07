@@ -32,6 +32,9 @@ from benefitfinder.domains.youth.policy_evaluator import evaluate_policies
 from benefitfinder.infrastructure.example_explanation_data import recommendation_explanation_data
 from benefitfinder.infrastructure.ollama_explanations import OllamaExplanationCompletion
 from benefitfinder.infrastructure.published_clauses import InMemoryPublishedClauses
+from benefitfinder.infrastructure.database.repositories.published_clauses import (
+    PostgresPublishedClauses,
+)
 
 NOT_FOUND_MESSAGE = "요청한 리소스를 찾을 수 없습니다."
 INVALID_REQUEST_MESSAGE = "요청 값이 올바르지 않습니다."
@@ -56,6 +59,7 @@ def create_app(
     explanation_repository: PublishedClauseRepository | None = None,
     explanation_generator: ExplanationGenerator | None = None,
     explanation_timeout_seconds: float = 5,
+    explanation_database_url: str | None = None,
 ) -> FastAPI:
     """Assemble and return a new FastAPI application.
 
@@ -64,6 +68,10 @@ def create_app(
     """
     if explanation_model is not None and explanation_generator is not None:
         raise ValueError("ambiguous_explanation_generator")
+    if explanation_repository is not None and explanation_database_url is not None:
+        raise ValueError("ambiguous_explanation_repository")
+    if explanation_database_url is not None:
+        explanation_repository = PostgresPublishedClauses(explanation_database_url)
     if explanation_model is not None:
         explanation_generator = GroundedPolicyExplainer(
             OllamaExplanationCompletion(explanation_model)

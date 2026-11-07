@@ -6,6 +6,7 @@ import asyncio
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Protocol
 from urllib.parse import urlsplit
 
@@ -75,6 +76,8 @@ class PublishedClause:
     source_url: str
     topics: tuple[str, ...]
     published: bool = False
+    location: str | None = None
+    checked_at: datetime | None = None
 
 
 class PublishedClauseRepository(Protocol):
@@ -182,6 +185,17 @@ async def explain_policy(
                     or urlsplit(clause.source_url).scheme != "https"
                     or not urlsplit(clause.source_url).hostname
                     or urlsplit(clause.source_url).username is not None
+                    or (
+                        clause.location is not None
+                        and (not isinstance(clause.location, str) or not clause.location.strip())
+                    )
+                    or (
+                        clause.checked_at is not None
+                        and (
+                            not isinstance(clause.checked_at, datetime)
+                            or clause.checked_at.utcoffset() is None
+                        )
+                    )
                 ):
                     return _fallback(request, "invalid_evidence")
             if generator is None:

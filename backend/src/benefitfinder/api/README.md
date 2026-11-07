@@ -1,6 +1,6 @@
 # FastAPI HTTP API
 
-`GET /health`, 공통 오류 처리와 가상 정책을 사용하는 `POST /api/v1/recommendations`를 구현했다. 추천 응답은 3기간 × 현재가치 on/off 계산과 F13 설명을 담은 JSON이다. 실제 정책·PostgreSQL·SSE는 연결 전이다. 전체 [구현 상태](../../../../docs/README.md)를 따른다.
+`GET /health`, 공통 오류 처리와 가상 정책을 사용하는 `POST /api/v1/recommendations`를 구현했다. 추천 응답은 3기간 × 현재가치 on/off 계산과 F13 설명을 담은 JSON이다. F13 조항은 `DATABASE_URL` 설정 시 PostgreSQL에서 조회한다. 실제 정책 계산 DB·SSE는 후속이다. 전체 [구현 상태](../../../../docs/README.md)를 따른다.
 
 | 경로 | 책임 |
 |---|---|
@@ -15,6 +15,8 @@ Pydantic 모델을 DB 모델이나 순수 domain 모델로 그대로 사용하�
 정책 분석 API 구현 시 프로필을 POST 본문으로 받아 SSE `progress` 후 `result` 또는 `error` 한 번으로 종료한다. 스트림 시작 전 오류는 HTTP 상태로, 시작 후 오류는 공통 계약을 담은 `error` 이벤트로 전달한다. 요청 ID·취소·60초 타임아웃을 처리하고 프로필을 URL·로그에 남기지 않는다. 정책 상세 GET에는 공개 정보만 반환하며 개인별 진단은 현재 분석 응답을 사용한다.
 
 ## F13 설명 실행
+
+PostgreSQL 게시 조항은 [명시적 마이그레이션](../../../migrations/README.md) 후 SELECT 전용 역할의 `DATABASE_URL`을 서버에 전달한다. DB를 설정한 뒤 장애·빈 조회를 가상 메모리 근거로 대체하지 않는다. [DB 저장 계약](../infrastructure/database/README.md)과 [DB→E4B→화면 통합 검증](../../../integration/README.md)을 따른다.
 
 기본 실행은 모델 없이 `ai_generated: false`인 기본 문구를 제공한다. 로컬 Ollama에 `gemma4:e4b`가 설치돼 있으면 아래처럼 모델을 준비하고 API를 실행한다. 빈 요청으로 모델을 준비하는 방법은 [Ollama 공식 안내](https://docs.ollama.com/faq#how-can-i-preload-a-model-into-ollama-to-get-faster-response-times)를 따른다. `.env` 파일은 자동으로 읽지 않으며 환경 변수는 서버 프로세스에 전달한다.
 
@@ -35,7 +37,7 @@ curl --fail --silent --show-error http://127.0.0.1:8000/api/v1/recommendations \
   --output data/local/f13-api-verification/response.json
 ```
 
-- 각 정책의 `ai_reason`에 설명, `ai_generated`에 해당 설명의 생성 여부, `ai_sources`에 조항 원문·ID·출처·문서 버전을 담는다. 응답 최상위 `ai_generated`는 생성 설명이 하나라도 있으면 true다. 이전 응답과의 호환을 위해 정책별 새 필드는 선택 필드이며 공용 계약·웹 검증·타입을 함께 갱신했다.
+- 각 정책의 `ai_reason`에 설명, `ai_generated`에 해당 설명의 생성 여부, `ai_sources`에 조항 원문·원문 위치·출처·확인일·문서 버전을 담는다. PostgreSQL 근거의 확인일은 조항이 속한 문서의 실제 DB 값을 사용한다. 응답 최상위 `ai_generated`는 생성 설명이 하나라도 있으면 true다. 이전 응답과의 호환을 위해 정책별 새 필드는 선택 필드이며 공용 계약·웹 검증·타입을 함께 갱신했다.
 - [결과 화면](../../../../apps/web/README.md#f13-결과-설명과-원문-근거)은 정책별 설명과 AI/기본 안내를 표시하고, 원문 근거를 펼쳐 인용·버전·확인일·링크를 보여준다. 실패·시간 초과의 빈 `ai_sources`에는 근거 펼침을 만들지 않는다.
 - 정책당 조회·생성은 최대 5초다. 모델이 아직 준비되지 않았거나 호출·검증·검색이 실패하면 기본 문구로 돌아가고 근거 목록은 비운다. 설명 실패는 계산 성공을 실패로 바꾸지 않으며 HTTP 200과 기존 금액·판정을 유지한다. 계산 자체의 오류를 설명 실패로 처리하지 않는다.
 - 같은 정책의 신청 안내는 한 요청에서만 재사용한다. 기간/PV마다 금액 문장을 새로 만들며, 사용자 프로필 전체·소득/재산·특수 조건·부모님 정보는 모델에 보내지 않는다.
