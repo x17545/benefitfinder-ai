@@ -8,6 +8,8 @@ Run from the repository root with:
 
 from __future__ import annotations
 
+import os
+
 from benefitfinder.bootstrap import create_app
 
-app = create_app()
+app = create_app(explanation_model=os.environ.get("F13_OLLAMA_MODEL") or None)

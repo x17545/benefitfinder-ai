@@ -8,6 +8,7 @@ from typing import Any
 from benefitfinder.application.response_mapper import (
     build_recommendation_response,
 )
+from benefitfinder.application.recommendation_explanations import RecommendationExplainer
 
 
 def get_recommendation_service(
@@ -17,6 +18,11 @@ def get_recommendation_service(
     return request.app.state.recommendation_service
 
 
+def get_recommendation_explainer(request: Request) -> RecommendationExplainer:
+    """Return the F13 service assembled by bootstrap, without constructing an adapter."""
+    return request.app.state.recommendation_explainer
+
+
 router = APIRouter(
     prefix="/api/v1",
     tags=["recommendations"],
@@ -24,10 +30,11 @@ router = APIRouter(
 
 
 @router.post("/recommendations")
-def create_recommendations(
+async def create_recommendations(
     request: RecommendationRequest,
     recommendation_service: Callable[..., dict[str, Any]] = Depends(get_recommendation_service),
-):
+    recommendation_explainer: RecommendationExplainer = Depends(get_recommendation_explainer),
+) -> dict[str, Any]:
     """가상 MVP 정책 추천 결과를 반환한다."""
 
     if request.domain != "youth":
@@ -49,4 +56,4 @@ def create_recommendations(
         annual_rate=annual_rate,
     )
 
-    return response
+    return await recommendation_explainer.enrich(response)

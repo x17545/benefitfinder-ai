@@ -223,6 +223,43 @@ class ContractTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             validator.validate(bad)
 
+    def test_policy_ai_fields_require_explanation_and_located_sources(self) -> None:
+        def policy_of(body: dict) -> dict:
+            return body["results"]["1y"]["pv_off"]["portfolios"][0]["policies"][0]
+
+        response = self.fixture("recommendation-response.json")
+        policy = policy_of(response)
+        policy.update({
+            "ai_generated": True,
+            "ai_reason": "[가상] 안내된 서류를 준비해요.",
+            "ai_sources": [{
+                "quote": "[가상] 신청 서류를 제출합니다.",
+                "location": "virtual-application",
+                "source": copy.deepcopy(policy["source"]),
+            }],
+        })
+        response["ai_generated"] = True
+        validator = self.validator("recommendation-response.schema.json")
+        validator.validate(response)
+        invalid = []
+        for field, value in (("ai_reason", None), ("ai_reason", ""), ("ai_sources", [])):
+            case = copy.deepcopy(response)
+            policy_of(case)[field] = value
+            invalid.append(case)
+        no_location = copy.deepcopy(response)
+        del policy_of(no_location)["ai_sources"][0]["location"]
+        invalid.append(no_location)
+        template_with_sources = copy.deepcopy(response)
+        policy_of(template_with_sources)["ai_generated"] = False
+        invalid.append(template_with_sources)
+        for case in invalid:
+            with self.subTest(case=policy_of(case)):
+                with self.assertRaises(ValidationError):
+                    validator.validate(case)
+        policy["ai_generated"] = False
+        policy["ai_sources"] = []
+        validator.validate(response)
+
     def test_portfolio_combination_fixture_shape(self):
         response = self.fixture("recommendation-response.json")
         self.assertEqual(response["view"], "portfolio")

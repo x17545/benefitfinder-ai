@@ -78,7 +78,7 @@ export function PolicyCard({ policy, info, aiGenerated }: PolicyCardProps): JSX.
 
         {policy.ai_reason !== null && policy.ai_reason !== undefined && policy.ai_reason !== '' ? (
           <span className="s3-policy__reason">
-            {aiGenerated ? <span className="s3-ai">AI</span> : null}
+            {(policy.ai_generated ?? aiGenerated) ? <span className="s3-ai">AI</span> : null}
             {policy.ai_reason}
           </span>
         ) : null}

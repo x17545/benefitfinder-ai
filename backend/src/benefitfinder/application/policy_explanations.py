@@ -85,6 +85,8 @@ class PublishedClauseRepository(Protocol):
 
 @dataclass(frozen=True)
 class GeneratedExplanation:
+    """A number-free application sentence and its source IDs, without the code lead."""
+
     text: str
     source_ids: tuple[str, ...]
 
@@ -117,6 +119,7 @@ class PolicyExplanation:
     ai_sources: tuple[str, ...]
     evidence: tuple[PublishedClause, ...]
     fallback_reason: str | None = None
+    application_detail: str | None = None
 
 
 def explanation_lead(request: ExplanationRequest) -> str:
@@ -136,8 +139,14 @@ def explanation_lead(request: ExplanationRequest) -> str:
     return f"{request.policy_name}은 {status} {amount}."
 
 
+def explanation_text(request: ExplanationRequest, application_detail: str | None = None) -> str:
+    """Render the code lead for this amount; only the application action can be reused."""
+    detail = application_detail or "세부 자격과 신청 방법은 공식 공고에서 확인해 주세요."
+    return explanation_lead(request) + " " + detail
+
+
 def _fallback(request: ExplanationRequest, reason: str) -> PolicyExplanation:
-    text = explanation_lead(request) + " 세부 자격과 신청 방법은 공식 공고에서 확인해 주세요."
+    text = explanation_text(request)
     return PolicyExplanation(request.policy_id, text, False, (), (), reason)
 
 
@@ -191,7 +200,12 @@ async def explain_policy(
                 return _fallback(request, "invalid_generation")
             evidence = tuple(clause for clause in clauses if clause.id in generated.source_ids)
             return PolicyExplanation(
-                request.policy_id, generated.text, True, generated.source_ids, evidence
+                request.policy_id,
+                explanation_text(request, generated.text),
+                True,
+                generated.source_ids,
+                evidence,
+                application_detail=generated.text,
             )
     except TimeoutError:
         return _fallback(request, "timeout")

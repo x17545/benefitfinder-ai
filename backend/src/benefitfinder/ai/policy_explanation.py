@@ -99,11 +99,11 @@ class GroundedPolicyExplainer:
                 or not text.endswith("요.")
                 or text.count(".") != 1
                 or not all(char.isprintable() for char in text)
-                or re.search(r"\d", text.replace(request.policy_name, ""))
+                or re.search(r"\d", text)
             ):
                 raise ValueError("explanation_evidence_mismatch")
             sentences.append(text)
             if clause_id not in ids:
                 ids.append(clause_id)
         titles = ", ".join(clause_by_id[clause_id].title for clause_id in ids)
-        return GeneratedExplanation(" ".join([lead, *sentences]) + f" (근거: {titles})", tuple(ids))
+        return GeneratedExplanation(" ".join(sentences) + f" (근거: {titles})", tuple(ids))

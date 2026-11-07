@@ -53,7 +53,7 @@
     },
     "ai_generated": {
       "type": "boolean",
-      "description": "결과 설명을 생성형 AI가 작성했으면 true, 기본 근거 템플릿이면 false다."
+      "description": "응답 중 AI 생성 설명이 하나라도 있으면 true, 모두 기본 근거 템플릿이면 false다. 각 정책의 ai_generated가 해당 항목 기준이다."
     },
     "data_updated_at": {
       "type": "string",
@@ -431,10 +431,108 @@
           ],
           "description": "6장 초안 필드명을 호환을 위해 유지한 추천 이유 텍스트. 템플릿을 포함하며 생성형 AI 작성 여부는 ai_generated 플래그와 함께 해석한다. 최종 필드명은 회의에서 정리한다. 민감 특수조건/부모정보를 쓰지 않는다."
         },
+        "ai_generated": {
+          "type": "boolean",
+          "description": "이 정책 설명을 생성형 AI가 작성했으면 true, 기본 근거 템플릿이면 false다. 생략하면 이전 응답과 같이 취급하며 최상위 ai_generated로만 해석한다."
+        },
+        "ai_sources": {
+          "type": "array",
+          "maxItems": 5,
+          "items": {
+            "allOf": [
+              {
+                "$ref": "common.schema.json#/$defs/evidence"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "location": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "location"
+                ]
+              }
+            ]
+          },
+          "description": "AI 생성 설명에 사용한 게시 조항 원문 인용 최대 5개. quote=게시 조항 전체 원문, location=조항 ID(필수), source=url/checked_at/document_version. evidence 정의를 재사용하되 location을 필수로 한다(다른 evidence의 location 선택성은 유지)."
+        },
         "source": {
           "$ref": "common.schema.json#/$defs/source"
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "ai_generated": {
+                "const": true
+              }
+            },
+            "required": [
+              "ai_generated"
+            ]
+          },
+          "then": {
+            "required": [
+              "ai_reason",
+              "ai_sources"
+            ],
+            "properties": {
+              "ai_reason": {
+                "type": "string",
+                "minLength": 1
+              },
+              "ai_sources": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 5,
+                "items": {
+                  "allOf": [
+                    {
+                      "$ref": "common.schema.json#/$defs/evidence"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "location": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "required": [
+                        "location"
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "ai_generated": {
+                "const": false
+              }
+            },
+            "required": [
+              "ai_generated"
+            ]
+          },
+          "then": {
+            "properties": {
+              "ai_sources": {
+                "type": "array",
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      ]
     },
     "condition_result": {
       "type": "object",
