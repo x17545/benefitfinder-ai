@@ -3,11 +3,14 @@ import type { JSX } from 'react';
 import { navigate, paths } from '../../app/router.ts';
 import { Button } from '../../shared/ui/Button.tsx';
 import { missingSteps } from '../profile/answerRules.ts';
-import { getFlowState } from '../profile/flowStore.ts';
+import { getFlowState, updateAnswers } from '../profile/flowStore.ts';
+import { useRegionOptions } from '../profile/regionOptions.ts';
+import { isValidRegionSelection, normalizeRegionAnswers } from '../profile/regionSelection.ts';
 import { removeSavedConditions, saveConditions } from '../profile/savedConditions.ts';
 import { toRecommendationRequest } from '../profile/toRequest.ts';
 import {
   cancelAnalysis,
+  clearAnalysis,
   getAnalysisState,
   showSampleResult,
   startAnalysis,
@@ -30,9 +33,11 @@ function start(): void {
 /** L 로딩 (기획서 4.4). 상단 바와 뒤로 버튼이 없다 */
 export function LoadingScreen(): JSX.Element {
   const analysis = useAnalysis();
+  const { state: regionState, retry: retryRegions } = useRegionOptions();
 
   // 들어오면 분석을 시작하고, 나가면(뒤로 가기) 취소한다
   useEffect(() => {
+    clearAnalysis();
     const { consent, answers } = getFlowState();
     if (!consent) {
       navigate(paths.start, { replace: true });
@@ -42,11 +47,21 @@ export function LoadingScreen(): JSX.Element {
       navigate(paths.conditions(13), { replace: true });
       return;
     }
-    start();
+    if (regionState.status !== 'ready') { return; }
+    const normalized = normalizeRegionAnswers(regionState.regions, answers.sidoCode, answers.regionCode);
+    if (!isValidRegionSelection(regionState.regions, answers.sidoCode, answers.regionCode)) {
+      updateAnswers(normalized);
+      navigate(paths.conditions(2), { replace: true });
+      return;
+    }
+    if (normalized.regionLabel !== answers.regionLabel) { updateAnswers(normalized); }
+    // StrictMode의 setup-cleanup-setup에서도 첫 예약을 취소해 중복 전송을 막는다.
+    const timer = window.setTimeout(start, 0);
     return () => {
+      window.clearTimeout(timer);
       cancelAnalysis();
     };
-  }, []);
+  }, [regionState]);
 
   // 끝나면 결과로. 뒤로 가기를 누르면 로딩이 아니라 확인(13단계)으로 가도록 기록을 바꾼다
   useEffect(() => {
@@ -55,6 +70,21 @@ export function LoadingScreen(): JSX.Element {
       navigate(paths.result, { replace: true });
     }
   }, [analysis.status]);
+
+  if (regionState.status === 'error' || regionState.status === 'empty') {
+    return (
+      <div className="page-width screen">
+        <main className="l-body">
+          <h1 className="screen__title">지역을 확인하지 못했어요</h1>
+          <p className="s2-desc">{regionState.status === 'empty' ? '지역 목록이 비어 있어요.' : '지역 목록을 불러오지 못했어요.'} 다시 확인한 뒤 분석할게요.</p>
+          <div className="l-actions">
+            <Button onClick={retryRegions}>다시 시도</Button>
+            <Button variant="secondary" onClick={() => { navigate(paths.conditions(2)); }}>지역 수정</Button>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   if (analysis.status === 'failed' && analysis.reason === 'limit') {
     return (
@@ -83,7 +113,7 @@ export function LoadingScreen(): JSX.Element {
           <h1 className="screen__title">분석에 실패했어요</h1>
           <p className="s2-desc">잠시 후 다시 시도해 주세요. 고른 조건은 그대로 남아 있어요.</p>
           <div className="l-actions">
-            <Button onClick={start}>다시 시도</Button>
+            <Button onClick={retryRegions}>다시 시도</Button>
             <Button
               variant="secondary"
               onClick={() => {
