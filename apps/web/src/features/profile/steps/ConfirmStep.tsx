@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import type { JSX } from 'react';
 import { navigate, paths } from '../../../app/router.ts';
 import {
@@ -22,8 +23,11 @@ import {
 } from '../../../domains/youth/conditionOptions.ts';
 import type { Choice } from '../../../domains/youth/conditionOptions.ts';
 import { missingSteps, needsMilitary } from '../answerRules.ts';
+import { useRegionOptions } from '../regionOptions.ts';
+import { isValidRegionSelection, normalizeRegionAnswers } from '../regionSelection.ts';
+import { Button } from '../../../shared/ui/Button.tsx';
 import { ConditionStepLayout } from '../ConditionStepLayout.tsx';
-import { useFlowState } from '../flowStore.ts';
+import { updateAnswers, useFlowState } from '../flowStore.ts';
 import type { ConditionAnswers } from '../flowStore.ts';
 
 interface SummaryRow {
@@ -100,8 +104,22 @@ function buildRows(answers: ConditionAnswers): SummaryRow[] {
 /** S2-13 확인. 항목을 누르면 그 단계로 간다 */
 export function ConfirmStep(): JSX.Element {
   const { answers } = useFlowState();
-  const rows = buildRows(answers);
-  const complete = missingSteps(answers).length === 0;
+  const { state: regionState, retry } = useRegionOptions();
+  const regionOk = regionState.status === 'ready' &&
+    isValidRegionSelection(regionState.regions, answers.sidoCode, answers.regionCode);
+  const { sidoCode, regionCode, regionLabel } = answers;
+  useEffect(() => {
+    if (regionState.status !== 'ready') { return; }
+    const normalized = normalizeRegionAnswers(regionState.regions, sidoCode, regionCode);
+    if (normalized.sidoCode !== sidoCode || normalized.regionCode !== regionCode ||
+        normalized.regionLabel !== regionLabel) {
+      updateAnswers(normalized);
+    }
+  }, [regionState, sidoCode, regionCode, regionLabel]);
+  const rows = buildRows(answers).map((row) =>
+    row.step === 2 && !regionOk ? { ...row, value: null } : row,
+  );
+  const complete = missingSteps(answers).length === 0 && regionOk;
 
   return (
     <ConditionStepLayout
@@ -111,6 +129,14 @@ export function ConfirmStep(): JSX.Element {
       canNext={complete}
       nextLabel="내 조합 찾기"
     >
+      {regionState.status === 'loading' ? <p className="s2-desc">지역 목록을 확인하고 있어요</p> : null}
+      {regionState.status === 'error' || regionState.status === 'empty' ? (
+        <div className="s2-sub" role="status">
+          <p className="s2-desc">{regionState.status === 'empty' ? '등록된 지역 목록이 비어 있어요.' : '지역 목록을 불러오지 못했어요.'} 다시 확인해 주세요.</p>
+          <Button variant="secondary" onClick={retry}>다시 시도</Button>
+        </div>
+      ) : null}
+      {regionState.status === 'ready' && !regionOk ? <p className="s2-desc">지역이 변경됐어요. 지역 항목을 눌러 다시 골라 주세요.</p> : null}
       <ul className="s2-summary ui-card">
         {rows.map((row) => (
           <li key={row.label}>
