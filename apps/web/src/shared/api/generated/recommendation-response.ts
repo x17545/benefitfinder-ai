@@ -24,6 +24,19 @@ export type ResultView = {
   not_yet_reviewed?: {
     policy_id: string;
     eligibility_summary: 'met' | 'not_met' | 'needs_review';
+    /**
+     * F12 승인 preview용 실제 정책명. review_explanation이 있을 때 필수다.
+     */
+    policy_name?: string;
+    /**
+     * F12 승인 preview가 확인한 범위 메모(조합/자격/금액 확정 전). review_explanation이 있을 때 필수다.
+     */
+    review_scope?: string;
+    /**
+     * F12 승인 preview 표시. true 고정이며 수급·신청 보장이 아니다. review_explanation이 있을 때 필수다.
+     */
+    verification_only?: true;
+    review_explanation?: PortfolioPolicy1;
   }[];
   closed_now?: {
     policy_id: string;
@@ -145,6 +158,102 @@ export type PortfolioPolicy = {
       ];
   source: Source;
 } & {
+  policy_id: string;
+  amount_in_period_won?: number | null;
+  original_amount_won?: number | null;
+  amount_status?: 'verified' | 'unknown';
+  eligibility: ConditionResult[];
+  /**
+   * 6장 초안 필드명을 호환을 위해 유지한 추천 이유 텍스트. 템플릿을 포함하며 생성형 AI 작성 여부는 ai_generated 플래그와 함께 해석한다. 최종 필드명은 회의에서 정리한다. 민감 특수조건/부모정보를 쓰지 않는다.
+   */
+  ai_reason?: string | null;
+  /**
+   * 이 정책 설명을 생성형 AI가 작성했으면 true, 기본 근거 템플릿이면 false다. 생략하면 이전 응답과 같이 취급하며 최상위 ai_generated로만 해석한다.
+   */
+  ai_generated?: boolean;
+  /**
+   * AI 생성 설명에 사용한 게시 조항 원문 인용 최대 5개. quote=게시 조항 전체 원문, location=조항 ID(필수), source=url/checked_at/document_version. evidence 정의를 재사용하되 location을 필수로 한다(다른 evidence의 location 선택성은 유지).
+   *
+   * @maxItems 5
+   */
+  ai_sources?:
+    | []
+    | [
+        Evidence & {
+          location: string;
+          [k: string]: unknown;
+        }
+      ]
+    | [
+        Evidence & {
+          location: string;
+          [k: string]: unknown;
+        },
+        Evidence & {
+          location: string;
+          [k: string]: unknown;
+        }
+      ]
+    | [
+        Evidence & {
+          location: string;
+          [k: string]: unknown;
+        },
+        Evidence & {
+          location: string;
+          [k: string]: unknown;
+        },
+        Evidence & {
+          location: string;
+          [k: string]: unknown;
+        }
+      ]
+    | [
+        Evidence & {
+          location: string;
+          [k: string]: unknown;
+        },
+        Evidence & {
+          location: string;
+          [k: string]: unknown;
+        },
+        Evidence & {
+          location: string;
+          [k: string]: unknown;
+        },
+        Evidence & {
+          location: string;
+          [k: string]: unknown;
+        }
+      ]
+    | [
+        Evidence & {
+          location: string;
+          [k: string]: unknown;
+        },
+        Evidence & {
+          location: string;
+          [k: string]: unknown;
+        },
+        Evidence & {
+          location: string;
+          [k: string]: unknown;
+        },
+        Evidence & {
+          location: string;
+          [k: string]: unknown;
+        },
+        Evidence & {
+          location: string;
+          [k: string]: unknown;
+        }
+      ];
+  source: Source;
+};
+/**
+ * F12 승인 preview 설명. portfolio_policy를 재사용하며 금액 미확정(null)·자격 미확정(needs_review 또는 빈 배열)으로만 둔다. 있을 때 policy_name/review_scope/verification_only가 필수이며 policy_id 동일성은 애플리케이션 검증으로 확인한다.
+ */
+export type PortfolioPolicy1 = {
   policy_id: string;
   amount_in_period_won?: number | null;
   original_amount_won?: number | null;

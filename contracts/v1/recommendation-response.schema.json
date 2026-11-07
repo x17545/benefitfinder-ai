@@ -187,8 +187,69 @@
                   "not_met",
                   "needs_review"
                 ]
+              },
+              "policy_name": {
+                "type": "string",
+                "minLength": 1,
+                "description": "F12 승인 preview용 실제 정책명. review_explanation이 있을 때 필수다."
+              },
+              "review_scope": {
+                "type": "string",
+                "minLength": 1,
+                "description": "F12 승인 preview가 확인한 범위 메모(조합/자격/금액 확정 전). review_explanation이 있을 때 필수다."
+              },
+              "verification_only": {
+                "const": true,
+                "description": "F12 승인 preview 표시. true 고정이며 수급·신청 보장이 아니다. review_explanation이 있을 때 필수다."
+              },
+              "review_explanation": {
+                "$ref": "#/$defs/portfolio_policy",
+                "description": "F12 승인 preview 설명. portfolio_policy를 재사용하며 금액 미확정(null)·자격 미확정(needs_review 또는 빈 배열)으로만 둔다. 있을 때 policy_name/review_scope/verification_only가 필수이며 policy_id 동일성은 애플리케이션 검증으로 확인한다."
               }
-            }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "required": [
+                    "review_explanation"
+                  ]
+                },
+                "then": {
+                  "required": [
+                    "policy_name",
+                    "review_scope",
+                    "verification_only"
+                  ],
+                  "properties": {
+                    "eligibility_summary": {
+                      "const": "needs_review"
+                    },
+                    "review_explanation": {
+                      "properties": {
+                        "amount_in_period_won": {
+                          "type": "null"
+                        },
+                        "original_amount_won": {
+                          "type": "null"
+                        },
+                        "amount_status": {
+                          "const": "unknown"
+                        },
+                        "eligibility": {
+                          "items": {
+                            "properties": {
+                              "status": {
+                                "const": "needs_review"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            ]
           }
         },
         "closed_now": {
