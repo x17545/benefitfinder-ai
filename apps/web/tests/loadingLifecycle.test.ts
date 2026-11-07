@@ -20,6 +20,16 @@ vi.mock('../src/app/router.ts', async (load) => ({
   ...await load<typeof import('../src/app/router.ts')>(),
   navigate: screen.navigate,
 }));
+// 지역 조회는 별도 경계다. 결합 후에도 이 테스트는 분석 POST의 수명주기를 확인한다.
+vi.mock('../src/features/profile/regionOptions.ts', () => ({
+  useRegionOptions: () => ({
+    state: { status: 'ready', regions: [{
+      sido_code: '41', sido_name: '[가상] 경기도',
+      sigungu: [{ code: '41110', name: '수원시' }],
+    }] },
+    retry: vi.fn(),
+  }),
+}));
 
 const RESULT_KEY = 'ypm.lastResult';
 const RESPONSE_TYPES = ['application/json', 'text/event-stream'] as const;

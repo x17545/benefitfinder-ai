@@ -260,6 +260,64 @@ class ContractTests(unittest.TestCase):
         policy["ai_sources"] = []
         validator.validate(response)
 
+    def test_not_yet_reviewed_preview_is_optional_but_consistent(self) -> None:
+        def reviewed_of(body: dict) -> dict:
+            return body["results"]["1y"]["pv_off"]["not_yet_reviewed"][0]
+
+        validator = self.validator("recommendation-response.schema.json")
+        base = self.fixture("recommendation-response.json")
+        validator.validate(base)
+        self.assertNotIn("review_explanation", reviewed_of(base))
+
+        preview = copy.deepcopy(base)
+        item = reviewed_of(preview)
+        source = copy.deepcopy(preview["results"]["1y"]["pv_off"]["portfolios"][0]["policies"][0]["source"])
+        item.update({
+            "policy_name": "[가상] 검증용 미리보기",
+            "review_scope": "[가상] 게시 조항 확인, 조합·자격·금액 확정 전",
+            "verification_only": True,
+            "review_explanation": {
+                "policy_id": item["policy_id"],
+                "amount_in_period_won": None,
+                "original_amount_won": None,
+                "amount_status": "unknown",
+                "eligibility": [],
+                "ai_reason": "[가상] 확인 중인 안내입니다.",
+                "ai_generated": True,
+                "ai_sources": [{
+                    "quote": "[가상] 가상 게시 조항 원문입니다.",
+                    "location": "가상 공고: 지원 대상",
+                    "source": source,
+                }],
+                "source": source,
+            },
+        })
+        preview["ai_generated"] = True
+        validator.validate(preview)
+
+        for key in ("policy_name", "review_scope", "verification_only"):
+            with self.subTest(missing=key):
+                bad = copy.deepcopy(preview)
+                del reviewed_of(bad)[key]
+                with self.assertRaises(ValidationError):
+                    validator.validate(bad)
+        bad = copy.deepcopy(preview)
+        reviewed_of(bad)["verification_only"] = False
+        with self.assertRaises(ValidationError):
+            validator.validate(bad)
+
+        # ID equality is checked by the web runtime; amounts/status by the actual JSON Schema.
+        for field in ("amount_in_period_won", "original_amount_won"):
+            with self.subTest(field=field):
+                bad = copy.deepcopy(preview)
+                reviewed_of(bad)["review_explanation"][field] = 1000000
+                with self.assertRaises(ValidationError):
+                    validator.validate(bad)
+        bad = copy.deepcopy(preview)
+        reviewed_of(bad)["review_explanation"]["amount_status"] = "verified"
+        with self.assertRaises(ValidationError):
+            validator.validate(bad)
+
     def test_portfolio_combination_fixture_shape(self):
         response = self.fixture("recommendation-response.json")
         self.assertEqual(response["view"], "portfolio")

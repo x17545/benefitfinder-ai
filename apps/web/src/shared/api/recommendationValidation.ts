@@ -79,8 +79,58 @@ function isNotEligible(value: unknown): boolean {
   return isRecord(value) && isNonEmptyString(value.policy_id) && arrayOf(value.failed, isNonEmptyString, 1);
 }
 
+/** F12 preview 일관성: ID 동일·확정 금액 없음·자격 미확정만 허용한다. */
+function isReviewExplanationConsistent(outer: Record<string, unknown>, inner: unknown): boolean {
+  if (!isPolicy(inner)) {
+    return false;
+  }
+  const detail = inner as Record<string, unknown>;
+  if (detail.policy_id !== outer.policy_id) {
+    return false;
+  }
+  const amount = detail.amount_in_period_won;
+  const original = detail.original_amount_won;
+  if (typeof amount === 'number' || typeof original === 'number') {
+    return false;
+  }
+  if (detail.amount_status === 'verified') {
+    return false;
+  }
+  const eligibility = detail.eligibility;
+  if (!Array.isArray(eligibility)) {
+    return false;
+  }
+  for (const condition of eligibility) {
+    if (!isRecord(condition) || condition.status !== 'needs_review') {
+      return false;
+    }
+  }
+  if (outer.eligibility_summary !== 'needs_review') {
+    return false;
+  }
+  return true;
+}
+
 function isNotReviewed(value: unknown): boolean {
-  return isRecord(value) && isNonEmptyString(value.policy_id) && isEligibilityStatus(value.eligibility_summary);
+  if (!isRecord(value) || !isNonEmptyString(value.policy_id) || !isEligibilityStatus(value.eligibility_summary)) {
+    return false;
+  }
+  if (!optional(value.policy_name, isNonEmptyString)) {
+    return false;
+  }
+  if (!optional(value.review_scope, isNonEmptyString)) {
+    return false;
+  }
+  if (!optional(value.verification_only, (item) => item === true)) {
+    return false;
+  }
+  if (value.review_explanation === undefined) {
+    return true;
+  }
+  if (!isNonEmptyString(value.policy_name) || !isNonEmptyString(value.review_scope) || value.verification_only !== true) {
+    return false;
+  }
+  return isReviewExplanationConsistent(value, value.review_explanation);
 }
 
 function isClosed(value: unknown): boolean {
