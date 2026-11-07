@@ -136,7 +136,7 @@ DB 스키마 변경은 `backend/migrations/versions/`에 이력으로 관리한�
 |---|---|---|
 | GET | `/health` | 서버 동작 확인 (구현됨, DB 준비 확인 아님) |
 | GET | `/api/v1/meta` | 마지막 갱신·기준금리·분석 이용량 정보 |
-| GET | `/api/v1/options` | 지역 코드와 선택지·금액 구간 |
+| GET | `/api/v1/options` | 공식 법정동코드 기반 시도·자치 시군구와 선택 구간 (구현됨, 원천·갱신 기준은 [백엔드 안내](../../backend/README.md#실제-지역-선택-api)) |
 | POST | `/api/v1/recommendations` | 선택 조건으로 분석, SSE 진행·조합 결과 |
 | POST | `/api/v1/simulations` | 같은 조건과 변경 시나리오의 전후 비교 |
 | GET | `/api/v1/benefits/{benefit_id}` | 공통 혜택 상세 조회 |

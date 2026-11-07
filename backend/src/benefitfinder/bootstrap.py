@@ -17,6 +17,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from benefitfinder.api.schemas import ErrorCode, ErrorResponse
 from benefitfinder.api.v1.routers.health import router as health_router
+from benefitfinder.api.v1.routers.options import router as options_router
 from benefitfinder.api.v1.routers.recommendations import router as recommendations_router
 
 from functools import partial
@@ -25,6 +26,8 @@ from benefitfinder.application.recommendation_service import (
     recommend_mvp_all_periods,
 )
 from benefitfinder.domains.youth.policy_evaluator import evaluate_policies
+from benefitfinder.application.region_options import RegionCatalog
+from benefitfinder.infrastructure.region_codes import OfficialRegionCatalog
 
 NOT_FOUND_MESSAGE = "요청한 리소스를 찾을 수 없습니다."
 INVALID_REQUEST_MESSAGE = "요청 값이 올바르지 않습니다."
@@ -43,7 +46,7 @@ def error_body(code: ErrorCode, message: str) -> dict[str, Any]:
     return ErrorResponse(request_id=str(uuid.uuid4()), code=code, message=message).model_dump()
 
 
-def create_app() -> FastAPI:
+def create_app(*, region_catalog: RegionCatalog | None = None) -> FastAPI:
     """Assemble and return a new FastAPI application.
 
     Each call returns an independent instance; routes added to one instance
@@ -99,6 +102,9 @@ def create_app() -> FastAPI:
         evaluate_policies=evaluate_policies,
     )
 
+    app.state.region_catalog = region_catalog if region_catalog is not None else OfficialRegionCatalog()
+
     app.include_router(health_router)
+    app.include_router(options_router)
     app.include_router(recommendations_router)
     return app
