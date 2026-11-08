@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+import re
 import os
 from pathlib import Path
 
@@ -16,6 +17,8 @@ from backend.integration.f12_review.artifacts import ApprovedDocument
 from benefitfinder.application.policy_explanations import PublishedClause
 
 ROOT = Path(__file__).resolve().parents[2]
+
+_ITEM_ID_RE = re.compile(r"^(rule|eligibility|amount|timing):[1-9][0-9]*$")
 
 
 def require_local_test_database(url: str) -> str:
@@ -43,19 +46,53 @@ def migrate_preview_database(url: str) -> None:
         connection.execute((ROOT / "migrations/testing/0001_f12_review_imports.sql").read_text())
 
 
-def import_approved_documents(url: str, documents: tuple[ApprovedDocument, ...]) -> None:
+def import_approved_documents(
+    url: str, documents: tuple[ApprovedDocument, ...], *, append: bool = False
+) -> None:
     require_local_test_database(url)
     if not documents or len({(d.policy_id, d.version) for d in documents}) != len(documents):
         raise ValueError("invalid_preview_documents")
-    # No truncation, updates, approval creation, or publication. Any duplicate rolls back the batch.
+    # Only INSERT: duplicate IDs or conflicting provenance roll back the entire batch.
     with psycopg.connect(url) as connection:
         for doc in documents:
-            connection.execute(
-                """INSERT INTO public.f13_policy_documents
-                (policy_id,document_version,policy_name,category,source_url,checked_at)
-                VALUES (%s,%s,%s,%s,%s,%s)""",
-                (doc.policy_id, doc.version, doc.name, doc.category, doc.url, doc.checked_at),
-            )
+            existing = None
+            if append:
+                existing = connection.execute(
+                    """SELECT policy_name,category,source_url,checked_at,
+                              publication_status,published_at
+                       FROM public.f13_policy_documents
+                       WHERE policy_id=%s AND document_version=%s FOR UPDATE""",
+                    (doc.policy_id, doc.version),
+                ).fetchone()
+            if existing is not None:
+                if existing != (doc.name, doc.category, doc.url, doc.checked_at, "draft", None):
+                    raise ValueError("invalid_preview_append")
+                total, invalid = connection.execute(
+                    """SELECT count(*), count(*) FILTER (WHERE
+                         c.publication_status<>'draft' OR c.review_status<>'approved'
+                         OR c.published_at IS NOT NULL OR i.clause_id IS NULL
+                         OR i.raw_policy_id<>%s OR i.content_sha256<>%s)
+                       FROM public.f13_clauses c
+                       LEFT JOIN public.f13_test_review_imports i
+                         USING (policy_id,document_version,clause_id)
+                       WHERE c.policy_id=%s AND c.document_version=%s""",
+                    (doc.raw_policy_id, doc.content_sha256, doc.policy_id, doc.version),
+                ).fetchone()
+                if not total or invalid:
+                    raise ValueError("invalid_preview_append")
+                if connection.execute(
+                    """SELECT 1 FROM public.f13_clauses
+                       WHERE policy_id=%s AND document_version=%s AND clause_id=ANY(%s)""",
+                    (doc.policy_id, doc.version, [item.item_id for item in doc.items]),
+                ).fetchone():
+                    raise ValueError("invalid_preview_append")
+            else:
+                connection.execute(
+                    """INSERT INTO public.f13_policy_documents
+                    (policy_id,document_version,policy_name,category,source_url,checked_at)
+                    VALUES (%s,%s,%s,%s,%s,%s)""",
+                    (doc.policy_id, doc.version, doc.name, doc.category, doc.url, doc.checked_at),
+                )
             for item in doc.items:
                 connection.execute(
                     """INSERT INTO public.f13_clauses
@@ -113,8 +150,15 @@ class DraftEvidence:
     scope: str
 
 
-async def load_approved_draft_evidence(url: str, policy: PreviewPolicy) -> DraftEvidence:
+async def load_approved_draft_evidence(
+    url: str, policy: PreviewPolicy, item_ids: tuple[str, ...] = ()
+) -> DraftEvidence:
     require_local_test_database(url)
+    if not isinstance(item_ids, tuple) or len(item_ids) > 5 or any(
+        not isinstance(value, str) or not _ITEM_ID_RE.fullmatch(value) for value in item_ids
+    ) or len(set(item_ids)) != len(item_ids):
+        raise ValueError("invalid_preview_item_selection")
+    selected = list(item_ids) if item_ids else None
     async with await psycopg.AsyncConnection.connect(
         url, connect_timeout=2,
         options="-c default_transaction_read_only=on -c statement_timeout=1000 -c lock_timeout=500",
@@ -128,11 +172,14 @@ async def load_approved_draft_evidence(url: str, policy: PreviewPolicy) -> Draft
             WHERE c.policy_id=%s AND c.document_version=%s AND d.category=%s
               AND d.publication_status='draft' AND c.publication_status='draft'
               AND c.review_status='approved'
+              AND (%s::text[] IS NULL OR c.clause_id=ANY(%s::text[]))
             ORDER BY CASE i.item_kind WHEN 'timing' THEN 0 WHEN 'eligibility' THEN 1
                      WHEN 'rule' THEN 2 ELSE 3 END, c.clause_id LIMIT 100""",
-            (policy.policy_id, policy.version, policy.category),
+            (policy.policy_id, policy.version, policy.category, selected, selected),
         )
         rows = await cursor.fetchall()
+    if selected is not None and {r["clause_id"] for r in rows} != set(selected):
+        raise ValueError("invalid_preview_item_selection")
     clauses = tuple(PublishedClause(
         id=r["clause_id"], policy_id=r["policy_id"], document_version=r["document_version"],
         title={"timing": "승인된 지급 시점과 지급 조건", "eligibility": "승인된 자격 관련 근거",

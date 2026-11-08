@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -45,6 +46,7 @@ class ReviewDescription:
 
 async def describe_policy(
     url: str, policy: PreviewPolicy, generator: ExplanationGenerator | None, timeout_seconds: float,
+    *, item_id: str | None = None,
 ) -> ReviewDescription | None:
     """Read fresh draft evidence. Never mark it published or calculate a personal amount."""
     request = ExplanationRequest(policy.policy_id, policy.name, policy.category, policy.version, None)
@@ -65,7 +67,14 @@ async def describe_policy(
         loop = asyncio.get_running_loop()
         deadline = loop.time() + timeout_seconds
         async with asyncio.timeout(timeout_seconds):
-            evidence = await load_approved_draft_evidence(url, policy)
+            try:
+                evidence = await load_approved_draft_evidence(
+                    url, policy, **({"item_ids": (item_id,)} if item_id is not None else {})
+                )
+            except ValueError:
+                if item_id is not None:
+                    return None
+                raise
             clauses, scope = evidence.clauses, evidence.scope
             if not clauses:
                 return None
@@ -100,10 +109,17 @@ def create_preview_app(
     url: str, policies: tuple[PreviewPolicy, ...], generator: ExplanationGenerator | None,
     *, region_catalog: object | None = None, region_router: APIRouter | None = None,
     timeout_seconds: float = 5,
+    focus_items: dict[str, str] | None = None,
 ) -> FastAPI:
     require_local_test_database(url)
     if not 0 < timeout_seconds <= 5 or not policies:
         raise ValueError("invalid_review_preview_configuration")
+    focus_items = focus_items if focus_items is not None else {}
+    if not set(focus_items) <= {policy.policy_id for policy in policies} or any(
+        not isinstance(item, str) or not re.fullmatch(r"(?:rule|eligibility|amount|timing):[1-9][0-9]*", item)
+        for item in focus_items.values()
+    ):
+        raise ValueError("invalid_review_preview_focus")
     app = FastAPI(title="BenefitFinder local review verification")
     app.state.region_catalog = region_catalog
     if region_router is not None:
@@ -128,7 +144,8 @@ def create_preview_app(
         interests = request.profile.domain_data.interests if request.profile.domain_data else []
         selected = tuple(p for p in policies if p.category in (interests or []))
         explanations = await asyncio.gather(*(
-            describe_policy(url, policy, generator, timeout_seconds) for policy in selected
+            describe_policy(url, policy, generator, timeout_seconds,
+                            item_id=focus_items.get(policy.policy_id)) for policy in selected
         ))
         pending = [
             {"policy_id": policy.policy_id, "eligibility_summary": "needs_review",
@@ -163,10 +180,14 @@ def main() -> None:
     importer = actions.add_parser("import-approved")
     importer.add_argument("--document", nargs=3, action="append", required=True,
                           metavar=("CATEGORY", "NAME", "EXPORT"))
+    importer.add_argument("--append", action="store_true",
+                          help="Reuse an identical draft document; insert only new item IDs")
     server = actions.add_parser("serve")
     server.add_argument("--model", default="gemma4:e4b")
     server.add_argument("--port", type=int, default=8000)
     server.add_argument("--timeout-seconds", type=float, default=5)
+    server.add_argument("--focus-item", nargs=2, action="append", default=[],
+                        metavar=("POLICY_ID", "ITEM_ID"))
     args = parser.parse_args()
     url = os.environ.get("F13_REVIEW_TEST_DATABASE_URL", "")
     try:
@@ -177,7 +198,7 @@ def main() -> None:
         elif args.action == "import-approved":
             documents = tuple(load_approved_export(Path(path), name=name, category=category)
                               for category, name, path in args.document)
-            import_approved_documents(url, documents)
+            import_approved_documents(url, documents, append=args.append)
             print(f"승인 근거 {sum(len(d.items) for d in documents)}개를 draft로 적재했습니다.")
         else:
             # Real-region PR #19 is needed only to run the combined browser verification.
@@ -188,9 +209,12 @@ def main() -> None:
             except ImportError:
                 raise ValueError("review_preview_requires_real_region_api") from None
             catalog = load_preview_catalog(url)
+            if len({policy for policy, _ in args.focus_item}) != len(args.focus_item):
+                raise ValueError("invalid_review_preview_focus")
             generator = GroundedPolicyExplainer(OllamaExplanationCompletion(args.model), purpose="review")
             app = create_preview_app(url, catalog, generator, timeout_seconds=args.timeout_seconds,
-                                     region_catalog=OfficialRegionCatalog(), region_router=options_router)
+                                     region_catalog=OfficialRegionCatalog(), region_router=options_router,
+                                     focus_items=dict(args.focus_item))
             uvicorn.run(app, host="127.0.0.1", port=args.port, access_log=False)
     except (ValueError, OSError, psycopg.Error):
         parser.exit(1, "검증 작업 실패: f12_review_preview_failed\n")

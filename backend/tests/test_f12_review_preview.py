@@ -6,6 +6,7 @@ import hashlib
 import json
 import tempfile
 import unittest
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
@@ -164,6 +165,44 @@ class PreviewResponseTests(unittest.TestCase):
         result = self.call(None, evidence=DraftEvidence((self.clause,), "현재 가상 승인 범위"))
         self.assertEqual(result["results"]["1y"]["pv_off"]["not_yet_reviewed"][0]["review_scope"],
                          "현재 가상 승인 범위")
+
+    def test_explicit_focus_reads_only_requested_approved_item(self):
+        clause = replace(self.clause, id="eligibility:2", text="가상 주소 유지 조건을 확인합니다.")
+        generator = AsyncMock()
+        generator.generate.return_value = GeneratedExplanation("주소 조건을 확인해요.", (clause.id,))
+        app = create_preview_app(TEST_URL, (self.policy,), generator,
+                                 focus_items={self.policy.policy_id: clause.id})
+        evidence = DraftEvidence((clause,), "가상 주소 조건만 승인")
+        with patch("backend.integration.f12_review.__main__.load_approved_draft_evidence",
+                   AsyncMock(return_value=evidence)) as load:
+            with TestClient(app) as client:
+                response = client.post("/api/v1/recommendations", json=self.payload)
+        self.assertEqual(response.status_code, 200)
+        load.assert_awaited_once_with(TEST_URL, self.policy, item_ids=(clause.id,))
+        self.assertEqual(generator.generate.call_args.args[1], (clause,))
+        row = response.json()["results"]["1y"]["pv_off"]["not_yet_reviewed"][0]
+        self.assertEqual(row["review_scope"], evidence.scope)
+        self.assertEqual(row["review_explanation"]["ai_sources"][0]["quote"], clause.text)
+
+    def test_focus_configuration_rejects_unknown_policy_and_invalid_item(self):
+        for focus in ({"unknown-policy": "amount:2"}, {self.policy.policy_id: "amount:0"},
+                      {self.policy.policy_id: "anything"}):
+            with self.subTest(focus=focus), self.assertRaisesRegex(
+                ValueError, "invalid_review_preview_focus"
+            ):
+                create_preview_app(TEST_URL, (self.policy,), None, focus_items=focus)
+
+    def test_missing_focused_item_does_not_fall_back_to_unrelated_approved_scope(self):
+        generator = AsyncMock()
+        app = create_preview_app(TEST_URL, (self.policy,), generator,
+                                 focus_items={self.policy.policy_id: "amount:2"})
+        with patch("backend.integration.f12_review.__main__.load_approved_draft_evidence",
+                   AsyncMock(side_effect=ValueError("invalid_preview_item_selection"))):
+            with TestClient(app) as client:
+                response = client.post("/api/v1/recommendations", json=self.payload)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["results"]["1y"]["pv_off"]["not_yet_reviewed"], [])
+        generator.generate.assert_not_awaited()
 
 
 if __name__ == "__main__":
