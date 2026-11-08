@@ -409,6 +409,31 @@ class F12ReviewPostgresTests(unittest.TestCase):
             asyncio.run(load_approved_draft_evidence(self.url, policy, ("timing:1",)))
 
 
+    def test_same_policy_distinct_documents_preserve_and_isolate_evidence(self):
+        original = _snapshot_rows(self.url, self.doc.policy_id, self.doc.version)
+        payload = virtual_export()
+        digest = hashlib.sha256(b"fictional supplemental source").hexdigest()
+        payload["source"].update(
+            id="virtual-supplement", url="https://policy.example/supplement",
+            document_version="sha256:" + digest, content_sha256=digest,
+        )
+        evidence = payload["items"][0]["candidate"]["evidence"]
+        evidence.update(document_id="virtual-supplement", document_version="sha256:" + digest,
+                        content_sha256=digest, quote="가상 보충 문서의 별도 조건입니다.")
+        supplement = _load_payload(payload)
+        import_approved_documents(self.url, (supplement,), append=True)
+        self.assertEqual(original, _snapshot_rows(self.url, self.doc.policy_id, self.doc.version))
+        catalog = load_preview_catalog(self.url)
+        self.assertEqual({p.version for p in catalog}, {self.doc.version, supplement.version})
+        for policy in catalog:
+            loaded = asyncio.run(load_approved_draft_evidence(self.url, policy, ("timing:1",)))
+            self.assertEqual(len(loaded.clauses), 1)
+            clause = loaded.clauses[0]
+            expected = self.doc if policy.version == self.doc.version else supplement
+            self.assertEqual(clause.text, expected.items[0].quote)
+            self.assertEqual(clause.source_url, expected.url)
+            self.assertEqual(clause.document_version, expected.version)
+
     def test_append_checks_every_existing_clause_provenance(self):
         second = _load_payload(_payload_with_specs(
             self.doc.raw_policy_id, (("amount:1", "amount"),)

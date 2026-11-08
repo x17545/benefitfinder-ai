@@ -110,10 +110,26 @@ def create_preview_app(
     *, region_catalog: object | None = None, region_router: APIRouter | None = None,
     timeout_seconds: float = 5,
     focus_items: dict[str, str] | None = None,
+    focus_documents: dict[str, str] | None = None,
 ) -> FastAPI:
     require_local_test_database(url)
     if not 0 < timeout_seconds <= 5 or not policies:
         raise ValueError("invalid_review_preview_configuration")
+    focus_documents = dict(focus_documents or {})
+    versions: dict[str, set[str]] = {}
+    for policy in policies:
+        versions.setdefault(policy.policy_id, set()).add(policy.version)
+    if (
+        len({(p.policy_id, p.version) for p in policies}) != len(policies)
+        or not set(focus_documents) <= set(versions)
+        or any(version not in versions[policy_id]
+               for policy_id, version in focus_documents.items())
+        or any(len(values) > 1 and policy_id not in focus_documents
+               for policy_id, values in versions.items())
+    ):
+        raise ValueError("invalid_review_preview_document")
+    policies = tuple(p for p in policies
+                     if p.version == focus_documents.get(p.policy_id, p.version))
     focus_items = focus_items if focus_items is not None else {}
     if not set(focus_items) <= {policy.policy_id for policy in policies} or any(
         not isinstance(item, str) or not re.fullmatch(r"(?:rule|eligibility|amount|timing):[1-9][0-9]*", item)
@@ -188,6 +204,8 @@ def main() -> None:
     server.add_argument("--timeout-seconds", type=float, default=5)
     server.add_argument("--focus-item", nargs=2, action="append", default=[],
                         metavar=("POLICY_ID", "ITEM_ID"))
+    server.add_argument("--focus-document", nargs=2, action="append", default=[],
+                        metavar=("POLICY_ID", "DOCUMENT_VERSION"))
     args = parser.parse_args()
     url = os.environ.get("F13_REVIEW_TEST_DATABASE_URL", "")
     try:
@@ -211,10 +229,13 @@ def main() -> None:
             catalog = load_preview_catalog(url)
             if len({policy for policy, _ in args.focus_item}) != len(args.focus_item):
                 raise ValueError("invalid_review_preview_focus")
+            if len({policy for policy, _ in args.focus_document}) != len(args.focus_document):
+                raise ValueError("invalid_review_preview_document")
             generator = GroundedPolicyExplainer(OllamaExplanationCompletion(args.model), purpose="review")
             app = create_preview_app(url, catalog, generator, timeout_seconds=args.timeout_seconds,
                                      region_catalog=OfficialRegionCatalog(), region_router=options_router,
-                                     focus_items=dict(args.focus_item))
+                                     focus_items=dict(args.focus_item),
+                                     focus_documents=dict(args.focus_document))
             uvicorn.run(app, host="127.0.0.1", port=args.port, access_log=False)
     except (ValueError, OSError, psycopg.Error):
         parser.exit(1, "검증 작업 실패: f12_review_preview_failed\n")
