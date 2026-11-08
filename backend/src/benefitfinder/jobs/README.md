@@ -40,6 +40,49 @@ uv run --locked python -m benefitfinder.jobs rule-review refresh --snapshot data
 
 실제 자료는 Git 제외 경로에 보관하고 기존 수집 결과 `records.json`을 그대로 이 입력으로 사용하지 않는다. 공식 원문과 분류의 확인, 텍스트 추출·후보 생성은 별도 준비가 필요하다. 승인 전 최신 전체 입력으로 재검수하고, 검토 중인 JSON 안의 원문·근거 위치·미해결 사유를 함께 확인한다. 로컬 승인 기록은 검수자 인증이나 운영 게시를 대신하지 않으며 공유·게시 연결은 관련 계약과 함께 검토한다.
 
+## F12 추출 품질 평가
+
+`evaluate-f12`는 F12 로컬 v1 검수 자료와 사람이 승인한 내보내기를 **읽기 전용**으로 비교한다. 기존 추출·승인 코드를 가져오거나 실행하지 않으며 모델·네트워크·DB에 접근하지 않는다. 승인·반려·보류·게시 상태를 바꾸지 않는다. 실제 원문·기준·후보·평가 결과는 Git 제외 경로에 둔다. 공유 테스트는 가상 자료만 사용한다.
+
+평가 manifest 예제는 가상 경로다. 경로는 manifest 파일의 디렉터리를 기준으로 해석하며 절대 경로도 허용한다.
+
+```json
+{
+  "format_version": 1,
+  "cases": [{
+    "id": "virtual-employment",
+    "category": "employment",
+    "reference_dir": "gold/employment",
+    "approved_exports": ["gold/employment/approved-export.json"],
+    "candidate_dir": "candidates/employment"
+  }]
+}
+```
+
+- `reference_dir/rules-pending.json`은 공식 원문·정책·버전의 기준이다. `approved_exports`는 `f12_approved_review_export` v1이며 검수자·사유·시각을 포함한 승인 항목만 읽는다. 승인 기록의 진위·검수자 신원을 인증하는 도구는 아니므로 실제 사용자 검수 기록과 대조해 기준 파일을 선택한다. 대기/반려 파일을 정답으로 넣지 않는다.
+- `candidate_dir`에는 평가할 `rules-pending.json`, `facts-pending.json`이 필요하다. 기준과 후보를 같은 디렉터리로 지정할 수 없다. 후보 번호·순서가 달라도 같은 분야/종류와 원문 범위로 비교한다. 규칙은 상대 정책·관계 종류·방향도 맞아야 한다.
+- 승인 인용의 범위를 하나 또는 여러 유효한 후보 인용이 모두 포함하는지 검사한다. 인용 사이의 원문 공백만 빠진 경우는 허용하고, 조건·접속어·숫자 등 내용 누락은 부분/누락으로 보고한다. 금액은 연결된 후보 수치 집합도 대조한다.
+- `exceptions`는 별도 필드의 텍스트와 그 후보가 실제 인용한 원문을 함께 검사한다. 공백만 정규화하고 표현의 의미가 같은지는 추정하지 않는다. 인용에 예외가 있어도 별도 필드가 비면 누락이며, 다른 표현은 사람 검토 대상이다. 자격/금액의 조건·예외 문맥은 승인한 인용 범위의 누락으로 평가한다.
+- 후보의 인용문·위치·문서 ID/버전/해시를 원문과 대조한다. 위치는 `line N`, `lines N-M`, `PDF pN / text lines N-M`처럼 원문 텍스트의 줄 범위가 있어야 자동 검증된다. 범위 안에서도 반복 인용이 모호하면 오류로 보고한다. PDF 페이지 자체의 정확성은 텍스트 줄 검사와 별도다.
+- 서로 다른 원문 버전은 비교 불가다. 추출 실패는 `candidate_dir: null`과 `candidate_error: "context_limit"`(또는 `model_failure`, `extraction_failed`)로 명시한다. 이 경우 후보를 만들거나 누락으로 단정하지 않는다. 모든 기준 근거가 평가되지 못하면 전체 `approved_evidence_recall`은 `null`이고, 비교 가능 근거의 recall과 전체 평가 가능 비율을 각각 제공한다.
+- 검수 기준은 공고 전체 정답이 아닐 수 있다. 추가 후보/승인 범위 밖 인용은 `unscored_content`로 남기며 오답·승인으로 바꾸거나 정밀도를 추정하지 않는다. 원문 인용 일치도 정책 해석·수급 자격의 정확성을 보장하지 않는다.
+
+```sh
+uv run --locked python -m benefitfinder.jobs evaluate-f12 \
+  --manifest data/local/f12-evaluation/manifest.json \
+  --output data/local/f12-evaluation/report.json
+```
+
+기존 보고서는 덮어쓰지 않는다. 콘솔에는 집계와 고정 오류 코드만 표시하며 원문·검수자·파일 내용은 출력하지 않는다. JSON 보고서는 항목별 포함/부분/누락/비교 불가, 예외의 일치/누락/표현 변경/인용 미지원, 후보 인용 오류, 금액 수치 차이와 평가 한계를 담는다. `requires_human_review: true`, `approval_effect: none`은 항상 유지한다.
+
+종료 코드 `0`은 지정된 승인 근거 범위에서 발견 사항이 없음, `1`은 누락·예외/근거/수치 차이·비교 불가 등 발견 사항이 있는 보고서 생성 완료, `2`는 입력/파일/출력 경로 오류다. `0`은 자동 승인이나 전체 공고의 정확성을 뜻하지 않는다. 문맥 한도를 높이거나 공고를 정답 구간만 잘라 점수를 맞추지 말고 실패를 별도 기록한다.
+
+실제 자료 없이 회귀를 실행하려면:
+
+```sh
+uv run --locked python -m unittest backend.tests.test_f12_evaluation backend.tests.test_f12_evaluation_files backend.tests.test_f12_evaluation_cli -v
+```
+
 ## 자동화 연결 경계
 
 수집·갱신 작업의 실행 진입점과 실패·재실행 제어를 둔다. 수집·정제 로직은 ingestion에 위임한다. 사용자 API 요청과 긴 작업을 분리하고 스케줄러·큐 제품은 필요할 때 정한다.

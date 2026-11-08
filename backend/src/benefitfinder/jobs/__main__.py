@@ -25,6 +25,11 @@ from benefitfinder.infrastructure.local_files import (
     write_field_summary_csv,
     write_records_csv,
 )
+from benefitfinder.infrastructure.f12_evaluation_files import (
+    EvaluationFileError,
+    evaluate_manifest,
+    write_evaluation_report,
+)
 from benefitfinder.infrastructure.policy_rule_files import (
     RuleReviewFileError,
     load_rule_batch,
@@ -158,17 +163,47 @@ def _add_rule_review_commands(commands: argparse._SubParsersAction) -> None:
     show.add_argument("--snapshot", type=Path, required=True)
 
 
+def evaluate_f12_command(manifest: Path, output: Path) -> int:
+    """Write read-only evaluation results; console contains counts, never source text."""
+    try:
+        report = evaluate_manifest(manifest)
+        write_evaluation_report(output, report)
+    except EvaluationFileError as error:
+        print(f"F12 평가 실패: {error}", file=sys.stderr)
+        return 2
+    except FileExistsError:
+        print("F12 평가 실패: evaluation_output_exists", file=sys.stderr)
+        return 2
+    except OSError:
+        print("F12 평가 실패: evaluation_io_error", file=sys.stderr)
+        return 2
+    summary = report["summary"]
+    print(
+        f"승인 근거 {summary['reference_items']}건: 완전 포함 {summary['covered_items']}, "
+        f"부분 {summary['partial_items']}, 누락 {summary['missing_items']}, "
+        f"비교 불가 {summary['not_comparable_items']}"
+    )
+    print(f"예외 일치 {summary['matched_exceptions']}/{summary['reference_exceptions']}, "
+          f"원문 인용 오류 {summary['citation_errors']}건. 평가가 승인을 바꾸지 않습니다.")
+    return 1 if report["assessment"] == "findings" else 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m benefitfinder.jobs")
     commands = parser.add_subparsers(dest="command", required=True)
     collect = commands.add_parser("collect-youthcenter", help="온통청년 정책 목록 전체 수집")
     collect.add_argument("--data-dir", type=Path, default=Path("data"))
+    evaluate = commands.add_parser("evaluate-f12", help="사람 승인 근거 기준의 로컬 추출 평가")
+    evaluate.add_argument("--manifest", type=Path, required=True)
+    evaluate.add_argument("--output", type=Path, required=True)
     _add_rule_review_commands(commands)
     args = parser.parse_args(argv)
     if args.command == "collect-youthcenter":
         return collect_youthcenter_command(args.data_dir)
     if args.command == "rule-review":
         return rule_review_command(args)
+    if args.command == "evaluate-f12":
+        return evaluate_f12_command(args.manifest, args.output)
     return 2
 
 
