@@ -79,6 +79,18 @@ uv run --locked python -m backend.integration.f12_review import-approved \
 ID에만 `youth:`를 붙인다. 가상 P1/P3/P6로 치환하지 않는다. 공고 전문과 반려·대기 항목은 넣지
 않는다. 기본 `PostgresPublishedClauses` 게시 조회는 이 자료를 0건으로 조회한다.
 
+같은 원문 버전에 사람이 추가 승인한 항목을 넣을 때만 `import-approved --append`를 명시한다.
+추가 내보내기에는 **새 항목 ID만** 넣는다. 기존 문서의 이름·분류·출처·확인 시각 및 검증 출처가
+일치해야 재사용하며, 기존 항목·승인·해시는 갱신하거나 삭제하지 않는다. 중복 항목, 문서 정보나
+상태 불일치는 전체 배치를 롤백한다. 원문이 같은데 추가 적재를 위해 버전을 임의로 올리지 않는다.
+기본 import의 중복 거부 동작은 유지한다. 기존 승인 자료가 있는 DB에서 migrate나 가상 seed를
+다시 실행하지 않는다.
+
+```sh
+uv run --locked python -m backend.integration.f12_review import-approved --append \
+  --document employment '가상 취업 정책' data/local/reviews/employment/new-approved-export.json
+```
+
 서버에는 별도 SELECT 전용 역할을 사용한다. 관리 역할에서 해당 역할에 public 스키마 USAGE와
 `f13_policy_documents`, `f13_clauses`, `f13_test_review_imports`의 SELECT만 부여한다.
 
@@ -88,6 +100,12 @@ uv run --locked python -m backend.integration.f12_review serve --model gemma4:e4
 # 다른 터미널
 pnpm dev:web
 ```
+
+새 승인 근거를 화면에서 개별 검증하려면 서버에 `--focus-item POLICY_ID ITEM_ID`를 지정한다.
+예: `serve --model gemma4:e4b --focus-item youth:virtual-approved eligibility:2`.
+해당 정책·버전의 지정한 미게시 승인 항목만 조회하고 그 승인 범위만 보여 준다. 항목이 없거나
+승인/미게시 상태를 벗어나면 다른 근거로 대신하지 않는다. 여러 정책은 옵션을 반복하고 한 정책에는
+하나의 항목만 지정한다. 사용자 입력이나 공개 추천 API에 근거 선택 파라미터를 추가하지 않는다.
 
 13단계는 production 공식 지역 라우터/어댑터를 사용한다. 이 검증용 추천 API는 관심 분야의 실제
 정책을 `not_yet_reviewed`에 표시한다. 정책 목록은 시작할 때 DB에서 읽은 버전으로 고정하고,
