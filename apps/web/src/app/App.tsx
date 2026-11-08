@@ -4,6 +4,7 @@ import { LoadingScreen } from '../features/benefits/LoadingScreen.tsx';
 import { ResultScreen } from '../features/benefits/ResultScreen.tsx';
 import { AboutScreen } from '../features/info/AboutScreen.tsx';
 import { PrivacyScreen } from '../features/info/PrivacyScreen.tsx';
+import { PolicyDetailScreen } from '../features/policy/PolicyDetailScreen.tsx';
 import { ConditionScreen } from '../features/profile/ConditionScreen.tsx';
 import { loadSavedConditions } from '../features/profile/savedConditions.ts';
 import { StartScreen } from '../features/profile/StartScreen.tsx';
@@ -51,7 +52,7 @@ function renderRoute(route: Route): JSX.Element {
     case 'whatIf':
       return <PlaceholderScreen screenId="S4" title="상황이 바뀌면?" links={[]} />;
     case 'policy':
-      return <PlaceholderScreen screenId="S5" title="정책 상세" links={[]} />;
+      return <PolicyDetailScreen key={route.policyId} policyId={route.policyId} />;
     case 'about':
       return <AboutScreen />;
     case 'privacy':
