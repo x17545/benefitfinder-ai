@@ -3,6 +3,7 @@ import { ASSET_CHOICES, INCOME_CHOICES } from '../../../domains/youth/conditionO
 import { ConditionStepLayout } from '../ConditionStepLayout.tsx';
 import { updateAnswers, useFlowState } from '../flowStore.ts';
 import { ChipQuestion } from './ChipQuestion.tsx';
+import { PrivacyNote } from './PrivacyNote.tsx';
 
 /** S2-8 본인 소득과 재산 (둘 다 필수, 모름 가능) */
 export function IncomeStep(): JSX.Element {
@@ -32,6 +33,7 @@ export function IncomeStep(): JSX.Element {
           updateAnswers({ assetBand: value });
         }}
       />
+      <PrivacyNote>소득 · 재산은 구간으로만 받아 자격 계산에만 쓰고, 분석이 끝나면 바로 폐기해요</PrivacyNote>
     </ConditionStepLayout>
   );
 }
