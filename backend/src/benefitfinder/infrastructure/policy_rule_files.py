@@ -863,7 +863,6 @@ def load_f12_review_pair(directory: Path) -> tuple[RuleReviewSnapshot, PolicyFac
     if (
         snapshot.operation != ReviewOperation.PREPARED
         or len(snapshot.batch.documents) != 1
-        or not snapshot.reviews
         or any(review.approval is not None for review in snapshot.reviews)
     ):
         _fail_invalid()
@@ -876,7 +875,10 @@ def load_f12_review_pair(directory: Path) -> tuple[RuleReviewSnapshot, PolicyFac
             _fail_invalid()
         for citation in candidate.citations:
             _check_citation(citation, document)
-    return snapshot, _load_policy_facts(directory / _FACTS_PENDING, document)
+    facts = _load_policy_facts(directory / _FACTS_PENDING, document)
+    if not snapshot.reviews and not (facts.eligibility or facts.amounts or facts.payment_timing):
+        _fail_invalid()
+    return snapshot, facts
 
 
 def _checked_section(items: tuple[RuleCitation, ...], document: SourceDocument) -> dict[str, object]:
@@ -1083,9 +1085,10 @@ def write_f12_review_pair(
         or not isinstance(draft, PolicyFactsDraft)
         or snapshot.operation != ReviewOperation.PREPARED
         or snapshot.batch.documents != (draft.document,)
-        or not snapshot.reviews
         or any(review.approval is not None for review in snapshot.reviews)
     ):
+        _fail_invalid()
+    if not snapshot.reviews and not (draft.eligibility or draft.amounts or draft.payment_timing):
         _fail_invalid()
     if os.path.lexists(directory):
         _fail_exists()
