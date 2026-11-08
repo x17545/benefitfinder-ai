@@ -5,12 +5,21 @@ from __future__ import annotations
 import re
 from decimal import Decimal
 
+from benefitfinder.ai.policy_fact_context import (
+    INCOME,
+    amount_adjustments,
+    clause_blocks,
+    eligibility_blocks,
+    income_exceptions,
+    is_amount_adjustment,
+    is_amount_note,
+    shown_context,
+)
 from benefitfinder.ai.policy_rule_agent import Chat
 from benefitfinder.application.policy_facts import PolicyAmountCandidate, PolicyFactsDraft
 from benefitfinder.application.policy_rules import RuleCitation, RuleReviewBatch, SourceDocument
 
 # Hints locate excerpts; only the model's validated line ranges become evidence.
-_ELIGIBILITY = re.compile(r"^[^가-힣]{0,12}(?:지원\s*대상|신청\s*자격|(?:신청\s*)?지원\s*제외)")
 _AMOUNT = re.compile(r"^[^가-힣]{0,12}(?:지원\s*(?:금액|내용|규모|내역|수준)|지급\s*금액)")
 _TIMING_SECTION = re.compile(r"^[^가-힣]{0,12}(?:지급\s*(?:방법|시기|일정)|지원\s*방법)")
 _TIMING = re.compile(r"지급\s*(?:방법|시기|일)|지원\s*방법|익월|첫\s*달|둘째\s*달|매월.*지급")
@@ -103,7 +112,10 @@ def _amount_items(sections: tuple[dict[int, str], ...]) -> tuple[dict[int, str],
     for section in sections:
         item: dict[int, str] = {}
         for number, line in section.items():
-            if item and line.lstrip().startswith(("- ", "• ", "‣ ")):
+            if (
+                item and line.lstrip().startswith(("- ", "• ", "‣ "))
+                and not is_amount_note(line)
+            ):
                 items.append(item)
                 item = {}
             item[number] = line
@@ -149,6 +161,8 @@ def _select(
     chat: Chat,
     *,
     keep_context: tuple[dict[int, str], ...] = (),
+    related_context: tuple[dict[int, str], ...] = (),
+    related_when: re.Pattern[str] | None = None,
 ) -> tuple[RuleCitation, ...]:
     if not shown:
         return ()
@@ -176,6 +190,13 @@ def _select(
                 }
             )
             continue
+        # A chosen line admits only literal context already shown to the model, not new facts.
+        for section in keep_context:
+            if selected.intersection(section):
+                selected.update(section)
+        if selected and (related_when is None or any(related_when.search(shown[n]) for n in selected)):
+            for section in related_context:
+                selected.update(section)
         ranges: list[tuple[int, int]] = []
         for section in keep_context:
             if selected.intersection(section):
@@ -238,26 +259,43 @@ def extract_policy_facts(batch: RuleReviewBatch, *, chat: Chat) -> PolicyFactsDr
     ):
         raise ValueError("policy_facts_requires_official_document_in_scope")
     lines = document.text.split("\n")
+    blocks = clause_blocks(lines)
+    eligibility_context = eligibility_blocks(blocks)
+    income_context = income_exceptions(eligibility_context)
     amount_sections = _sections(lines, _AMOUNT)
+    adjustment_context = tuple(
+        block for block in amount_adjustments(blocks)
+        if not any(set(block).intersection(section) for section in amount_sections)
+    )
     timing_sections = _sections(lines, _TIMING_SECTION)
     eligibility = _select(
         document,
-        _excerpts(lines, _ELIGIBILITY, 0, 22),
+        shown_context(eligibility_context),
         "Eligibility: select actual applicant conditions (age, residence, employment, housing, "
         "income or assets) and applicable exceptions/exclusions. Include full income-band "
-        "rows where relevant, not only the headings. Skip supporting-document lists.",
+        "rows where relevant, not only the headings. Include separately located exceptions, "
+        "continuations and shutdown/closure exceptions. Skip supporting-document lists, "
+        "generic reminders and caution-only paragraphs. Preserve ambiguous source wording; "
+        "never repair OR/AND, household labels or birth years by inference.",
         chat,
+        keep_context=eligibility_context,
+        related_context=income_context,
+        related_when=INCOME,
     )
     amounts = _select(
         document,
-        {number: text for section in amount_sections for number, text in section.items()},
+        shown_context((*amount_sections, *adjustment_context)),
         "Benefit amounts: select actual payments or point amounts, not income limits, "
         "application dates or illustration-only figures. Include the main monthly amount, "
         "duration, stated cap or actual-cost limit, and any separately payable bonus with "
         "its conditions. If a bonus or cap has exclusions on continuation lines, include those "
-        "lines too. Never calculate an unstated total.",
+        "lines too. Keep lifetime caps, prior-payment deductions and separately located "
+        "benefit-offset Q&A. An amount ceiling alone is not a complete payable-amount rule. "
+        "Never calculate an unstated total.",
         chat,
-        keep_context=_amount_items(amount_sections),
+        keep_context=(*_amount_items(amount_sections), *adjustment_context),
+        related_context=adjustment_context,
+        related_when=_WON,
     )
     timing = _select(
         document,
@@ -275,7 +313,7 @@ def extract_policy_facts(batch: RuleReviewBatch, *, chat: Chat) -> PolicyFactsDr
         amounts=tuple(
             PolicyAmountCandidate(citation, values)
             for citation in amounts
-            if (values := _explicit_amounts(citation.quote))
+            if (values := _explicit_amounts(citation.quote)) or is_amount_adjustment(citation.quote)
         ),
         payment_timing=timing,
         scheduled_monthly_day=_fixed_monthly_day(timing),
