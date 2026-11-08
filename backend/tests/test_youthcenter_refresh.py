@@ -118,3 +118,35 @@ class RefreshCommandTests(TestCase):
         self.assertEqual(status["last_success"], previous)
         self.assertEqual(status["last_attempt"]["error_codes"], ["refresh_attempt_failed"])
         self.assertEqual(len(list((self.root / "runs").iterdir())), 1)
+
+    def test_status_failure_cleans_new_run_and_next_cli_run_uses_previous_records(self) -> None:
+        self.assertEqual(self._run(_page("V-A"), _page("V-B")), (0, ["1", "2"]))
+        status_path = self.root / "status.json"
+        previous_status = status_path.read_bytes()
+        previous = self._generation(self._status())
+        previous_files = {
+            p.name: (p.read_bytes(), p.stat().st_mtime_ns) for p in previous.iterdir()
+        }
+        replace_file = os.replace
+
+        def fail_status(source: Path, destination: Path) -> None:
+            if Path(destination) == status_path:
+                raise OSError("virtual status failure")
+            replace_file(source, destination)
+
+        with patch("benefitfinder.jobs.youthcenter_refresh.os.replace", side_effect=fail_status):
+            self.assertEqual(self._run(_page("V-X", total=1)), (1, ["1"]))
+        self.assertEqual(status_path.read_bytes(), previous_status)
+        self.assertEqual(set((self.root / "runs").iterdir()), {previous.parent})
+        self.assertFalse((self.root / ".refresh-lock").exists())
+        self.assertEqual(
+            {p.name: (p.read_bytes(), p.stat().st_mtime_ns) for p in previous.iterdir()},
+            previous_files,
+        )
+
+        self.assertEqual(self._run(_page("V-A", "복구한 가상 공고", total=1)), (0, ["1"]))
+        recovered = self._status()
+        self.assertEqual(recovered["last_attempt"]["changes"], {"changed": 1, "missing": 1})
+        records = json.loads((self._generation(recovered) / "records.json").read_bytes())
+        self.assertNotIn("V-X", records)
+        self.assertIsNotNone(records["V-B"]["missing_detected_at"])

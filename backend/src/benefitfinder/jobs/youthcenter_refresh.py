@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 from collections import Counter
 from collections.abc import Callable
 from datetime import datetime
@@ -132,6 +133,17 @@ def _retryable(result: CollectionResult) -> bool:
     )
 
 
+def _discard_unselected_run(root: Path, generation: Path) -> None:
+    """Remove only this attempt's generation when the current pointer rules it out."""
+    try:
+        selected, _ = _last_success(root)
+    except (OSError, RefreshError):
+        # A failed replace can leave its outcome uncertain. Preserve data in that case.
+        return
+    if selected is None or selected["run_id"] != generation.name:
+        shutil.rmtree(generation)
+
+
 def _run_locked(
     root: Path,
     build: Callable[[Path, Path | None], CollectionResult],
@@ -144,6 +156,7 @@ def _run_locked(
     changes: dict[str, int] = {}
     error_codes: list[str] = []
     complete = False
+    generation: Path | None = None
 
     for attempts in (1, 2):
         try:
@@ -152,7 +165,7 @@ def _run_locked(
                 result = build(staging, previous)
                 if result.complete:
                     run_id = uuid4().hex
-                    staging.rename(runs / run_id)
+                    generation = staging.rename(runs / run_id)
         except (OSError, ValueError, KeyError, TypeError):
             error_codes = ["refresh_attempt_failed"]
             break
@@ -172,21 +185,26 @@ def _run_locked(
         else:
             break
 
-    _write_status(
-        root / STATUS_FILE,
-        {
-            "format_version": 1,
-            "last_success": last_success,
-            "last_attempt": {
-                "status": "success" if complete else "failed",
-                "started_at": started_at,
-                "finished_at": clock().isoformat(),
-                "attempts": attempts,
-                "error_codes": error_codes,
-                "changes": changes,
+    try:
+        _write_status(
+            root / STATUS_FILE,
+            {
+                "format_version": 1,
+                "last_success": last_success,
+                "last_attempt": {
+                    "status": "success" if complete else "failed",
+                    "started_at": started_at,
+                    "finished_at": clock().isoformat(),
+                    "attempts": attempts,
+                    "error_codes": error_codes,
+                    "changes": changes,
+                },
             },
-        },
-    )
+        )
+    except OSError:
+        if generation is not None:
+            _discard_unselected_run(root, generation)
+        raise
     return complete
 
 
