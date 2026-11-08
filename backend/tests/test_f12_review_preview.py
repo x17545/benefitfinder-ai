@@ -184,6 +184,49 @@ class PreviewResponseTests(unittest.TestCase):
         self.assertEqual(row["review_scope"], evidence.scope)
         self.assertEqual(row["review_explanation"]["ai_sources"][0]["quote"], clause.text)
 
+    def test_document_selection_keeps_same_item_ids_in_distinct_sources(self):
+        supplement = replace(self.policy, version="v2", url="https://policy.example/supplement")
+        clause = replace(self.clause, document_version="v2", source_url=supplement.url)
+        generator = AsyncMock()
+        generator.generate.return_value = GeneratedExplanation("보충 조건을 확인해요.", (clause.id,))
+        app = create_preview_app(
+            TEST_URL, (self.policy, supplement), generator,
+            focus_documents={self.policy.policy_id: "v2"},
+            focus_items={self.policy.policy_id: clause.id},
+        )
+        with patch("backend.integration.f12_review.__main__.load_approved_draft_evidence",
+                   AsyncMock(return_value=DraftEvidence((clause,), "보충 문서 승인 범위"))) as load:
+            with TestClient(app) as client:
+                result = client.post("/api/v1/recommendations", json=self.payload).json()
+        load.assert_awaited_once_with(TEST_URL, supplement, item_ids=(clause.id,))
+        rows = result["results"]["1y"]["pv_off"]["not_yet_reviewed"]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["review_explanation"]["source"]["document_version"], "v2")
+        source = rows[0]["review_explanation"]["ai_sources"][0]["source"]
+        self.assertEqual(source["url"], supplement.url)
+        self.assertEqual(source["document_version"], "v2")
+        # Revocation of the selected document cannot fall back to the original notice.
+        with patch("backend.integration.f12_review.__main__.load_approved_draft_evidence",
+                   AsyncMock(side_effect=ValueError("invalid_preview_item_selection"))) as load:
+            with TestClient(app) as client:
+                result = client.post("/api/v1/recommendations", json=self.payload).json()
+        load.assert_awaited_once_with(TEST_URL, supplement, item_ids=(clause.id,))
+        self.assertEqual(result["results"]["1y"]["pv_off"]["not_yet_reviewed"], [])
+        self.assertEqual(generator.generate.await_count, 1)
+
+    def test_ambiguous_missing_or_duplicate_document_configuration_fails(self):
+        supplement = replace(self.policy, version="v2")
+        for policies, focus in (
+            ((self.policy, supplement), {}),
+            ((self.policy, supplement), {self.policy.policy_id: "v3"}),
+            ((self.policy,), {"unknown-policy": "v1"}),
+            ((self.policy, self.policy), {}),
+        ):
+            with self.subTest(focus=focus), self.assertRaisesRegex(
+                ValueError, "invalid_review_preview_document"
+            ):
+                create_preview_app(TEST_URL, policies, None, focus_documents=focus)
+
     def test_focus_configuration_rejects_unknown_policy_and_invalid_item(self):
         for focus in ({"unknown-policy": "amount:2"}, {self.policy.policy_id: "amount:0"},
                       {self.policy.policy_id: "anything"}):
