@@ -21,7 +21,7 @@ from zoneinfo import ZoneInfo
 from benefitfinder.ai.chunked_evidence import extract_chunked_evidence
 from benefitfinder.application.policy_rules import RuleReviewSnapshot
 from benefitfinder.infrastructure.chunk_e4b import LocalE4BChat
-from benefitfinder.infrastructure.chunk_evidence_files import write_chunked_run
+from benefitfinder.infrastructure.chunk_evidence_files import write_chunk_checkpoint, write_chunked_run
 from benefitfinder.infrastructure.local_files import (
     JsonFileSnapshotStore,
     JsonFileVersionStore,
@@ -169,6 +169,7 @@ def extract_chunked_command(source: Path, output: Path) -> int:
         facts, provenance = extract_chunked_evidence(
             batch, chat=LocalE4BChat(),
             progress=lambda done, total: print(f"문맥 묶음 {done}/{total} 완료", flush=True),
+            checkpoint=lambda record: write_chunk_checkpoint(output, record),
         )
         snapshot = prepare_snapshot(batch, at=datetime.now(ZoneInfo("Asia/Seoul")))
         write_chunked_run(output, snapshot, facts, provenance)

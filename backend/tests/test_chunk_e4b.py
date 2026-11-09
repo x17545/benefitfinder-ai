@@ -70,7 +70,7 @@ class LocalE4BChatTest(unittest.TestCase):
             out = io.StringIO()
             try:
                 with contextlib.redirect_stdout(out):
-                    result = chat(messages, 1, 10)
+                    result = chat(messages, tuple(range(1, 11)))
             except ValueError:
                 self.assertEqual(out.getvalue(), "")
                 raise
@@ -92,7 +92,7 @@ class LocalE4BChatTest(unittest.TestCase):
                          {"eligibility", "amount", "timing", "exceptions"})
         self.assertFalse(payload["format"]["additionalProperties"])
         for section in payload["format"]["properties"].values():
-            self.assertEqual(section["items"], {"type": "integer", "minimum": 1, "maximum": 10})
+            self.assertEqual(section["items"], {"type": "integer", "enum": list(range(1, 11))})
         self.assertIs(payload["stream"], False)
         self.assertEqual(payload["messages"], messages)
         self.assertEqual(payload["options"], {"temperature": 0, "num_ctx": 16384, "num_predict": 4096})
@@ -157,7 +157,7 @@ class LocalE4BChatTest(unittest.TestCase):
                     out = io.StringIO()
                     with contextlib.redirect_stdout(out):
                         with self.assertRaises(ValueError) as ctx:
-                            LocalE4BChat()([{"role": "user", "content": "virtual"}], 1, 10)
+                            LocalE4BChat()([{"role": "user", "content": "virtual"}], tuple(range(1, 11)))
                     self.assertEqual(str(ctx.exception), FIXED_CODE)
                     self.assertEqual(out.getvalue(), "")
                     self.assertTrue(fake.closed)
@@ -169,7 +169,7 @@ class LocalE4BChatTest(unittest.TestCase):
             out = io.StringIO()
             with contextlib.redirect_stdout(out):
                 with self.assertRaises(ValueError) as ctx:
-                    LocalE4BChat()([{"role": "user", "content": SECRET}], 1, 10)
+                    LocalE4BChat()([{"role": "user", "content": SECRET}], tuple(range(1, 11)))
             self.assertEqual(str(ctx.exception), FIXED_CODE)
             self.assertNotIn(SECRET, str(ctx.exception))
             self.assertEqual(out.getvalue(), "")

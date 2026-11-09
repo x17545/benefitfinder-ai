@@ -23,14 +23,14 @@ class LocalE4BChat:
     """루프백 Ollama에 JSON 모드로 요청해 assistant 본문을 돌려준다."""
 
     def __call__(
-        self, messages: list[dict[str, str]], first_line: int, last_line: int
+        self, messages: list[dict[str, str]], visible_lines: tuple[int, ...]
     ) -> str:
         try:
             payload = {
                 "model": _MODEL,
                 "messages": messages,
                 "think": False,
-                "format": evidence_schema(first_line, last_line),
+                "format": evidence_schema(visible_lines),
                 "stream": False,
                 "options": {
                     "temperature": 0,

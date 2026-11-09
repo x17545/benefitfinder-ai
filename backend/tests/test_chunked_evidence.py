@@ -70,7 +70,7 @@ class ChunkedEvidenceTests(TestCase):
         original = batch()
         messages = []
         progress = []
-        def chat(prompt: list[dict[str, str]], first: int, last: int) -> str:
+        def chat(prompt: list[dict[str, str]], visible: tuple[int, ...]) -> str:
             messages.append(prompt)
             data = empty()
             if len(messages) == 1:
@@ -107,7 +107,7 @@ class ChunkedEvidenceTests(TestCase):
 
     def test_invalid_range_has_one_model_repair_without_swapping_or_dropping(self) -> None:
         prompts = []
-        def chat(messages: list[dict[str, str]], first: int, last: int) -> str:
+        def chat(messages: list[dict[str, str]], visible: tuple[int, ...]) -> str:
             prompts.append(list(messages))
             result = empty()
             if len(prompts) == 1:
@@ -118,21 +118,38 @@ class ChunkedEvidenceTests(TestCase):
         facts, trace = extract_chunked_evidence(batch(), chat=chat)
         self.assertEqual(len(prompts), 4)
         self.assertEqual(prompts[1][-2]['role'], 'assistant')
-        self.assertIn('개별 줄 번호', prompts[1][-1]['content'])
+        self.assertIn('원문 줄 번호', prompts[1][-1]['content'])
         self.assertEqual(trace['chunks'][0]['attempts'], 2)
         self.assertEqual(trace['chunks'][0]['repair_reason'], 'chunk_response_invalid')
         self.assertEqual(facts['eligibility']['items'][0]['evidence']['location'], 'text lines 5-6')
         calls = []
-        def always_invalid(messages: list[dict[str, str]], first: int, last: int) -> str:
+        def always_invalid(messages: list[dict[str, str]], visible: tuple[int, ...]) -> str:
             calls.append(messages)
             return json.dumps({**empty(), 'eligibility': [[500, 1]]})
         with self.assertRaisesRegex(ValueError, '^chunk_response_invalid$'):
             extract_chunked_evidence(batch(), chat=always_invalid)
         self.assertEqual(len(calls), 2)
 
+    def test_blank_only_selection_rejected_before_checkpoint_and_overlap_union(self) -> None:
+        original = batch(TEXT.replace('신청 기준 안내', ''))
+        calls = []
+        checkpoints = []
+        def chat(messages: list[dict[str, str]], visible: tuple[int, ...]) -> str:
+            calls.append(visible)
+            self.assertNotIn(3, visible)
+            return json.dumps({**empty(), 'eligibility': [3]})
+        with self.assertRaisesRegex(ValueError, '^chunk_response_invalid$'):
+            extract_chunked_evidence(original, chat=chat, checkpoint=checkpoints.append)
+        self.assertEqual(len(calls), 2)
+        self.assertFalse(checkpoints)
+        from benefitfinder.ai.chunked_evidence import _coalesce
+        self.assertEqual(_coalesce({(5, 6), (6, 8)}, TEXT.splitlines(keepends=True)), [(5, 8)])
+        self.assertEqual(_coalesce({(5, 5), (8, 8)}, TEXT.splitlines(keepends=True)), [(5, 5), (8, 8)])
+        self.assertEqual(_coalesce({(1, 1), (3, 3)}, ['a\n', '\n', 'b']), [(1, 3)])
+
     def test_failure_on_later_chunk_is_not_partial_success(self) -> None:
         count = 0
-        def chat(_: list[dict[str, str]], first: int, last: int) -> str:
+        def chat(_: list[dict[str, str]], visible: tuple[int, ...]) -> str:
             nonlocal count
             count += 1
             if count == 2:
@@ -163,6 +180,7 @@ class ChunkedEvidenceTests(TestCase):
                 self.assertEqual(snapshot.batch.documents[0].text, TEXT)
                 self.assertFalse(snapshot.reviews)
                 self.assertTrue((root/'out/completion.json').exists())
+                self.assertEqual(len(list((root/'out/chunks').glob('*.json'))), 3)
                 before = {p: p.read_bytes() for p in root.rglob('*.json')}
                 model.reset_mock()
                 with redirect_stdout(StringIO()), redirect_stderr(StringIO()):

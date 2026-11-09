@@ -24,3 +24,10 @@ def write_chunked_run(
         'format_version': 1, 'state': 'complete', 'status': 'needs_review',
         'approval_effect': 'none',
     })
+
+
+def write_chunk_checkpoint(directory: Path, record: dict[str, object]) -> None:
+    """Preserve a validated chunk immediately; this is not a completed extraction."""
+    chunks = directory / "chunks"
+    chunks.mkdir(exist_ok=True)
+    _write(chunks / f"{record['index']:04d}.json", record)

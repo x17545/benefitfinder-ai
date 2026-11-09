@@ -54,10 +54,11 @@ def plan_source_chunks(
     return tuple(result)
 
 
-def evidence_schema(first_line: int, last_line: int) -> dict[str, object]:
-    """Constrain the model to individual, visible source line numbers."""
-    if (type(first_line) is not int or type(last_line) is not int
-            or not 1 <= first_line <= last_line):
+def evidence_schema(visible_lines: tuple[int, ...]) -> dict[str, object]:
+    """Constrain selections to actual nonblank lines; blank lines are not evidence."""
+    if (not visible_lines or len(visible_lines) > 220
+            or any(type(n) is not int or n < 1 for n in visible_lines)
+            or tuple(sorted(set(visible_lines))) != visible_lines):
         raise ValueError("chunk_input_invalid")
     return {
         "type": "object",
@@ -65,6 +66,6 @@ def evidence_schema(first_line: int, last_line: int) -> dict[str, object]:
         "additionalProperties": False,
         "properties": {kind: {
             "type": "array", "maxItems": 220,
-            "items": {"type": "integer", "minimum": first_line, "maximum": last_line},
+            "items": {"type": "integer", "enum": list(visible_lines)},
         } for kind in ("eligibility", "amount", "timing", "exceptions")},
     }
