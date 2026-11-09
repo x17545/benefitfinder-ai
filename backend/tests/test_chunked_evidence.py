@@ -95,7 +95,8 @@ class ChunkedEvidenceTests(TestCase):
             self.assertIn(item['evidence']['quote'], TEXT)
 
     def test_invalid_or_invented_range_never_produces_complete_result(self) -> None:
-        for data in ({**empty(), 'eligibility': [[True, 2]]},
+        for data in ({**empty(), 'amount': [[]]},
+                     {**empty(), 'eligibility': [[True, 2]]},
                      {**empty(), 'eligibility': [[1, 500]]},
                      {**empty(), 'eligibility': [[3, 2]]},
                      {**empty(), 'unexpected': []}):

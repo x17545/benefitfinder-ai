@@ -52,3 +52,15 @@ def plan_source_chunks(
         result.append(chosen)
         core = stop
     return tuple(result)
+
+
+EVIDENCE_SCHEMA: dict[str, object] = {
+    "type": "object",
+    "required": ["eligibility", "amount", "timing", "exceptions"],
+    "additionalProperties": False,
+    "properties": {kind: {
+        "type": "array", "maxItems": 100,
+        "items": {"type": "array", "minItems": 2, "maxItems": 2,
+                  "items": {"type": "integer", "minimum": 1}},
+    } for kind in ("eligibility", "amount", "timing", "exceptions")},
+}

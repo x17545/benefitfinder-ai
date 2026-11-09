@@ -9,6 +9,8 @@ from __future__ import annotations
 import http.client
 import json
 
+from benefitfinder.application.source_chunks import EVIDENCE_SCHEMA
+
 _HOST = "127.0.0.1"
 _PORT = 11434
 _PATH = "/api/chat"
@@ -26,11 +28,11 @@ class LocalE4BChat:
                 "model": _MODEL,
                 "messages": messages,
                 "think": False,
-                "format": "json",
+                "format": EVIDENCE_SCHEMA,
                 "stream": False,
                 "options": {
                     "temperature": 0,
-                    "num_ctx": 8192,
+                    "num_ctx": 16384,
                     "num_predict": 2048,
                 },
             }

@@ -21,7 +21,7 @@ _PROMPT = """당신은 공식 청년 취업·주거 지침의 근거 범위를 �
 목차·제목·예시만으로 정책을 추정하지 말고, 실제 조건이 있으면 표와 FAQ도 빠뜨리지 말라.
 상충이나 다른 쪽/문서 참조가 있으면 원문을 그대로 보존하고 해결했다고 판단하지 말라.
 JSON 객체만 반환하라. 정확히 eligibility, amount, timing, exceptions 네 키를 사용한다.
-값은 [[시작줄,끝줄], ...] 형태의 정수 쌍 배열이다. 해당 없으면 [].
+값은 [[시작줄,끝줄], ...] 형태의 정수 쌍 배열이다. 해당 없으면 []이고 [[]]는 금지한다.
 이미 제시된 원문 줄 번호만 사용하라. 인용문을 생성하거나 값을 추정하지 말라.
 """
 
@@ -132,7 +132,8 @@ def extract_chunked_evidence(
              "payment_timing": {"status": "extracted" if items["timing"] else "not_found",
                                 "items": items["timing"], "scheduled_monthly_day": None}}
     provenance = {"format_version": 1, "kind": "f12_chunked_evidence", "source": source,
-                  "model": "gemma4:e4b", "extraction_complete": True,
+                  "model": "gemma4:e4b", "think": False, "num_ctx": 16384,
+                  "response_format": "bounded_integer_range_schema", "extraction_complete": True,
                   "source_lines": len(lines), "chunks": trace, "exceptions": items["exceptions"],
                   "requires_human_review": True, "approval_effect": "none",
                   "limitations": ["인접 페이지 문맥을 보존하지만 먼 위치의 참조와 의미적 완전성은 사람이 확인해야 합니다.",

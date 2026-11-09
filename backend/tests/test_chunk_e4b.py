@@ -88,10 +88,16 @@ class LocalE4BChatTest(unittest.TestCase):
         payload = json.loads(bytes(fake.request_args["body"]))
         self.assertEqual(payload["model"], "gemma4:e4b")
         self.assertIs(payload["think"], False)
-        self.assertEqual(payload["format"], "json")
+        self.assertEqual(set(payload["format"]["required"]),
+                         {"eligibility", "amount", "timing", "exceptions"})
+        self.assertFalse(payload["format"]["additionalProperties"])
+        for section in payload["format"]["properties"].values():
+            self.assertEqual(section["items"]["minItems"], 2)
+            self.assertEqual(section["items"]["maxItems"], 2)
+            self.assertEqual(section["items"]["items"]["type"], "integer")
         self.assertIs(payload["stream"], False)
         self.assertEqual(payload["messages"], messages)
-        self.assertEqual(payload["options"], {"temperature": 0, "num_ctx": 8192, "num_predict": 2048})
+        self.assertEqual(payload["options"], {"temperature": 0, "num_ctx": 16384, "num_predict": 2048})
         ctor.assert_called_once_with("127.0.0.1", 11434, timeout=60)
 
     def test_construct_does_not_connect(self):
