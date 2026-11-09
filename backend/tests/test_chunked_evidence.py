@@ -94,6 +94,33 @@ class ChunkedEvidenceTests(TestCase):
         for item in facts['eligibility']['items']:
             self.assertIn(item['evidence']['quote'], TEXT)
 
+    def test_structural_context_is_distinct_from_model_and_does_not_add_amount_values(self) -> None:
+        text = ('Q1 [가상] 소득 100만원과 지원은?\n'
+                'A [가상] 지원금 10만원 지급\n'
+                '* [가상] 해당 지급의 예외\n'
+                '추가 조건을 함께 확인\n'
+                'Q2 [가상] 다른 질문\nA 별도 답변\n')
+        choices = {**empty(), 'eligibility': [2], 'amount': [2], 'exceptions': [3]}
+        facts, trace = extract_chunked_evidence(batch(text), chat=lambda *args: json.dumps(choices))
+        self.assertEqual(facts['eligibility']['items'][0]['evidence']['location'], 'text lines 1-4')
+        self.assertIn('추가 조건', trace['exceptions'][0]['evidence']['quote'])
+        self.assertNotIn('Q2', trace['exceptions'][0]['evidence']['quote'])
+        self.assertEqual(facts['benefit_amount']['items'][0]['amounts_won'], [100000])
+        self.assertEqual(trace['model_only_facts']['eligibility']['items'][0]['evidence']['location'],
+                         'text lines 2-2')
+        self.assertEqual(trace['chunks'][0]['selected']['eligibility'], ((2, 2),))
+        self.assertEqual(trace['chunks'][0]['context_added']['eligibility'], ((1, 1), (3, 4)))
+        self.assertEqual(trace['approval_effect'], 'none')
+
+    def test_unsplittable_faq_fails_before_model(self) -> None:
+        pages = ['=== PDF PAGE 1 ===\nQ1 가상 질문\nA 가상 답변\n' + '가상 본문\n' * 60]
+        for i in range(2, 5):
+            pages.append(f'=== PDF PAGE {i} ===\nQ&A\n' + '가상 계속 본문\n' * 60)
+        pages.append('=== PDF PAGE 5 ===\nQ2 다음 질문\nA 다음 답변\n')
+        with patch('builtins.print') as chat, self.assertRaisesRegex(ValueError, '^chunk_context_limit$'):
+            extract_chunked_evidence(batch(''.join(pages)), chat=chat)
+        chat.assert_not_called()
+
     def test_invalid_or_invented_range_never_produces_complete_result(self) -> None:
         for data in ({**empty(), 'amount': [[]]},
                      {**empty(), 'eligibility': [True, 2]},

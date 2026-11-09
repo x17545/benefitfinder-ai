@@ -5,6 +5,7 @@ from dataclasses import asdict
 import json
 import re
 
+from benefitfinder.ai.evidence_context import close_context, context_groups
 from benefitfinder.application.policy_rules import RuleReviewBatch, SourceDocument
 from benefitfinder.application.source_chunks import SourceChunk, plan_source_chunks
 
@@ -24,6 +25,7 @@ _PROMPT = """당신은 공식 청년 취업·주거 지침의 근거 범위를 �
 JSON 객체만 반환하라. 정확히 eligibility, amount, timing, exceptions 네 키를 사용한다.
 값은 [시작줄, 다음줄, ...]처럼 선택한 모든 줄 번호의 평평한 정수 배열이다.
 범위의 시작/끝 쌍이 아니다. 빠짐없이 각 줄 번호를 쓰고, 해당 없으면 []이다. [[]]는 금지한다.
+일부만 보이는 FAQ/각주 묶음은 참고 문맥이다. 선택 가능한 번호만 사용하라.
 이미 제시된 원문 줄 번호만 사용하라. 인용문을 생성하거나 값을 추정하지 말라.
 """
 
@@ -96,6 +98,49 @@ def _amounts(quote: str) -> list[int]:
     return sorted(result)
 
 
+def _added_ranges(
+    expanded: tuple[tuple[int, int], ...], original: tuple[tuple[int, int], ...]
+) -> tuple[tuple[int, int], ...]:
+    selected = {i for a, b in original for i in range(a, b + 1)}
+    added = sorted({i for a, b in expanded for i in range(a, b + 1)} - selected)
+    result = []
+    for i in added:
+        if result and i == result[-1][1] + 1:
+            result[-1] = (result[-1][0], i)
+        else:
+            result.append((i, i))
+    return tuple(result)
+
+
+def _materialize(
+    document: SourceDocument, selected: dict[str, set[tuple[int, int]]],
+    amount_source: set[tuple[int, int]],
+) -> tuple[dict[str, object], dict[str, list[dict[str, object]]]]:
+    lines = document.text.splitlines(keepends=True)
+    merged = {kind: _coalesce(ranges, lines) for kind, ranges in selected.items()}
+    items = {kind: [{"evidence": _evidence(document, a, b)} for a, b in ranges]
+             for kind, ranges in merged.items()}
+    # Context can mention income/assets or other amounts. Never turn these into
+    # model-selected benefit values just because we restored the complete clause.
+    source_values = {(a, b): _amounts(_evidence(document, a, b)["quote"])
+                     for a, b in amount_source}
+    amounts = [{**item, "amounts_won": sorted({v for (a, b), values in source_values.items()
+                                             if a <= end and b >= start for v in values})}
+               for item, (start, end) in zip(items['amount'], merged['amount'], strict=True)]
+    source = {"id": document.id, "url": document.source_url,
+              "document_version": document.document_version,
+              "content_sha256": document.content_sha256,
+              "collected_at": document.collected_at.isoformat()}
+    facts = {"format_version": 1, "policy_id": document.policy_id, "source": source,
+             "status": "needs_review",
+             "eligibility": {"status": "extracted" if items["eligibility"] else "not_found",
+                             "items": items["eligibility"]},
+             "benefit_amount": {"status": "extracted" if amounts else "not_found", "items": amounts},
+             "payment_timing": {"status": "extracted" if items["timing"] else "not_found",
+                                "items": items["timing"], "scheduled_monthly_day": None}}
+    return facts, items
+
+
 def extract_chunked_evidence(
     batch: RuleReviewBatch, *, chat: Chat, progress: Progress | None = None,
     checkpoint: Checkpoint | None = None
@@ -115,21 +160,33 @@ def extract_chunked_evidence(
         raise ValueError("chunk_input_invalid")
     chunks = plan_source_chunks(document.text)
     lines = document.text.splitlines(keepends=True)
-    selected: dict[str, set[tuple[int, int]]] = {k: set() for k in _KINDS}
-    trace = []
+    groups = context_groups(document.text)
+    units = sorted({close_context(((g.start, g.end),), groups)[0] for g in groups})
+    # A structural unit may only be selected where the entire unit was shown.
+    # Its complete window must exist; never silently clip a question or a note.
+    if any(not any(c.start <= a <= b <= c.end for c in chunks) for a, b in units):
+        raise ValueError("chunk_context_limit")
+    allowed = []
     for chunk in chunks:
+        partial = [(a, b) for a, b in units if not chunk.start <= a <= b <= chunk.end]
+        allowed.append(tuple(i for i in range(chunk.start, chunk.end + 1)
+                             if lines[i - 1].strip() and not any(a <= i <= b for a, b in partial)))
+    if set().union(*map(set, allowed)) != {i for i, line in enumerate(lines, 1) if line.strip()}:
+        raise ValueError("chunk_context_limit")
+    selected: dict[str, set[tuple[int, int]]] = {k: set() for k in _KINDS}
+    contextual: dict[str, set[tuple[int, int]]] = {k: set() for k in _KINDS}
+    trace = []
+    for chunk, visible_lines in zip(chunks, allowed, strict=True):
         context = "\n".join(f"{i}: {lines[i - 1].rstrip()}"
                             for i in range(chunk.start, chunk.end + 1))
-        visible_lines = tuple(i for i in range(chunk.start, chunk.end + 1)
-                              if lines[i - 1].strip())
         messages = [{"role": "system", "content": _PROMPT},
                     {"role": "user", "content": (
                         f"정책 ID: {document.policy_id}\n"
                         f"중심 범위: {chunk.core_start}-{chunk.core_end}; "
                         f"앞뒤 문맥 포함: {chunk.start}-{chunk.end}\n{context}"
                     )}]
-        response = chat(messages, visible_lines)
-        attempts = 1
+        response = chat(messages, visible_lines) if visible_lines else json.dumps({k: [] for k in _KINDS})
+        attempts = int(bool(visible_lines))
         try:
             choices = _ranges(response, chunk, visible_lines)
         except ValueError:
@@ -144,9 +201,16 @@ def extract_chunked_evidence(
             }])
             choices = _ranges(chat(messages, visible_lines), chunk, visible_lines)
             attempts = 2
+        expanded = {kind: close_context(ranges, groups) for kind, ranges in choices.items()}
+        if any(not chunk.start <= a <= b <= chunk.end
+               for ranges in expanded.values() for a, b in ranges):
+            raise ValueError("chunk_context_invalid")
         for kind, ranges in choices.items():
             selected[kind].update(ranges)
-        record = {**asdict(chunk), "selected": choices, "attempts": attempts,
+            contextual[kind].update(expanded[kind])
+        record = {**asdict(chunk), "selected": choices, "contextualized": expanded,
+                  "context_added": {k: _added_ranges(expanded[k], choices[k]) for k in _KINDS},
+                  "model_called": bool(visible_lines), "attempts": attempts,
                   "repair_reason": "chunk_response_invalid" if attempts == 2 else None,
                   "content_sha256": document.content_sha256}
         trace.append(record)
@@ -156,26 +220,16 @@ def extract_chunked_evidence(
             progress(chunk.index, len(chunks))
     # Preserve exceptions separately; never reclassify all exceptions as eligibility.
     # The model must also select each exception in its applicable fact category.
-    items = {kind: [{"evidence": _evidence(document, a, b)}
-                    for a, b in _coalesce(ranges, lines)] for kind, ranges in selected.items()}
-    amounts = [{**item, "amounts_won": _amounts(item["evidence"]["quote"])}
-               for item in items["amount"]]
-    source = {"id": document.id, "url": document.source_url,
-              "document_version": document.document_version,
-              "content_sha256": document.content_sha256,
-              "collected_at": document.collected_at.isoformat()}
-    facts = {"format_version": 1, "policy_id": document.policy_id, "source": source,
-             "status": "needs_review",
-             "eligibility": {"status": "extracted" if items["eligibility"] else "not_found",
-                             "items": items["eligibility"]},
-             "benefit_amount": {"status": "extracted" if amounts else "not_found", "items": amounts},
-             "payment_timing": {"status": "extracted" if items["timing"] else "not_found",
-                                "items": items["timing"], "scheduled_monthly_day": None}}
+    model_facts, model_items = _materialize(document, selected, selected['amount'])
+    facts, items = _materialize(document, contextual, selected['amount'])
+    source = facts['source']
     provenance = {"format_version": 1, "kind": "f12_chunked_evidence", "source": source,
                   "model": "gemma4:e4b", "think": False, "num_ctx": 16384, "num_predict": 4096,
-                  "response_format": "nonblank_source_line_schema", "aggregation": "selected_line_union", "extraction_complete": True,
+                  "response_format": "nonblank_source_line_schema", "aggregation": "selected_line_union_with_structural_context", "extraction_complete": True,
                   "source_lines": len(lines), "chunks": trace, "exceptions": items["exceptions"],
+                  "context_groups": [asdict(g) for g in groups],
+                  "model_only_facts": model_facts, "model_only_exceptions": model_items['exceptions'],
                   "requires_human_review": True, "approval_effect": "none",
-                  "limitations": ["인접 페이지 문맥을 보존하지만 먼 위치의 참조와 의미적 완전성은 사람이 확인해야 합니다.",
+                  "limitations": ["명시적 Q/A·별표 각주 구조로 문맥을 붙이며 모델 선택과 구분합니다. 의미적 완전성은 사람이 확인해야 합니다.",
                                   "명시한 단독 원화 수치만 추출하며 합계·상한·지급일을 추정하지 않습니다."]}
     return facts, provenance
