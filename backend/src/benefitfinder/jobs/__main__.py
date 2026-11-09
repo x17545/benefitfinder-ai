@@ -18,7 +18,10 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from benefitfinder.ai.chunked_evidence import extract_chunked_evidence
 from benefitfinder.application.policy_rules import RuleReviewSnapshot
+from benefitfinder.infrastructure.chunk_e4b import LocalE4BChat
+from benefitfinder.infrastructure.chunk_evidence_files import write_chunked_run
 from benefitfinder.infrastructure.local_files import (
     JsonFileSnapshotStore,
     JsonFileVersionStore,
@@ -158,15 +161,44 @@ def _add_rule_review_commands(commands: argparse._SubParsersAction) -> None:
     show.add_argument("--snapshot", type=Path, required=True)
 
 
+def extract_chunked_command(source: Path, output: Path) -> int:
+    """Run one local E4B extraction over every window; never approve or publish."""
+    try:
+        batch = load_rule_batch(source)
+        output.mkdir(parents=True, exist_ok=False)
+        facts, provenance = extract_chunked_evidence(
+            batch, chat=LocalE4BChat(),
+            progress=lambda done, total: print(f"문맥 묶음 {done}/{total} 완료", flush=True),
+        )
+        snapshot = prepare_snapshot(batch, at=datetime.now(ZoneInfo("Asia/Seoul")))
+        write_chunked_run(output, snapshot, facts, provenance)
+    except FileExistsError:
+        print("분할 추출 실패: chunk_output_exists", file=sys.stderr)
+        return 1
+    except (ValueError, OSError, RuleReviewWorkflowError, RuleReviewFileError) as error:
+        allowed = {"chunk_input_invalid", "chunk_context_limit", "chunk_response_invalid",
+                   "chunk_model_failed"}
+        code = str(error) if str(error) in allowed else "chunk_extraction_failed"
+        print(f"분할 추출 실패: {code}", file=sys.stderr)
+        return 1
+    print("분할 추출 완료: 검수 대기. 승인·DB 적재·게시 상태를 바꾸지 않습니다.")
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m benefitfinder.jobs")
     commands = parser.add_subparsers(dest="command", required=True)
     collect = commands.add_parser("collect-youthcenter", help="온통청년 정책 목록 전체 수집")
     collect.add_argument("--data-dir", type=Path, default=Path("data"))
+    chunked = commands.add_parser("extract-chunked-facts", help="앞뒤 문맥을 보존한 로컬 E4B 추출")
+    chunked.add_argument("--input", type=Path, required=True)
+    chunked.add_argument("--output-dir", type=Path, required=True)
     _add_rule_review_commands(commands)
     args = parser.parse_args(argv)
     if args.command == "collect-youthcenter":
         return collect_youthcenter_command(args.data_dir)
+    if args.command == "extract-chunked-facts":
+        return extract_chunked_command(args.input, args.output_dir)
     if args.command == "rule-review":
         return rule_review_command(args)
     return 2
