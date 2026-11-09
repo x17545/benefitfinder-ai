@@ -54,13 +54,17 @@ def plan_source_chunks(
     return tuple(result)
 
 
-EVIDENCE_SCHEMA: dict[str, object] = {
-    "type": "object",
-    "required": ["eligibility", "amount", "timing", "exceptions"],
-    "additionalProperties": False,
-    "properties": {kind: {
-        "type": "array", "maxItems": 100,
-        "items": {"type": "array", "minItems": 2, "maxItems": 2,
-                  "items": {"type": "integer", "minimum": 1}},
-    } for kind in ("eligibility", "amount", "timing", "exceptions")},
-}
+def evidence_schema(first_line: int, last_line: int) -> dict[str, object]:
+    """Constrain the model to individual, visible source line numbers."""
+    if (type(first_line) is not int or type(last_line) is not int
+            or not 1 <= first_line <= last_line):
+        raise ValueError("chunk_input_invalid")
+    return {
+        "type": "object",
+        "required": ["eligibility", "amount", "timing", "exceptions"],
+        "additionalProperties": False,
+        "properties": {kind: {
+            "type": "array", "maxItems": 220,
+            "items": {"type": "integer", "minimum": first_line, "maximum": last_line},
+        } for kind in ("eligibility", "amount", "timing", "exceptions")},
+    }

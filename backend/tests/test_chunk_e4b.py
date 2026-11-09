@@ -70,7 +70,7 @@ class LocalE4BChatTest(unittest.TestCase):
             out = io.StringIO()
             try:
                 with contextlib.redirect_stdout(out):
-                    result = chat(messages)
+                    result = chat(messages, 1, 10)
             except ValueError:
                 self.assertEqual(out.getvalue(), "")
                 raise
@@ -92,12 +92,10 @@ class LocalE4BChatTest(unittest.TestCase):
                          {"eligibility", "amount", "timing", "exceptions"})
         self.assertFalse(payload["format"]["additionalProperties"])
         for section in payload["format"]["properties"].values():
-            self.assertEqual(section["items"]["minItems"], 2)
-            self.assertEqual(section["items"]["maxItems"], 2)
-            self.assertEqual(section["items"]["items"]["type"], "integer")
+            self.assertEqual(section["items"], {"type": "integer", "minimum": 1, "maximum": 10})
         self.assertIs(payload["stream"], False)
         self.assertEqual(payload["messages"], messages)
-        self.assertEqual(payload["options"], {"temperature": 0, "num_ctx": 16384, "num_predict": 2048})
+        self.assertEqual(payload["options"], {"temperature": 0, "num_ctx": 16384, "num_predict": 4096})
         ctor.assert_called_once_with("127.0.0.1", 11434, timeout=60)
 
     def test_construct_does_not_connect(self):
@@ -159,7 +157,7 @@ class LocalE4BChatTest(unittest.TestCase):
                     out = io.StringIO()
                     with contextlib.redirect_stdout(out):
                         with self.assertRaises(ValueError) as ctx:
-                            LocalE4BChat()([{"role": "user", "content": "virtual"}])
+                            LocalE4BChat()([{"role": "user", "content": "virtual"}], 1, 10)
                     self.assertEqual(str(ctx.exception), FIXED_CODE)
                     self.assertEqual(out.getvalue(), "")
                     self.assertTrue(fake.closed)
@@ -171,7 +169,7 @@ class LocalE4BChatTest(unittest.TestCase):
             out = io.StringIO()
             with contextlib.redirect_stdout(out):
                 with self.assertRaises(ValueError) as ctx:
-                    LocalE4BChat()([{"role": "user", "content": SECRET}])
+                    LocalE4BChat()([{"role": "user", "content": SECRET}], 1, 10)
             self.assertEqual(str(ctx.exception), FIXED_CODE)
             self.assertNotIn(SECRET, str(ctx.exception))
             self.assertEqual(out.getvalue(), "")

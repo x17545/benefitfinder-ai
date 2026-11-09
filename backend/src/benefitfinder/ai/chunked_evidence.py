@@ -8,7 +8,7 @@ import re
 from benefitfinder.application.policy_rules import RuleReviewBatch, SourceDocument
 from benefitfinder.application.source_chunks import SourceChunk, plan_source_chunks
 
-Chat = Callable[[list[dict[str, str]]], str]
+Chat = Callable[[list[dict[str, str]], int, int], str]
 Progress = Callable[[int, int], None]
 _KINDS = ("eligibility", "amount", "timing", "exceptions")
 _PROMPT = """당신은 공식 청년 취업·주거 지침의 근거 범위를 선택하는 검수 보조자다.
@@ -21,7 +21,8 @@ _PROMPT = """당신은 공식 청년 취업·주거 지침의 근거 범위를 �
 목차·제목·예시만으로 정책을 추정하지 말고, 실제 조건이 있으면 표와 FAQ도 빠뜨리지 말라.
 상충이나 다른 쪽/문서 참조가 있으면 원문을 그대로 보존하고 해결했다고 판단하지 말라.
 JSON 객체만 반환하라. 정확히 eligibility, amount, timing, exceptions 네 키를 사용한다.
-값은 [[시작줄,끝줄], ...] 형태의 정수 쌍 배열이다. 해당 없으면 []이고 [[]]는 금지한다.
+값은 [시작줄, 다음줄, ...]처럼 선택한 모든 줄 번호의 평평한 정수 배열이다.
+범위의 시작/끝 쌍이 아니다. 빠짐없이 각 줄 번호를 쓰고, 해당 없으면 []이다. [[]]는 금지한다.
 이미 제시된 원문 줄 번호만 사용하라. 인용문을 생성하거나 값을 추정하지 말라.
 """
 
@@ -43,15 +44,16 @@ def _ranges(raw: str, chunk: SourceChunk) -> dict[str, tuple[tuple[int, int], ..
         result = {}
         for kind in _KINDS:
             entries = data[kind]
-            if not isinstance(entries, list) or len(entries) > 100:
+            if (not isinstance(entries, list) or len(entries) > 220
+                    or any(type(n) is not int or not chunk.start <= n <= chunk.end
+                           for n in entries)):
                 raise ValueError
             ranges = []
-            for entry in entries:
-                if (not isinstance(entry, list) or len(entry) != 2
-                        or any(type(n) is not int for n in entry)
-                        or not chunk.start <= entry[0] <= entry[1] <= chunk.end):
-                    raise ValueError
-                ranges.append(tuple(entry))
+            for number in sorted(set(entries)):
+                if ranges and number == ranges[-1][1] + 1:
+                    ranges[-1] = (ranges[-1][0], number)
+                else:
+                    ranges.append((number, number))
             result[kind] = tuple(sorted(set(ranges)))
         return result
     except (ValueError, TypeError, RecursionError):
@@ -102,16 +104,32 @@ def extract_chunked_evidence(
     for chunk in chunks:
         context = "\n".join(f"{i}: {lines[i - 1].rstrip()}"
                             for i in range(chunk.start, chunk.end + 1))
-        response = chat([{"role": "system", "content": _PROMPT},
-                         {"role": "user", "content": (
-                             f"정책 ID: {document.policy_id}\n"
-                             f"중심 범위: {chunk.core_start}-{chunk.core_end}; "
-                             f"앞뒤 문맥 포함: {chunk.start}-{chunk.end}\n{context}"
-                         )}])
-        choices = _ranges(response, chunk)
+        messages = [{"role": "system", "content": _PROMPT},
+                    {"role": "user", "content": (
+                        f"정책 ID: {document.policy_id}\n"
+                        f"중심 범위: {chunk.core_start}-{chunk.core_end}; "
+                        f"앞뒤 문맥 포함: {chunk.start}-{chunk.end}\n{context}"
+                    )}]
+        response = chat(messages, chunk.start, chunk.end)
+        attempts = 1
+        try:
+            choices = _ranges(response, chunk)
+        except ValueError:
+            # Ask the model once; never swap, clip or silently discard invalid ranges.
+            messages.extend([{"role": "assistant", "content": response}, {
+                "role": "user", "content": (
+                    f"응답의 범위/형식 검증 실패. 모든 범위는 {chunk.start} 이상 "
+                    f"{chunk.end} 이하의 개별 줄 번호여야 합니다. 범위 쌍이나 중첩 배열은 금지합니다. "
+                    "앞서 제공한 원문을 다시 확인해 네 분류 전체를 올바른 JSON으로 제출하세요. "
+                    "근거를 추정하거나 범위를 자동 교환하지 말고 원문 줄을 선택하세요."
+                ),
+            }])
+            choices = _ranges(chat(messages, chunk.start, chunk.end), chunk)
+            attempts = 2
         for kind, ranges in choices.items():
             selected[kind].update(ranges)
-        trace.append({**asdict(chunk), "selected": choices})
+        trace.append({**asdict(chunk), "selected": choices, "attempts": attempts,
+                      "repair_reason": "chunk_response_invalid" if attempts == 2 else None})
         if progress is not None:
             progress(chunk.index, len(chunks))
     # Preserve exceptions separately; never reclassify all exceptions as eligibility.
@@ -132,8 +150,8 @@ def extract_chunked_evidence(
              "payment_timing": {"status": "extracted" if items["timing"] else "not_found",
                                 "items": items["timing"], "scheduled_monthly_day": None}}
     provenance = {"format_version": 1, "kind": "f12_chunked_evidence", "source": source,
-                  "model": "gemma4:e4b", "think": False, "num_ctx": 16384,
-                  "response_format": "bounded_integer_range_schema", "extraction_complete": True,
+                  "model": "gemma4:e4b", "think": False, "num_ctx": 16384, "num_predict": 4096,
+                  "response_format": "bounded_source_line_schema", "extraction_complete": True,
                   "source_lines": len(lines), "chunks": trace, "exceptions": items["exceptions"],
                   "requires_human_review": True, "approval_effect": "none",
                   "limitations": ["인접 페이지 문맥을 보존하지만 먼 위치의 참조와 의미적 완전성은 사람이 확인해야 합니다.",

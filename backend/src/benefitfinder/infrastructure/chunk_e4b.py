@@ -9,7 +9,7 @@ from __future__ import annotations
 import http.client
 import json
 
-from benefitfinder.application.source_chunks import EVIDENCE_SCHEMA
+from benefitfinder.application.source_chunks import evidence_schema
 
 _HOST = "127.0.0.1"
 _PORT = 11434
@@ -22,18 +22,20 @@ _MAX_RESPONSE_BYTES = 1024 * 1024
 class LocalE4BChat:
     """루프백 Ollama에 JSON 모드로 요청해 assistant 본문을 돌려준다."""
 
-    def __call__(self, messages: list[dict[str, str]]) -> str:
+    def __call__(
+        self, messages: list[dict[str, str]], first_line: int, last_line: int
+    ) -> str:
         try:
             payload = {
                 "model": _MODEL,
                 "messages": messages,
                 "think": False,
-                "format": EVIDENCE_SCHEMA,
+                "format": evidence_schema(first_line, last_line),
                 "stream": False,
                 "options": {
                     "temperature": 0,
                     "num_ctx": 16384,
-                    "num_predict": 2048,
+                    "num_predict": 4096,
                 },
             }
             body = json.dumps(payload, ensure_ascii=False).encode("utf-8")

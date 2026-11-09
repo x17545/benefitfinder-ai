@@ -27,7 +27,7 @@ def batch(text: str = TEXT) -> RuleReviewBatch:
     return RuleReviewBatch((document,), (PolicyReference('virtual-policy', 'youth', ('housing',)),), ())
 
 
-def empty() -> dict[str, list[list[int]]]:
+def empty() -> dict[str, list[int]]:
     return {k: [] for k in ('eligibility', 'amount', 'timing', 'exceptions')}
 
 
@@ -70,12 +70,12 @@ class ChunkedEvidenceTests(TestCase):
         original = batch()
         messages = []
         progress = []
-        def chat(prompt: list[dict[str, str]]) -> str:
+        def chat(prompt: list[dict[str, str]], first: int, last: int) -> str:
             messages.append(prompt)
             data = empty()
             if len(messages) == 1:
-                data.update(eligibility=[[5, 6], [8, 8]], exceptions=[[8, 8]],
-                            amount=[[9, 9]], timing=[[9, 9]])
+                data.update(eligibility=[5, 6, 8], exceptions=[8],
+                            amount=[9], timing=[9])
             return json.dumps(data)
         facts, trace = extract_chunked_evidence(original, chat=chat,
                                                 progress=lambda d, n: progress.append((d, n)))
@@ -96,18 +96,43 @@ class ChunkedEvidenceTests(TestCase):
 
     def test_invalid_or_invented_range_never_produces_complete_result(self) -> None:
         for data in ({**empty(), 'amount': [[]]},
-                     {**empty(), 'eligibility': [[True, 2]]},
-                     {**empty(), 'eligibility': [[1, 500]]},
+                     {**empty(), 'eligibility': [True, 2]},
+                     {**empty(), 'eligibility': [1, 500]},
                      {**empty(), 'eligibility': [[3, 2]]},
                      {**empty(), 'unexpected': []}):
             with self.subTest(data=data), self.assertRaisesRegex(ValueError, '^chunk_response_invalid$'):
-                extract_chunked_evidence(batch(), chat=lambda _: json.dumps(data))
+                extract_chunked_evidence(batch(), chat=lambda *args: json.dumps(data))
         with self.assertRaisesRegex(ValueError, '^chunk_response_invalid$'):
-            extract_chunked_evidence(batch(), chat=lambda _: '{"eligibility":[],"eligibility":[]}')
+            extract_chunked_evidence(batch(), chat=lambda *args: '{"eligibility":[],"eligibility":[]}')
+
+    def test_invalid_range_has_one_model_repair_without_swapping_or_dropping(self) -> None:
+        prompts = []
+        def chat(messages: list[dict[str, str]], first: int, last: int) -> str:
+            prompts.append(list(messages))
+            result = empty()
+            if len(prompts) == 1:
+                result['eligibility'] = [[6, 5]]
+            elif len(prompts) == 2:
+                result['eligibility'] = [5, 6]
+            return json.dumps(result)
+        facts, trace = extract_chunked_evidence(batch(), chat=chat)
+        self.assertEqual(len(prompts), 4)
+        self.assertEqual(prompts[1][-2]['role'], 'assistant')
+        self.assertIn('개별 줄 번호', prompts[1][-1]['content'])
+        self.assertEqual(trace['chunks'][0]['attempts'], 2)
+        self.assertEqual(trace['chunks'][0]['repair_reason'], 'chunk_response_invalid')
+        self.assertEqual(facts['eligibility']['items'][0]['evidence']['location'], 'text lines 5-6')
+        calls = []
+        def always_invalid(messages: list[dict[str, str]], first: int, last: int) -> str:
+            calls.append(messages)
+            return json.dumps({**empty(), 'eligibility': [[500, 1]]})
+        with self.assertRaisesRegex(ValueError, '^chunk_response_invalid$'):
+            extract_chunked_evidence(batch(), chat=always_invalid)
+        self.assertEqual(len(calls), 2)
 
     def test_failure_on_later_chunk_is_not_partial_success(self) -> None:
         count = 0
-        def chat(_: list[dict[str, str]]) -> str:
+        def chat(_: list[dict[str, str]], first: int, last: int) -> str:
             nonlocal count
             count += 1
             if count == 2:
@@ -130,7 +155,7 @@ class ChunkedEvidenceTests(TestCase):
             write_rule_batch(source, batch())
             args = ['extract-chunked-facts', '--input', str(source), '--output-dir', str(root/'out')]
             with patch('benefitfinder.jobs.__main__.LocalE4BChat') as model:
-                model.return_value.side_effect = lambda _: json.dumps(empty())
+                model.return_value.side_effect = lambda *args: json.dumps(empty())
                 with redirect_stdout(StringIO()), redirect_stderr(StringIO()):
                     self.assertEqual(main(args), 0)
                 self.assertEqual(model.return_value.call_count, 3)
