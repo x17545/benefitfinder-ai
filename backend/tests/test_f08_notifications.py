@@ -34,6 +34,18 @@ class DiscordWebhookTests(TestCase):
         )
         connection.close.assert_called_once()
 
+    def test_rejects_blank_and_repeated_thread_ids(self) -> None:
+        for query in (
+            "thread_id=",
+            "thread_id=123&thread_id=456",
+            "thread_id=&thread_id=123",
+        ):
+            with self.subTest(query=query):
+                with self.assertRaisesRegex(
+                    DiscordWebhookError, "^discord_webhook_invalid$"
+                ):
+                    DiscordWebhook(WEBHOOK + "?" + query)
+
     def test_refuses_other_hosts_and_does_not_expose_webhook_on_delivery_failure(self) -> None:
         with self.assertRaisesRegex(DiscordWebhookError, "^discord_webhook_invalid$"):
             DiscordWebhook(WEBHOOK.replace("discord.com", "example.invalid"))

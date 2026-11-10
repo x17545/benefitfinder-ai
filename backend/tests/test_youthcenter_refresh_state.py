@@ -2,6 +2,9 @@
 
 import json
 import os
+import subprocess
+import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -14,6 +17,27 @@ from benefitfinder.jobs.youthcenter_refresh import RefreshError, run_youthcenter
 
 AT = datetime(2026, 11, 7, tzinfo=timezone.utc)
 
+_LOCK_CHILD = """\
+import sys
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+
+from benefitfinder.jobs.youthcenter_refresh import run_youthcenter_refresh
+
+root = Path(sys.argv[1])
+ready = Path(sys.argv[2])
+
+
+def build(staging, previous):
+    ready.write_text("locked", encoding="utf-8")
+    time.sleep(60)
+    raise AssertionError("child must be killed while holding the lock")
+
+
+run_youthcenter_refresh(root, build, lambda: datetime.now(timezone.utc))
+"""
+
 
 def _complete(staging: Path, previous: Path | None) -> CollectionResult:
     (staging / "example.json").write_text("{}\n", encoding="utf-8")
@@ -25,6 +49,35 @@ class RefreshStateTests(TestCase):
         temporary = TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
+
+    def _start_blocked_refresh(self) -> subprocess.Popen[str]:
+        ready = self.root / "child-locked"
+        process = subprocess.Popen(
+            [sys.executable, "-c", _LOCK_CHILD, str(self.root), str(ready)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+
+        def stop() -> None:
+            if process.poll() is None:
+                process.kill()
+            process.wait(timeout=5)
+            if process.stdout is not None:
+                process.stdout.close()
+            if process.stderr is not None:
+                process.stderr.close()
+
+        self.addCleanup(stop)
+        deadline = time.monotonic() + 10
+        while not ready.exists():
+            if process.poll() is not None:
+                stdout, stderr = process.communicate(timeout=1)
+                self.fail(f"lock child exited early: {stdout}{stderr}")
+            if time.monotonic() >= deadline:
+                self.fail("lock child did not acquire the advisory lock")
+            time.sleep(0.02)
+        return process
 
     def test_status_replace_failure_does_not_select_the_uncommitted_generation(self) -> None:
         status = self.root / "status.json"
@@ -42,7 +95,7 @@ class RefreshStateTests(TestCase):
             run_youthcenter_refresh(self.root, _complete, lambda: AT)
         self.assertEqual(status.read_bytes(), old_status)
         self.assertTrue((old_run / "example.json").is_file())
-        self.assertFalse((self.root / ".refresh-lock").exists())
+        self.assertTrue((self.root / ".refresh-lock").is_file())
         self.assertEqual(archived.read_bytes(), b"{}\n")
         self.assertEqual(set((self.root / "runs").iterdir()), {old_run, archived.parent})
 
@@ -59,7 +112,7 @@ class RefreshStateTests(TestCase):
             run_youthcenter_refresh(self.root, _complete, lambda: AT)
         self.assertFalse(status.exists())
         self.assertEqual(list((self.root / "runs").iterdir()), [])
-        self.assertFalse((self.root / ".refresh-lock").exists())
+        self.assertTrue((self.root / ".refresh-lock").is_file())
         self.assertTrue(run_youthcenter_refresh(self.root, _complete, lambda: AT))
         self.assertTrue(status.is_file())
         state = json.loads(status.read_text(encoding="utf-8"))
@@ -90,7 +143,7 @@ class RefreshStateTests(TestCase):
         new_run = self.root / "runs" / new_id
         self.assertTrue((new_run / "example.json").is_file())
         self.assertTrue((old_run / "example.json").is_file())
-        self.assertFalse((self.root / ".refresh-lock").exists())
+        self.assertTrue((self.root / ".refresh-lock").is_file())
         next_build = Mock(side_effect=_complete)
         self.assertTrue(run_youthcenter_refresh(self.root, next_build, lambda: AT))
         self.assertEqual(next_build.call_args.args[1], new_run)
@@ -119,7 +172,7 @@ class RefreshStateTests(TestCase):
         ):
             run_youthcenter_refresh(self.root, _complete, lambda: AT)
         self.assertEqual(status.read_bytes(), old_status)
-        self.assertFalse((self.root / ".refresh-lock").exists())
+        self.assertTrue((self.root / ".refresh-lock").is_file())
         runs = sorted(p.name for p in (self.root / "runs").iterdir() if p.is_dir())
         self.assertIn(old_id, runs)
         self.assertEqual(len(runs), 2)
@@ -127,10 +180,23 @@ class RefreshStateTests(TestCase):
         self.assertEqual(len(fresh), 1)
         self.assertTrue((self.root / "runs" / fresh[0] / "example.json").is_file())
 
-    def test_existing_lock_stops_before_collection(self) -> None:
-        (self.root / ".refresh-lock").mkdir()
+    def test_contended_advisory_lock_stops_before_collection(self) -> None:
+        child = self._start_blocked_refresh()
         build = Mock()
         with self.assertRaisesRegex(RefreshError, "^refresh_already_running$"):
             run_youthcenter_refresh(self.root, build, lambda: AT)
         build.assert_not_called()
         self.assertFalse((self.root / "status.json").exists())
+        self.assertTrue((self.root / ".refresh-lock").is_file())
+        self.assertIsNone(child.poll())
+
+    def test_subprocess_crash_releases_advisory_lock_for_reacquire(self) -> None:
+        child = self._start_blocked_refresh()
+        child.kill()
+        child.wait(timeout=5)
+        self.assertIsNotNone(child.returncode)
+
+        build = Mock(side_effect=_complete)
+        self.assertTrue(run_youthcenter_refresh(self.root, build, lambda: AT))
+        self.assertEqual(build.call_count, 1)
+        self.assertTrue((self.root / ".refresh-lock").is_file())

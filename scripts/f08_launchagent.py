@@ -14,12 +14,14 @@ import argparse
 import plistlib
 import shutil
 import sys
-import time
 from collections.abc import Sequence
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 LABEL = "dev.benefitfinder.f08"
 KST_GMTOFF = 32400
+SYSTEM_LOCALTIME = Path("/etc/localtime")
 RUN_HOUR = 3
 RUN_MINUTE = 0
 TIMEZONE_EXIT_CODE = 2
@@ -29,8 +31,14 @@ def default_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
 
-def current_gmtoff() -> int:
-    return time.localtime().tm_gmtoff
+def current_gmtoff(localtime: Path = SYSTEM_LOCALTIME) -> int:
+    """Read the host timezone without consulting the caller's TZ environment."""
+    with localtime.open("rb") as handle:
+        system_zone = ZoneInfo.from_file(handle, key="system-localtime")
+    offset = datetime.now(system_zone).utcoffset()
+    if offset is None:
+        raise ValueError("system timezone has no UTC offset")
+    return int(offset.total_seconds())
 
 
 def parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
@@ -88,7 +96,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not uv or not Path(uv).is_absolute():
         print("uv not found; pass --uv absolute path.", file=sys.stderr)
         return 2
-    offset = current_gmtoff()
+    try:
+        offset = current_gmtoff()
+    except (OSError, ValueError):
+        print("system timezone unavailable; need KST host.", file=sys.stderr)
+        return TIMEZONE_EXIT_CODE
     if offset != KST_GMTOFF:
         print(
             "launchd calendar uses host local timezone. "

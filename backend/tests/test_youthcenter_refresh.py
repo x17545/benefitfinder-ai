@@ -138,7 +138,7 @@ class RefreshCommandTests(TestCase):
             self.assertEqual(self._run(_page("V-X", total=1)), (1, ["1"]))
         self.assertEqual(status_path.read_bytes(), previous_status)
         self.assertEqual(set((self.root / "runs").iterdir()), {previous.parent})
-        self.assertFalse((self.root / ".refresh-lock").exists())
+        self.assertTrue((self.root / ".refresh-lock").is_file())
         self.assertEqual(
             {p.name: (p.read_bytes(), p.stat().st_mtime_ns) for p in previous.iterdir()},
             previous_files,

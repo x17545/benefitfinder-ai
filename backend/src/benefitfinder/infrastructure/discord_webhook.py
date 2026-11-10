@@ -14,7 +14,11 @@ class DiscordWebhook:
     def __init__(self, url: str) -> None:
         try:
             parsed = urlsplit(url)
-            query = parse_qs(parsed.query, strict_parsing=True)
+            query = parse_qs(
+                parsed.query,
+                strict_parsing=True,
+                keep_blank_values=True,
+            )
             valid = (
                 parsed.scheme == "https"
                 and parsed.netloc == "discord.com"

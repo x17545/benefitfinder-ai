@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import errno
+import fcntl
 import json
 import os
 import re
@@ -18,6 +20,7 @@ from benefitfinder.ingestion.collect import CollectionResult
 
 STATUS_FILE = "status.json"
 _RUNS_DIR = "runs"
+_LOCK_FILE = ".refresh-lock"
 _RETRY_DELAY_SECONDS = 5
 
 
@@ -215,12 +218,15 @@ def run_youthcenter_refresh(
 ) -> bool:
     """Publish a complete local generation by replacing only its status pointer."""
     root.mkdir(parents=True, exist_ok=True)
-    lock = root / ".refresh-lock"
+    lock = root / _LOCK_FILE
+    descriptor = os.open(lock, os.O_RDWR | os.O_CREAT, 0o600)
     try:
-        lock.mkdir()
-    except FileExistsError:
-        raise RefreshError("refresh_already_running") from None
-    try:
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError as error:
+            if error.errno in {errno.EACCES, errno.EAGAIN}:
+                raise RefreshError("refresh_already_running") from None
+            raise
         return _run_locked(root, build, clock)
     finally:
-        lock.rmdir()
+        os.close(descriptor)

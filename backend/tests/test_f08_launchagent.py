@@ -1,9 +1,12 @@
 """F08 launchd plist generator synthetic tests (no secrets, no install)."""
 
+import os
 import plistlib
 import shutil
 import subprocess
 import sys
+import time
+import zoneinfo
 from contextlib import redirect_stderr
 from io import StringIO
 from pathlib import Path
@@ -14,6 +17,16 @@ from unittest.mock import patch
 from scripts import f08_launchagent as gen
 
 FAKE_UV = "/usr/local/bin/uv"
+
+
+def _required_tzif_path(name: str) -> Path:
+    for root in zoneinfo.TZPATH:
+        candidate = Path(root) / name
+        if candidate.is_file():
+            return candidate
+    raise AssertionError(
+        f"required system TZif file is missing: {name}; TZPATH={zoneinfo.TZPATH!r}"
+    )
 
 
 class LaunchAgentTests(TestCase):
@@ -88,6 +101,20 @@ class LaunchAgentTests(TestCase):
         self.assertEqual(code, gen.TIMEZONE_EXIT_CODE)
         self.assertFalse(self.output.exists())
         self.assertIn("launchd", err.getvalue())
+
+    def test_timezone_probe_ignores_process_tz(self) -> None:
+        self.addCleanup(time.tzset)
+        cases = (
+            ("UTC", "Asia/Seoul", gen.KST_GMTOFF),
+            ("Asia/Seoul", "UTC", 0),
+        )
+        for process_tz, system_zone, expected in cases:
+            with self.subTest(process_tz=process_tz, system_zone=system_zone):
+                tzif = _required_tzif_path(system_zone)
+                with patch.dict(os.environ, {"TZ": process_tz}):
+                    time.tzset()
+                    self.assertEqual(gen.current_gmtoff(tzif), expected)
+                time.tzset()
 
     def test_generation_does_not_require_or_read_credentials(self) -> None:
         self.assertFalse(self.env.exists())
