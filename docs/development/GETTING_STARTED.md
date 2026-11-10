@@ -1,6 +1,6 @@
 # 처음 개발 시작하기
 
-모든 명령은 저장소 루트(`benefitfinder-ai/`)의 터미널에서 실행한다. 웹과 API는 DB·AI 키 없이 실행할 수 있다. 웹은 시작·조건 입력·분석·결과 화면을 제공하며, 기본 백엔드는 생존 확인 API만 제공한다. 실제 정책 추천 API·DB·데이터 Agent는 후속 구현이다.
+모든 명령은 저장소 루트(`benefitfinder-ai/`)의 터미널에서 실행한다. 웹과 API는 DB·AI 키 없이 실행할 수 있다. 웹은 시작·조건 입력·분석·결과 화면을 제공하며, 백엔드는 생존 확인과 가상 정책 추천 API를 제공한다. 실데이터 추천과 실제 DB는 후속 구현이다. F13의 기본 문구·선택적 로컬 모델 실행은 [API 안내](../../backend/src/benefitfinder/api/README.md#f13-설명-실행)를 따른다.
 
 ## 1. 도구 설치 (처음 한 번)
 
@@ -66,7 +66,7 @@ pnpm dev
 
 두 서버를 함께 실행하며 `Ctrl+C`로 종료한다. 파일 변경은 Vite·Uvicorn이 반영한다. 각각 실행하려면 터미널 두 개에서 `pnpm dev:web`과 `pnpm dev:api`를 실행한다. API만 작업할 때는 아래 명령도 같다.
 
-기본 백엔드에는 `/api/v1/options`·`/api/v1/recommendations`·정책 상세 API가 아직 없다. `pnpm dev`에서는 지역을 못 받으면 `[가상]` 목록을 표시한다. 분석 실패 화면의 [예제 결과로 보기]는 가상 계약으로 결과 화면을 확인하는 개발 전용 버튼이다. 이 흐름을 실제 정책 추천 성공으로 보고하지 않는다.
+기본 백엔드에는 가상 정책의 `/api/v1/recommendations`가 있다. `/api/v1/options`·정책 상세 API는 아직 없다. `pnpm dev`에서는 지역을 못 받으면 `[가상]` 목록을 표시한다. 분석 실패 화면의 [예제 결과로 보기]는 가상 계약으로 결과 화면을 확인하는 개발 전용 버튼이다. 가상 응답을 실제 정책 추천 성공으로 보고하지 않는다.
 
 ```sh
 uv run --locked uvicorn benefitfinder.main:app --reload --reload-dir backend/src --host 127.0.0.1 --port 8000

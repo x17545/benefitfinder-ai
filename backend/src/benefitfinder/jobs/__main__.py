@@ -10,10 +10,13 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
+import json
 import os
 import sys
 from collections import Counter
 from collections.abc import Sequence
+from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 from time import monotonic
@@ -64,6 +67,12 @@ from benefitfinder.ingestion.rule_review_workflow import (
 from benefitfinder.ingestion.youthcenter import SOURCE_NAME, YOUTHCENTER_POLICY_LIST
 from benefitfinder.jobs.f12_review_display import format_f12_review
 from benefitfinder.jobs.rule_review_example import example_rule_batch
+
+from benefitfinder.ai.policy_explanation import GroundedPolicyExplainer
+from benefitfinder.application.policy_explanations import explain_policy
+from benefitfinder.infrastructure.ollama_explanations import OllamaExplanationCompletion
+from benefitfinder.infrastructure.published_clauses import InMemoryPublishedClauses
+from benefitfinder.jobs.explanation_example import explanation_example
 
 API_KEY_ENV = "YOUTHCENTER_API_KEY"
 KST = ZoneInfo("Asia/Seoul")
@@ -341,6 +350,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     evaluate.add_argument("--manifest", type=Path, required=True)
     evaluate.add_argument("--output", type=Path, required=True)
     _add_rule_review_commands(commands)
+    explain = commands.add_parser(
+        "explain-example", help="F13 가상 게시 조항으로 설명 생성·폴백 확인"
+    )
+    explain.add_argument("--category", choices=("employment", "housing"), default="employment")
+    explain.add_argument("--model", help="로컬 Ollama 모델; 생략하면 템플릿 사용")
     args = parser.parse_args(argv)
     if args.command == "collect-youthcenter":
         return collect_youthcenter_command(args.data_dir)
@@ -348,6 +362,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         return extract_chunked_command(args.input, args.output_dir)
     if args.command == "rule-review":
         return rule_review_command(args)
+    if args.command == "explain-example":
+        request, clauses = explanation_example(args.category)
+        try:
+            generator = (
+                GroundedPolicyExplainer(OllamaExplanationCompletion(args.model))
+                if args.model
+                else None
+            )
+        except ValueError:
+            print("설명 예제 실행 실패: local_explanation_model_required", file=sys.stderr)
+            return 2
+        result = asyncio.run(explain_policy(request, InMemoryPublishedClauses(clauses), generator))
+        print(json.dumps({"virtual_data": True, **asdict(result)}, ensure_ascii=False, indent=2))
+        return 0
     if args.command == "evaluate-f12":
         return evaluate_f12_command(args.manifest, args.output)
     return 2

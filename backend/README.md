@@ -2,7 +2,7 @@
 
 작업 전에는 루트 지침과 이 경로의 [추가 에이전트 지침](AGENTS.md)을 함께 읽는다.
 
-Python + FastAPI와 PostgreSQL을 사용하는 백엔드 구조다. 생존 확인·공통 오류, 공식 지역 선택 API, 가상 MVP 정책의 추천 API를 제공한다. Python 의존성은 루트 uv 프로젝트에서 관리하고 DB 연결은 아직 구현하지 않았다.
+Python + FastAPI와 PostgreSQL을 사용하는 백엔드 구조다. 생존 확인·공통 오류, 공식 지역 선택 API, 가상 MVP 정책의 추천 API와 가상 게시 조항 기반 F13 설명을 제공한다. Python 의존성은 루트 uv 프로젝트에서 관리하고 DB 연결은 아직 구현하지 않았다.
 
 `src/benefitfinder/`의 모듈을 한 애플리케이션으로 통합한다. AI·데이터 수집은 담당 디렉터리를 가지며 각각 별도 서버로 배포할 필요는 없다.
 
@@ -33,7 +33,7 @@ backend/
   tests/test_api.py               부트스트랩 TestClient 검증
 ```
 
-`bootstrap.py`·`main.py`에서 서버와 원천 어댑터를 조립한다. `GET /health`·`GET /api/v1/options`·`POST /api/v1/recommendations`가 동작한다. 추천은 가상 정책 계산이며 실제 DB 연동 완료를 뜻하지 않는다.
+`bootstrap.py`·`main.py`에서 서버와 원천 어댑터를 조립한다. `GET /health`·`GET /api/v1/options`·`POST /api/v1/recommendations`가 동작한다. 추천은 가상 정책 계산이며 실제 DB 연동 완료를 뜻하지 않는다. F13은 기본 문구로 동작하며 선택한 로컬 E4B 모델로 설명을 생성할 수 있다. [실행과 실패 시 동작](src/benefitfinder/api/README.md#f13-설명-실행)을 따른다. 실제 PostgreSQL·게시 자료·운영 스케줄 연결은 별도 검증이 필요하다.
 
 ## 실제 지역 선택 API
 
