@@ -1,33 +1,46 @@
+import { useEffect } from 'react';
 import type { JSX } from 'react';
 import { Button } from '../../../shared/ui/Button.tsx';
 import { ConditionStepLayout } from '../ConditionStepLayout.tsx';
 import { updateAnswers, useFlowState } from '../flowStore.ts';
 import { useRegionOptions } from '../regionOptions.ts';
-import type { Region } from '../regionOptions.ts';
+import {
+  isValidRegionSelection,
+  normalizeRegionAnswers,
+  regionLabel,
+  resolveSidoSelection,
+} from '../regionSelection.ts';
 
-function regionLabel(region: Region, sigunguName: string): string {
-  return region.sido_name === sigunguName ? sigunguName : `${region.sido_name} ${sigunguName}`;
-}
-
-/** S2-2 지역: 시·도 → 시·군·구. 하위가 하나면(세종) 자동 선택 */
+/** S2-2 region: sido -> sigungu. Sole-child sido auto-selects. */
 export function RegionStep(): JSX.Element {
-  const { sidoCode, regionCode } = useFlowState().answers;
+  const { sidoCode, regionCode, regionLabel: storedLabel } = useFlowState().answers;
   const { state, retry } = useRegionOptions();
 
   const regions = state.status === 'ready' ? state.regions : [];
   const selectedSido = regions.find((region) => region.sido_code === sidoCode);
+  const selectionValid =
+    state.status === 'ready' ? isValidRegionSelection(regions, sidoCode, regionCode) : false;
 
-  function selectSido(code: string): void {
-    const region = regions.find((item) => item.sido_code === code);
-    if (region === undefined) {
+  useEffect(() => {
+    if (state.status !== 'ready') {
       return;
     }
-    const only = region.sigungu.length === 1 ? region.sigungu[0] : undefined;
-    updateAnswers({
-      sidoCode: region.sido_code,
-      regionCode: only !== undefined ? only.code : null,
-      regionLabel: only !== undefined ? regionLabel(region, only.name) : null,
-    });
+    const normalized = normalizeRegionAnswers(state.regions, sidoCode, regionCode);
+    if (
+      normalized.sidoCode !== sidoCode ||
+      normalized.regionCode !== regionCode ||
+      normalized.regionLabel !== storedLabel
+    ) {
+      updateAnswers(normalized);
+    }
+  }, [state, sidoCode, regionCode, storedLabel]);
+
+  function selectSido(code: string): void {
+    const resolved = resolveSidoSelection(regions, code);
+    if (resolved === null) {
+      return;
+    }
+    updateAnswers(resolved);
   }
 
   function selectSigungu(code: string): void {
@@ -35,7 +48,7 @@ export function RegionStep(): JSX.Element {
     if (selectedSido === undefined || sigungu === undefined) {
       return;
     }
-    updateAnswers({ regionCode: sigungu.code, regionLabel: regionLabel(selectedSido, sigungu.name) });
+    updateAnswers({ regionCode: sigungu.code, regionLabel: regionLabel(selectedSido.sido_name, sigungu.name) });
   }
 
   return (
@@ -43,13 +56,24 @@ export function RegionStep(): JSX.Element {
       step={2}
       title="어디에 사나요?"
       description="주민등록상 주소 기준이에요"
-      canNext={state.status === 'ready' && regionCode !== null}
+      canNext={selectionValid}
     >
       {state.status === 'loading' ? <p className="s2-desc">지역 목록을 불러오고 있어요</p> : null}
 
       {state.status === 'error' ? (
         <div className="s2-sub">
           <p className="s2-desc">지역 목록을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.</p>
+          <div>
+            <Button variant="secondary" onClick={retry}>
+              다시 시도
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
+      {state.status === 'empty' ? (
+        <div className="s2-sub">
+          <p className="s2-desc">등록된 지역 목록이 비어 있어요. 잠시 후 다시 시도해 주세요.</p>
           <div>
             <Button variant="secondary" onClick={retry}>
               다시 시도
@@ -91,7 +115,7 @@ export function RegionStep(): JSX.Element {
               }}
             >
               <option value="" disabled>
-                {selectedSido === undefined ? '시·도를 먼저 골라 주세요' : '선택해 주세요'}
+                {selectedSido === undefined ? "시·도를 먼저 골라 주세요" : "선택해 주세요"}
               </option>
               {selectedSido?.sigungu.map((sigungu) => (
                 <option key={sigungu.code} value={sigungu.code}>
@@ -100,12 +124,6 @@ export function RegionStep(): JSX.Element {
               ))}
             </select>
           </label>
-
-          {state.isSample ? (
-            <p className="s2-dev-note">
-              개발용 안내: 서버의 지역 목록(GET /api/v1/options)에 연결되지 않아 가상 목록을 보여 주고 있어요.
-            </p>
-          ) : null}
         </div>
       ) : null}
     </ConditionStepLayout>

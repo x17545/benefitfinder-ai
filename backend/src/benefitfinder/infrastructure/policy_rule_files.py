@@ -7,13 +7,22 @@ ever overwriting an existing result.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import re
 import tempfile
+from contextlib import suppress
 from datetime import datetime
 from pathlib import Path
 from typing import NoReturn
 
+from benefitfinder.application.f12_review import (
+    F12ReviewDecision,
+    f12_item_ids,
+    latest_f12_decisions,
+    validate_f12_decisions,
+)
 from benefitfinder.application.policy_rules import CandidateReview
 from benefitfinder.application.policy_rules import PolicyReference
 from benefitfinder.application.policy_rules import ReviewIssue
@@ -26,6 +35,8 @@ from benefitfinder.application.policy_rules import RuleKind
 from benefitfinder.application.policy_rules import RuleReviewBatch
 from benefitfinder.application.policy_rules import RuleReviewSnapshot
 from benefitfinder.application.policy_rules import SourceDocument
+from benefitfinder.application.policy_facts import PolicyAmountCandidate
+from benefitfinder.application.policy_facts import PolicyFactsDraft
 
 FORMAT_VERSION: int = 1
 INVALID_RULE_REVIEW_FILE: str = "invalid_rule_review_file"
@@ -34,6 +45,9 @@ RULE_REVIEW_OUTPUT_EXISTS: str = "rule_review_output_exists"
 RULE_REVIEW_IO_ERROR: str = "rule_review_io_error"
 
 _HEX_DIGITS: frozenset[str] = frozenset("0123456789abcdefABCDEF")
+_RULES_PENDING = "rules-pending.json"
+_FACTS_PENDING = "facts-pending.json"
+_NUMBERED_CITATION = re.compile(r"(?:line ([0-9]{1,6})|lines ([0-9]{1,6})-([0-9]{1,6}))")
 
 
 class RuleReviewFileError(ValueError):
@@ -704,6 +718,16 @@ def load_rule_batch(path: Path) -> RuleReviewBatch:
         _fail_invalid()
 
 
+def parse_rule_snapshot(data: dict[str, object]) -> RuleReviewSnapshot:
+    """Parse an already bounded/decoded snapshot with the same strict v1 validation."""
+    try:
+        return _parse_snapshot_dict(data)
+    except RuleReviewFileError:
+        raise
+    except Exception:
+        _fail_invalid()
+
+
 def load_rule_snapshot(path: Path) -> RuleReviewSnapshot:
     """Read a version 1 snapshot file strictly into domain records."""
     try:
@@ -734,3 +758,374 @@ def write_rule_snapshot(path: Path, snapshot: RuleReviewSnapshot) -> None:
         _fail_invalid()
     payload = _snapshot_to_json(snapshot)
     _write_create_only(Path(path), payload)
+
+
+def _check_citation(citation: RuleCitation, document: SourceDocument) -> None:
+    if not isinstance(citation, RuleCitation):
+        _fail_invalid()
+    if citation.document_id != document.id:
+        _fail_invalid()
+    if citation.document_version != document.document_version:
+        _fail_invalid()
+    if citation.content_sha256 != document.content_sha256:
+        _fail_invalid()
+    if not isinstance(citation.quote, str) or not citation.quote.strip():
+        _fail_invalid()
+    location = citation.location
+    if not isinstance(location, str) or not location.strip():
+        _fail_invalid()
+    if location.split(maxsplit=1)[0].casefold() in {"line", "lines"}:
+        match = _NUMBERED_CITATION.fullmatch(location)
+        if match is None:
+            _fail_invalid()
+        start = int(match[1] or match[2])
+        end = int(match[3]) if match[3] else start
+        lines = document.text.split("\n")
+        if not 1 <= start <= end <= len(lines) or citation.quote != "\n".join(
+            lines[start - 1 : end]
+        ):
+            _fail_invalid()
+    elif citation.quote not in document.text:
+        _fail_invalid()
+
+
+def _facts_source(document: SourceDocument) -> dict[str, object]:
+    return {
+        "id": document.id,
+        "url": document.source_url,
+        "document_version": document.document_version,
+        "content_sha256": document.content_sha256,
+        "collected_at": _to_iso(document.collected_at),
+    }
+
+
+def _fact_items(
+    section: object, *, timing: bool = False, amount: bool = False
+) -> list[dict[str, object]]:
+    if not isinstance(section, dict):
+        _fail_invalid()
+    keys = {"status", "items", "scheduled_monthly_day"} if timing else {"status", "items"}
+    _check_only_allowed(section, keys)
+    items = section.get("items")
+    if not isinstance(items, list) or section.get("status") != (
+        "extracted" if items else "not_found"
+    ):
+        _fail_invalid()
+    for item in items:
+        if not isinstance(item, dict):
+            _fail_invalid()
+        _check_only_allowed(item, {"evidence", "amounts_won"} if amount else {"evidence"})
+    return items
+
+
+def _fact_evidence(item: dict[str, object], document: SourceDocument) -> RuleCitation:
+    citation = _parse_citation(item.get("evidence"))
+    _check_citation(citation, document)
+    return citation
+
+
+def _load_policy_facts(path: Path, document: SourceDocument) -> PolicyFactsDraft:
+    data = _read_json_object(path)
+    _check_only_allowed(
+        data,
+        {
+            "format_version",
+            "policy_id",
+            "status",
+            "source",
+            "eligibility",
+            "benefit_amount",
+            "payment_timing",
+        },
+    )
+    _check_format_version(data)
+    if (
+        data.get("status") != "needs_review"
+        or data.get("policy_id") != document.policy_id
+        or data.get("source") != _facts_source(document)
+    ):
+        _fail_invalid()
+
+    eligibility = tuple(
+        _fact_evidence(item, document) for item in _fact_items(data.get("eligibility"))
+    )
+    amounts = []
+    for item in _fact_items(data.get("benefit_amount"), amount=True):
+        values = item.get("amounts_won")
+        if not isinstance(values, list) or any(type(value) is not int for value in values):
+            _fail_invalid()
+        amounts.append(PolicyAmountCandidate(_fact_evidence(item, document), tuple(values)))
+    timing_section = data.get("payment_timing")
+    if not isinstance(timing_section, dict):
+        _fail_invalid()
+    timing = tuple(
+        _fact_evidence(item, document) for item in _fact_items(timing_section, timing=True)
+    )
+    day = _require_present(timing_section, "scheduled_monthly_day")
+    if day is not None and (type(day) is not int or not 1 <= day <= 31 or not timing):
+        _fail_invalid()
+    return PolicyFactsDraft(document, eligibility, tuple(amounts), timing, day)
+
+
+def load_f12_review_pair(directory: Path) -> tuple[RuleReviewSnapshot, PolicyFactsDraft]:
+    """Read both pending files and check their citations against the same saved notice."""
+    snapshot = load_rule_snapshot(directory / _RULES_PENDING)
+    if (
+        snapshot.operation != ReviewOperation.PREPARED
+        or len(snapshot.batch.documents) != 1
+        or any(review.approval is not None for review in snapshot.reviews)
+    ):
+        _fail_invalid()
+    (document,) = snapshot.batch.documents
+    if not document.official:
+        _fail_invalid()
+    for review in snapshot.reviews:
+        candidate = review.candidate
+        if candidate.source_policy_id != document.policy_id or not candidate.citations:
+            _fail_invalid()
+        for citation in candidate.citations:
+            _check_citation(citation, document)
+    facts = _load_policy_facts(directory / _FACTS_PENDING, document)
+    if not snapshot.reviews and not (facts.eligibility or facts.amounts or facts.payment_timing):
+        _fail_invalid()
+    return snapshot, facts
+
+
+def _checked_section(items: tuple[RuleCitation, ...], document: SourceDocument) -> dict[str, object]:
+    if not isinstance(items, tuple):
+        _fail_invalid()
+    for item in items:
+        _check_citation(item, document)
+    status = "extracted" if items else "not_found"
+    return {
+        "status": status,
+        "items": [{"evidence": _citation_to_json(item)} for item in items],
+    }
+
+
+def _checked_amount(candidate: PolicyAmountCandidate, document: SourceDocument) -> dict[str, object]:
+    if not isinstance(candidate, PolicyAmountCandidate):
+        _fail_invalid()
+    _check_citation(candidate.evidence, document)
+    if not isinstance(candidate.amounts_won, tuple):
+        _fail_invalid()
+    for amount in candidate.amounts_won:
+        if type(amount) is not int:
+            _fail_invalid()
+    return {
+        "evidence": _citation_to_json(candidate.evidence),
+        "amounts_won": list(candidate.amounts_won),
+    }
+
+
+def _checked_amounts(items: tuple[PolicyAmountCandidate, ...], document: SourceDocument) -> dict[str, object]:
+    if not isinstance(items, tuple):
+        _fail_invalid()
+    status = "extracted" if items else "not_found"
+    return {
+        "status": status,
+        "items": [_checked_amount(item, document) for item in items],
+    }
+
+
+def _policy_facts_payload(draft: PolicyFactsDraft) -> dict[str, object]:
+    if not isinstance(draft, PolicyFactsDraft):
+        _fail_invalid()
+    document = draft.document
+    if not isinstance(document, SourceDocument):
+        _fail_invalid()
+    eligibility = _checked_section(draft.eligibility, document)
+    benefit_amount = _checked_amounts(draft.amounts, document)
+    timing = _checked_section(draft.payment_timing, document)
+    day = draft.scheduled_monthly_day
+    if day is None:
+        scheduled = None
+    else:
+        if type(day) is not int or not 1 <= day <= 31:
+            _fail_invalid()
+        if not draft.payment_timing:
+            _fail_invalid()
+        scheduled = day
+    return {
+        "format_version": FORMAT_VERSION,
+        "policy_id": document.policy_id,
+        "status": "needs_review",
+        "source": _facts_source(document),
+        "eligibility": eligibility,
+        "benefit_amount": benefit_amount,
+        "payment_timing": {
+            "status": timing["status"],
+            "items": timing["items"],
+            "scheduled_monthly_day": scheduled,
+        },
+    }
+
+
+def write_policy_facts(path: Path, draft: PolicyFactsDraft) -> None:
+    """Store one local F12 fact file without overwriting existing results."""
+    _write_create_only(path, _policy_facts_payload(draft))
+
+
+def _f12_pair_digest(snapshot: RuleReviewSnapshot, draft: PolicyFactsDraft) -> str:
+    payload = {"rules": _snapshot_to_json(snapshot), "facts": _policy_facts_payload(draft)}
+    return hashlib.sha256(_dump_payload(payload)).hexdigest()
+
+
+def load_f12_decisions(
+    path: Path, snapshot: RuleReviewSnapshot, draft: PolicyFactsDraft
+) -> tuple[F12ReviewDecision, ...]:
+    """Read a local decision history only for the exact candidate pair it refers to."""
+    data = _read_json_object(path)
+    _check_only_allowed(data, {"format_version", "pair_sha256", "decisions"})
+    _check_format_version(data)
+    if _require_str(data, "pair_sha256") != _f12_pair_digest(snapshot, draft):
+        raise RuleReviewFileError("f12_review_pair_mismatch")
+    entries = data.get("decisions")
+    if not isinstance(entries, list) or not entries:
+        _fail_invalid()
+    decisions = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            _fail_invalid()
+        _check_only_allowed(entry, {"item_id", "decision", "reviewer", "reason", "reviewed_at"})
+        decisions.append(
+            F12ReviewDecision(
+                item_id=_require_str(entry, "item_id"),
+                decision=_require_str(entry, "decision"),
+                reviewer=_require_str(entry, "reviewer"),
+                reason=_require_str(entry, "reason"),
+                reviewed_at=_parse_datetime(entry.get("reviewed_at")),
+            )
+        )
+    result = tuple(decisions)
+    validate_f12_decisions(snapshot, draft, result)
+    return result
+
+
+def write_f12_decisions(
+    path: Path,
+    snapshot: RuleReviewSnapshot,
+    draft: PolicyFactsDraft,
+    decisions: tuple[F12ReviewDecision, ...],
+) -> None:
+    """Create a new decision file without modifying the pair or any prior history."""
+    if not decisions:
+        _fail_invalid()
+    validate_f12_decisions(snapshot, draft, decisions)
+    _write_create_only(
+        path,
+        {
+            "format_version": FORMAT_VERSION,
+            "pair_sha256": _f12_pair_digest(snapshot, draft),
+            "decisions": [
+                {
+                    "item_id": entry.item_id,
+                    "decision": entry.decision,
+                    "reviewer": entry.reviewer,
+                    "reason": entry.reason,
+                    "reviewed_at": _to_iso(entry.reviewed_at),
+                }
+                for entry in decisions
+            ],
+        },
+    )
+
+
+def write_f12_approved_export(
+    path: Path,
+    snapshot: RuleReviewSnapshot,
+    draft: PolicyFactsDraft,
+    decisions_path: Path,
+) -> int:
+    """Write only the candidates last approved by a person in the verified local history."""
+    latest = latest_f12_decisions(load_f12_decisions(decisions_path, snapshot, draft))
+    ids = f12_item_ids(snapshot, draft)
+    groups = (
+        ("rule", (_candidate_to_json(review.candidate) for review in snapshot.reviews)),
+        (
+            "eligibility",
+            ({"evidence": _citation_to_json(citation)} for citation in draft.eligibility),
+        ),
+        ("amount", (_checked_amount(amount, draft.document) for amount in draft.amounts)),
+        (
+            "timing",
+            ({"evidence": _citation_to_json(citation)} for citation in draft.payment_timing),
+        ),
+    )
+    items = []
+    for kind, candidates in groups:
+        for item_id, candidate in zip(ids[kind], candidates, strict=True):
+            entry = latest.get(item_id)
+            if entry is None or entry.decision != "approve":
+                continue
+            items.append(
+                {
+                    "item_id": item_id,
+                    "kind": kind,
+                    "approval": {
+                        "reviewer": entry.reviewer,
+                        "reason": entry.reason,
+                        "reviewed_at": _to_iso(entry.reviewed_at),
+                    },
+                    "candidate": candidate,
+                }
+            )
+    if not items:
+        raise RuleReviewFileError("f12_no_approved_items")
+    _write_create_only(
+        path,
+        {
+            "format_version": FORMAT_VERSION,
+            "kind": "f12_approved_review_export",
+            "pair_sha256": _f12_pair_digest(snapshot, draft),
+            "policy_id": draft.document.policy_id,
+            "source": _facts_source(draft.document),
+            "items": items,
+        },
+    )
+    return len(items)
+
+
+def write_f12_review_pair(
+    directory: Path, snapshot: RuleReviewSnapshot, draft: PolicyFactsDraft
+) -> None:
+    """Save two pending files for one document in a new directory."""
+    if (
+        not isinstance(snapshot, RuleReviewSnapshot)
+        or not isinstance(draft, PolicyFactsDraft)
+        or snapshot.operation != ReviewOperation.PREPARED
+        or snapshot.batch.documents != (draft.document,)
+        or any(review.approval is not None for review in snapshot.reviews)
+    ):
+        _fail_invalid()
+    if not snapshot.reviews and not (draft.eligibility or draft.amounts or draft.payment_timing):
+        _fail_invalid()
+    if os.path.lexists(directory):
+        _fail_exists()
+    try:
+        directory.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix=".f12-pair-", dir=directory.parent) as temp:
+            rules = Path(temp) / _RULES_PENDING
+            facts = Path(temp) / _FACTS_PENDING
+            write_rule_snapshot(rules, snapshot)
+            write_policy_facts(facts, draft)
+            try:
+                directory.mkdir(mode=0o700)
+            except FileExistsError:
+                _fail_exists()
+
+            linked: list[Path] = []
+            try:
+                for staged in (rules, facts):
+                    destination = directory / staged.name
+                    os.link(staged, destination)
+                    linked.append(destination)
+            except OSError:
+                for destination in linked:
+                    with suppress(OSError):
+                        destination.unlink()
+                with suppress(OSError):
+                    directory.rmdir()
+                raise
+    except OSError:
+        _fail_io()

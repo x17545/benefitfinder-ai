@@ -189,9 +189,9 @@ const POLICIES = {
 };
 // F13 AI 맞춤 설명 (가상 문장). 실서비스에서는 요청마다 원문 조항을 검색해 AI가 쓰고, 숫자는 코드 결과와 같은지 검사한다
 const AI_REASON = {
-  P1: ["혼자 월세로 살고 집이 없어서 지원 대상 조건에 맞아요. 부모님 소득은 아직 확인되지 않아 신청 전에 원가구 소득 기준을 확인해야 해요.", "「지원 대상」 · 「소득 기준」 조항"],
-  P3: ["지금 취업 준비 중이고 소득이 없어서 조건 3개를 모두 충족해요. 받는 동안 구직활동 계획서를 내야 하니 신청할 때 함께 준비해 두세요.", "「지원 대상」 · 「구직활동 의무」 조항"],
-  P6: ["전세로 옮길 계획이 있다면 고를 수 있는 지원이에요. 전세 계약서가 있어야 확인되는 조건이 남아 있어요.", "「지원 대상」 · 「제출 서류」 조항"],
+  P1: ["이 정책의 소득·가구 기준은 공식 공고에서 확인해야 해요. 신청 전에 제출 서류와 증빙 범위를 담당 기관에서 확인해 주세요.", "「지원 대상」 · 「소득 기준」 조항"],
+  P3: ["코드가 계산한 지원액과 지급 기간으로 비교한 후보예요. 공고의 구직활동 계획 제출 안내를 보고 신청 전에 의무와 제출 방법을 확인해 주세요.", "「지원 대상」 · 「구직활동 의무」 조항"],
+  P6: ["이 정책의 계약·제출 서류 요건은 공고에서 확인해야 해요. 안내된 지원 금액과 기간은 코드 계산 결과이며 최종 자격은 신청 기관에서 확인해 주세요.", "「지원 대상」 · 「제출 서류」 조항"],
 };
 // F14 지원금이 아닌 서비스 (가상). 환산 금액 = 단가 × 횟수 (코드 계산). 단가 근거가 없으면 금액을 보여 주지 않는다
 const SERVICES = {
@@ -251,7 +251,8 @@ const REGIONS = {
 // ===== 상태 =====
 const demo = { age: 25, military: "", sido: "경기도", sigungu: "수원시", status: "취업 준비", school: "대학 졸업", married: "미혼", housing: "혼자 살아요", owner: "없어요 (무주택)", head: "세대주", contract: "월세", deposit: "5천만 원 이하", rent: "40만 ~ 60만 원",
                income: "없음", asset: "1억 2천만 원 이하", special: ["해당 없음"], interests: ["취업", "주거"], received: ["없음"], hh: null, pIncome: "모름", pAsset: "모름" };
-const S = { consent: false, remember: false, saved: false, cond: { age: "", military: "", sido: "", sigungu: "", status: "", school: "", married: "", housing: "", owner: "", head: "", contract: "", deposit: "", rent: "", income: "", asset: "", special: [], interests: [], received: [], hh: null, pIncome: "", pAsset: "" },
+const emptyConditions = () => ({ age: "", military: "", sido: "", sigungu: "", status: "", school: "", married: "", housing: "", owner: "", head: "", contract: "", deposit: "", rent: "", income: "", asset: "", special: [], interests: [], received: [], hh: null, pIncome: "", pAsset: "" });
+const S = { consent: false, remember: false, saved: false, cond: emptyConditions(),
             period: "1y", pv: false, tab: 0, open: {}, whatif: "취업하면" };
 const won = (man) => "약 " + man.toLocaleString() + "만 원";
 const toast = (t) => { const el = document.getElementById("toast"); el.textContent = t; el.classList.add("show"); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove("show"), 1800); };
@@ -260,12 +261,12 @@ const ensureDemo = () => { if (!S.cond.age) S.cond = JSON.parse(JSON.stringify(d
 
 // ===== 공통 조각 =====
 const COM_AI = "검수한 정책과 입력 조건으로 계산한 참고 결과예요. [AI] 표시가 붙은 설명은 AI가 공고 원문을 찾아 작성했어요. 최종 자격과 최신 조건은 신청 기관에서 확인해 주세요.";
-const bar = (title, back, right = "") => `<div class="proto">화면 시안 · 계산·저장은 데모 · 모든 정책 이름과 금액은 가상의 값</div>
+const bar = (title, back, right = "") => `<div class="proto">화면 시안 · 정책·금액·AI 설명은 가상 · 서버 전송·실제 저장 없음</div>
   <header class="bar">${back ? `<button class="back" onclick="history.back()" aria-label="뒤로">‹</button>` : ""}<span class="title">${title}</span>${right}</header>`;
-const foot = () => `<footer class="foot"><button onclick="go('#/about')">이용 안내</button><button onclick="go('#/privacy')">개인정보 처리방침</button><button onclick="clearMine()">내 정보 지우기</button><span>데이터 출처 온통청년 · 보조금24 · 매일 새벽 3시 갱신</span></footer>`;
+const foot = () => `<footer class="foot"><button onclick="go('#/about')">이용 안내</button><button onclick="go('#/privacy')">개인정보 처리방침</button><button onclick="clearMine()">내 정보 지우기</button><span>출처·새벽 3시 갱신은 서비스 목표 안내 · 이 시안은 가상 예시</span></footer>`;
 const cta = (label, onclick, disabled = false, extra = "") => `<div class="cta">${extra}<button class="btn" ${disabled ? "disabled" : ""} onclick="${onclick}">${label}</button></div>`;
 const statusChip = ([s, label]) => `<span class="s ${s}">${{ met: "✓", not_met: "✕", needs_review: "?" }[s]} ${label}</span>`;
-function clearMine() { S.saved = false; S.remember = false; toast("이 기기에 저장된 내 정보를 지웠어요"); render(); }
+function clearMine() { S.saved = false; S.remember = false; S.consent = false; S.cond = emptyConditions(); S.open = {}; S.period = "1y"; S.pv = false; S.tab = 0; go("#/"); render(); toast("시안에 입력한 조건과 결과 표시를 지웠어요"); }
 
 // ===== S1 시작 =====
 function s1() {
@@ -284,7 +285,7 @@ function s1() {
     <div class="check ${S.consent ? "on" : ""}" onclick="S.consent=!S.consent; render()"><span class="box">${S.consent ? "✓" : ""}</span>
       <span><b>(필수)</b> 선택한 조건은 정책 분석에만 사용돼요 <button class="link" onclick="event.stopPropagation(); go('#/privacy')">개인정보 처리방침</button></span></div>
     <div class="check ${S.remember ? "on" : ""}" onclick="S.remember=!S.remember; render()"><span class="box">${S.remember ? "✓" : ""}</span>
-      <span>(선택) 이 기기에 내 조건 기억하기 <span class="muted small">30일 동안, 언제든 지울 수 있어요</span></span></div>
+      <span>(선택) 이 기기에 내 조건 기억하기 <span class="muted small">실제 앱은 30일 · 이 시안은 새로고침하면 사라져요</span></span></div>
   </main>${foot()}${cta("시작하기", "go('#/conditions/1')", !S.consent)}`;
 }
 
@@ -359,7 +360,7 @@ function loading(frozen) {
   return bar("분석 중", false) + `<main><h2>가장 이득인 조합을<br>계산하고 있어요</h2><p class="muted">아래 단계로 정책을 찾고 계산하고 있어요</p>
     <div class="steps">${LOAD.map(([t, d, tool], i) => `<div class="${i < k ? "done" : i === k ? "now" : ""}"><span class="ic">${i < k ? "✓" : ""}</span><span>${t}${i < k && d ? ` (${d})` : ""}<small>${tool}</small></span></div>`).join("")}</div></main>`;
 }
-function runLoading() { ensureDemo(); loading.k = 0; const tick = () => { if (location.hash !== "#/loading") return; loading.k++; render(); if (loading.k < LOAD.length) setTimeout(tick, 700); else setTimeout(() => { if (S.remember) S.saved = true; go("#/result"); }, 500); }; setTimeout(tick, 700); }
+function runLoading() { ensureDemo(); loading.k = 0; const tick = () => { if (location.hash !== "#/loading") return; loading.k++; render(); if (loading.k < LOAD.length) setTimeout(tick, 700); else setTimeout(() => { if (location.hash !== "#/loading") return; if (S.remember) S.saved = true; go("#/result"); }, 500); }; setTimeout(tick, 700); }
 
 // ===== S3 결과 =====
 function s3() {
@@ -419,7 +420,7 @@ function s3() {
     ${fold("nr", "아직 조합 계산 전인 정책 1개", `<p class="muted">금액·중복 여부를 검수 중이에요. 정책별 자격 진단은 볼 수 있어요.</p><div><b>청년 주거 이전 지원</b> <span class="s needs_review">? 확인 필요</span></div>`)}
     <button class="btn line" onclick="go('#/what-if')">상황이 바뀌면 어떻게 될까?</button>
     <button class="btn svc" onclick="go('#/services')"><span>돈 말고 받을 수 있는 도움 ${Object.keys(SERVICES).length}개</span><span>›</span></button>
-    <button class="btn ghost" onclick="toast('결과 이미지를 저장했어요 (시안: 실제 저장 생략)')">결과 이미지로 저장</button>
+    <button class="btn ghost" onclick="toast('화면 시안에서는 PNG를 저장하지 않아요. 실제 앱에서 확인해 주세요')">결과 이미지로 저장</button>
     <p class="disclaimer">${COM_AI}</p>
   </main>${foot()}`;
 }
@@ -524,8 +525,8 @@ function about() { return bar("이용 안내", true) + `<main><h2>청년 정책 
   <div class="card"><b>AI를 쓰는 곳</b><p><span class="ai">AI</span>정책 원문을 AI가 읽고 조건·금액·중복 제한을 정리해요. 사람이 검수한 것만 계산에 써요.</p><p><span class="ai">AI</span>결과 화면의 설명은 AI가 공고 원문을 찾아 써요. [AI] 표시로 구분해요.</p><p class="muted small">자격 판정과 금액 계산은 AI가 아니라 정해진 계산식이 해요.</p></div>
   <div class="card"><b>데이터</b><p>온통청년·보조금24 API와 연결된 공식 공고·사업 지침을 확인해요. 매일 새벽 3시에 자동으로 갱신해요.</p></div>
   <div class="card"><b>한계</b><p>두 API에 없는 정책은 다루지 않아요. 금액·중복 여부를 검수한 정책만 조합에 들어가요.</p></div></main>${foot()}`; }
-function privacy() { return bar("개인정보 처리방침", true) + `<main><h2>개인정보 처리방침 (시안)</h2>
-  <div class="card"><dl class="kv"><dt>받는 정보</dt><dd>선택한 조건 (나이, 지역, 상황, 소득·재산 구간 등)</dd><dt>저장 위치</dt><dd>'기억하기'를 켠 경우 사용자 브라우저에만 30일. 서버에는 저장하지 않아요</dd><dt>외부 전달</dt><dd>선택한 조건은 계산을 위해 서버로 보내요. 민감 조건은 서버 판정에만 사용해요</dd><dt>AI로 보내는 것</dt><dd>설명을 쓰기 위해 조건별 판정 결과(충족·확인 필요)와 정책 원문만 보내요. 소득·재산 금액, 해당 조건(수급·장애 등), 부모님 정보는 보내지 않아요</dd><dt>이용 통계</dt><dd>구글 애널리틱스 (쿠키 사용, 조건 값은 보내지 않아요)</dd><dt>지우기</dt><dd>하단 '내 정보 지우기'를 누르면 바로 지워져요</dd></dl></div></main>${foot()}`; }
+function privacy() { return bar("개인정보 처리방침", true) + `<main><h2>개인정보 처리방침 (시안)</h2><p class="small muted">아래 표는 실제 서비스의 목표 안내예요. 이 클릭 시안은 서버·AI로 전송하거나 브라우저에 저장하지 않으며 새로고침하면 입력이 사라져요.</p>
+  <div class="card"><dl class="kv"><dt>받는 정보</dt><dd>선택한 조건 (나이, 지역, 상황, 소득·재산 구간 등)</dd><dt>저장 위치</dt><dd>실제 앱은 입력·마지막 결과를 현재 탭에 임시 보관해요. 기억하기를 켜고 분석하면 조건을 추가로 30일 저장하고 만료 뒤 다음 접속 때 지워요. 서버에는 저장하지 않아요</dd><dt>외부 전달</dt><dd>선택한 조건은 계산을 위해 서버로 보내요. 민감 조건은 서버 판정에만 사용해요</dd><dt>AI로 보내는 것</dt><dd>선택적 설명에는 허용된 일반 판정 요약·정책 금액과 기간·검색된 공개 조항만 보내요. 프로필 전체·소득·재산·특수 조건·부모님 정보는 이름이나 판정 문장으로도 보내지 않아요</dd><dt>이용 통계</dt><dd>GA는 목표 계획이며 현재 앱·시안에 연결하지 않았어요. 조건 값은 전송 대상이 아니에요</dd><dt>지우기</dt><dd>하단 '내 정보 지우기'를 누르면 바로 지워져요</dd></dl></div></main>${foot()}`; }
 function notFound(t = "페이지를 찾을 수 없어요", d = "주소를 다시 확인해 주세요") { return bar("", true) + `<main><div class="empty"><span class="big">🔎</span><h2>${t}</h2><p class="muted">${d}</p></div></main>${cta("처음으로", "go('#/')")}`; }
 function emptyResult() { return bar("추천 조합", true) + `<main><div class="empty"><span class="big">📭</span><h2>지금 다루는 정책 중엔<br>맞는 게 없어요</h2><p class="muted">초기에는 취업·주거 혜택만 다뤄요. 나머지 분야는 확장 예정이에요</p></div>
   <button class="btn line" onclick="go('#/conditions/13')">조건 바꾸기</button><button class="btn ghost" onclick="toast('온통청년으로 이동 (시안)')">온통청년에서 더 찾아보기 ↗</button><button class="btn ghost" onclick="toast('복지로로 이동 (시안)')">복지로에서 더 찾아보기 ↗</button></main>${foot()}`; }

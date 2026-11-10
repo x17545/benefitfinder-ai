@@ -1,6 +1,7 @@
 {
   "request_id": "example-request-001",
   "domain": "youth",
+  "virtual_data": true,
   "view": "portfolio",
   "results": {
     "1y": {

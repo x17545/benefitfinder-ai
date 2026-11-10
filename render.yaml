@@ -1,0 +1,14 @@
+# Apply only after reviewing the target service and authorizing deployment.
+# https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: benefitfinder-ai
+    runtime: python
+    branch: main
+    autoDeployTrigger: 'off'
+    buildCommand: uv sync --locked --no-dev --python 3.12
+    startCommand: uv run --locked --no-sync uvicorn benefitfinder.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: UV_VERSION
+        value: '0.9.5'

@@ -33,6 +33,10 @@ function replaceField(path: readonly (string | number)[], value: unknown): unkno
 }
 
 describe('isRecommendationResponse', () => {
+  it('accepts optional virtual provenance and rejects a non-boolean flag', () => {
+    expect(isRecommendationResponse(replaceField(['virtual_data'], true))).toBe(true);
+    expect(isRecommendationResponse(replaceField(['virtual_data'], 'true'))).toBe(false);
+  });
   it('accepts the contract example', () => {
     expect(isRecommendationResponse(FIXTURE)).toBe(true);
   });
@@ -75,6 +79,135 @@ describe('isRecommendationResponse', () => {
     { name: 'non-numeric discount rate', path: ['discount_rate'], value: 'unknown' },
   ])('rejects $name before it reaches rendering', ({ path, value }) => {
     expect(isRecommendationResponse(replaceField(path, value))).toBe(false);
+  });
+});
+
+describe('per-policy AI grounding', () => {
+  const firstPolicy = ['results', '1y', 'pv_off', 'portfolios', 0, 'policies', 0];
+  const secondPolicy = ['results', '1y', 'pv_off', 'portfolios', 0, 'policies', 1];
+  function validEvidence(): Record<string, unknown> {
+    return {
+      quote: '[가상 예제] 신청 연령은 만 19세 이상 34세 이하입니다.',
+      location: '가상 공고: 지원 대상',
+      source: {
+        url: 'https://policy.example/youth/sample-p3',
+        checked_at: '2026-10-26T09:00:00+09:00',
+        document_version: 'fictional-v1',
+      },
+    };
+  }
+  function cloneFixture(): Record<string, unknown> {
+    return JSON.parse(fixtureText) as Record<string, unknown>;
+  }
+  function policiesOf(root: Record<string, unknown>): Record<string, unknown>[] {
+    const results = root.results as Record<string, Record<string, Record<string, unknown>>>;
+    const view = results['1y'].pv_off;
+    const portfolios = view.portfolios as Record<string, unknown>[];
+    const first = portfolios[0] as Record<string, unknown>;
+    return first.policies as Record<string, unknown>[];
+  }
+  function firstPolicyOf(root: Record<string, unknown>): Record<string, unknown> {
+    return policiesOf(root)[0];
+  }
+  function withRoot(mut: (root: Record<string, unknown>) => void): unknown {
+    const root = cloneFixture();
+    mut(root);
+    return root;
+  }
+  it('accepts legacy policies without per-policy flags', () => {
+    const root = cloneFixture();
+    expect(isRecommendationResponse(root)).toBe(true);
+    expect(firstPolicyOf(root).ai_generated).toBeUndefined();
+    expect(firstPolicyOf(root).ai_sources).toBeUndefined();
+  });
+  it('accepts a partial success with one grounded AI policy', () => {
+    const root = withRoot((draft) => {
+      const policies = policiesOf(draft);
+      policies[0] = {
+        ...policies[0],
+        ai_generated: true,
+        ai_reason: '[가상] AI가 정리한 추천 이유입니다.',
+        ai_sources: [validEvidence()],
+      };
+      draft.ai_generated = true;
+    });
+    expect(isRecommendationResponse(root)).toBe(true);
+  });
+  it('accepts false flags with missing or empty sources', () => {
+    const missing = withRoot((draft) => {
+      firstPolicyOf(draft).ai_generated = false;
+    });
+    expect(isRecommendationResponse(missing)).toBe(true);
+    const empty = withRoot((draft) => {
+      const policy = firstPolicyOf(draft);
+      policy.ai_generated = false;
+      policy.ai_sources = [];
+    });
+    expect(isRecommendationResponse(empty)).toBe(true);
+  });
+  it.each([
+    { name: 'true without reason', reason: undefined as unknown, sources: [validEvidence()] as unknown },
+    { name: 'true with null reason', reason: null as unknown, sources: [validEvidence()] as unknown },
+    { name: 'true with empty reason', reason: '' as unknown, sources: [validEvidence()] as unknown },
+    { name: 'true without sources', reason: '[가상] AI 설명' as unknown, sources: undefined as unknown },
+    { name: 'true with empty sources', reason: '[가상] AI 설명' as unknown, sources: [] as unknown },
+  ])('rejects $name', ({ reason, sources }) => {
+    const root = withRoot((draft) => {
+      const policy = firstPolicyOf(draft);
+      policy.ai_generated = true;
+      if (reason === undefined) {
+        Reflect.deleteProperty(policy, 'ai_reason');
+      } else {
+        policy.ai_reason = reason;
+      }
+      if (sources === undefined) {
+        Reflect.deleteProperty(policy, 'ai_sources');
+      } else {
+        policy.ai_sources = sources;
+      }
+    });
+    expect(isRecommendationResponse(root)).toBe(false);
+  });
+  it('rejects a false flag with non-empty sources', () => {
+    const root = withRoot((draft) => {
+      const policy = firstPolicyOf(draft);
+      policy.ai_generated = false;
+      policy.ai_sources = [validEvidence()];
+    });
+    expect(isRecommendationResponse(root)).toBe(false);
+  });
+  it.each([
+    { name: 'non-boolean flag', value: 'true' },
+    { name: 'null flag', value: null },
+  ])('rejects $name', ({ value }) => {
+    expect(isRecommendationResponse(replaceField([...firstPolicy, 'ai_generated'], value))).toBe(false);
+  });
+  it.each([
+    { name: 'empty quote', evidence: { quote: '', location: '가상 공고: 지원 대상', source: { url: 'https://policy.example/youth/sample-p3', checked_at: '2026-10-26T09:00:00+09:00', document_version: 'fictional-v1' } } },
+    { name: 'non-HTTP source URL', evidence: { quote: '[가상] 원문', source: { url: 'javascript:alert(1)', checked_at: '2026-10-26T09:00:00+09:00', document_version: 'fictional-v1' } } },
+    { name: 'missing source', evidence: { quote: '[가상] 원문', location: '가상 공고: 지원 대상' } },
+    { name: 'missing location', evidence: { quote: '[가상] 원문', source: { url: 'https://policy.example/youth/sample-p3', checked_at: '2026-10-26T09:00:00+09:00', document_version: 'fictional-v1' } } },
+  ])('rejects invalid ai_sources evidence ($name)', ({ evidence }) => {
+    const root = withRoot((draft) => {
+      const policy = firstPolicyOf(draft);
+      policy.ai_generated = true;
+      policy.ai_reason = '[가상] AI 설명';
+      policy.ai_sources = [evidence];
+    });
+    expect(isRecommendationResponse(root)).toBe(false);
+  });
+  it('rejects more than five ai_sources', () => {
+    const root = withRoot((draft) => {
+      const policy = firstPolicyOf(draft);
+      policy.ai_generated = true;
+      policy.ai_reason = '[가상] AI 설명';
+      policy.ai_sources = [validEvidence(), validEvidence(), validEvidence(), validEvidence(), validEvidence(), validEvidence()];
+    });
+    expect(isRecommendationResponse(root)).toBe(false);
+  });
+  it('keeps rejecting broken amounts and condition evidence alongside AI fields', () => {
+    expect(isRecommendationResponse(replaceField([...secondPolicy, 'amount_in_period_won'], -1))).toBe(false);
+    expect(isRecommendationResponse(replaceField([...firstPolicy, 'ai_generated'], true))).toBe(false);
   });
 });
 

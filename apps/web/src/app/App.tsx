@@ -2,6 +2,8 @@ import { useEffect } from 'react';
 import type { JSX } from 'react';
 import { LoadingScreen } from '../features/benefits/LoadingScreen.tsx';
 import { ResultScreen } from '../features/benefits/ResultScreen.tsx';
+import { AboutScreen } from '../features/info/AboutScreen.tsx';
+import { PrivacyScreen } from '../features/info/PrivacyScreen.tsx';
 import { ConditionScreen } from '../features/profile/ConditionScreen.tsx';
 import { loadSavedConditions } from '../features/profile/savedConditions.ts';
 import { StartScreen } from '../features/profile/StartScreen.tsx';
@@ -51,9 +53,9 @@ function renderRoute(route: Route): JSX.Element {
     case 'policy':
       return <PlaceholderScreen screenId="S5" title="정책 상세" links={[]} />;
     case 'about':
-      return <PlaceholderScreen screenId="P1" title="이용 안내" links={[]} />;
+      return <AboutScreen />;
     case 'privacy':
-      return <PlaceholderScreen screenId="P2" title="개인정보 처리방침" links={[]} />;
+      return <PrivacyScreen />;
     case 'notFound':
       return (
         <PlaceholderScreen

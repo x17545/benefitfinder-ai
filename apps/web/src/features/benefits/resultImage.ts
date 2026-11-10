@@ -8,6 +8,7 @@ export interface ResultImageModel {
   listTitle: string;
   policies: { name: string; amount: string }[];
   createdAt: Date;
+  virtualData?: boolean;
 }
 
 /** 한국 날짜 YYYY.MM.DD / YYYYMMDD */
@@ -25,8 +26,9 @@ export function imageFileName(date: Date): string {
 }
 
 /** 그림 맨 아래 줄 */
-export function imageFooter(date: Date): string {
-  return `청년 정책 매니저 · AI 참고 결과 · 생성일 ${kstDate(date).dotted}`;
+export function imageFooter(date: Date, virtualData = false): string {
+  const label = virtualData ? '가상 정책 예제 · 실제 지원금 아님' : '참고 결과';
+  return `청년 정책 매니저 · ${label} · 생성일 ${kstDate(date).dotted}`;
 }
 
 const WIDTH = 1080;
@@ -87,7 +89,7 @@ export function drawResultImage(model: ResultImageModel): HTMLCanvasElement {
     };
 
     ctx.textBaseline = 'top';
-    text('내 지원금 조합', 44, 800, colors.ink);
+    text(model.virtualData === true ? '가상 정책 조합 예제' : '내 지원금 조합', 44, 800, colors.ink);
     y += 64;
     text(model.periodLabel, 28, 500, colors.muted);
     y += 60;
@@ -157,7 +159,7 @@ export function drawResultImage(model: ResultImageModel): HTMLCanvasElement {
     }
 
     y += 24;
-    text(imageFooter(model.createdAt), 24, 500, colors.muted);
+    text(imageFooter(model.createdAt, model.virtualData), 24, 500, colors.muted);
     y += 40 + PAD;
     return y;
   }
