@@ -143,7 +143,7 @@ class PreviewResponseTests(unittest.TestCase):
         paths = Path(__file__).resolve().parents[2] / "contracts/v1"
         schemas = [json.loads(p.read_text()) for p in paths.glob("*.schema.json")]
         registry = Registry().with_resources((s["$id"], Resource.from_contents(s)) for s in schemas)
-        schema = next(s for s in schemas if s["title"] == "Recommendation response")
+        schema = json.loads((paths / "recommendation-response.schema.json").read_text())
         Draft202012Validator(schema, registry=registry, format_checker=FormatChecker()).validate(result)
 
     def test_generation_failure_and_timeout_keep_scope_and_fallback_without_evidence(self):

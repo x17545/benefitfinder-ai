@@ -18,6 +18,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from benefitfinder.api.schemas import ErrorCode, ErrorResponse
 from benefitfinder.api.v1.routers.health import router as health_router
+from benefitfinder.api.v1.routers.options import router as options_router
 from benefitfinder.api.v1.routers.recommendations import router as recommendations_router
 from benefitfinder.ai.policy_explanation import GroundedPolicyExplainer
 from benefitfinder.application.policy_explanations import (
@@ -28,13 +29,15 @@ from benefitfinder.application.recommendation_explanations import Recommendation
 from benefitfinder.application.recommendation_service import (
     recommend_mvp_all_periods,
 )
+from benefitfinder.application.region_options import RegionCatalog
 from benefitfinder.domains.youth.policy_evaluator import evaluate_policies
-from benefitfinder.infrastructure.example_explanation_data import recommendation_explanation_data
-from benefitfinder.infrastructure.ollama_explanations import OllamaExplanationCompletion
-from benefitfinder.infrastructure.published_clauses import InMemoryPublishedClauses
 from benefitfinder.infrastructure.database.repositories.published_clauses import (
     PostgresPublishedClauses,
 )
+from benefitfinder.infrastructure.example_explanation_data import recommendation_explanation_data
+from benefitfinder.infrastructure.ollama_explanations import OllamaExplanationCompletion
+from benefitfinder.infrastructure.published_clauses import InMemoryPublishedClauses
+from benefitfinder.infrastructure.region_codes import OfficialRegionCatalog
 
 NOT_FOUND_MESSAGE = "요청한 리소스를 찾을 수 없습니다."
 INVALID_REQUEST_MESSAGE = "요청 값이 올바르지 않습니다."
@@ -55,6 +58,7 @@ def error_body(code: ErrorCode, message: str) -> dict[str, Any]:
 
 def create_app(
     *,
+    region_catalog: RegionCatalog | None = None,
     explanation_model: str | None = None,
     explanation_repository: PublishedClauseRepository | None = None,
     explanation_generator: ExplanationGenerator | None = None,
@@ -136,6 +140,9 @@ def create_app(
     )
     app.state.recommendation_explainer = explainer
 
+    app.state.region_catalog = region_catalog if region_catalog is not None else OfficialRegionCatalog()
+
     app.include_router(health_router)
+    app.include_router(options_router)
     app.include_router(recommendations_router)
     return app
