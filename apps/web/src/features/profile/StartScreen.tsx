@@ -78,7 +78,7 @@ export function StartScreen(): JSX.Element {
                 }}
               />
               <label htmlFor="s1-consent">
-                <b>(필수)</b> 선택한 조건은 정책 분석에만 사용돼요
+                <b>(필수)</b> 선택한 조건은 정책 분석에만 쓰고, 분석이 끝나면 바로 폐기해요
               </label>
               <a className="s1-consent__link" href={paths.privacy}>
                 개인정보 처리방침

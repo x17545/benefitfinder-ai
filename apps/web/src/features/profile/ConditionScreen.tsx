@@ -17,6 +17,7 @@ import { HousingStep } from './steps/HousingStep.tsx';
 import { IncomeStep } from './steps/IncomeStep.tsx';
 import { MultiChoiceStep } from './steps/MultiChoiceStep.tsx';
 import { ParentsStep } from './steps/ParentsStep.tsx';
+import { PrivacyNote } from './steps/PrivacyNote.tsx';
 import { RegionStep } from './steps/RegionStep.tsx';
 import { SingleChoiceStep } from './steps/SingleChoiceStep.tsx';
 
@@ -105,13 +106,7 @@ export function ConditionScreen({ step }: ConditionScreenProps): JSX.Element {
             updateAnswers({ special: values });
           }}
         >
-          <p className="s2-private">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <rect x="5" y="11" width="14" height="10" rx="2" />
-              <path d="M8 11V8a4 4 0 0 1 8 0v3" />
-            </svg>
-            이 정보는 자격 계산에만 써요. 서버에 저장하지 않아요
-          </p>
+          <PrivacyNote>이 정보는 자격 계산에만 쓰고, 분석이 끝나면 바로 폐기해요. 서버에 저장하지 않아요</PrivacyNote>
         </MultiChoiceStep>
       );
     case 10:

@@ -8,6 +8,7 @@ import {
 import { ConditionStepLayout } from '../ConditionStepLayout.tsx';
 import { updateAnswers, useFlowState } from '../flowStore.ts';
 import { ChipQuestion } from './ChipQuestion.tsx';
+import { PrivacyNote } from './PrivacyNote.tsx';
 
 const PARENT_AGE_NOTE_FROM = 30;
 
@@ -75,6 +76,7 @@ export function ParentsStep(): JSX.Element {
           updateAnswers({ parentAsset: value, parentsSkipped: false });
         }}
       />
+      <PrivacyNote>부모님 정보는 자격 계산에만 쓰고, 분석이 끝나면 바로 폐기해요</PrivacyNote>
     </ConditionStepLayout>
   );
 }
