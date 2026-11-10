@@ -43,7 +43,8 @@ export interface NetChange {
 
 export function netChange(result: ChangeSimulationResult): NetChange | null {
   const income = result.income_change;
-  if (income === null || income === undefined) {
+  if ((result.scenario !== 'employed' && result.scenario !== 'income_up') ||
+      income === null || income === undefined || income.to_won <= income.from_won) {
     return null;
   }
   const incomeDiff = income.to_won - income.from_won;

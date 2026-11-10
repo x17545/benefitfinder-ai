@@ -7,9 +7,11 @@ const SOURCE = {
   checked_at: '2026-10-26T09:00:00+09:00',
   document_version: 'fictional-v1',
 };
+const EMPLOYMENT_SOURCE = { ...SOURCE, url: 'https://policy.example/youth/sample-p3' };
+const LOAN_SOURCE = { ...SOURCE, url: 'https://policy.example/youth/sample-p6' };
 
-function evidence(quote: string, location: string): NormalizedBenefit['eligibility_conditions'][number]['evidence'] {
-  return [{ quote: `[가상] ${quote}`, location, source: SOURCE }];
+function evidence(quote: string, location: string, source = SOURCE): NormalizedBenefit['eligibility_conditions'][number]['evidence'] {
+  return [{ quote: `[가상] ${quote}`, location, source }];
 }
 
 const SAMPLES: NormalizedBenefit[] = [
@@ -48,8 +50,8 @@ const SAMPLES: NormalizedBenefit[] = [
     categories: ['employment'],
     application: { status: 'open', starts_on: null, ends_on: null, url: null },
     eligibility_conditions: [
-      { id: 'age', description: '[가상] 만 19 ~ 34세', evidence: evidence('신청일 기준 만 19세 이상 34세 이하인 청년', '지원 대상') },
-      { id: 'employment', description: '[가상] 구직 중', evidence: evidence('현재 취업하지 않고 구직활동 중인 사람', '지원 대상') },
+      { id: 'age', description: '[가상] 만 19 ~ 34세', evidence: evidence('신청일 기준 만 19세 이상 34세 이하인 청년', '지원 대상', EMPLOYMENT_SOURCE) },
+      { id: 'employment', description: '[가상] 구직 중', evidence: evidence('현재 취업하지 않고 구직활동 중인 사람', '지원 대상', EMPLOYMENT_SOURCE) },
     ],
     benefit_amount: {
       type: 'monthly', amount_won: 500_000, period_months: 6, max_total_won: 3_000_000,
@@ -58,7 +60,7 @@ const SAMPLES: NormalizedBenefit[] = [
     reviewed: true,
     conflicts: [],
     lifetime_once: true,
-    source: SOURCE,
+    source: EMPLOYMENT_SOURCE,
     domain_data: {},
   },
   {
@@ -70,18 +72,18 @@ const SAMPLES: NormalizedBenefit[] = [
     categories: ['housing'],
     application: { status: 'closed', starts_on: '2026-07-01', ends_on: '2026-08-31', url: null },
     eligibility_conditions: [
-      { id: 'age', description: '[가상] 만 19 ~ 39세', evidence: evidence('신청일 기준 만 19세 이상 39세 이하인 청년', '지원 대상') },
-      { id: 'home_ownership', description: '[가상] 무주택', evidence: evidence('세대원 모두 주택을 소유하지 않은 사람', '지원 대상') },
-      { id: 'income', description: '[가상] 연 소득 5,000만 원 이하', evidence: evidence('본인 연 소득이 5,000만 원 이하인 사람', '소득 기준') },
+      { id: 'age', description: '[가상] 만 19 ~ 39세', evidence: evidence('신청일 기준 만 19세 이상 39세 이하인 청년', '지원 대상', LOAN_SOURCE) },
+      { id: 'home_ownership', description: '[가상] 무주택', evidence: evidence('세대원 모두 주택을 소유하지 않은 사람', '지원 대상', LOAN_SOURCE) },
+      { id: 'income', description: '[가상] 연 소득 5,000만 원 이하', evidence: evidence('본인 연 소득이 5,000만 원 이하인 사람', '소득 기준', LOAN_SOURCE) },
     ],
     benefit_amount: {
       type: 'interest', amount_won: 1_500_000, period_months: 24, max_total_won: 3_000_000,
       pay_timing: 'yearly', amount_text: '[가상] 연 최대 150만 원 · 2년', amount_status: 'verified',
     },
     reviewed: true,
-    conflicts: [{ policy_id: 'youth:example:P1', evidence: evidence('청년 월세 지원과 함께 받을 수 없어요', '중복 지원 제한') }],
+    conflicts: [{ policy_id: 'youth:example:P1', evidence: evidence('청년 월세 지원과 함께 받을 수 없어요', '중복 지원 제한', LOAN_SOURCE) }],
     lifetime_once: false,
-    source: SOURCE,
+    source: LOAN_SOURCE,
     domain_data: {},
   },
 ];

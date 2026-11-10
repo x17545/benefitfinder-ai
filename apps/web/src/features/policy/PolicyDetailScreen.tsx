@@ -1,5 +1,5 @@
 import type { JSX } from 'react';
-import { navigate, paths } from '../../app/router.ts';
+import { CONDITION_STEPS, navigate, paths } from '../../app/router.ts';
 import { conditionLabel } from '../../domains/youth/conditionLabels.ts';
 import type { NormalizedBenefit } from '../../shared/api/benefits.ts';
 import { SiteFooter } from '../../shared/ui/SiteFooter.tsx';
@@ -8,16 +8,18 @@ import { TopBar } from '../../shared/ui/TopBar.tsx';
 import { useAnalysis } from '../benefits/analysisStore.ts';
 import { isStale, monthDay, recruitTag, shortPolicyId, sourceName } from '../benefits/format.ts';
 import { usePolicyInfo } from '../benefits/policyInfo.ts';
+import { PolicyExplanation } from '../benefits/PolicyExplanation.tsx';
+import { readResultBasis, withResultBasis } from '../benefits/resultBasis.ts';
+import type { PortfolioPolicy } from '../benefits/resultModel.ts';
 import { clearMyData } from '../profile/clearMyData.ts';
+import { useFlowState } from '../profile/flowStore.ts';
 import { devSampleBenefit } from './devSampleBenefits.ts';
 import {
   amountSummary,
   applyPeriod,
-  conditionQuotes,
   diagnosisSummary,
   findMyPolicyResult,
 } from './policyDetailModel.ts';
-import type { MyPolicyResult } from './policyDetailModel.ts';
 import { usePolicyDetail } from './usePolicyDetail.ts';
 import './PolicyDetailScreen.css';
 
@@ -25,31 +27,31 @@ interface PolicyDetailScreenProps {
   policyId: string;
 }
 
-/** 이전 화면이 없으면(주소로 바로 들어오면) S1로 간다 */
-function goBack(): void {
-  if (window.history.length > 1) {
-    window.history.back();
-    return;
-  }
-  navigate(paths.start);
-}
-
 /** S5 정책 상세 (기획서 4.7). 주소 /policy/{정책ID} */
 export function PolicyDetailScreen({ policyId }: PolicyDetailScreenProps): JSX.Element {
   const { state, retry } = usePolicyDetail(policyId);
   const analysis = useAnalysis();
-  const mine = findMyPolicyResult(analysis.status === 'done' ? analysis.result : null, policyId);
+  const { consent } = useFlowState();
+  const basis = readResultBasis(window.location.search);
+  const result = consent && analysis.status === 'done' ? analysis.result : null;
+  const mine = state.status === 'ok' && result !== null && analysis.status === 'done'
+    ? findMyPolicyResult(result, state.benefit, basis, state.isSample, analysis.isSample) : null;
+  const conditionsHref = consent ? paths.conditions(result !== null ? CONDITION_STEPS : 1) : paths.start;
 
   const title = state.status === 'ok' ? state.benefit.title : '정책 상세';
 
   return (
     <div className="page-width screen">
-      <TopBar title={title} onBack={goBack} />
+      <TopBar title={title} onBack={() => {
+        if (window.history.length > 1) window.history.back();
+        else navigate(result !== null ? withResultBasis(paths.result, basis) : paths.start);
+      }} />
       {state.status === 'ok' ? (
-        <PolicyDetail benefit={state.benefit} isSample={state.isSample} mine={mine} />
+        <PolicyDetail benefit={state.benefit} isSample={state.isSample} mine={mine}
+          hasAnalysis={result !== null} conditionsHref={conditionsHref} aiGenerated={result?.ai_generated ?? false} />
       ) : (
         <main className="screen__body s5-body">
-          {state.status === 'loading' ? <p className="s5-muted">정책 정보를 불러오고 있어요</p> : null}
+          {state.status === 'loading' ? <p className="s5-muted" role="status">정책 정보를 불러오고 있어요</p> : null}
           {state.status === 'notFound' ? (
             <section className="s5-message">
               <h1 className="screen__title">찾는 정책이 없어요</h1>
@@ -83,19 +85,23 @@ export function PolicyDetailScreen({ policyId }: PolicyDetailScreenProps): JSX.E
 interface PolicyDetailProps {
   benefit: NormalizedBenefit;
   isSample: boolean;
-  mine: MyPolicyResult | null;
+  mine: PortfolioPolicy | null;
+  hasAnalysis: boolean;
+  conditionsHref: string;
+  aiGenerated: boolean;
 }
 
-function PolicyDetail({ benefit, isSample, mine }: PolicyDetailProps): JSX.Element {
+function PolicyDetail({ benefit, isSample, mine, hasAnalysis, conditionsHref, aiGenerated }: PolicyDetailProps): JSX.Element {
   const tag = recruitTag(benefit.application);
   const closed = benefit.application.status === 'closed';
-  const applyUrl = benefit.application.url ?? benefit.source.url;
+  const applicationUrl = benefit.application.status === 'open' ? benefit.application.url : null;
+  const applyUrl = applicationUrl ?? benefit.source.url;
   const conflicts = benefit.conflicts ?? [];
-  const conflictInfo = usePolicyInfo(conflicts.map((conflict) => conflict.policy_id));
+  const conflictInfo = usePolicyInfo(isSample ? [] : conflicts.map((conflict) => conflict.policy_id));
   const reviewItems = mine?.eligibility.filter((item) => item.status === 'needs_review') ?? [];
 
   function conflictName(id: string): string {
-    return conflictInfo.get(id)?.title ?? devSampleBenefit(id)?.title ?? `정책 ${shortPolicyId(id)}`;
+    return (isSample ? devSampleBenefit(id)?.title : conflictInfo.get(id)?.title) ?? `정책 ${shortPolicyId(id)}`;
   }
 
   return (
@@ -125,9 +131,9 @@ function PolicyDetail({ benefit, isSample, mine }: PolicyDetailProps): JSX.Eleme
                   {mine.eligibility.map((condition) => (
                     <li key={condition.condition_id} className="s5-condition">
                       <StatusChip status={condition.status}>{conditionLabel(condition.condition_id)}</StatusChip>
-                      {conditionQuotes(benefit, condition).map((item) => (
-                        <blockquote key={`${item.location ?? ''}${item.quote}`} className="s5-quote">
-                          {item.location !== null ? <span className="s5-quote__where">「{item.location}」</span> : null}
+                      {condition.evidence.map((item, index) => (
+                        <blockquote key={`${item.source.url}-${String(index)}`} className="s5-quote">
+                          {item.location !== undefined ? <span className="s5-quote__where">「{item.location}」</span> : null}
                           {item.quote}
                         </blockquote>
                       ))}
@@ -137,9 +143,9 @@ function PolicyDetail({ benefit, isSample, mine }: PolicyDetailProps): JSX.Eleme
               </>
             ) : (
               <>
-                <h2 className="s5-card__title">내 조건을 고르면 자격을 진단해 드려요</h2>
-                <a className="ui-button ui-button--secondary" href={paths.conditions(1)}>
-                  조건 고르기
+                <h2 className="s5-card__title">{hasAnalysis ? '이 정책의 현재 진단을 확인할 수 없어요' : '내 조건을 고르면 자격을 진단해 드려요'}</h2>
+                <a className="ui-button ui-button--secondary" href={conditionsHref}>
+                  {hasAnalysis ? '조건 확인하고 다시 분석하기' : '조건 고르기'}
                 </a>
               </>
             )}
@@ -211,13 +217,10 @@ function PolicyDetail({ benefit, isSample, mine }: PolicyDetailProps): JSX.Eleme
           ) : null}
 
           {/* 9-1 맞춤 설명 (내 조건으로 진단했고 설명이 있을 때만) */}
-          {mine?.aiReason !== null && mine?.aiReason !== undefined ? (
+          {mine !== null && (mine.ai_reason?.trim() || (mine.ai_sources?.length ?? 0) > 0) ? (
             <section className="ui-card s5-card">
               <h2 className="s5-card__title">내 상황에서 볼 점</h2>
-              <p>
-                {mine.aiGenerated ? <span className="s5-ai">AI</span> : null}
-                {mine.aiReason}
-              </p>
+              <PolicyExplanation policy={mine} aiGenerated={aiGenerated} />
             </section>
           ) : null}
         </div>
@@ -225,13 +228,13 @@ function PolicyDetail({ benefit, isSample, mine }: PolicyDetailProps): JSX.Eleme
         {/* 10 출처 · 확인일 */}
         <p className="s5-source">
           출처 {sourceName(benefit.source.url)} · 마지막 확인 {monthDay(benefit.source.checked_at)} ·{' '}
-          <a href={benefit.source.url} target="_blank" rel="noopener noreferrer">
+          {isSample ? benefit.source.url : <a href={benefit.source.url} target="_blank" rel="noopener noreferrer">
             {benefit.source.url}
-          </a>
+          </a>}
           {isStale(benefit.source.checked_at) ? ' · ⚠ 최신 내용은 공식 페이지에서 확인' : ''}
         </p>
         <p className="s5-notice">
-          검수한 정책과 입력 조건으로 계산한 참고 결과예요. 최종 자격과 최신 조건은 신청 기관에서 확인해 주세요.
+          정책 안내는 참고용이에요. 최종 자격과 최신 조건은 신청 기관에서 확인해 주세요.
         </p>
       </main>
 
@@ -245,14 +248,14 @@ function PolicyDetail({ benefit, isSample, mine }: PolicyDetailProps): JSX.Eleme
               : ''}
           </p>
         ) : null}
-        <a
+        {isSample ? <p className="s5-muted">가상 예시에는 실제 신청 링크가 없어요.</p> : <a
           className="ui-button ui-button--primary ui-button--large ui-button--block"
           href={applyUrl}
           target="_blank"
           rel="noopener noreferrer"
         >
-          {closed ? '공식 페이지 보기 ↗' : '신청하러 가기 ↗'}
-        </a>
+          {applicationUrl !== null ? '신청하러 가기 ↗' : '공식 페이지 보기 ↗'}
+        </a>}
       </div>
     </>
   );

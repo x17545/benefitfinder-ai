@@ -73,7 +73,9 @@ export async function postSimulation(
       return { status: 'error' };
     }
     const body: unknown = await response.json();
-    return isSimulationResult(body) ? { status: 'ok', result: body } : { status: 'error' };
+    return isSimulationResult(body) && body.scenario === request.scenario &&
+      body.basis_period === (request.options?.period ?? '1y')
+      ? { status: 'ok', result: body } : { status: 'error' };
   } catch {
     return { status: 'error' };
   }

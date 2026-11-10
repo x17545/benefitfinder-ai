@@ -23,7 +23,7 @@ export function toSimulationState(scenario: SimulationScenario, outcome: Simulat
   if (outcome.status === 'limit') {
     return outcome;
   }
-  const sample = devSampleSimulation(scenario);
+  const sample = outcome.status === 'notAvailable' ? devSampleSimulation(scenario) : null;
   return sample !== null ? { status: 'ok', result: sample, isSample: true } : { status: 'error' };
 }
 
@@ -40,7 +40,8 @@ export function useSimulation(request: ChangeSimulationRequest | null): { state:
     }
     const parsed = JSON.parse(body) as ChangeSimulationRequest;
     const controller = new AbortController();
-    void postSimulation(parsed, fetch, controller.signal).then((outcome) => {
+    const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(60_000)]);
+    void postSimulation(parsed, fetch, signal).then((outcome) => {
       if (!controller.signal.aborted) {
         setLoaded({ key, state: toSimulationState(parsed.scenario, outcome) });
       }

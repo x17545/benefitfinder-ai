@@ -29,7 +29,7 @@ export async function loadPolicyDetail(
       return { status: 'error' };
     }
     const body: unknown = await response.json();
-    return isNormalizedBenefit(body) ? { status: 'ok', benefit: body } : { status: 'error' };
+    return isNormalizedBenefit(body) && body.id === id ? { status: 'ok', benefit: body } : { status: 'error' };
   } catch {
     return { status: 'error' };
   }
@@ -40,7 +40,7 @@ export function toDetailState(id: string, loaded: LoadResult): PolicyDetailState
   if (loaded.status === 'ok') {
     return { status: 'ok', benefit: loaded.benefit, isSample: false };
   }
-  const sample = devSampleBenefit(id);
+  const sample = loaded.status === 'notFound' ? devSampleBenefit(id) : null;
   return sample !== null ? { status: 'ok', benefit: sample, isSample: true } : loaded;
 }
 
@@ -52,7 +52,8 @@ export function usePolicyDetail(id: string): { state: PolicyDetailState; retry: 
 
   useEffect(() => {
     const controller = new AbortController();
-    void loadPolicyDetail(id, fetch, controller.signal).then((result) => {
+    const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(60_000)]);
+    void loadPolicyDetail(id, fetch, signal).then((result) => {
       if (!controller.signal.aborted) {
         setLoaded({ key, state: toDetailState(id, result) });
       }

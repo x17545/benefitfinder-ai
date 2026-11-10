@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { JSX } from 'react';
-import { navigate, paths } from '../../app/router.ts';
+import { CONDITION_STEPS, navigate, paths } from '../../app/router.ts';
 import type { ChangeSimulationRequest, ChangeSimulationResult, SimulationScenario } from '../../shared/api/simulations.ts';
 import { ChoiceChip, ChoiceGroup } from '../../shared/ui/ChoiceChip.tsx';
 import { SiteFooter } from '../../shared/ui/SiteFooter.tsx';
@@ -8,7 +8,9 @@ import { TopBar } from '../../shared/ui/TopBar.tsx';
 import { useAnalysis } from '../benefits/analysisStore.ts';
 import { formatManWon, shortPolicyId } from '../benefits/format.ts';
 import { usePolicyInfo } from '../benefits/policyInfo.ts';
+import { readResultBasis, withResultBasis } from '../benefits/resultBasis.ts';
 import { devSampleBenefit } from '../policy/devSampleBenefits.ts';
+import { missingSteps } from '../profile/answerRules.ts';
 import { clearMyData } from '../profile/clearMyData.ts';
 import { useFlowState } from '../profile/flowStore.ts';
 import { toRecommendationRequest } from '../profile/toRequest.ts';
@@ -16,26 +18,15 @@ import { manText, netChange, periodShort, rateBarWidth, rateSentence, SCENARIO_C
 import { useSimulation } from './useSimulation.ts';
 import './WhatIfScreen.css';
 
-/** S3에서 왔으면 S3으로, 아니면 이전 화면으로 */
-function goBack(hasResult: boolean): void {
-  if (hasResult) {
-    navigate(paths.result);
-    return;
-  }
-  if (window.history.length > 1) {
-    window.history.back();
-    return;
-  }
-  navigate(paths.start);
-}
-
 /** S4 상황이 바뀌면? (기획서 4.6). 주소 /what-if */
 export function WhatIfScreen(): JSX.Element {
-  const { answers } = useFlowState();
+  const { answers, consent } = useFlowState();
   const analysis = useAnalysis();
   const [scenario, setScenario] = useState<SimulationScenario>('employed');
+  const basis = readResultBasis(window.location.search);
 
-  const hasConditions = answers.age !== null;
+  const missing = missingSteps(answers);
+  const hasConditions = consent && missing.length === 0 && analysis.status === 'done';
   // '독립하면'인데 이미 혼자 살면 계산할 것이 없다 (기획서 4.6)
   const alreadyAlone = scenario === 'independent' && answers.living === 'alone';
   const request: ChangeSimulationRequest | null =
@@ -44,7 +35,7 @@ export function WhatIfScreen(): JSX.Element {
           domain: 'youth',
           profile: toRecommendationRequest(answers).profile,
           scenario,
-          options: { period: '1y', present_value: false },
+          options: basis,
         }
       : null;
   const { state, retry } = useSimulation(request);
@@ -54,7 +45,7 @@ export function WhatIfScreen(): JSX.Element {
       <TopBar
         title="상황이 바뀌면?"
         onBack={() => {
-          goBack(analysis.status === 'done');
+          navigate(analysis.status === 'done' ? withResultBasis(paths.result, basis) : paths.start);
         }}
       />
       <main className="screen__body s4-body">
@@ -64,7 +55,7 @@ export function WhatIfScreen(): JSX.Element {
           <section className="ui-card s4-card">
             <h2 className="s4-card__title">내 조건을 먼저 골라 주세요</h2>
             <p className="s4-muted">조건을 고르면 상황이 바뀔 때 지원금이 어떻게 달라지는지 계산해 드려요.</p>
-            <a className="ui-button ui-button--primary" href={paths.conditions(1)}>
+            <a className="ui-button ui-button--primary" href={consent ? paths.conditions(missing[0] ?? CONDITION_STEPS) : paths.start}>
               조건 고르기
             </a>
           </section>
@@ -76,7 +67,10 @@ export function WhatIfScreen(): JSX.Element {
                   key={chip.value}
                   selected={scenario === chip.value}
                   onSelect={() => {
-                    setScenario(chip.value);
+                    if (chip.value !== scenario) {
+                      setScenario(chip.value);
+                      retry();
+                    }
                   }}
                 >
                   {chip.label}
@@ -110,15 +104,11 @@ export function WhatIfScreen(): JSX.Element {
               </section>
             ) : null}
             {!alreadyAlone && state.status === 'ok' ? (
-              <SimulationResult result={state.result} isSample={state.isSample} />
+              <SimulationResult result={state.result} isSample={state.isSample} presentValue={basis.present_value} />
             ) : null}
           </>
         )}
 
-        <p className="s4-note">
-          계산은 바뀐 조건으로 조합을 다시 계산한 결과예요. 안내는 공고 근거와 계산 결과로 정리했어요. 세금·4대
-          보험은 빼고 지원금 변화만 계산했어요.
-        </p>
       </main>
       <SiteFooter onClearData={clearMyData} />
     </div>
@@ -128,32 +118,34 @@ export function WhatIfScreen(): JSX.Element {
 interface SimulationResultProps {
   result: ChangeSimulationResult;
   isSample: boolean;
+  presentValue: boolean;
 }
 
-function SimulationResult({ result, isSample }: SimulationResultProps): JSX.Element {
+function SimulationResult({ result, isSample, presentValue }: SimulationResultProps): JSX.Element {
   const lost = result.lost ?? [];
   const gained = result.gained ?? [];
-  const info = usePolicyInfo([...lost, ...gained].map((item) => item.policy_id));
+  const info = usePolicyInfo(isSample ? [] : [...lost, ...gained].map((item) => item.policy_id));
   const diff = result.after_total_won - result.before_total_won;
   const net = netChange(result);
   const rate = result.effective_marginal_rate;
   const barWidth = rateBarWidth(rate);
+  const detailBasis = { period: result.basis_period, present_value: !isSample && presentValue };
 
   function name(id: string): string {
-    return info.get(id)?.title ?? devSampleBenefit(id)?.title ?? `정책 ${shortPolicyId(id)}`;
+    return (isSample ? devSampleBenefit(id)?.title : info.get(id)?.title) ?? `정책 ${shortPolicyId(id)}`;
   }
 
   return (
     <>
       {isSample ? (
-        <p className="s4-dev-note">개발용 화면: 상황 변화 API가 아직 없어 가상 예시를 보여 줘요</p>
+        <p className="s4-dev-note">개발용 가상 예시: 입력 조건과 무관한 1년 기준이며 현재가치를 적용하지 않았어요</p>
       ) : null}
 
       <div className="s4-grid">
         {/* 2 총액 비교 */}
         <section className="ui-card s4-card">
           <dl className="s4-rows">
-            <dt>현재 추천 조합 ({periodShort(result.basis_period)})</dt>
+            <dt>현재 추천 조합 ({periodShort(result.basis_period)}{!isSample && presentValue ? ' · 현재가치' : ''})</dt>
             <dd>{formatManWon(result.before_total_won)}</dd>
             <dt>바뀐 뒤 추천 조합</dt>
             <dd>
@@ -170,7 +162,7 @@ function SimulationResult({ result, isSample }: SimulationResultProps): JSX.Elem
         {/* 3 · 4 실제로 늘어나는 돈 + 실효한계세율 (소득이 바뀌는 상황에서만) */}
         {net !== null ? (
           <section className="ui-card s4-card">
-            <h2 className="s4-card__title">실제로 늘어나는 돈</h2>
+            <h2 className="s4-card__title">실제로 늘어나는 돈 (1년 기준)</h2>
             <dl className="s4-rows">
               <dt>연 소득</dt>
               <dd>
@@ -199,13 +191,15 @@ function SimulationResult({ result, isSample }: SimulationResultProps): JSX.Elem
               <p className="s4-small">{result.income_change.assumption_note}</p>
             ) : null}
           </section>
+        ) : result.scenario === 'employed' || result.scenario === 'income_up' ? (
+          <p className="s4-note">연 소득 증가분을 확인할 수 없어 실제 순증가와 실효한계세율을 표시하지 않아요.</p>
         ) : null}
 
         {/* 5 끊기는 정책 */}
         {lost.map((item) => (
           <section key={`lost-${item.policy_id}`} className="ui-card s4-card">
             <span className="s4-badge s4-badge--lose">✕ 끊기는 정책</span>
-            <a className="s4-policy" href={paths.policy(item.policy_id)}>
+            <a className="s4-policy" href={withResultBasis(paths.policy(item.policy_id), detailBasis)}>
               {name(item.policy_id)} ›
             </a>
             <p className="s4-muted">
@@ -219,7 +213,7 @@ function SimulationResult({ result, isSample }: SimulationResultProps): JSX.Elem
         {gained.map((item) => (
           <section key={`gain-${item.policy_id}`} className="ui-card s4-card">
             <span className="s4-badge s4-badge--add">＋ 새로 받는 정책</span>
-            <a className="s4-policy" href={paths.policy(item.policy_id)}>
+            <a className="s4-policy" href={withResultBasis(paths.policy(item.policy_id), detailBasis)}>
               {name(item.policy_id)} ›
             </a>
             <p className="s4-muted">
@@ -247,17 +241,19 @@ function SimulationResult({ result, isSample }: SimulationResultProps): JSX.Elem
         {result.todo ? (
           <section className="ui-card s4-card s4-card--sub">
             <h2 className="s4-card__title">지금 할 일</h2>
-            <p>
-              <span className="s4-ai">AI</span>
-              {result.todo.text}
-            </p>
-            <p className="s4-small">
-              근거: 공고 원문{' '}
-              {result.todo.evidence.map((item) => `'${item.location ?? item.quote}'`).join(' · ')} 조항
-            </p>
+            <p>{result.todo.text}</p>
+            <ul className="s4-small">
+              {result.todo.evidence.map((item, index) => (
+                <li key={`${item.source.url}-${String(index)}`}>
+                  <blockquote>{item.quote}</blockquote>
+                  <a href={item.source.url} target="_blank" rel="noopener noreferrer">{item.location ?? '원문 근거'} ↗</a>
+                </li>
+              ))}
+            </ul>
           </section>
         ) : null}
       </div>
+      <p className="s4-note">{result.calculation_note}</p>
     </>
   );
 }

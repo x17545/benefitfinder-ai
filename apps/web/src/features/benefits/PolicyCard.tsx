@@ -1,5 +1,4 @@
 import type { JSX } from 'react';
-import { paths } from '../../app/router.ts';
 import { conditionLabel } from '../../domains/youth/conditionLabels.ts';
 import type { NormalizedBenefit } from '../../shared/api/benefits.ts';
 import { StatusChip } from '../../shared/ui/StatusChip.tsx';
@@ -11,6 +10,7 @@ import type { PortfolioPolicy } from './resultModel.ts';
 interface PolicyCardProps {
   policy: PortfolioPolicy;
   info: ReadonlyMap<string, NormalizedBenefit>;
+  detailHref: string;
   /** 결과 설명을 생성형 AI가 썼을 때만 AI 표시 */
   aiGenerated: boolean;
 }
@@ -38,7 +38,7 @@ function PolicyIcon({ categories }: { categories: readonly string[] }): JSX.Elem
 }
 
 /** 지원금 행 (S3 9 ~ 12번) */
-export function PolicyCard({ policy, info, aiGenerated }: PolicyCardProps): JSX.Element {
+export function PolicyCard({ policy, info, aiGenerated, detailHref }: PolicyCardProps): JSX.Element {
   const benefit = info.get(policy.policy_id);
   const tag = benefit !== undefined ? recruitTag(benefit.application) : null;
   const amount = policy.amount_in_period_won;
@@ -49,7 +49,7 @@ export function PolicyCard({ policy, info, aiGenerated }: PolicyCardProps): JSX.
 
   return (
     <article className="s3-policy">
-      <a className="s3-policy__main" href={paths.policy(policy.policy_id)}>
+      <a className="s3-policy__main" href={detailHref}>
         <span className="s3-policy__head">
           <PolicyIcon categories={benefit?.categories ?? []} />
           <span className="s3-policy__title">
@@ -86,7 +86,7 @@ export function PolicyCard({ policy, info, aiGenerated }: PolicyCardProps): JSX.
       </span>
 
       <div className="s3-policy__actions">
-        <a className="ui-button ui-button--secondary" href={paths.policy(policy.policy_id)}>
+        <a className="ui-button ui-button--secondary" href={detailHref}>
           자세히 보기
         </a>
         <a className="ui-button ui-button--primary" href={applyUrl} target="_blank" rel="noopener noreferrer">

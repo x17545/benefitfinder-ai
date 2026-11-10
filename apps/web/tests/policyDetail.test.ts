@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import benefitText from '../../../contracts/fixtures/youth-benefit.json?raw';
 import resultText from '../../../contracts/fixtures/recommendation-response.json?raw';
 import type { NormalizedBenefit } from '../src/shared/api/benefits.ts';
@@ -6,7 +6,6 @@ import type { RecommendationResponse } from '../src/shared/api/recommendations.t
 import {
   amountSummary,
   applyPeriod,
-  conditionQuotes,
   diagnosisSummary,
   findMyPolicyResult,
 } from '../src/features/policy/policyDetailModel.ts';
@@ -39,23 +38,34 @@ describe('S5 정책 상세 글자', () => {
   it('지원 내용은 원문 요약을 먼저 쓴다', () => {
     expect(amountSummary(benefit.benefit_amount)).toBe('[가상] 월 최대 20만 원, 최장 12개월');
     expect(amountSummary(null)).toContain('공식 페이지');
+    expect(amountSummary({ max_total_won: 100_000, amount_status: 'unknown' })).toBe('금액 확인 필요');
   });
 
-  it('원문 인용은 정책 상세의 조건 근거를 쓴다', () => {
-    expect(conditionQuotes(benefit, condition('age', 'met'))[0]?.quote).toContain('만 19세 이상 34세 이하');
-  });
-
-  it('마지막 분석 결과에서 이 정책의 자격 진단을 찾는다', () => {
-    const id = result.results['1y'].pv_off.portfolios[0]?.policies[0]?.policy_id ?? '';
-    expect(findMyPolicyResult(result, id)?.eligibility.length).toBeGreaterThan(0);
-    expect(findMyPolicyResult(result, 'youth:example:none')).toBeNull();
-    expect(findMyPolicyResult(null, id)).toBeNull();
+  it('같은 선택 기준과 정책 버전의 진단·설명만 연결한다', () => {
+    const fixture = structuredClone(result);
+    const basis = { period: '2y', present_value: true } as const;
+    const policy = fixture.results['2y'].pv_on.portfolios[0]?.policies[0];
+    if (!policy) throw new Error('invalid fixture');
+    fixture.virtual_data = false;
+    fixture.ai_generated = true;
+    policy.ai_reason = '2년 현재가치 기본 문구';
+    policy.ai_generated = false;
+    const matching = { ...benefit, id: policy.policy_id, source: policy.source };
+    expect(findMyPolicyResult(fixture, matching, basis, false, false)).toMatchObject({
+      ai_reason: '2년 현재가치 기본 문구', ai_generated: false, eligibility: policy.eligibility,
+    });
+    expect(findMyPolicyResult(fixture, { ...matching, id: 'other' }, basis, false, false)).toBeNull();
+    const revised = { ...matching, source: { ...matching.source, document_version: 'new-version' } };
+    expect(findMyPolicyResult(fixture, revised, basis, false, false)).toBeNull();
+    expect(findMyPolicyResult(fixture, matching, basis, true, false)).toBeNull();
+    expect(findMyPolicyResult(fixture, matching, basis, false, true)).toBeNull();
   });
 });
 
 describe('S5 정책 상세 받기', () => {
   it('404는 없는 정책, 다른 실패와 모양이 틀린 응답은 오류로 구분한다', async () => {
-    expect((await loadPolicyDetail('x', respond(200, benefit))).status).toBe('ok');
+    expect((await loadPolicyDetail(benefit.id, respond(200, benefit))).status).toBe('ok');
+    expect((await loadPolicyDetail('x', respond(200, benefit))).status).toBe('error');
     expect((await loadPolicyDetail('x', respond(404, {}))).status).toBe('notFound');
     expect((await loadPolicyDetail('x', respond(500, {}))).status).toBe('error');
     expect((await loadPolicyDetail('x', respond(200, { id: 'x' }))).status).toBe('error');
@@ -65,5 +75,15 @@ describe('S5 정책 상세 받기', () => {
     const sample = toDetailState('youth:example:P1', { status: 'notFound' });
     expect(sample.status === 'ok' && sample.isSample).toBe(true);
     expect(toDetailState('youth:example:unknown', { status: 'notFound' }).status).toBe('notFound');
+    expect(toDetailState('youth:example:P1', { status: 'error' }).status).toBe('error');
+  });
+
+  it('배포 빌드에서는 가상 정책이 반환되지 않는다', () => {
+    vi.stubEnv('DEV', false);
+    try {
+      expect(toDetailState('youth:example:P1', { status: 'notFound' }).status).toBe('notFound');
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });

@@ -142,15 +142,6 @@
   text-decoration: none;
 }
 
-.s4-ai {
-  margin-right: 6px;
-  padding: 1px 6px;
-  border-radius: 6px;
-  background: var(--color-accent-soft);
-  font-size: 11px;
-  font-weight: 800;
-}
-
 .s4-note {
   margin: 0;
   font-size: var(--text-tiny);
