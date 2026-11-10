@@ -20,6 +20,8 @@ apps/web/
   AGENTS.md
   .env.example               개발 서버 전용 예시 (브라우저 공개값 없음)
   package.json               name @benefitfinder/web, 스크립트 dev/lint/typecheck/build/preview/test
+  api/backend-unavailable.ts 백엔드 미연결 Preview의 503 오류 응답
+  vercel.ts                  배포 환경별 API 연결과 SPA 경로
   vite.config.ts             dev 127.0.0.1:5173 strictPort, /api/v1·/health 프록시
   vitest 설정                vite.config.ts의 test 필드 (tests/**/*.test.ts)
   tsconfig.json              tsc -b 참조 (app + node)
@@ -80,7 +82,7 @@ pnpm --filter @benefitfinder/web test           # vitest run
 
 Vercel의 프로젝트 Root Directory는 `apps/web`이며 `vercel.ts`가 `/api/*`·`/health`를 먼저 백엔드로 보내고 나머지 화면 주소는 `/index.html`로 연결한다. `/privacy`, `/about`, `/result` 직접 접근·새로고침도 SPA 라우터가 처리한다. [공식 프로그램 설정 안내](https://vercel.com/docs/project-configuration/vercel-ts)의 `config` export 형식을 사용하며 별도 런타임 의존성을 추가하지 않는다.
 
-Preview 환경에는 **해당 구현을 포함한 백엔드의 HTTPS 원점**을 `API_PROXY_TARGET`으로 명시한다. 예: `https://branch-backend.example`. 이 값에 경로·인증정보·쿼리를 넣지 않는다. Preview에서 값이 없으면 다른 버전의 운영 API로 연결하지 않고 설정 오류로 빌드를 중단한다. Production은 같은 변수를 지정하거나 기존 `https://benefitfinder-ai.onrender.com`을 기본값으로 사용한다. `.env`의 Vite 개발 서버 설정은 배포 설정을 대신하지 않는다. `VITE_*`로 DB·모델 키를 전달하지 않는다.
+Preview에서 API를 쓰려면 **해당 구현을 포함한 백엔드의 HTTPS 원점**을 `API_PROXY_TARGET`으로 명시한다. 예: `https://branch-backend.example`. 이 값에 경로·인증정보·쿼리를 넣지 않는다. 값이 없거나 비어 있으면 웹은 빌드하고, `/api/*`와 `/health`는 `api/backend-unavailable.ts`의 HTTP 503·`dependency_unavailable` JSON으로 응답한다. 이 응답은 요청 본문을 읽거나 저장하지 않고 `Cache-Control: no-store`를 사용한다. 운영 API로 자동 연결하거나 정상 상태·가상 지역·추천 결과로 대체하지 않는다. 환경 이름을 알 수 없는 경우에도 같은 방식을 사용한다. 명시한 주소가 잘못됐으면 설정 오류로 빌드를 중단한다. Production은 같은 변수를 지정하거나 기존 `https://benefitfinder-ai.onrender.com`을 기본값으로 사용한다. `.env`의 Vite 개발 서버 설정은 배포 설정을 대신하지 않는다. `VITE_*`로 DB·모델 키를 전달하지 않는다.
 
 백엔드는 저장소 루트의 [Render 설정](../../render.yaml)을 기준으로 준비한다. 이미 있는 서비스는 새로 만들기 전에 대상 서비스·연결 브랜치·환경을 확인한다. 이 파일은 자동 배포를 켜지 않으며, main 병합·배포·원격 설정 적용은 별도 승인 후 수행한다. 프론트·백엔드에 같은 구현을 반영한 뒤 `/health`의 JSON뿐 아니라 `/api/v1/options`의 지역 JSON, 가상 조건 추천·표시, `/privacy` 직접 접근을 모두 확인한다. `/health` 200만으로 정책 API 준비를 판단하지 않는다.
 

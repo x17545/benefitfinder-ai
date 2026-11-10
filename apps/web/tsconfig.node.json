@@ -15,5 +15,5 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true
   },
-  "include": ["vite.config.ts", "vercel.ts"]
+  "include": ["vite.config.ts", "vercel.ts", "api/**/*.ts"]
 }

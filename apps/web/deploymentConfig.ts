@@ -3,8 +3,14 @@ export function createVercelConfig(
   apiTarget: string | undefined,
   environment: string | undefined,
 ): { rewrites: { source: string; destination: string }[] } {
-  if (environment === 'preview' && !apiTarget?.trim()) {
-    throw new Error('preview_API_PROXY_TARGET_required');
+  if (environment !== 'production' && !apiTarget?.trim()) {
+    return {
+      rewrites: [
+        { source: '/api/:path*', destination: '/api/backend-unavailable' },
+        { source: '/health', destination: '/api/backend-unavailable' },
+        { source: '/(.*)', destination: '/index.html' },
+      ],
+    };
   }
   let target: URL;
   try {

@@ -11,8 +11,19 @@ describe('Vercel API routing', () => {
     ]);
   });
 
-  it('requires an explicit preview backend instead of quietly using production', () => {
-    expect(() => createVercelConfig(undefined, 'preview')).toThrow('preview_API_PROXY_TARGET_required');
+  it.each(['preview', 'development', undefined])(
+    'keeps a preview without a backend isolated from production (%s)', (environment) => {
+      for (const target of [undefined, '', '  ']) {
+        expect(createVercelConfig(target, environment).rewrites).toEqual([
+          { source: '/api/:path*', destination: '/api/backend-unavailable' },
+          { source: '/health', destination: '/api/backend-unavailable' },
+          { source: '/(.*)', destination: '/index.html' },
+        ]);
+      }
+    },
+  );
+
+  it('preserves the production backend default', () => {
     expect(createVercelConfig(undefined, 'production').rewrites[0]?.destination)
       .toBe('https://benefitfinder-ai.onrender.com/api/:path*');
   });

@@ -76,7 +76,7 @@ uv run --locked uvicorn benefitfinder.main:app --reload --reload-dir backend/src
 
 F13은 기본 안내 템플릿으로 동작한다. `F13_OLLAMA_MODEL=gemma4:e4b`를 명시하고 같은 실행 환경의 `127.0.0.1:11434`에 모델이 준비된 경우에만 로컬 AI 설명을 요청한다. 모델 오류·지연 시 기본 안내로 돌아가며 계산은 유지한다. Render에 환경 변수만 넣어도 개발 PC의 Ollama에 연결되는 것은 아니다.
 
-Vercel Preview는 [웹 배포 연결 안내](../../apps/web/README.md#vercel-배포-연결)의 `API_PROXY_TARGET`을 Preview 환경에 설정해야 한다. 대응하는 백엔드가 없는 Preview는 빌드를 중단한다. 실제 배포는 별도 승인 후 수행한다.
+Vercel Preview에서 API를 쓰려면 [웹 배포 연결 안내](../../apps/web/README.md#vercel-배포-연결)의 `API_PROXY_TARGET`을 설정한다. 미설정 Preview도 화면은 빌드하지만 `/api/*`와 `/health`는 HTTP 503·`dependency_unavailable`로 응답한다. 운영 API로 자동 연결하지 않으며 잘못된 주소를 명시하면 빌드를 중단한다. 실제 배포는 별도 승인 후 수행한다.
 
 ## 4. 매일 쓰는 검사
 
