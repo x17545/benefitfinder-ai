@@ -38,6 +38,10 @@ def _object(value: object, keys: set[str]) -> dict[str, object]:
 def _text(value: object) -> str:
     if not isinstance(value, str) or not value.strip():
         _invalid()
+    try:
+        value.encode('utf-8')
+    except UnicodeError:
+        _invalid()
     return value
 
 
@@ -290,7 +294,7 @@ def evaluate_manifest(manifest: Path, *, view: str | None = None) -> dict[str, o
     try:
         data, size = _read_json(manifest, 32 * 1024 * 1024, (1, 2))
         if data['format_version'] == 2:
-            return _evaluate_large(manifest, data, size, view or 'both')
+            return _evaluate_large(manifest, data, size, 'both' if view is None else view)
         if view is not None:
             _invalid()
         return evaluate_cases(load_evaluation_cases(manifest))

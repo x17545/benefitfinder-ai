@@ -109,3 +109,23 @@ class LargeEvaluationBoundsTests(TestCase):
             write_json(path, facts)
             with self.assertRaisesRegex(EvaluationFileError, '^invalid_f12_evaluation_input$'):
                 evaluate_manifest(manifest)
+
+    def test_invalid_unicode_returns_fixed_error_without_partial_output(self) -> None:
+        for version in (1, 2):
+            with self.subTest(version=version), TemporaryDirectory() as temp:
+                root = Path(temp)
+                manifest = large_fixture(root, 100)
+                data = json.loads(manifest.read_text())
+                data['format_version'] = version
+                data['cases'][0]['id'] = 'private-marker-\ud800'
+                manifest.write_text(json.dumps(data, ensure_ascii=True), encoding='utf-8')
+                before = {p: p.read_bytes() for p in root.rglob('*.json')}
+                output = root / 'failed.json'
+                stdout, stderr = StringIO(), StringIO()
+                with redirect_stdout(stdout), redirect_stderr(stderr):
+                    self.assertEqual(main(['evaluate-f12', '--manifest', str(manifest),
+                                           '--output', str(output)]), 2)
+                self.assertIn('invalid_f12_evaluation_input', stderr.getvalue())
+                self.assertNotIn('private-marker', stdout.getvalue() + stderr.getvalue())
+                self.assertFalse(output.exists())
+                self.assertTrue(all(p.read_bytes() == raw for p, raw in before.items()))

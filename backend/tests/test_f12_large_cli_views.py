@@ -155,8 +155,11 @@ class LargeCliViewsTests(TestCase):
         with TemporaryDirectory() as temp:
             root = Path(temp)
             manifest = chunk_fixture(root)
-            with self.assertRaisesRegex(EvaluationFileError, '^invalid_f12_evaluation_input$'):
-                evaluate_manifest(manifest, view='invalid')
+            for view in ('invalid', ''):
+                with self.subTest(view=view), self.assertRaisesRegex(
+                    EvaluationFileError, '^invalid_f12_evaluation_input$'
+                ):
+                    evaluate_manifest(manifest, view=view)
             manifest.write_text('{"format_version":2,"format_version":2,"private-marker":true}')
             output = root / 'failed.json'
             stdout, stderr = StringIO(), StringIO()
