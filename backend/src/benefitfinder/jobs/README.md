@@ -2,6 +2,97 @@
 
 현재 구현: `python -m benefitfinder.jobs collect-youthcenter`가 온통청년 목록 수집을 한 번 실행한다(사용법은 [ingestion](../ingestion/README.md#로컬-수집-실행)). `rule-review`는 로컬 검수 자료의 준비·명시적 승인·재검수·상태 조회를 실행한다. 두 명령 모두 `__main__.py`에서 구체 파일 어댑터와 순수 처리 함수를 조립한다. 매일 실행·실패 알림은 구현하지 않았다.
 
+## 한 번에 F12 검수 자료 만들기
+
+공식 공고 한 건, 두 정책의 ID와 빈 후보 목록을 담은 검수 입력을 준비한다. 아래 이름과 ID는 가상이다. Ollama에서 도구 호출을 지원하는 로컬 모델을 실행한 뒤 저장소 루트에서 실행한다.
+
+```bash
+uv run --locked python -m benefitfinder.jobs rule-review extract-all \
+  --input data/processed/rule-reviews/notice-input.json \
+  --target-name '가상 정책 B' --target-alias '가상 B' --target-id youth:virtual:b \
+  --model gemma4:e4b --output-dir data/processed/rule-reviews/notice-review
+```
+
+같은 원문으로 중복 제한과 자격·금액·지급 시점을 각각 추출한 뒤 새 `--output-dir`에 `rules-pending.json`과 `facts-pending.json`을 저장한다. 한쪽 추출이 실패하면 결과를 저장하지 않으며 기존 디렉터리는 덮어쓰지 않는다. 원문과 두 결과 모두 Git 제외 경로에 둔다.
+
+## 두 F12 검수 파일을 함께 보기
+
+`extract-all`에 넘긴 결과 디렉터리를 지정한다.
+
+```bash
+uv run --locked python -m benefitfinder.jobs rule-review show-all \
+  --input-dir data/processed/rule-reviews/notice-review
+```
+
+두 파일의 공고 버전·해시와 인용을 저장된 원문으로 확인한 뒤 중복 제한·예외, 자격 조건, 지원 금액, 지급 시점을 검수 대기 상태와 함께 보여 준다. 줄 번호가 있는 인용은 해당 위치의 원문과 정확히 일치해야 한다. 공식 출처와 인용 위치를 표시하며, 추출된 근거가 없으면 `not_found`, 고정 월 지급일이 확인되지 않으면 `미확인`으로 표시한다. 파일이 빠졌거나 서로 다른 공고의 파일을 섞으면 내용을 출력하기 전에 실패한다. 조회는 읽기 전용이며 모델이나 공식 사이트를 호출하지 않는다. 중복 제한 상태 요약만 보려면 기존 `rule-review show --snapshot <경로>`를 사용한다.
+
+### 항목별로 승인·반려 사유 남기기
+
+`show-all`에 표시된 항목 ID를 고른다. `rule`은 예외를 포함한 중복 제한 후보, `eligibility`는 자격 근거, `amount`는 금액과 근거, `timing`은 지급 시점 근거다. `not_found`에는 검수할 후보가 없어 ID를 부여하지 않는다. `decide`에는 승인(`approve`) 또는 반려(`reject`), 검수자, 사유를 모두 명시한다. 아래 값은 가상 예시다.
+
+```bash
+review_dir=data/processed/rule-reviews/notice-review
+uv run --locked python -m benefitfinder.jobs rule-review decide \
+  --input-dir "$review_dir" --item-id rule:1 --decision approve \
+  --reviewer virtual-reviewer --reason '원문과 제한 조건·예외가 일치함' \
+  --output "$review_dir/decisions-1.json"
+uv run --locked python -m benefitfinder.jobs rule-review decide \
+  --input-dir "$review_dir" --item-id amount:1 --decision reject \
+  --reviewer virtual-reviewer --reason '지급 한도를 함께 확인해야 함' \
+  --decisions "$review_dir/decisions-1.json" --output "$review_dir/decisions-2.json"
+uv run --locked python -m benefitfinder.jobs rule-review show-all \
+  --input-dir "$review_dir" --decisions "$review_dir/decisions-2.json"
+```
+
+이전 기록을 `--decisions`로 넘기면 새 판단을 덧붙인 파일을 만든다. 같은 항목을 다시 판단해도 이력은 남고, 조회에는 마지막 판단과 사유를 표시한다. 판단이 없는 항목은 `needs_review`로 표시된다. 두 입력 파일이나 이전 기록을 덮어쓰지 않으며 원문 또는 후보가 바뀐 다른 결과에 기존 판단을 적용하지 않는다. 이 기록은 로컬 후보 검수용이며 `approve --snapshot`의 규칙 승인 기록이나 운영 게시에 연결되지 않는다. 원문·후보·판단 기록은 모두 Git 제외 경로에 둔다.
+
+### 승인 항목만 로컬 파일로 내보내기
+
+같은 두 후보 파일과 최신 판단 기록을 지정한다.
+
+```bash
+uv run --locked python -m benefitfinder.jobs rule-review export-approved \
+  --input-dir "$review_dir" --decisions "$review_dir/decisions-2.json" \
+  --output "$review_dir/approved-export.json"
+```
+
+가장 최근 판단이 승인인 항목만 새 JSON에 저장한다. 각 항목에 검수자·시각·사유, 원문 인용과 위치를 남기고, 공고의 출처·버전·해시를 함께 담는다. 반려와 검수 대기 항목, 공고 전문은 포함하지 않는다. 승인 후 반려한 항목도 제외한다. 승인 항목이 없으면 `f12_no_approved_items`로 실패하고 파일을 만들지 않는다. 기존 자료를 덮어쓰거나 새 승인을 생성하지 않는다. 이 파일은 Git 제외 경로에 두는 로컬 검수 산출물이며 운영 게시에 연결되지 않는다.
+
+## 로컬 모델로 후보 만들기
+
+`rule-review extract`는 이미 확보한 공식 공고 텍스트 한 건과 상대 정책 한 건으로 중복 제한 후보 하나를 만든다. 검수 입력 v1과 같은 형식으로 공식 `documents` 한 건, 두 정책의 `policies`, 빈 `candidates`를 준비한다. `rule-review example`의 가상 출력에서 필드 구조를 확인할 수 있다. 두 정책 모두 청년 취업·주거 범위에 있어야 하고, 상대 정책의 이름과 ID는 입력자가 공식 자료로 확인한다. 공고가 같은 정책을 다른 이름으로 부르면 확인된 표기를 `--target-alias`로 반복해서 넘길 수 있다. 모르는 별칭을 유사성만으로 정책에 연결하지 않는다. 아래 이름·ID는 가상이다.
+
+```bash
+ollama pull gemma4:e4b
+uv run --locked python -m benefitfinder.jobs rule-review extract \
+  --input data/processed/rule-reviews/notice-input.json \
+  --target-name '가상 정책 B' --target-alias '가상 B' --target-id virtual-b --model gemma4:e4b \
+  --output data/processed/rule-reviews/notice-candidates.json
+uv run --locked python -m benefitfinder.jobs rule-review prepare \
+  --input data/processed/rule-reviews/notice-candidates.json \
+  --output data/processed/rule-reviews/notice-pending.json
+```
+
+Ollama가 `127.0.0.1:11434`에서 실행 중이고 도구 호출을 지원하는 로컬 모델이 설치되어 있어야 한다. 모델은 검색된 줄과 앞뒤 문맥을 함께 보고, 여러 줄에 걸친 제한·기간·예외를 연속된 원문 범위로 인용할 수 있다. 선택한 근거의 명시적 허용은 제한 조건과 구분해 `exceptions`에 저장한다. 예외가 조건에 섞이거나 선택한 근거에서 빠지면 모델에 재제출을 요청한다. 콘솔에는 모델·도구 순서·소요 시간만 남긴다. 모델이 낸 해석은 사람이 검수하며, 이 명령은 승인하거나 게시하지 않는다. 실제 원문과 후보는 `data/` 같은 Git 제외 경로에 보관한다.
+
+## 자격·금액·지급 시점 후보 만들기
+
+공식 공고 한 건을 담은 기존 검수 입력으로 실행한다. 상대 정책 이름과 ID는 필요 없다.
+
+```bash
+uv run --locked python -m benefitfinder.jobs rule-review extract-facts \
+  --input data/processed/rule-reviews/notice-input.json --model gemma4:e4b \
+  --output data/processed/rule-reviews/notice-facts-pending.json
+```
+
+모델은 자격 조건·지원 금액·지급 시점에 해당하는 원문 줄을 고른다. 결과는 원문 인용, 줄 번호, 문서 버전·해시가 붙은 별도 `needs_review` 파일이다. 금액 숫자는 인용에 직접 적힌 원화 표기만 옮긴다. 월 금액과 기간을 곱해 총액을 만들거나, 지급 시점의 상대 조건을 고정 지급일로 바꾸지 않는다. 근거를 찾지 못한 항목은 `not_found`다. 날짜 범위·선택지·기한처럼 고정 월 지급일을 하나로 확정할 수 없으면 인용을 보존하고 `scheduled_monthly_day: null`로 둔다. `not_found`는 후보에서 근거를 찾지 못했다는 뜻이며 원문 전체에 조건이 없다는 판정이 아니다. 이 파일은 아래 중복 제한 검수 명령의 승인·게시 입력이 아니다.
+
+자격 조항은 고정된 앞뒤 줄 수로 자르지 않고 이어진 조건·예외까지 모델에 보여 준다. 소득 조건의 별도 예외와 증빙 요건, 사업자 제외 다음 줄의 휴·폐업 예외도 원문 인용에 남긴다. 금액은 월 한도뿐 아니라 실제 비용·생애 한도·기수혜 차감 및 별도 절의 급여 차감 FAQ를 함께 제시한다. 금액 수치가 없는 차감 근거도 보존하되 `amounts_won`은 빈 배열이다. 지원금으로 소득 한도를 옮기거나, 원문에 없는 총액을 계산하지 않는다. 문맥 한도(240줄·35,000자·한 줄 700자)를 넘으면 `policy_facts_context_limit`로 실패하며 일부 조건을 조용히 생략하지 않는다. 모호한 접속어·출생연도·가구 구분은 원문 그대로 검수 대기에 둔다.
+
+보완 추출은 새 결과 파일에 저장한다. `show-all`로 새 두 파일을 확인하되 이전 `--decisions`를 연결하지 않는다. 인용 범위나 후보가 달라지면 항목 번호도 바뀔 수 있으며, 기존 판단은 다른 후보 쌍에 재사용할 수 없다. 근거 보완 자체는 승인·DB 적재·게시를 수행하지 않는다.
+
+규칙 후보가 없는 공식 보충 지침도 `facts`만으로 검수할 수 있다. 중복 제한 근거가 없어 `rules-pending.json`의 `reviews`가 비어도 자격·금액·지급 시점 중 하나라도 `extracted`면 두 파일을 함께 저장·조회하고 항목별 판단·승인 내보내기를 진행한다. 모두 `not_found`면 저장·조회 모두 실패한다. 같은 정책의 다른 공식 문서는 기존 공고의 근거에 덧붙이지 않는다. 원문 URL·버전·해시를 별도 파일로 보존하고 해당 문서의 인용으로만 검수한다.
+
 ## 로컬 규칙 검수 실행
 
 다음 예제는 실제 정책과 무관한 가상 자료이며 DB·LLM·네트워크 없이 실행한다. 저장소 루트에서 실행하고, 기존 파일이 있으면 새 경로를 사용한다.
@@ -32,13 +123,56 @@ uv run --locked python -m benefitfinder.jobs rule-review refresh --snapshot data
 | `refresh --snapshot --input --output` | 새 전체 입력으로 기존 승인을 해제하거나 유지. 기존 사유·검토한 후보는 보존 |
 | `show --snapshot` | 저장된 입력으로 상태를 다시 검사해 요약. 파일을 수정하거나 공식 사이트를 조회하지 않음 |
 
-모든 출력은 새 파일로만 만든다. 승인·재검수 후에도 이전 파일의 원문·검수자·시각은 그대로 남으며, 실패한 명령이 기존 자료를 바꾸지 않는다. 종료 코드 `0`은 명령 성공(검수 대기 결과도 포함), `1`은 형식·검수·파일 오류, `2`는 잘못된 명령 인자다. 오류는 고정 코드로 표시하며 콘솔에는 원문·인용문·외부 예외 본문을 출력하지 않는다.
+파일 출력은 새 파일로만 만든다. 승인·재검수 후에도 이전 파일의 원문·검수자·시각은 그대로 남으며, 실패한 명령이 기존 자료를 바꾸지 않는다. 종료 코드 `0`은 명령 성공(검수 대기 결과도 포함), `1`은 형식·검수·파일 오류, `2`는 잘못된 명령 인자다. 오류는 원문·인용문·외부 예외 본문 없이 고정 코드로 표시한다. 인용은 검수용 상세 조회인 `show-all`이 성공했을 때 표시한다.
 
 `created_at`은 결과 파일 생성 시각이며 공고의 마지막 확인일이나 검수 시각을 대신하지 않는다. 저장된 수집 시각·검수 시각이 파일 생성 시각보다 뒤이면 조회·승인·재검수는 고정 오류 코드로 실패하고 새 파일을 만들지 않는다. 재검수는 입력을 교체하기 전에 기존 파일도 검사하며, 여기서 발견된 승인 불일치·상충 사유를 새 입력에도 보존한다. 원문이 동일한 재수집은 기존 승인 시각을 유지한다. 원문 변경·삭제·공식 출처 미확인·정책 범위 변경·상충 후보 추가는 검수 대기로 돌아간다. 재검수는 새 후보를 자동으로 승인하거나 기존 사유를 지우지 않는다. 새 추출 후보와 해결한 검수 사유는 별도 `prepare` 파일에서 다시 검토한다. 입력 누락을 새 수급 허용으로 해석하지 않는다.
 
 이 형식은 `RuleReviewBatch`·`RuleReviewSnapshot`의 **로컬 개발용 직렬화 v1**이며 공유 API·게시 계약·PostgreSQL 스키마가 아니다. 입력 파일은 `format_version: 1`, `documents`, `policies`, `candidates`를 담는다. 결과는 `operation`, `created_at`, 전체 `batch`와 `reviews`를 담고 `status`는 저장하지 않는다. 날짜에는 시간대가 필요하며 알 수 없는 필드·중복 JSON 키·잘못된 타입/버전은 거부한다. 정확한 입력 모양은 `example`이 만든 파일과 `application/policy_rules.py`를 본다.
 
 실제 자료는 Git 제외 경로에 보관하고 기존 수집 결과 `records.json`을 그대로 이 입력으로 사용하지 않는다. 공식 원문과 분류의 확인, 텍스트 추출·후보 생성은 별도 준비가 필요하다. 승인 전 최신 전체 입력으로 재검수하고, 검토 중인 JSON 안의 원문·근거 위치·미해결 사유를 함께 확인한다. 로컬 승인 기록은 검수자 인증이나 운영 게시를 대신하지 않으며 공유·게시 연결은 관련 계약과 함께 검토한다.
+
+## F12 추출 품질 평가
+
+`evaluate-f12`는 F12 로컬 v1 검수 자료와 사람이 승인한 내보내기를 **읽기 전용**으로 비교한다. 기존 추출·승인 코드를 가져오거나 실행하지 않으며 모델·네트워크·DB에 접근하지 않는다. 승인·반려·보류·게시 상태를 바꾸지 않는다. 실제 원문·기준·후보·평가 결과는 Git 제외 경로에 둔다. 공유 테스트는 가상 자료만 사용한다.
+
+평가 manifest 예제는 가상 경로다. 경로는 manifest 파일의 디렉터리를 기준으로 해석하며 절대 경로도 허용한다.
+
+```json
+{
+  "format_version": 1,
+  "cases": [{
+    "id": "virtual-employment",
+    "category": "employment",
+    "reference_dir": "gold/employment",
+    "approved_exports": ["gold/employment/approved-export.json"],
+    "candidate_dir": "candidates/employment"
+  }]
+}
+```
+
+- `reference_dir/rules-pending.json`은 공식 원문·정책·버전의 기준이다. `approved_exports`는 `f12_approved_review_export` v1이며 검수자·사유·시각을 포함한 승인 항목만 읽는다. 승인 기록의 진위·검수자 신원을 인증하는 도구는 아니므로 실제 사용자 검수 기록과 대조해 기준 파일을 선택한다. 대기/반려 파일을 정답으로 넣지 않는다.
+- `candidate_dir`에는 평가할 `rules-pending.json`, `facts-pending.json`이 필요하다. 기준과 후보를 같은 디렉터리로 지정할 수 없다. 후보 번호·순서가 달라도 같은 분야/종류와 원문 범위로 비교한다. 규칙은 상대 정책·관계 종류·방향도 맞아야 한다.
+- 승인 인용의 범위를 하나 또는 여러 유효한 후보 인용이 모두 포함하는지 검사한다. 인용 사이의 원문 공백만 빠진 경우는 허용하고, 조건·접속어·숫자 등 내용 누락은 부분/누락으로 보고한다. 금액은 연결된 후보 수치 집합도 대조한다.
+- `exceptions`는 별도 필드의 텍스트와 그 후보가 실제 인용한 원문을 함께 검사한다. 공백만 정규화하고 표현의 의미가 같은지는 추정하지 않는다. 인용에 예외가 있어도 별도 필드가 비면 누락이며, 다른 표현은 사람 검토 대상이다. 자격/금액의 조건·예외 문맥은 승인한 인용 범위의 누락으로 평가한다.
+- 후보의 인용문·위치·문서 ID/버전/해시를 원문과 대조한다. 위치는 `line N`, `lines N-M`, `PDF pN / text lines N-M`처럼 원문 텍스트의 줄 범위가 있어야 자동 검증된다. 범위 안에서도 반복 인용이 모호하면 오류로 보고한다. PDF 페이지 자체의 정확성은 텍스트 줄 검사와 별도다.
+- 서로 다른 원문 버전은 비교 불가다. 추출 실패는 `candidate_dir: null`과 `candidate_error: "context_limit"`(또는 `model_failure`, `extraction_failed`)로 명시한다. 이 경우 후보를 만들거나 누락으로 단정하지 않는다. 모든 기준 근거가 평가되지 못하면 전체 `approved_evidence_recall`은 `null`이고, 비교 가능 근거의 recall과 전체 평가 가능 비율을 각각 제공한다.
+- 검수 기준은 공고 전체 정답이 아닐 수 있다. 추가 후보/승인 범위 밖 인용은 `unscored_content`로 남기며 오답·승인으로 바꾸거나 정밀도를 추정하지 않는다. 원문 인용 일치도 정책 해석·수급 자격의 정확성을 보장하지 않는다.
+
+```sh
+uv run --locked python -m benefitfinder.jobs evaluate-f12 \
+  --manifest data/local/f12-evaluation/manifest.json \
+  --output data/local/f12-evaluation/report.json
+```
+
+기존 보고서는 덮어쓰지 않는다. 콘솔에는 집계와 고정 오류 코드만 표시하며 원문·검수자·파일 내용은 출력하지 않는다. JSON 보고서는 항목별 포함/부분/누락/비교 불가, 예외의 일치/누락/표현 변경/인용 미지원, 후보 인용 오류, 금액 수치 차이와 평가 한계를 담는다. `requires_human_review: true`, `approval_effect: none`은 항상 유지한다.
+
+종료 코드 `0`은 지정된 승인 근거 범위에서 발견 사항이 없음, `1`은 누락·예외/근거/수치 차이·비교 불가 등 발견 사항이 있는 보고서 생성 완료, `2`는 입력/파일/출력 경로 오류다. `0`은 자동 승인이나 전체 공고의 정확성을 뜻하지 않는다. 문맥 한도를 높이거나 공고를 정답 구간만 잘라 점수를 맞추지 말고 실패를 별도 기록한다.
+
+실제 자료 없이 회귀를 실행하려면:
+
+```sh
+uv run --locked python -m unittest backend.tests.test_f12_evaluation backend.tests.test_f12_evaluation_files backend.tests.test_f12_evaluation_cli -v
+```
 
 ## 긴 공식 지침의 문맥 분할 추출
 
