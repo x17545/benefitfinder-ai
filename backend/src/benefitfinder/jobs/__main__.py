@@ -13,6 +13,7 @@ import argparse
 import asyncio
 import json
 import os
+import shutil
 import sys
 from collections import Counter
 from collections.abc import Sequence
@@ -26,6 +27,7 @@ from benefitfinder.ai.policy_facts_agent import extract_policy_facts
 from benefitfinder.ai.policy_rule_agent import extract_rule_batch
 from benefitfinder.application.f12_review import F12ReviewDecision
 from benefitfinder.application.policy_rules import RuleReviewSnapshot
+from benefitfinder.infrastructure.discord_webhook import DiscordWebhook, DiscordWebhookError
 from benefitfinder.infrastructure.local_files import (
     JsonFileSnapshotStore,
     JsonFileVersionStore,
@@ -48,7 +50,7 @@ from benefitfinder.infrastructure.policy_rule_files import (
     write_rule_snapshot,
 )
 from benefitfinder.infrastructure.youthcenter_http import YouthcenterHttpFetcher
-from benefitfinder.ingestion.collect import collect_youthcenter
+from benefitfinder.ingestion.collect import CollectionResult, collect_youthcenter
 from benefitfinder.ingestion.rule_review_workflow import (
     RuleReviewWorkflowError,
     approve_snapshot,
@@ -59,6 +61,12 @@ from benefitfinder.ingestion.rule_review_workflow import (
 from benefitfinder.ingestion.youthcenter import SOURCE_NAME, YOUTHCENTER_POLICY_LIST
 from benefitfinder.jobs.f12_review_display import format_f12_review
 from benefitfinder.jobs.rule_review_example import example_rule_batch
+from benefitfinder.jobs.youthcenter_refresh import (
+    STATUS_FILE,
+    RefreshError,
+    refresh_notification,
+    run_youthcenter_refresh,
+)
 
 from benefitfinder.ai.policy_explanation import GroundedPolicyExplainer
 from benefitfinder.application.policy_explanations import explain_policy
@@ -104,6 +112,71 @@ def collect_youthcenter_command(data_dir: Path) -> int:
         return 1
     print("전체 수집 완료")
     return 0
+
+
+def _refresh_youthcenter(data_dir: Path) -> int:
+    api_key = os.environ.get(API_KEY_ENV, "").strip()
+    if not api_key:
+        print(f"환경 변수 {API_KEY_ENV}에 인증키를 설정하세요.", file=sys.stderr)
+        return 2
+
+    root = data_dir / "processed" / "f08-youthcenter"
+    fetcher = YouthcenterHttpFetcher(api_key)
+    snapshots = JsonFileSnapshotStore(data_dir / "raw" / "f08-youthcenter")
+
+    def clock() -> datetime:
+        return datetime.now(KST)
+
+    def build(staging: Path, previous: Path | None) -> CollectionResult:
+        versions = JsonFileVersionStore(staging)
+        records_path = versions.records_path(SOURCE_NAME)
+        if previous is not None:
+            records_path.parent.mkdir(parents=True)
+            shutil.copyfile(JsonFileVersionStore(previous).records_path(SOURCE_NAME), records_path)
+
+        result = collect_youthcenter(YOUTHCENTER_POLICY_LIST, fetcher, snapshots, versions, clock)
+        if result.complete:
+            records = versions.load_records(SOURCE_NAME)
+            if not records_path.exists():  # 첫 정상 응답이 0건이면 저장할 레코드가 없다.
+                records_path.parent.mkdir(parents=True, exist_ok=True)
+                records_path.write_text("{}\n", encoding="utf-8")
+            write_records_csv(records, records_path.with_name("records.csv"))
+            write_field_summary_csv(records, records_path.with_name("fields.csv"))
+        return result
+
+    try:
+        complete = run_youthcenter_refresh(root, build, clock)
+    except RefreshError as exc:
+        print(f"온통청년 갱신 실패: {exc}", file=sys.stderr)
+        return 1
+    except OSError:
+        print("온통청년 갱신 실패: refresh_io_error", file=sys.stderr)
+        return 1
+    if not complete:
+        print(f"온통청년 갱신 실패. 마지막 성공본 유지: {root / STATUS_FILE}", file=sys.stderr)
+        return 1
+    print(f"온통청년 갱신 완료: {root / STATUS_FILE}")
+    return 0
+
+
+def refresh_youthcenter_command(data_dir: Path, *, notify_discord: bool = False) -> int:
+    started_at = datetime.now(KST)
+    code = _refresh_youthcenter(data_dir)
+    if notify_discord:
+        webhook = os.environ.get("DISCORD_WEBHOOK_URL", "").strip()
+        if not webhook:
+            print("F08 알림 실패: discord_webhook_missing", file=sys.stderr)
+            return code or 1
+        try:
+            message = refresh_notification(
+                data_dir / "processed" / "f08-youthcenter", code, started_at
+            )
+            DiscordWebhook(webhook).send(message)
+        except DiscordWebhookError as exc:
+            print(f"F08 알림 실패: {exc}", file=sys.stderr)
+            return code or 1
+        print("F08 디스코드 결과 알림 전송 완료")
+    return code
 
 
 def _print_review_summary(snapshot: RuleReviewSnapshot) -> None:
@@ -285,6 +358,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     commands = parser.add_subparsers(dest="command", required=True)
     collect = commands.add_parser("collect-youthcenter", help="온통청년 정책 목록 전체 수집")
     collect.add_argument("--data-dir", type=Path, default=Path("data"))
+    refresh = commands.add_parser(
+        "refresh-youthcenter", help="완전한 온통청년 수집만 최신본으로 전환"
+    )
+    refresh.add_argument("--data-dir", type=Path, default=Path("data"))
+    refresh.add_argument(
+        "--notify-discord", action="store_true", help="디스코드 웹훅으로 결과 알림"
+    )
     _add_rule_review_commands(commands)
     explain = commands.add_parser(
         "explain-example", help="F13 가상 게시 조항으로 설명 생성·폴백 확인"
@@ -294,6 +374,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.command == "collect-youthcenter":
         return collect_youthcenter_command(args.data_dir)
+    if args.command == "refresh-youthcenter":
+        return refresh_youthcenter_command(args.data_dir, notify_discord=args.notify_discord)
     if args.command == "rule-review":
         return rule_review_command(args)
     if args.command == "explain-example":
