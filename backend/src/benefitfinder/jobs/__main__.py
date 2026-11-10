@@ -23,10 +23,13 @@ from pathlib import Path
 from time import monotonic
 from zoneinfo import ZoneInfo
 
+from benefitfinder.ai.chunked_evidence import extract_chunked_evidence
 from benefitfinder.ai.policy_facts_agent import extract_policy_facts
 from benefitfinder.ai.policy_rule_agent import extract_rule_batch
 from benefitfinder.application.f12_review import F12ReviewDecision
 from benefitfinder.application.policy_rules import RuleReviewSnapshot
+from benefitfinder.infrastructure.chunk_e4b import LocalE4BChat
+from benefitfinder.infrastructure.chunk_evidence_files import write_chunk_checkpoint, write_chunked_run
 from benefitfinder.infrastructure.discord_webhook import DiscordWebhook, DiscordWebhookError
 from benefitfinder.infrastructure.local_files import (
     JsonFileSnapshotStore,
@@ -383,6 +386,31 @@ def evaluate_f12_command(manifest: Path, output: Path) -> int:
     return 1 if report["assessment"] == "findings" else 0
 
 
+def extract_chunked_command(source: Path, output: Path) -> int:
+    """Run one local E4B extraction over every window; never approve or publish."""
+    try:
+        batch = load_rule_batch(source)
+        output.mkdir(parents=True, exist_ok=False)
+        facts, provenance = extract_chunked_evidence(
+            batch, chat=LocalE4BChat(),
+            progress=lambda done, total: print(f"문맥 묶음 {done}/{total} 완료", flush=True),
+            checkpoint=lambda record: write_chunk_checkpoint(output, record),
+        )
+        snapshot = prepare_snapshot(batch, at=datetime.now(ZoneInfo("Asia/Seoul")))
+        write_chunked_run(output, snapshot, facts, provenance)
+    except FileExistsError:
+        print("분할 추출 실패: chunk_output_exists", file=sys.stderr)
+        return 1
+    except (ValueError, OSError, RuleReviewWorkflowError, RuleReviewFileError) as error:
+        allowed = {"chunk_input_invalid", "chunk_context_limit", "chunk_response_invalid",
+                   "chunk_model_failed"}
+        code = str(error) if str(error) in allowed else "chunk_extraction_failed"
+        print(f"분할 추출 실패: {code}", file=sys.stderr)
+        return 1
+    print("분할 추출 완료: 검수 대기. 승인·DB 적재·게시 상태를 바꾸지 않습니다.")
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m benefitfinder.jobs")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -398,6 +426,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     evaluate = commands.add_parser("evaluate-f12", help="사람 승인 근거 기준의 로컬 추출 평가")
     evaluate.add_argument("--manifest", type=Path, required=True)
     evaluate.add_argument("--output", type=Path, required=True)
+    chunked = commands.add_parser("extract-chunked-facts", help="앞뒤 문맥을 보존한 로컬 E4B 추출")
+    chunked.add_argument("--input", type=Path, required=True)
+    chunked.add_argument("--output-dir", type=Path, required=True)
     _add_rule_review_commands(commands)
     explain = commands.add_parser(
         "explain-example", help="F13 가상 게시 조항으로 설명 생성·폴백 확인"
@@ -409,6 +440,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return collect_youthcenter_command(args.data_dir)
     if args.command == "refresh-youthcenter":
         return refresh_youthcenter_command(args.data_dir, notify_discord=args.notify_discord)
+    if args.command == "extract-chunked-facts":
+        return extract_chunked_command(args.input, args.output_dir)
     if args.command == "rule-review":
         return rule_review_command(args)
     if args.command == "explain-example":
