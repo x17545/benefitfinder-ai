@@ -354,6 +354,10 @@ export interface RecommendationResponse {
   request_id: string;
   domain: string;
   /**
+   * true면 가상 정책·금액의 개발용 계산이다. 화면과 저장 이미지에 실제 추천이 아님을 표시한다. 생략은 실제 자료 검증 완료를 뜻하지 않는다.
+   */
+  virtual_data?: boolean;
+  /**
    * 전역 초기 기준. results[1y][pv_off]의 표시 섹션과 일치한다.
    */
   view: 'portfolio' | 'fallback_list' | 'empty';

@@ -39,7 +39,7 @@ async def create_recommendations(
 
     if request.domain != "youth":
         raise HTTPException(
-            status_code=422,
+            status_code=400,
             detail="unsupported_domain",
         )
 

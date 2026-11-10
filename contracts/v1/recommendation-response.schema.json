@@ -23,6 +23,10 @@
     "domain": {
       "$ref": "common.schema.json#/$defs/domain_id"
     },
+    "virtual_data": {
+      "type": "boolean",
+      "description": "true면 가상 정책·금액의 개발용 계산이다. 화면과 저장 이미지에 실제 추천이 아님을 표시한다. 생략은 실제 자료 검증 완료를 뜻하지 않는다."
+    },
     "view": {
       "enum": [
         "portfolio",

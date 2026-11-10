@@ -62,8 +62,8 @@ export function StartScreen(): JSX.Element {
         </ol>
 
         <p className="s1-notice">
-          선택한 조건으로 정책을 찾고 지원금 조합을 계산해요. 결과는 참고용이며 최종 자격은 신청 기관에서
-          확인해야 해요. <a href={paths.about}>자세히</a>
+          현재는 가상 정책으로 조합 계산을 시험해요. 실제 받을 수 있는 지원금이 아니에요.{' '}
+          <a href={paths.about}>자세히</a>
         </p>
 
         <div className="s1-actions">

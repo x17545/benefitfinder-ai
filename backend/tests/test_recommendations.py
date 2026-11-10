@@ -68,6 +68,7 @@ class RecommendationApiTest(unittest.TestCase):
         )
 
         self.assertEqual(data["domain"], "youth")
+        self.assertTrue(data["virtual_data"])
         self.assertFalse(data["ai_generated"])
         self.assertEqual(data["discount_rate_status"], "unknown")
         self.assertEqual(
@@ -87,7 +88,9 @@ class RecommendationApiTest(unittest.TestCase):
             json=payload,
         )
 
-        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["code"], "unsupported_domain")
+        self.assertNotIn("unknown", response.json()["message"])
 
 
 if __name__ == "__main__":

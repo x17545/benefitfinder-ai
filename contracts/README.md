@@ -2,7 +2,7 @@
 
 작업 전에는 루트 지침과 이 경로의 [추가 에이전트 지침](AGENTS.md)을 함께 읽는다.
 
-프론트엔드·백엔드·AI·데이터 담당자가 공유하는 JSON 교환 형식이다. `v1/`의 JSON Schema가 필드·자료형의 기준이며, `fixtures/`는 독립 개발을 위한 가상 예제다. 2026-10-27 추가 회의에 따라 초기 MVP의 수집·검색·진단·조합·상황 변화·상세는 청년 취업·주거 혜택만 다룬다. 생활·자산형성·교육·장학 등은 확장 단계다. F01~F11과 13단계 입력은 두 분야에 유지하지만, 정책 API는 아직 없고 6장 필드명/형식과 11.2 기본값(동점 순서, 취업 가정 연 소득 2,400만, 기준선 ±100만 등)은 회의 논의 초안이다. 원초안의 상위 20개 절단은 최적값을 누락할 수 있어 이번 계산 규칙 정리에서 제거했다.
+프론트엔드·백엔드·AI·데이터 담당자가 공유하는 JSON 교환 형식이다. `v1/`의 JSON Schema가 필드·자료형의 기준이며, `fixtures/`는 독립 개발을 위한 가상 예제다. 2026-10-27 추가 회의에 따라 초기 MVP의 수집·검색·진단·조합·상황 변화·상세는 청년 취업·주거 혜택만 다룬다. 생활·자산형성·교육·장학 등은 확장 단계다. F01~F11과 13단계 입력은 두 분야에 유지하지만, 실행 API는 공식 지역 선택·가상 정책 추천·F13 설명을 제공하며, 6장 필드명/형식과 11.2 기본값(동점 순서, 취업 가정 연 소득 2,400만, 기준선 ±100만 등)은 회의 논의 초안이다. 원초안의 상위 20개 절단은 최적값을 누락할 수 있어 이번 계산 규칙 정리에서 제거했다.
 
 ## 파일
 
@@ -27,7 +27,7 @@
 ## 공통 의미
 
 - `domain`: 적용 분야. 첫 지원값은 `youth`다. 스키마는 확장을 허용하지만 서버의 지원 여부는 별도 확인한다.
-- 초기 정책 분류: `domain: youth` 안에서 `categories`의 `employment`(취업)·`housing`(주거)만 활성화한다. 관심 선택 `interests`도 이 두 값만 받는다. 수집 출처의 분류를 검수하여 대응시키고 혼합·불명확한 분류는 확인 전 노출하지 않는다. 공통 혜택의 `categories`와 분야 식별자는 확장 가능하게 유지하며, 확장 시 청년 관심 enum·선택지·후보 필터·예제·검증을 함께 갱신한다. 현재 실행 API나 배포된 소비자는 없으며, 이번 관심 enum 축소는 MVP 회의 결정에 맞춘 초안 계약 변경이다.
+- 초기 정책 분류: `domain: youth` 안에서 `categories`의 `employment`(취업)·`housing`(주거)만 활성화한다. 관심 선택 `interests`도 이 두 값만 받는다. 수집 출처의 분류를 검수하여 대응시키고 혼합·불명확한 분류는 확인 전 노출하지 않는다. 공통 혜택의 `categories`와 분야 식별자는 확장 가능하게 유지하며, 확장 시 청년 관심 enum·선택지·후보 필터·예제·검증을 함께 갱신한다. 현재 공식 지역·가상 추천 API가 이 계약을 사용하며, 관심 enum 축소는 MVP 회의 결정에 맞춘 초안 계약 변경이다.
 - `domain_data`: 분야 고유 정보. 공통 필드나 정책 조건을 중복 저장하지 않는다. 분야별 이름·자료형은 해당 분야 문서에서 정의하고 실제 사용 전 추가 검증한다.
 - `profile`: 사용자가 제공·확인한 조건. 공통 `age`/`region_code`/`employment_status`/`income_band`/`household_type`은 유지하고, 혼인·학력·주거·계약/보증금/월세·재산·특수조건·관심·이미수혜·가구/부모정보는 `domain_data`에 둔다. 지역은 공통 `region_code`(시군구 전체 코드)가 SSOT이며, `domain_data.region`에는 피커 상위 시도(`sido_code`)만 둔다. 기간+현재가치 옵션은 `request.options` 한 곳에만 둔다. 누락 또는 `null`은 미확인을 뜻하며 `0`, 무소득, 미충족으로 바꾸지 않는다.
 - `military_months_range`: `{min, max}`. 정확한 개월은 동일값, 미상은 전체 `null`, 열린 상한은 `max: null`. UI 매핑은 해당없음 `0..0`, 1년6개월이하 `0..18`, 1년6개월초과~2년 `19..24`, 2년초과 `25..null`이다. `min<=max`는 스키마가 강제하지 않고 애플리케이션 검증과 테스트로 확인한다. 정책별 최대 6년 연장은 해당 공고 근거가 있을 때만 적용하고 근거 없으면 사용하지 않는다.
@@ -36,8 +36,8 @@
 - `evidence`: 원문의 인용문과 해당 버전의 출처. 인용문은 실제 원문에서 확인해야 하며 AI가 생성한 문장을 넣지 않는다.
 - `application.status`: `open`, `closed`, `upcoming`, `unknown`. 상시 모집은 별도 `always` 값을 두지 않고 `open`+공식 상시 근거로 표현한다. 날짜만으로 확정할 수 없는 모집 상태는 `unknown`이며, 날짜 `null`을 `open`으로 추정하지 않는다.
 - `condition_results`/`eligibility[].status`: `met`(충족), `not_met`(미충족), `needs_review`(추가 확인 필요). `need_check` 표기는 거부된다. 충족·미충족에는 최소 하나의 근거가 필요하다.
+- `virtual_data`: 추천 응답의 선택적 boolean. `true`는 가상 정책·금액 계산이며 화면과 PNG에 실제 지원금이 아님을 표시한다. 이전 응답은 생략 가능하고, 생략·`false`를 실제 정책 검증 완료로 해석하지 않는다. 현재 MVP 추천 API는 항상 `true`다.
 - `ai_generated`: 응답 중 AI 생성 설명이 하나라도 있으면 `true`, 모두 기본 근거 템플릿이면 `false`다. 데이터 준비에서 Agent를 썼는지를 나타내는 플래그가 아니다. `ai_reason`(6장 초안 이름 유지)은 템플릿을 포함한 추천 이유 텍스트이며 이 플래그와 함께 해석한다. 최종 필드명은 회의에서 정리한다. 데이터 Agent의 활용은 이용 안내에 별도로 설명하며 사용자 검색·코드 판정/계산·템플릿 응답은 LLM 없이 동작한다.
-- `portfolio_policy.ai_generated`/`ai_sources`: 정책별 AI 표시. `ai_generated`가 `true`면 `ai_reason`은 빈 문자열이 아닌 문자열, `ai_sources`는 1개 이상 5개 이하가 둘 다 필수다. `false`면 `ai_sources`가 있을 때만 빈 배열을 허용한다. 두 필드를 모두 생략한 이전 응답·가상 예제는 계속 유효하며 최상위 `ai_generated`로만 해석한다. `ai_sources` 항목은 `common.schema.json#/$defs/evidence`를 `allOf`로 재사용하면서 `required:[location]`을 추가한다. `quote`=게시 조항 전체 원문, `location`=조항 ID(필수), `source`=`url`/`checked_at`/`document_version`이다. 다른 `evidence`의 `location` 선택성은 유지한다. 정책별 숫자·판정과 첫 문장은 코드가 만들고 모델은 숫자 없는 신청 안내만 생성해 6개 보기에 재사용한다. 출력은 부분 성공 최상위 `ai_generated:true`·정책별 플래그 세팅이다. 화면 배지는 `policy.ai_generated ?? aiGenerated`로 판단해 일부만 실패한 조합을 AI로 오인하지 않는다.
 - `portfolio_policy.ai_generated`/`ai_sources`: 정책별 AI 표시. `ai_generated`가 `true`면 `ai_reason`은 빈 문자열이 아닌 문자열, `ai_sources`는 1개 이상 5개 이하가 둘 다 필수다. `false`면 `ai_sources`가 있을 때만 빈 배열을 허용한다. 두 필드를 모두 생략한 이전 응답·가상 예제는 계속 유효하며 최상위 `ai_generated`로만 해석한다. `ai_sources` 항목은 `common.schema.json#/$defs/evidence`를 `allOf`로 재사용하면서 `required:[location]`을 추가한다. `quote`=게시 조항 전체 원문, `location`=조항 ID(필수), `source`=`url`/`checked_at`/`document_version`이다. 다른 `evidence`의 `location` 선택성은 유지한다. 정책별 숫자·판정과 첫 문장은 코드가 만들고 모델은 숫자 없는 신청 안내만 생성해 6개 보기에 재사용한다. 출력은 부분 성공 최상위 `ai_generated:true`·정책별 플래그 세팅이다. 화면 배지는 `policy.ai_generated ?? aiGenerated`로 판단해 일부만 실패한 조합을 AI로 오인하지 않는다.
 - `not_yet_reviewed[]` preview(F12 승인용): 기존 `policy_id`·`eligibility_summary`는 그대로 두고 선택적 `policy_name`·`review_scope`·`verification_only:true`·`review_explanation:portfolio_policy`를 추가한다. `review_explanation`이 있으면 세 필드가 필수이며(스키마 `if/then` 강제), `policy_id` 동일·금액 미확정(`amount_in_period_won`·`original_amount_won` null, `amount_status`는 `unknown`, 확정 정수·`verified` 거부)·자격 미확정(바깥 `eligibility_summary`는 `needs_review`, 안쪽 `eligibility`는 빈 배열 또는 전부 `needs_review`)는 애플리케이션 검증으로 보장한다. 이전 응답(설명 없음)은 계속 유효하며 생산 기본 추천 동작은 바꾸지 않는다. backend의 preview 정책 구성은 금액 null·원액 null·`amount_status: unknown`·`eligibility: []`·`source`·`ai_reason`/`ai_generated`/`ai_sources`이며, 화면은 실제 `policy_name`과 `검증용 · 조합/자격/금액 확정 전`·`review_scope`·기존 `PolicyExplanation` 재사용(AI/기본 안내·원문 quote·url·version·date)만 보여주고 수급·신청 보장 CTA를 추가하지 않는다. 추가 결과 API 주입은 메인이 담당한다.
 - `conflicts`: 현재는 근거를 가진 단순 금지 쌍만 표현한다. 조건부·기간별·수급 이력·금액 차감 규칙을 여기에 손실 변환하지 않는다. Agent 추출 후보는 적용 정책·조건·예외·시점·원문 버전과 함께 검수하며, 복잡한 규칙의 내부 모델·코드 지원 범위·공유 계약은 다음 회의에서 검토한다. API 필드 누락은 동시 수급 허용의 근거가 아니다. 상세는 [정책 데이터 분석·정제 설계](../docs/architecture/POLICY_DATA_PIPELINE.md)를 따른다.
@@ -72,13 +72,13 @@
 
 이 규칙은 기능 구현 시 애플리케이션·분야 테스트로 검증한다. 구조 검증 통과를 자격 판정의 정확성으로 해석하지 않는다.
 
-## HTTP 매핑 (현재 구현: GET /health, 나머지는 예정)
+## HTTP 매핑 (현재 구현: health·options·가상 recommendations, 나머지는 예정)
 
 | 방식 | 주소 | 하는 일 | 응답 |
 |---|---|---|---|
 | GET | `/api/v1/meta` | 갱신 시각·기준금리·남은 횟수 | `meta` |
 | GET | `/api/v1/options` | 지역·구간 선택지 | `options` |
-| POST | `/api/v1/recommendations` | 분석 시작. SSE `progress` 여러 번 후 최종 `result` 한 번(또는 `error`) | `recommendation-response` |
+| POST | `/api/v1/recommendations` | 현재 가상 정책 JSON 응답. 목표는 SSE `progress` 후 `result` 또는 `error` | `recommendation-response` |
 | POST | `/api/v1/simulations` | 상황 변화 계산 | `simulation-response` |
 | GET | `/api/v1/benefits/{benefit_id}` | 정책 상세 | `benefit` |
 | GET | `/health` | 생존 확인(liveness 전용, DB-ready 보장 안 함) | `health` |
