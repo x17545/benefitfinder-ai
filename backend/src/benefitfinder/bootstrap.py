@@ -8,6 +8,7 @@ directly; they receive already-assembled objects here.
 from __future__ import annotations
 
 import uuid
+from functools import partial
 from typing import Any
 
 from fastapi import FastAPI, Request
@@ -17,14 +18,26 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from benefitfinder.api.schemas import ErrorCode, ErrorResponse
 from benefitfinder.api.v1.routers.health import router as health_router
+from benefitfinder.api.v1.routers.options import router as options_router
 from benefitfinder.api.v1.routers.recommendations import router as recommendations_router
-
-from functools import partial
-
+from benefitfinder.ai.policy_explanation import GroundedPolicyExplainer
+from benefitfinder.application.policy_explanations import (
+    ExplanationGenerator,
+    PublishedClauseRepository,
+)
+from benefitfinder.application.recommendation_explanations import RecommendationExplainer
 from benefitfinder.application.recommendation_service import (
     recommend_mvp_all_periods,
 )
+from benefitfinder.application.region_options import RegionCatalog
 from benefitfinder.domains.youth.policy_evaluator import evaluate_policies
+from benefitfinder.infrastructure.database.repositories.published_clauses import (
+    PostgresPublishedClauses,
+)
+from benefitfinder.infrastructure.example_explanation_data import recommendation_explanation_data
+from benefitfinder.infrastructure.ollama_explanations import OllamaExplanationCompletion
+from benefitfinder.infrastructure.published_clauses import InMemoryPublishedClauses
+from benefitfinder.infrastructure.region_codes import OfficialRegionCatalog
 
 NOT_FOUND_MESSAGE = "요청한 리소스를 찾을 수 없습니다."
 INVALID_REQUEST_MESSAGE = "요청 값이 올바르지 않습니다."
@@ -43,12 +56,39 @@ def error_body(code: ErrorCode, message: str) -> dict[str, Any]:
     return ErrorResponse(request_id=str(uuid.uuid4()), code=code, message=message).model_dump()
 
 
-def create_app() -> FastAPI:
+def create_app(
+    *,
+    region_catalog: RegionCatalog | None = None,
+    explanation_model: str | None = None,
+    explanation_repository: PublishedClauseRepository | None = None,
+    explanation_generator: ExplanationGenerator | None = None,
+    explanation_timeout_seconds: float = 5,
+    explanation_database_url: str | None = None,
+) -> FastAPI:
     """Assemble and return a new FastAPI application.
 
     Each call returns an independent instance; routes added to one instance
     never affect another. The app starts without DB, LLM, or secrets.
     """
+    if explanation_model is not None and explanation_generator is not None:
+        raise ValueError("ambiguous_explanation_generator")
+    if explanation_repository is not None and explanation_database_url is not None:
+        raise ValueError("ambiguous_explanation_repository")
+    if explanation_database_url is not None:
+        explanation_repository = PostgresPublishedClauses(explanation_database_url)
+    if explanation_model is not None:
+        explanation_generator = GroundedPolicyExplainer(
+            OllamaExplanationCompletion(explanation_model)
+        )
+    policies, clauses = recommendation_explanation_data()
+    explainer = RecommendationExplainer(
+        explanation_repository
+        if explanation_repository is not None
+        else InMemoryPublishedClauses(clauses),
+        policies,
+        explanation_generator,
+        timeout_seconds=explanation_timeout_seconds,
+    )
     app = FastAPI(
         title="BenefitFinder API",
         description="Youth employment/housing benefit API (bootstrap).",
@@ -66,6 +106,8 @@ def create_app() -> FastAPI:
         code, message = HTTP_ERROR_RESPONSES.get(
             exc.status_code, ("http_error", "요청을 처리할 수 없습니다.")
         )
+        if exc.status_code == 400 and exc.detail == "unsupported_domain":
+            code, message = "unsupported_domain", "아직 지원하지 않는 분야입니다."
         headers = {
             name: value
             for name, value in (exc.headers or {}).items()
@@ -98,7 +140,11 @@ def create_app() -> FastAPI:
         recommend_mvp_all_periods,
         evaluate_policies=evaluate_policies,
     )
+    app.state.recommendation_explainer = explainer
+
+    app.state.region_catalog = region_catalog if region_catalog is not None else OfficialRegionCatalog()
 
     app.include_router(health_router)
+    app.include_router(options_router)
     app.include_router(recommendations_router)
     return app

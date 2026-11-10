@@ -2,18 +2,18 @@ import type { JSX } from 'react';
 import { paths } from '../../app/router.ts';
 import { InfoCard, InfoLayout } from './InfoLayout.tsx';
 
-/** P1 이용 안내 (기획서 4.8, v3.0 카드 5개) */
+/** P1 이용 안내 (기획서 4.8의 주제를 현재 구현 범위로 안내) */
 export function AboutScreen(): JSX.Element {
   return (
     <InfoLayout
       title="이용 안내"
       heading="청년 정책 매니저는 이렇게 계산해요"
-      lead="고른 조건으로 받을 수 있는 지원금을 찾고, 함께 받을 수 있는 조합과 총액을 비교해 드려요."
+      lead="현재는 가상 정책으로 입력과 계산 흐름을 보여 드려요. 실제 정책 추천은 준비 중이에요."
     >
       <div className="info-cards">
         <InfoCard title="어떻게 찾고 계산하나요">
           <p>
-            고른 조건으로 검수한 정책을 찾고, 조건마다 충족 · 미충족 · 확인 필요를 판정해요. 함께 받을 수
+            고른 조건을 가상 정책의 규칙과 비교해 조건마다 충족 · 미충족 · 확인 필요를 판정해요. 함께 받을 수
             없는 정책은 빼고, 총액이 큰 조합을 최대 3개까지 보여 드려요.
           </p>
           <p>자격 판정, 금액, 조합, 현재가치는 모두 정해진 규칙(코드)으로 계산해요.</p>
@@ -21,16 +21,16 @@ export function AboutScreen(): JSX.Element {
 
         <InfoCard title="AI는 어디에 쓰나요">
           <ul>
-            <li>정책 공고 원문에서 조건 · 금액 · 함께 받을 수 없는 규칙을 찾아요. 사람이 검수한 뒤에만 반영해요.</li>
-            <li>결과 화면의 맞춤 설명 문장을 써요. AI가 쓴 문장에는 [AI] 표시를 붙여요.</li>
+            <li>정책 자료를 준비할 때 공고 원문에서 조건 · 금액 · 함께 받을 수 없는 규칙의 후보를 찾고 사람이 검수해요.</li>
+            <li>AI 설명을 사용하는 경우에만 [AI] 표시를 붙여요. AI를 사용할 수 없으면 기본 안내를 보여 드려요.</li>
             <li>금액과 자격 같은 숫자 계산은 AI가 하지 않아요.</li>
           </ul>
         </InfoCard>
 
         <InfoCard title="데이터 출처와 갱신">
           <p>
-            온통청년 · 보조금24 등 공식 자료를 써요. 매일 새벽 3시에 새로 확인하고, 정책마다 출처와 마지막
-            확인일을 함께 보여 드려요.
+            지역 선택은 공식 행정표준코드를 사용해요. 추천 결과의 정책과 금액은 가상 예제이며 실제 정책
+            자료 연결과 매일 자동 갱신은 준비 중이에요. 정책마다 표시된 출처와 확인일을 확인해 주세요.
           </p>
         </InfoCard>
 
@@ -53,7 +53,7 @@ export function AboutScreen(): JSX.Element {
         </InfoCard>
 
         <InfoCard title="내 정보는 어떻게 다루나요">
-          <p>고른 조건은 분석에만 쓰고, 분석이 끝나면 바로 폐기해요.</p>
+          <p>고른 조건은 서버에 저장하지 않아요. 입력과 결과의 브라우저 보관 · 삭제 방법을 확인해 주세요.</p>
           <a className="ui-button ui-button--secondary" href={paths.privacy}>
             개인정보 처리방침 보기
           </a>

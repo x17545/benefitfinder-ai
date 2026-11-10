@@ -203,6 +203,7 @@ def build_recommendation_response(
     return {
         "request_id": str(uuid4()),
         "domain": calculation["domain"],
+        "virtual_data": True,
         "view": "portfolio",
         "results": results,
         "ai_generated": False,

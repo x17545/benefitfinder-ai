@@ -20,6 +20,18 @@ jobs:
     name: repository-checks
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: fictional-ci-only
+          POSTGRES_DB: benefitfinder_f13_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d benefitfinder_f13_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
       # Use the actual PR head; a synthetic merge commit would hide a missing main merge.
       - uses: actions/checkout@v7
@@ -53,3 +65,9 @@ jobs:
         env:
           WORK_BRANCH: ${{ github.ref_name }}
         run: uv run --locked python scripts/check.py --branch "$WORK_BRANCH" --allow-main
+      - name: Check actual PostgreSQL F13 retrieval
+        env:
+          F13_TEST_DATABASE_URL: postgresql://postgres:fictional-ci-only@127.0.0.1:5432/benefitfinder_f13_test
+        run: |
+          uv run --locked ruff check backend/integration
+          uv run --locked python -m unittest discover -s backend/integration -v
