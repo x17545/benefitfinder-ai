@@ -72,7 +72,7 @@ export async function fetchBenefit(id: string, options: FetchBenefitOptions = {}
     throw new Error(`benefit request failed: HTTP ${response.status.toString()}`);
   }
   const body: unknown = await response.json();
-  if (!isNormalizedBenefit(body)) {
+  if (!isNormalizedBenefit(body) || body.id !== id) {
     throw new Error('benefit request failed: unexpected response shape');
   }
   return body;

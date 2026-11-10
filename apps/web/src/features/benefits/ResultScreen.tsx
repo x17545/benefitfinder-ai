@@ -17,6 +17,7 @@ import { PortfolioCard } from './PortfolioCard.tsx';
 import { usePolicyInfo } from './policyInfo.ts';
 import { saveResultImage } from './resultImage.ts';
 import { ResultLists } from './ResultLists.tsx';
+import { readResultBasis, withResultBasis } from './resultBasis.ts';
 import { allPolicyIds, pickView, policyName, portfolioLabel } from './resultModel.ts';
 import type { ResultView } from './resultModel.ts';
 import './ResultScreen.css';
@@ -89,8 +90,8 @@ function hasResultContent(view: ResultView): boolean {
 export function ResultScreen(): JSX.Element {
   const analysis = useAnalysis();
   const { answers } = useFlowState();
-  const [period, setPeriod] = useState<Period>('1y');
-  const [presentValue, setPresentValue] = useState(false);
+  const [period, setPeriod] = useState<Period>(() => readResultBasis(window.location.search).period);
+  const [presentValue, setPresentValue] = useState(() => readResultBasis(window.location.search).present_value);
   const [selectedRank, setSelectedRank] = useState(1);
 
   const result = analysis.status === 'done' ? analysis.result : null;
@@ -128,11 +129,13 @@ export function ResultScreen(): JSX.Element {
   function changePeriod(next: Period): void {
     setPeriod(next);
     setSelectedRank(1);
+    navigate(withResultBasis(paths.result, { period: next, present_value: presentValue }), { replace: true });
   }
 
   function togglePresentValue(next: boolean): void {
     setPresentValue(next);
     setSelectedRank(1);
+    navigate(withResultBasis(paths.result, { period, present_value: next }), { replace: true });
   }
 
   const conflict = view.why?.deciding_conflict ?? [];
@@ -317,7 +320,8 @@ export function ResultScreen(): JSX.Element {
             </h2>
             <div className="s3-policies">
               {selected.policies.map((policy) => (
-                <PolicyCard key={policy.policy_id} policy={policy} info={info} aiGenerated={result.ai_generated} />
+                <PolicyCard key={policy.policy_id} policy={policy} info={info} aiGenerated={result.ai_generated}
+                  detailHref={withResultBasis(paths.policy(policy.policy_id), { period, present_value: presentValue })} />
               ))}
             </div>
           </section>
@@ -368,7 +372,7 @@ export function ResultScreen(): JSX.Element {
           <Button
             size="large"
             onClick={() => {
-              navigate(paths.whatIf);
+              navigate(withResultBasis(paths.whatIf, { period, present_value: presentValue }));
             }}
           >
             상황이 바뀌면 어떻게 될까?

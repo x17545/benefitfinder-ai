@@ -1,0 +1,228 @@
+/* S5 정책 상세 */
+.s5-body {
+  gap: 16px;
+  word-break: keep-all;
+}
+
+.s5-muted {
+  margin: 0;
+  color: var(--color-muted);
+}
+
+/* 개발 중에만 보이는 안내 */
+.s5-dev-note {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--color-check-soft);
+  color: var(--color-check);
+  font-size: var(--text-sub);
+}
+
+/* 1 · 2 기관 · 모집 상태 · 이름 */
+.s5-head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.s5-head__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--color-muted);
+  font-size: 14px;
+}
+
+.s5-tag {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.s5-tag--ok {
+  background: var(--color-ok-soft);
+  color: var(--color-ok);
+}
+
+.s5-tag--check {
+  background: var(--color-check-soft);
+  color: var(--color-check);
+}
+
+.s5-tag--muted {
+  background: var(--color-sub);
+  color: var(--color-muted);
+}
+
+/* 카드 목록: 휴대폰 1줄, 넓은 화면 2줄 */
+.s5-grid {
+  display: grid;
+  gap: 12px;
+  align-items: start;
+}
+
+@media (min-width: 1024px) {
+  .s5-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.s5-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px;
+}
+
+.s5-card .ui-button {
+  align-self: flex-start;
+}
+
+/* 확인이 필요한 것: 회색 바탕 */
+.s5-card--sub {
+  background: var(--color-sub);
+}
+
+.s5-card__title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.s5-card p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.s5-amount {
+  font-size: 17px;
+  font-weight: 700;
+}
+
+/* 조건 칩 + 원문 인용 */
+.s5-conditions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.s5-condition {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.s5-quote {
+  align-self: stretch;
+  margin: 0;
+  padding: 10px 14px;
+  border-left: 3px solid var(--color-line);
+  border-radius: 0 10px 10px 0;
+  background: var(--color-bg);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.s5-quote__where {
+  margin-right: 6px;
+  color: var(--color-muted);
+}
+
+.s5-link {
+  color: var(--color-ink);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+/* 신청 방법: 이름 | 값 */
+.s5-rows {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px 20px;
+  margin: 0;
+}
+
+.s5-rows dt {
+  color: var(--color-muted);
+}
+
+.s5-rows dd {
+  margin: 0;
+}
+
+.s5-review {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  line-height: 1.6;
+}
+
+.s5-source {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-muted);
+  overflow-wrap: anywhere;
+}
+
+.s5-source a {
+  color: inherit;
+}
+
+.s5-notice {
+  margin: 0;
+  font-size: var(--text-tiny);
+  color: var(--color-muted);
+}
+
+/* 없는 정책 · 불러오기 실패 */
+.s5-message {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding-block: 24px;
+}
+
+.s5-message__actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* 11 하단 고정 [신청하러 가기] */
+.s5-bottom {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-block: 14px 20px;
+  background: linear-gradient(to bottom, transparent, var(--color-bg) 28%);
+}
+
+.s5-closed {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--color-card);
+  font-size: 14px;
+}
+
+@media (min-width: 768px) {
+  .s5-bottom {
+    align-items: flex-end;
+  }
+
+  .s5-bottom .ui-button {
+    max-width: 360px;
+  }
+}

@@ -2,7 +2,6 @@ import { createElement } from 'react';
 import type { EffectCallback } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Period } from '../src/features/benefits/format.ts';
 import type { RecommendationResponse } from '../src/shared/api/recommendations.ts';
 import { isRecommendationResponse } from '../src/shared/api/recommendations.ts';
 import fixtureText from '../../../contracts/fixtures/recommendation-response.json?raw';
@@ -12,21 +11,17 @@ import unavailableText from '../../../contracts/fixtures/pv-unknown-response.jso
 
 const screen = vi.hoisted(() => ({
   result: null as RecommendationResponse | null,
-  period: '1y' as Period,
-  presentValue: false,
+  location: { search: '' },
   effects: [] as EffectCallback[],
 }));
 
-// DOM 의존성 없이 실제 화면을 렌더한다. 기간/PV 선택 상태와 effect 실행 시점만 지정한다.
+// DOM 의존성 없이 실제 화면을 렌더한다. 기간/PV는 주소에서 읽고 effect 실행 시점만 지정한다.
 vi.mock('react', async (load) => {
   const actual = await load<typeof import('react')>();
   return {
     ...actual,
     useSyncExternalStore: (_subscribe: unknown, getSnapshot: () => unknown) => getSnapshot(),
     useEffect: (effect: EffectCallback) => { screen.effects.push(effect); },
-    useState: (initial: unknown) => actual.useState(
-      initial === '1y' ? screen.period : initial === false ? screen.presentValue : initial,
-    ),
   };
 });
 vi.mock('../src/features/benefits/analysisStore.ts', async (load) => ({
@@ -55,10 +50,9 @@ function fixture(text: string): RecommendationResponse {
 
 beforeEach(() => {
   vi.resetModules();
-  vi.stubGlobal('window', { sessionStorage: storage(), localStorage: storage() });
+  screen.location.search = '';
+  vi.stubGlobal('window', { location: screen.location, sessionStorage: storage(), localStorage: storage() });
   screen.effects = [];
-  screen.period = '1y';
-  screen.presentValue = false;
   screen.result = null;
 });
 afterEach(() => vi.unstubAllGlobals());
@@ -139,7 +133,7 @@ describe('period-specific empty results', () => {
     const initial = await renderResult();
     expect(initial).toContain('role="tablist"');
     expect(initial).not.toContain('정책 P120');
-    screen.period = '2y';
+    screen.location.search = '?period=2y';
     expect(await renderResult()).toContain('정책 P120');
   });
 
@@ -168,7 +162,7 @@ describe('period-specific empty results', () => {
     expect(initial).toContain('지금 다루는 정책 중엔 맞는 게 없어요');
     expect(initial).not.toContain('지원금 0개를 찾았어요');
 
-    screen.period = '2y';
+    screen.location.search = '?period=2y';
     const later = await renderResult();
     expect(later).toContain('aria-label="추천 조합 요약"');
     expect(later).toContain('600만 원');
@@ -181,7 +175,7 @@ describe('period-specific empty results', () => {
     result.results['1y'] = fixture(emptyText).results['1y'];
     screen.result = result;
     expect(await renderResult()).toContain('role="tablist"');
-    screen.period = '2y';
+    screen.location.search = '?period=2y';
     const html = await renderResult();
     expect(html).toContain('300만 원');
     expect(html).not.toContain('150만 원');
@@ -192,7 +186,7 @@ describe('period-specific empty results', () => {
     const result = fixture(fixtureText);
     result.results['2y'] = fixture(emptyText).results['2y'];
     screen.result = result;
-    screen.period = '2y';
+    screen.location.search = '?period=2y';
     const html = await renderResult();
     expect(html).toContain('role="tablist"');
     expect(html).toContain('지금 다루는 정책 중엔 맞는 게 없어요');
@@ -201,7 +195,7 @@ describe('period-specific empty results', () => {
 
   it('distinguishes an unavailable PV calculation from an empty result', async () => {
     screen.result = fixture(unavailableText);
-    screen.presentValue = true;
+    screen.location.search = '?pv=1';
     const html = await renderResult();
     expect(html).toContain('role="tablist"');
     expect(html).toContain('이 기준으로는 계산할 수 없어요');
