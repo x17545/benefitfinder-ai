@@ -20,7 +20,7 @@ export function SiteFooter({ onClearData }: SiteFooterProps): JSX.Element {
           내 정보 지우기
         </button>
       </div>
-      <div>개발 버전 · 가상 정책 계산 예제 · 실제 정책 추천 준비 중</div>
+      <div>청년 취업·주거 지원 · 현재 추천은 가상 정책 예제로 계산해요</div>
     </footer>
   );
 }

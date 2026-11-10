@@ -11,18 +11,18 @@ describe('공통 페이지', () => {
       expect(html).toContain(title);
     }
     expect(html).toContain('href="/privacy"');
-    expect(html).toContain('가상 정책으로 조합 계산을 시험하는 개발 버전');
+    expect(html).toContain('현재는 가상 정책');
     expect(html).not.toContain('매일 새벽 3시에 새로 확인');
   });
 
-  it('P2는 서버 무저장, 탭 보관, 선택한 30일 저장과 지우는 방법을 구분한다', () => {
+  it('P2 개인정보 처리방침은 서버 무저장과 실제 브라우저 보관·삭제 범위를 안내한다', () => {
     const html = renderToStaticMarkup(createElement(PrivacyScreen));
     expect(html).toContain('고른 조건은 서버에 저장하지 않아요');
-    expect(html).toContain('입력한 조건과 마지막 결과');
-    expect(html).toContain('이 탭에 보관해요');
-    expect(html).toContain('30일');
-    expect(html).toContain('이용 통계 도구는 연결하지 않았어요');
-    for (const title of ['받는 정보', '서버로 보내는 정보와 폐기', '생성형 AI로 보내는 것', '이 기기에 저장되는 것', '이용 통계', '지우는 방법']) {
+    expect(html).not.toContain('바로 폐기');
+    expect(html).toContain('기억하기를 꺼도 이 탭에는 남아요');
+    expect(html).toContain('저장한 지 30일이 지나면 다음 접속 때 지워요');
+    expect(html).toContain('현재 구글 애널리틱스 등 이용 통계 도구는 연결하지 않았어요');
+    for (const title of ['받는 정보', '서버로 보내는 정보와 보관', '생성형 AI로 보내는 것', '이 기기에 저장되는 것', '이용 통계', '지우는 방법']) {
       expect(html).toContain(title);
     }
     expect(html).toContain('지금 지우기');

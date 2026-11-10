@@ -106,7 +106,7 @@ export function ConditionScreen({ step }: ConditionScreenProps): JSX.Element {
             updateAnswers({ special: values });
           }}
         >
-          <PrivacyNote>이 정보는 자격 계산에만 쓰고 서버에 저장하지 않아요. 이 탭의 입력은 내 정보 지우기로 지울 수 있어요</PrivacyNote>
+          <PrivacyNote>이 정보는 자격 계산에만 써요. 서버에 저장하지 않아요</PrivacyNote>
         </MultiChoiceStep>
       );
     case 10:

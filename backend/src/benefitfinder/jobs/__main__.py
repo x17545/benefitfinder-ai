@@ -37,12 +37,12 @@ from benefitfinder.infrastructure.local_files import (
     write_field_summary_csv,
     write_records_csv,
 )
-from benefitfinder.infrastructure.ollama_chat import OllamaChat
 from benefitfinder.infrastructure.f12_evaluation_files import (
     EvaluationFileError,
     evaluate_manifest,
     write_evaluation_report,
 )
+from benefitfinder.infrastructure.ollama_chat import OllamaChat
 from benefitfinder.infrastructure.policy_rule_files import (
     RULE_REVIEW_OUTPUT_EXISTS,
     RuleReviewFileError,

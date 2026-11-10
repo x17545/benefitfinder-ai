@@ -29,14 +29,14 @@ from benefitfinder.application.recommendation_explanations import Recommendation
 from benefitfinder.application.recommendation_service import (
     recommend_mvp_all_periods,
 )
+from benefitfinder.application.region_options import RegionCatalog
 from benefitfinder.domains.youth.policy_evaluator import evaluate_policies
-from benefitfinder.infrastructure.example_explanation_data import recommendation_explanation_data
-from benefitfinder.infrastructure.ollama_explanations import OllamaExplanationCompletion
-from benefitfinder.infrastructure.published_clauses import InMemoryPublishedClauses
 from benefitfinder.infrastructure.database.repositories.published_clauses import (
     PostgresPublishedClauses,
 )
-from benefitfinder.application.region_options import RegionCatalog
+from benefitfinder.infrastructure.example_explanation_data import recommendation_explanation_data
+from benefitfinder.infrastructure.ollama_explanations import OllamaExplanationCompletion
+from benefitfinder.infrastructure.published_clauses import InMemoryPublishedClauses
 from benefitfinder.infrastructure.region_codes import OfficialRegionCatalog
 
 NOT_FOUND_MESSAGE = "요청한 리소스를 찾을 수 없습니다."
@@ -58,12 +58,12 @@ def error_body(code: ErrorCode, message: str) -> dict[str, Any]:
 
 def create_app(
     *,
+    region_catalog: RegionCatalog | None = None,
     explanation_model: str | None = None,
     explanation_repository: PublishedClauseRepository | None = None,
     explanation_generator: ExplanationGenerator | None = None,
     explanation_timeout_seconds: float = 5,
     explanation_database_url: str | None = None,
-    region_catalog: RegionCatalog | None = None,
 ) -> FastAPI:
     """Assemble and return a new FastAPI application.
 

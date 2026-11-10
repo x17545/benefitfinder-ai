@@ -200,7 +200,7 @@ pgvector는 PostgreSQL에서 의미 검색이 필요해질 때 검토하는 선�
 
 ### 구현·검증 상태
 
-- `pnpm dev`가 Vite(5173)와 FastAPI(8000)를 함께 실행한다. `bootstrap.create_app()`에서 서버를 조립하고 `main:app`을 ASGI 진입점으로 쓴다. 생존 확인(`/health`), 공식 지역 옵션과 FastAPI 문서(`/docs`·`/redoc`·`/openapi.json`), 공통 오류 처리를 기본 제공하며 가상 정책 추천·F13 설명과 게시 조항 PostgreSQL 조회·명시적 SQL 마이그레이션을 제공한다. 실제 정책 자료·계산 DB·운영 게시 연결은 후속이다. 데이터 Agent의 로컬 추출·사람 검수·평가·문맥 분할 명령은 제공한다.
+- `pnpm dev`가 Vite(5173)와 FastAPI(8000)를 함께 실행한다. `bootstrap.create_app()`에서 서버를 조립하고 `main:app`을 ASGI 진입점으로 쓴다. 생존 확인(`/health`), 공식 지역 옵션, FastAPI 문서(`/docs`·`/redoc`·`/openapi.json`), 공통 오류 처리와 가상 정책 추천·F13 설명, 게시 조항 PostgreSQL 조회·명시적 SQL 마이그레이션을 제공한다. 실제 정책 자료·계산 DB·운영 게시는 후속이다. 데이터 Agent의 로컬 추출·사람 검수·품질 평가·문맥 분할 명령을 제공한다.
 - `pyproject.toml`·`uv.lock`은 Python, 루트/웹 `package.json`·`pnpm-workspace.yaml`·`pnpm-lock.yaml`은 웹 실행·의존성을 정의한다. 공유 의존성은 담당 영역과 조율한다. `pip`·`npm` 설치나 별도 lockfile을 추가하지 않는다. 실행 안내는 [처음 개발 시작하기](../development/GETTING_STARTED.md)를 따른다.
 - `contracts/v1/*.schema.json`에서 `json-schema-to-typescript`로 `apps/web/src/shared/api/generated/*.ts`를 생성한다. `pnpm types:generate` 후 생성물을 커밋한다. `pnpm types:check`는 최신 여부를 검사하며 실제 HTTP의 Pydantic 모델과 JSON Schema 일치는 API 테스트로 확인한다.
 - `uv run --locked python scripts/check.py`는 Git·파일·직접 import·계약·가상 계산 정답·API HTTP·Ruff·웹 lint/타입/테스트/빌드를 검사한다. PR 준비 검사는 `--pr`이며 자세한 범위는 [저장소 운영 설정](../development/REPOSITORY_SETTINGS.md)을 따른다. CI는 두 lockfile로 설치한 뒤 같은 검사를 실행한다.
