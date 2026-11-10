@@ -1,6 +1,6 @@
 # 외부 연동 어댑터
 
-현재 구현: 온통청년 HTTP 어댑터(`youthcenter_http.py`), 수집용 로컬 JSON·CSV 저장소(`local_files.py`), 검수 자료의 엄격한 JSON 읽기와 새 파일 저장(`policy_rule_files.py`). 수집 어댑터는 `application/collection.py`의 인터페이스를 구현하고 검수 파일은 `application/policy_rules.py`의 내부 모델을 직렬화한다. 모두 표준 라이브러리만 사용하며 PostgreSQL 저장소는 구현하지 않았다.
+현재 구현: 공식 법정동코드 HTTP·ZIP 변환·프로세스 캐시(`region_codes.py`), 온통청년 HTTP 어댑터(`youthcenter_http.py`), 수집용 로컬 JSON·CSV 저장소(`local_files.py`), 검수 자료의 엄격한 JSON 읽기와 새 파일 저장(`policy_rule_files.py`). 지역 어댑터는 `application/region_options.py`의 인터페이스를 구현한다. 원천·갱신·오류 기준은 [지역 API 안내](../../../README.md#실제-지역-선택-api)를 따른다. 수집 어댑터는 `application/collection.py`의 인터페이스를 구현하고 검수 파일은 `application/policy_rules.py`의 내부 모델을 직렬화한다. 모두 표준 라이브러리만 사용하며 PostgreSQL 저장소는 구현하지 않았다.
 
 검수 자료는 같은 디렉터리의 임시 파일을 완전히 쓴 뒤 하드 링크로 새 결과 파일을 만든다. 기존 경로를 덮어쓰지 않으며 파일 충돌·쓰기 실패 시 이전 자료를 보존한다. 하드 링크를 지원하는 로컬 파일시스템이 필요하고 실패 시 덮어쓰기 방식으로 우회하지 않는다. 사용법·내부 형식·한계는 [jobs 안내](../jobs/README.md#로컬-규칙-검수-실행)를 따른다.
 

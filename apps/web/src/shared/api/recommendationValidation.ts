@@ -14,10 +14,37 @@ function isCondition(value: unknown): boolean {
 }
 
 function isPolicy(value: unknown): boolean {
-  return isRecord(value) && isNonEmptyString(value.policy_id) && arrayOf(value.eligibility, isCondition) &&
-    isSource(value.source) && optional(value.amount_in_period_won, isNullableMoney) &&
-    optional(value.original_amount_won, isNullableMoney) && optional(value.ai_reason, isNullableString) &&
-    optional(value.amount_status, (item) => item === 'verified' || item === 'unknown');
+  if (!isRecord(value) || !isNonEmptyString(value.policy_id) || !arrayOf(value.eligibility, isCondition) ||
+    !isSource(value.source) || !optional(value.amount_in_period_won, isNullableMoney) ||
+    !optional(value.original_amount_won, isNullableMoney) ||
+    !optional(value.amount_status, (item) => item === 'verified' || item === 'unknown')) {
+    return false;
+  }
+  return isPolicyAiFields(value);
+}
+
+/** ai_sources 항목은 evidence에 location(조항 ID) 필수. 다른 evidence의 location 선택성은 유지한다. */
+function isAiSource(value: unknown): boolean {
+  return isRecord(value) && isEvidence(value) && isNonEmptyString(value.location);
+}
+
+/** true면 설명과 근거가 필수다. 정책별 플래그 생략은 기존 응답과 호환한다. */
+function isPolicyAiFields(value: Record<string, unknown>): boolean {
+  const flag = value.ai_generated;
+  const reason = value.ai_reason;
+  const sources = value.ai_sources;
+  if (flag === true) {
+    return isNonEmptyString(reason) && arrayOf(sources, isAiSource, 1, 5);
+  }
+  if (flag === false) {
+    return optional(reason, isNullableString) &&
+      (sources === undefined || (Array.isArray(sources) && sources.length === 0));
+  }
+  if (flag === undefined) {
+    return optional(reason, isNullableString) &&
+      optional(sources, (item) => arrayOf(item, isAiSource, 0, 5));
+  }
+  return false;
 }
 
 function isGivenUp(value: unknown): boolean {
@@ -52,8 +79,58 @@ function isNotEligible(value: unknown): boolean {
   return isRecord(value) && isNonEmptyString(value.policy_id) && arrayOf(value.failed, isNonEmptyString, 1);
 }
 
+/** F12 preview 일관성: ID 동일·확정 금액 없음·자격 미확정만 허용한다. */
+function isReviewExplanationConsistent(outer: Record<string, unknown>, inner: unknown): boolean {
+  if (!isPolicy(inner)) {
+    return false;
+  }
+  const detail = inner as Record<string, unknown>;
+  if (detail.policy_id !== outer.policy_id) {
+    return false;
+  }
+  const amount = detail.amount_in_period_won;
+  const original = detail.original_amount_won;
+  if (typeof amount === 'number' || typeof original === 'number') {
+    return false;
+  }
+  if (detail.amount_status === 'verified') {
+    return false;
+  }
+  const eligibility = detail.eligibility;
+  if (!Array.isArray(eligibility)) {
+    return false;
+  }
+  for (const condition of eligibility) {
+    if (!isRecord(condition) || condition.status !== 'needs_review') {
+      return false;
+    }
+  }
+  if (outer.eligibility_summary !== 'needs_review') {
+    return false;
+  }
+  return true;
+}
+
 function isNotReviewed(value: unknown): boolean {
-  return isRecord(value) && isNonEmptyString(value.policy_id) && isEligibilityStatus(value.eligibility_summary);
+  if (!isRecord(value) || !isNonEmptyString(value.policy_id) || !isEligibilityStatus(value.eligibility_summary)) {
+    return false;
+  }
+  if (!optional(value.policy_name, isNonEmptyString)) {
+    return false;
+  }
+  if (!optional(value.review_scope, isNonEmptyString)) {
+    return false;
+  }
+  if (!optional(value.verification_only, (item) => item === true)) {
+    return false;
+  }
+  if (value.review_explanation === undefined) {
+    return true;
+  }
+  if (!isNonEmptyString(value.policy_name) || !isNonEmptyString(value.review_scope) || value.verification_only !== true) {
+    return false;
+  }
+  return isReviewExplanationConsistent(value, value.review_explanation);
 }
 
 function isClosed(value: unknown): boolean {
