@@ -75,11 +75,15 @@ class RecommendationExplainer:
                 row["ai_sources"] = [
                     {
                         "quote": clause.text,
-                        "location": clause.id,
+                        "location": clause.location or clause.id,
                         "source": {
                             "url": clause.source_url,
                             "document_version": clause.document_version,
-                            "checked_at": row["source"]["checked_at"],
+                            "checked_at": (
+                                clause.checked_at.isoformat()
+                                if clause.checked_at is not None
+                                else row["source"]["checked_at"]
+                            ),
                         },
                     }
                     for clause in explanation.evidence
