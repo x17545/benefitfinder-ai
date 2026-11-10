@@ -361,10 +361,10 @@ def _add_rule_review_commands(commands: argparse._SubParsersAction) -> None:
     export.add_argument("--output", type=Path, required=True, help="새 로컬 내보내기 파일 경로")
 
 
-def evaluate_f12_command(manifest: Path, output: Path) -> int:
+def evaluate_f12_command(manifest: Path, output: Path, *, view: str | None = None) -> int:
     """Write read-only evaluation results; console contains counts, never source text."""
     try:
-        report = evaluate_manifest(manifest)
+        report = evaluate_manifest(manifest, view=view)
         write_evaluation_report(output, report)
     except EvaluationFileError as error:
         print(f"F12 평가 실패: {error}", file=sys.stderr)
@@ -375,14 +375,22 @@ def evaluate_f12_command(manifest: Path, output: Path) -> int:
     except OSError:
         print("F12 평가 실패: evaluation_io_error", file=sys.stderr)
         return 2
-    summary = report["summary"]
-    print(
-        f"승인 근거 {summary['reference_items']}건: 완전 포함 {summary['covered_items']}, "
-        f"부분 {summary['partial_items']}, 누락 {summary['missing_items']}, "
-        f"비교 불가 {summary['not_comparable_items']}"
-    )
-    print(f"예외 일치 {summary['matched_exceptions']}/{summary['reference_exceptions']}, "
-          f"원문 인용 오류 {summary['citation_errors']}건. 평가가 승인을 바꾸지 않습니다.")
+    reports = report['views'] if 'views' in report else {report.get('view', 'provided'): report}
+    for label, result in reports.items():
+        summary = result["summary"]
+        prefix = f"[{label}] " if 'views' in report or 'view' in report else ''
+        print(
+            f"{prefix}승인 근거 {summary['reference_items']}건: 완전 포함 {summary['covered_items']}, "
+            f"부분 {summary['partial_items']}, 누락 {summary['missing_items']}, "
+            f"비교 불가 {summary['not_comparable_items']}"
+        )
+        print(f"예외 일치 {summary['matched_exceptions']}/{summary['reference_exceptions']}, "
+              f"원문 인용 오류 {summary['citation_errors']}건. 평가가 승인을 바꾸지 않습니다.")
+        if 'input_accounting' in result:
+            accounting = result['input_accounting']
+            print(f"{prefix}후보 입력 {accounting['candidate_items_read']} / "
+                  f"평가 {accounting['candidate_items_evaluated']}, "
+                  f"별도 예외 인용 오류 {result['auxiliary_exceptions']['citation_errors']}건")
     return 1 if report["assessment"] == "findings" else 0
 
 
@@ -426,6 +434,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     evaluate = commands.add_parser("evaluate-f12", help="사람 승인 근거 기준의 로컬 추출 평가")
     evaluate.add_argument("--manifest", type=Path, required=True)
     evaluate.add_argument("--output", type=Path, required=True)
+    evaluate.add_argument("--view", choices=("model", "context", "both"),
+                          help="v2 입력의 모델 원선택/문맥 보존 결과 (기본 both)")
     chunked = commands.add_parser("extract-chunked-facts", help="앞뒤 문맥을 보존한 로컬 E4B 추출")
     chunked.add_argument("--input", type=Path, required=True)
     chunked.add_argument("--output-dir", type=Path, required=True)
@@ -459,7 +469,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(json.dumps({"virtual_data": True, **asdict(result)}, ensure_ascii=False, indent=2))
         return 0
     if args.command == "evaluate-f12":
-        return evaluate_f12_command(args.manifest, args.output)
+        return evaluate_f12_command(args.manifest, args.output, view=args.view)
     return 2
 
 

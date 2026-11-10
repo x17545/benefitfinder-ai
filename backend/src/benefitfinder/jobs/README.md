@@ -174,6 +174,62 @@ uv run --locked python -m benefitfinder.jobs evaluate-f12 \
 uv run --locked python -m unittest backend.tests.test_f12_evaluation backend.tests.test_f12_evaluation_files backend.tests.test_f12_evaluation_cli -v
 ```
 
+### 대량 후보와 두 뷰 평가 (manifest v2)
+
+기존 v1 manifest·보고서·종료 코드와 분류별 100개 제한은 그대로입니다. `--view`는 v2 전용입니다. 대량 후보는 v2로 명시적으로 선택합니다. 아래 예제는 가상 경로이며 manifest의 디렉터리 기준으로 해석합니다.
+
+```json
+{
+  "format_version": 2,
+  "cases": [{
+    "id": "virtual-housing",
+    "category": "housing",
+    "reference_dir": "gold/housing",
+    "approved_exports": ["gold/housing/approved-export.json"],
+    "candidate_dir": "candidates/housing-run",
+    "candidate_format": "chunked-v1"
+  }]
+}
+```
+
+- `candidate_format: facts-v1`(생략 시 기본)는 기존 두 파일을 읽습니다. 두 뷰에 같은 제공 자료를 사용하고 `provided_shared`로 표시합니다. 없는 모델 이력이나 추가 문맥을 추정하지 않습니다. 규칙·승인 내보내기·정책 연결에는 기존 v1 검증을 적용합니다.
+- `chunked-v1`은 `extract-chunked-facts`의 완료 디렉터리입니다. `rules-pending.json`, `facts-pending.json`, `chunked-evidence.json`, `completion.json`이 필요합니다. 원선택은 `model_only_facts`, 문맥 보존 결과는 `facts-pending.json`, 별도 예외는 `model_only_exceptions`/`exceptions`로 분리합니다.
+- 완료 상태·출처·수집 시각·버전·해시·전체 중심 범위·선택/추가 문맥 범위와 실제 후보의 줄 선택이 맞아야 합니다. 원선택과 문맥 자료를 바꿔 넣거나 일부만 저장한 실행, 문맥 추가로 금액·고정 지급일을 바꾸는 입력은 오류입니다. 이 검사는 모델 실행·승인 신원·문맥 해석의 진위 인증을 대신하지 않습니다.
+
+```sh
+# 두 결과를 한 번에 평가: v2 기본값도 both
+uv run --locked python -m benefitfinder.jobs evaluate-f12 \
+  --manifest data/local/f12-evaluation/large-manifest.json \
+  --view both --output data/local/f12-evaluation/comparison.json
+
+# 각각 별도 보고서
+uv run --locked python -m benefitfinder.jobs evaluate-f12 \
+  --manifest data/local/f12-evaluation/large-manifest.json \
+  --view model --output data/local/f12-evaluation/model.json
+uv run --locked python -m benefitfinder.jobs evaluate-f12 \
+  --manifest data/local/f12-evaluation/large-manifest.json \
+  --view context --output data/local/f12-evaluation/context.json
+```
+
+같은 승인 기준으로 기존 공개 평가 함수를 실행합니다. `both` 보고서는 `format_version: 2`, `kind: f12_extraction_comparison`, `views.model`/`views.context`를 담고 단일 뷰는 기존 보고서에 `view`·집계·자원 정보를 추가합니다. `input_accounting`은 입력/평가 후보 수와 인용 수를 대조하며 다르면 실패합니다. 별도 예외 인용은 `auxiliary_exceptions`에서 원문 일치만 평가하고 승인 근거 점수의 분모나 자격 후보로 섞지 않습니다. 그 의미적 완전성은 별도 사람 검토 대상입니다.
+
+종료 코드 0은 요청한 뷰 모두에 발견 사항 없음, 1은 어느 뷰든 발견 사항이 있는 보고서 생성, 2는 입력·파일·출력 또는 예산 오류입니다. 예를 들어 원선택 19개 완전·1개 부분 / 문맥 보존 후 20개 완전이면 `both`와 `model`은 1, `context`는 0입니다. 20/20은 승인 범위의 포함 결과이며 전체 정책·모델 단독 정확도나 자동 승인을 뜻하지 않습니다.
+
+v2는 100개 상수만 늘린 모드가 아닙니다. 파일을 경로별로 캐시하고 실제 바이트 수를 한 번씩 합산하며, 한도+1바이트까지만 읽은 뒤 JSON을 파싱합니다. 스냅샷도 제한된 읽기의 결과를 기존 엄격 파서에 전달해 다시 파일을 열지 않습니다. 전체 입력과 두 뷰의 정합성·예산을 먼저 검사하므로 실패하면 일부 보고서를 생성하지 않습니다. 기존 결과는 덮어쓰지 않습니다.
+
+| v2 자원 | 한도 |
+|---|---:|
+| manifest / 각 데이터 파일 | 32 MiB / 8 MiB |
+| 전체 읽기 / 파일 수 / 사례 수 | 32 MiB / 64개 / 20개 |
+| 사실·별도 예외 각 분류 | 2,000개 |
+| 검증 후보(두 뷰·별도 예외 포함) / 인용(승인 기준 포함) | 5,000개 / 5,000개 |
+| 전체 승인 기준 | 200개 |
+| 원문 한 문서 | 200,000자 / 10,000줄 |
+| 한 인용 / 검증 인용 문자 합계 | 64,000자 / 4,000,000자 |
+| 예약한 기준 인용 × 후보 인용 비교 / 인용별 원문 줄 작업 | 1,000,000 / 10,000,000 |
+
+작업량은 두 뷰와 별도 예외를 포함한 정적 상한 추정이며 실행 시간 보장은 아닙니다. 단일 뷰도 짝 기록 전체를 검증하고 두 뷰 예산을 보수적으로 예약합니다. `resource_usage`는 실제 읽기/검증 수, 예약 작업량(`reserved_*`)과 한도를 제공합니다. 공유 `facts-v1`은 한 번 읽어 두 뷰에서 재사용하므로 입력 검증 수와 뷰별 평가 수의 합은 다를 수 있습니다. 잘못된 형식이나 UTF-8로 표현할 수 없는 문자열은 `invalid_f12_evaluation_input`, 예산 초과는 `f12_evaluation_budget_exceeded`로 구분합니다. 후보를 자르거나 skip하지 않으며 LLM·네트워크·DB·승인/게시 상태에 접근하지 않습니다.
+
 ## 긴 공식 지침의 문맥 분할 추출
 
 `extract-chunked-facts`는 공식 청년 취업·주거 지침 전체를 순서대로 로컬 `gemma4:e4b`로 읽고 자격·금액·지급 시점의 근거 후보를 검수 대기로 만듭니다. 온라인 추천 경로와 연결하지 않습니다. 모델·DB·계약 의존성을 추가하지 않으며 기존 F12 추출/평가 명령과는 독립적인 실행입니다.
@@ -196,7 +252,7 @@ uv run --locked python -m benefitfinder.jobs extract-chunked-facts \
 
 새 출력 디렉터리만 사용합니다. 검증한 묶음은 `chunks/`에 즉시 보관하지만 완료를 뜻하지 않습니다. 모델 원선택은 겹친 줄과 공백만 합칩니다. 최종 후보는 인식한 FAQ/각주 단위의 원문 문맥을 추가해 보존합니다. `chunks/`의 `selected`(모델 원선택), `contextualized`(문맥 포함), `context_added`(추가 줄)를 구분합니다. `chunked-evidence.json`에는 `context_groups`, `model_only_facts`, `model_only_exceptions`를 함께 남겨 원선택과 문맥 보존 후 결과를 각각 평가할 수 있습니다. 성공하면 `facts-pending.json`(기존 로컬 v1), 전체 원문을 보존한 `rules-pending.json`(빈 규칙 검수 배치), `chunked-evidence.json`(중심/문맥 범위·모델 선택·별도 예외·원본 해시), 마지막에 `completion.json`을 생성합니다. `completion.json`이 없는 디렉터리는 미완료이며 평가 입력으로 사용하지 않습니다. 실패 시 남은 디렉터리는 재사용하지 말고 새 경로로 실행합니다. 기존 승인·보류·반려 파일을 바꾸거나 이전 결과를 덮어쓰지 않습니다.
 
-금액은 모델이 직접 금액 근거로 선택한 줄의 명시된 단독 원화 수치만 읽습니다. 추가 문맥에 등장하는 소득·재산·다른 금액을 지원 금액으로 승격하지 않으며 합계·수급 자격·지급일을 추정하지 않습니다. `scheduled_monthly_day`는 `null`입니다. 추출은 항상 검수 대기이며 별도 예외 기록도 자동 승인·규칙 게시를 뜻하지 않습니다. `facts-pending.json`은 기존 로컬 v1의 필드 구조입니다. 긴 지침의 후보 수가 분류별 100개를 넘으면 기존 F12 파일 리더에 그대로 입력할 수 없습니다. 기존 한도를 완화하거나 상위 100개로 자르지 말고, 전체 후보의 형식·원문·버전·줄 위치를 검증한 뒤 공개 평가 함수에 연결해야 합니다. 현재 통합에는 기존 `evaluate-f12`도 포함하지만 분류별 100개 초과 후보를 평가하는 연결은 별도 이슈 #26으로 남아 있습니다.
+금액은 모델이 직접 금액 근거로 선택한 줄의 명시된 단독 원화 수치만 읽습니다. 추가 문맥에 등장하는 소득·재산·다른 금액을 지원 금액으로 승격하지 않으며 합계·수급 자격·지급일을 추정하지 않습니다. `scheduled_monthly_day`는 `null`입니다. 추출은 항상 검수 대기이며 별도 예외 기록도 자동 승인·규칙 게시를 뜻하지 않습니다. `facts-pending.json`은 기존 로컬 v1의 필드 구조입니다. 기존 v1 평가 입력은 분류별 100개까지이며, 더 많은 후보와 모델 원선택/문맥 보존 결과는 위의 v2 `chunked-v1` 평가 CLI로 연결합니다. 전체 후보의 형식·원문·버전·줄 위치와 자원 예산을 검증하며, 상위 100개로 자르지 않습니다.
 
 콘솔에는 묶음 진행 건수와 고정 오류 코드만 표시합니다. 종료 코드 0은 추출 파일 생성, 1은 입력·모델·파일 오류, 2는 명령 인자 오류입니다. 원문·승인 기준·추출/평가 결과·실행 로그는 Git 제외 경로에만 보관하고 공유 테스트는 가상 문서를 사용합니다.
 

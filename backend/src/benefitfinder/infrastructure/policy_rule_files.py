@@ -718,6 +718,16 @@ def load_rule_batch(path: Path) -> RuleReviewBatch:
         _fail_invalid()
 
 
+def parse_rule_snapshot(data: dict[str, object]) -> RuleReviewSnapshot:
+    """Parse an already bounded/decoded snapshot with the same strict v1 validation."""
+    try:
+        return _parse_snapshot_dict(data)
+    except RuleReviewFileError:
+        raise
+    except Exception:
+        _fail_invalid()
+
+
 def load_rule_snapshot(path: Path) -> RuleReviewSnapshot:
     """Read a version 1 snapshot file strictly into domain records."""
     try:
