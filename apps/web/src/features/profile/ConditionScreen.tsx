@@ -106,7 +106,7 @@ export function ConditionScreen({ step }: ConditionScreenProps): JSX.Element {
             updateAnswers({ special: values });
           }}
         >
-          <PrivacyNote>이 정보는 자격 계산에만 쓰고, 분석이 끝나면 바로 폐기해요. 서버에 저장하지 않아요</PrivacyNote>
+          <PrivacyNote>이 정보는 자격 계산에만 써요. 서버에 저장하지 않아요</PrivacyNote>
         </MultiChoiceStep>
       );
     case 10:
