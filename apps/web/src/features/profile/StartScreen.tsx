@@ -79,6 +79,7 @@ export function StartScreen(): JSX.Element {
               />
               <label htmlFor="s1-consent">
                 <b>(필수)</b> 선택한 조건은 정책 분석에만 사용돼요
+                <span className="s1-consent__hint">입력과 결과는 새로고침을 위해 이 탭에 임시 보관해요</span>
               </label>
               <a className="s1-consent__link" href={paths.privacy}>
                 개인정보 처리방침
