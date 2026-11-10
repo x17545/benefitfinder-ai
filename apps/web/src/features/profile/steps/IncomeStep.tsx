@@ -33,7 +33,7 @@ export function IncomeStep(): JSX.Element {
           updateAnswers({ assetBand: value });
         }}
       />
-      <PrivacyNote>소득 · 재산은 구간으로만 받아 자격 계산에만 쓰고, 분석이 끝나면 바로 폐기해요</PrivacyNote>
+      <PrivacyNote>소득 · 재산은 구간으로만 받고 서버에 저장하지 않아요. 이 탭의 입력은 내 정보 지우기로 지울 수 있어요</PrivacyNote>
     </ConditionStepLayout>
   );
 }

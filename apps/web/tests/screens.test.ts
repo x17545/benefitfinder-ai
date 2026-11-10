@@ -99,6 +99,13 @@ describe('remember choice on S1', () => {
 });
 
 describe('period-specific empty results', () => {
+  it('labels virtual policy calculations returned by the API without the sample button', async () => {
+    screen.result = { ...fixture(fixtureText), virtual_data: true };
+    const html = await renderResult();
+    expect(html).toContain('가상 정책으로 계산한 예제예요');
+    expect(html).toContain('실제 받을 수 있는 지원금이 아니에요');
+  });
+
   it.each(['met', 'not_met', 'needs_review'] as const)('keeps unreviewed policies and their %s summary when no amounts can be calculated', async (status) => {
     const result = fixture(emptyText);
     result.results['1y'].pv_off.not_yet_reviewed = [{ policy_id: 'youth:example:P120', eligibility_summary: status }];

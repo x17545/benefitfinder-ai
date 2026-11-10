@@ -33,6 +33,10 @@ function replaceField(path: readonly (string | number)[], value: unknown): unkno
 }
 
 describe('isRecommendationResponse', () => {
+  it('accepts optional virtual provenance and rejects a non-boolean flag', () => {
+    expect(isRecommendationResponse(replaceField(['virtual_data'], true))).toBe(true);
+    expect(isRecommendationResponse(replaceField(['virtual_data'], 'true'))).toBe(false);
+  });
   it('accepts the contract example', () => {
     expect(isRecommendationResponse(FIXTURE)).toBe(true);
   });

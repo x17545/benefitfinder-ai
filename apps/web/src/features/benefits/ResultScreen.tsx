@@ -162,6 +162,7 @@ export function ResultScreen(): JSX.Element {
             : '금액 확인 필요',
       })),
       createdAt: new Date(),
+      virtualData: analysis.status === 'done' && (analysis.isSample || result?.virtual_data === true),
     }).then((saved) => {
       if (saved) {
         showToast('결과 이미지를 저장했어요');
@@ -174,8 +175,8 @@ export function ResultScreen(): JSX.Element {
       <ResultTopBar />
 
       <main className="s3-body">
-        {analysis.isSample ? (
-          <p className="s2-dev-note">개발용 예제 결과(contracts/fixtures)예요. 실제 결과가 아니에요.</p>
+        {analysis.isSample || result.virtual_data === true ? (
+          <p className="s2-dev-note">가상 정책으로 계산한 예제예요. 실제 받을 수 있는 지원금이 아니에요.</p>
         ) : null}
 
         <section className="s3-heading">

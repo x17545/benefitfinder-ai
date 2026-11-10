@@ -4,7 +4,7 @@ interface PrivacyNoteProps {
   children: ReactNode;
 }
 
-/** 민감한 조건을 묻는 단계(8·9·12)의 자물쇠 안내. 분석 후 바로 폐기한다는 것을 알린다 */
+/** 민감한 조건을 묻는 단계(8·9·12)의 서버 저장·브라우저 삭제 안내. */
 export function PrivacyNote({ children }: PrivacyNoteProps): JSX.Element {
   return (
     <p className="s2-private">

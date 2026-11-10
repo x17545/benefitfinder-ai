@@ -106,6 +106,8 @@ def create_app(
         code, message = HTTP_ERROR_RESPONSES.get(
             exc.status_code, ("http_error", "요청을 처리할 수 없습니다.")
         )
+        if exc.status_code == 400 and exc.detail == "unsupported_domain":
+            code, message = "unsupported_domain", "아직 지원하지 않는 분야입니다."
         headers = {
             name: value
             for name, value in (exc.headers or {}).items()

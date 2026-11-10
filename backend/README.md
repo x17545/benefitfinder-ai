@@ -14,7 +14,7 @@ F13의 저장 모델·게시/버전 조회·시간 제한·읽기 역할은 [Pos
 backend/
   .env.example                  DB 연결 설정의 가상 양식
   migrations/
-    versions/                   향후 PostgreSQL 스키마 변경 이력
+    versions/                   F13 게시 조항 PostgreSQL 스키마 변경 이력
   src/benefitfinder/
     bootstrap.py              조립(create_app)
     main.py                   ASGI 진입점(benefitfinder.main:app)

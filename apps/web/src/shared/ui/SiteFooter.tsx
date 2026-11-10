@@ -20,7 +20,7 @@ export function SiteFooter({ onClearData }: SiteFooterProps): JSX.Element {
           내 정보 지우기
         </button>
       </div>
-      <div>데이터 출처 온통청년 · 보조금24 · 매일 새벽 3시 갱신</div>
+      <div>개발 버전 · 가상 정책 계산 예제 · 실제 정책 추천 준비 중</div>
     </footer>
   );
 }

@@ -62,8 +62,8 @@ export function StartScreen(): JSX.Element {
         </ol>
 
         <p className="s1-notice">
-          선택한 조건으로 정책을 찾고 지원금 조합을 계산해요. 결과는 참고용이며 최종 자격은 신청 기관에서
-          확인해야 해요. <a href={paths.about}>자세히</a>
+          현재는 가상 정책으로 조합 계산을 시험해요. 실제 받을 수 있는 지원금이 아니에요.{' '}
+          <a href={paths.about}>자세히</a>
         </p>
 
         <div className="s1-actions">
@@ -78,7 +78,8 @@ export function StartScreen(): JSX.Element {
                 }}
               />
               <label htmlFor="s1-consent">
-                <b>(필수)</b> 선택한 조건은 정책 분석에만 쓰고, 분석이 끝나면 바로 폐기해요
+                <b>(필수)</b> 선택한 조건을 분석에 사용하고 서버에는 저장하지 않아요
+                <span className="s1-consent__hint">입력과 결과는 이 탭에 남아요. 언제든 내 정보 지우기로 지울 수 있어요</span>
               </label>
               <a className="s1-consent__link" href={paths.privacy}>
                 개인정보 처리방침

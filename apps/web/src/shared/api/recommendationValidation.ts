@@ -174,6 +174,7 @@ export function isRecommendationResponse(value: unknown): value is Recommendatio
   return isNonEmptyString(value.request_id) && isString(value.domain) && /^[a-z][a-z0-9_-]*$/.test(value.domain) &&
     (value.view === 'portfolio' || value.view === 'fallback_list' || value.view === 'empty') &&
     typeof value.ai_generated === 'boolean' && isDateTime(value.data_updated_at) &&
+    (value.virtual_data === undefined || typeof value.virtual_data === 'boolean') &&
     (value.discount_rate === null || (typeof value.discount_rate === 'number' &&
       Number.isFinite(value.discount_rate) && value.discount_rate >= 0)) &&
     (value.discount_rate_status === 'verified' || value.discount_rate_status === 'unknown') &&
