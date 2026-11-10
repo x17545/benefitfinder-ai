@@ -17,9 +17,11 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from benefitfinder.api.schemas import ErrorCode, ErrorResponse
+from benefitfinder.api.v1.routers.benefits import router as benefits_router
 from benefitfinder.api.v1.routers.health import router as health_router
 from benefitfinder.api.v1.routers.options import router as options_router
 from benefitfinder.api.v1.routers.recommendations import router as recommendations_router
+from benefitfinder.api.v1.routers.simulations import router as simulations_router
 from benefitfinder.ai.policy_explanation import GroundedPolicyExplainer
 from benefitfinder.application.policy_explanations import (
     ExplanationGenerator,
@@ -30,11 +32,14 @@ from benefitfinder.application.recommendation_service import (
     recommend_mvp_all_periods,
 )
 from benefitfinder.application.region_options import RegionCatalog
+from benefitfinder.application.simulation_service import simulate_mvp
 from benefitfinder.domains.youth.policy_evaluator import evaluate_policies
+from benefitfinder.domains.youth.scenario import change_profile, next_threshold
 from benefitfinder.infrastructure.database.repositories.published_clauses import (
     PostgresPublishedClauses,
 )
 from benefitfinder.infrastructure.example_explanation_data import recommendation_explanation_data
+from benefitfinder.infrastructure.example_benefits import example_benefits
 from benefitfinder.infrastructure.ollama_explanations import OllamaExplanationCompletion
 from benefitfinder.infrastructure.published_clauses import InMemoryPublishedClauses
 from benefitfinder.infrastructure.region_codes import OfficialRegionCatalog
@@ -141,10 +146,20 @@ def create_app(
         evaluate_policies=evaluate_policies,
     )
     app.state.recommendation_explainer = explainer
+    app.state.benefit_lookup = example_benefits(policies).get
+    policy_names = {policy.policy_id.rsplit(":", 1)[1]: policy.policy_name for policy in policies}
+    app.state.simulation_service = partial(
+        simulate_mvp,
+        recommend=app.state.recommendation_service,
+        change_profile=change_profile,
+        next_threshold=partial(next_threshold, policy_names=policy_names),
+    )
 
     app.state.region_catalog = region_catalog if region_catalog is not None else OfficialRegionCatalog()
 
     app.include_router(health_router)
     app.include_router(options_router)
     app.include_router(recommendations_router)
+    app.include_router(simulations_router)
+    app.include_router(benefits_router)
     return app

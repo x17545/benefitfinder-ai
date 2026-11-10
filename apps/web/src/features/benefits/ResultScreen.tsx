@@ -321,6 +321,7 @@ export function ResultScreen(): JSX.Element {
             <div className="s3-policies">
               {selected.policies.map((policy) => (
                 <PolicyCard key={policy.policy_id} policy={policy} info={info} aiGenerated={result.ai_generated}
+                  virtualData={analysis.isSample || result.virtual_data === true}
                   detailHref={withResultBasis(paths.policy(policy.policy_id), { period, present_value: presentValue })} />
               ))}
             </div>

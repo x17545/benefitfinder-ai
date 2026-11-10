@@ -98,6 +98,7 @@ describe('period-specific empty results', () => {
     const html = await renderResult();
     expect(html).toContain('가상 정책으로 계산한 예제예요');
     expect(html).toContain('실제 받을 수 있는 지원금이 아니에요');
+    expect(html).not.toContain('신청하러 가기');
   });
 
   it.each(['met', 'not_met', 'needs_review'] as const)('keeps unreviewed policies and their %s summary when no amounts can be calculated', async (status) => {

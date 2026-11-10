@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from benefitfinder.api.schemas.recommendation import RecommendationRequest
 from collections.abc import Callable
 from typing import Any
+from benefitfinder.application.recommendation_service import MVP_ANNUAL_RATE
 from benefitfinder.application.response_mapper import (
     build_recommendation_response,
 )
@@ -44,7 +45,7 @@ async def create_recommendations(
         )
 
     # 가상 MVP 계산용 할인율. 실제 금리 출처 검증값은 아님.
-    annual_rate = 0.025
+    annual_rate = MVP_ANNUAL_RATE
 
     calculation = recommendation_service(
         request,

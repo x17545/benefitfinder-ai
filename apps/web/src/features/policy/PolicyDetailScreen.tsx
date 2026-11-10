@@ -92,6 +92,7 @@ interface PolicyDetailProps {
 }
 
 function PolicyDetail({ benefit, isSample, mine, hasAnalysis, conditionsHref, aiGenerated }: PolicyDetailProps): JSX.Element {
+  const virtualData = isSample || benefit.virtual_data === true;
   const tag = recruitTag(benefit.application);
   const closed = benefit.application.status === 'closed';
   const applicationUrl = benefit.application.status === 'open' ? benefit.application.url : null;
@@ -109,6 +110,8 @@ function PolicyDetail({ benefit, isSample, mine, hasAnalysis, conditionsHref, ai
       <main className="screen__body s5-body">
         {isSample ? (
           <p className="s5-dev-note">개발용 화면: 정책 상세 API가 아직 없어 가상 예시를 보여 줘요</p>
+        ) : virtualData ? (
+          <p className="s5-dev-note">가상 정책의 상세예요. 실제 모집이나 지원금을 뜻하지 않아요.</p>
         ) : null}
 
         {/* 1 · 2 기관 · 모집 상태 · 정책 이름 */}
@@ -151,6 +154,15 @@ function PolicyDetail({ benefit, isSample, mine, hasAnalysis, conditionsHref, ai
             )}
           </section>
 
+          {benefit.virtual_data === true && benefit.eligibility_conditions.length > 0 ? (
+            <section className="ui-card s5-card">
+              <h2 className="s5-card__title">가상 정책의 공개 기준</h2>
+              {benefit.eligibility_conditions.flatMap((condition) => condition.evidence.map((item, index) => (
+                <blockquote key={`${condition.id}-${String(index)}`} className="s5-quote">{item.quote}</blockquote>
+              )))}
+            </section>
+          ) : null}
+
           {/* 5 지원 내용 */}
           <section className="ui-card s5-card">
             <h2 className="s5-card__title">지원 내용</h2>
@@ -165,7 +177,7 @@ function PolicyDetail({ benefit, isSample, mine, hasAnalysis, conditionsHref, ai
               <ul className="s5-conditions">
                 {conflicts.map((conflict) => (
                   <li key={conflict.policy_id} className="s5-condition">
-                    <a className="s5-link" href={paths.policy(conflict.policy_id)}>
+                    <a className="s5-link" href={withResultBasis(paths.policy(conflict.policy_id), readResultBasis(window.location.search))}>
                       {conflictName(conflict.policy_id)} ›
                     </a>
                     {conflict.evidence.map((item) => (
@@ -185,7 +197,7 @@ function PolicyDetail({ benefit, isSample, mine, hasAnalysis, conditionsHref, ai
             <h2 className="s5-card__title">신청 방법</h2>
             <dl className="s5-rows">
               <dt>신청 기간</dt>
-              <dd>{applyPeriod(benefit.application)}</dd>
+              <dd>{virtualData ? '가상 정책에는 실제 모집 일정이 없어요.' : applyPeriod(benefit.application)}</dd>
               <dt>접수 기관</dt>
               <dd>{benefit.provider}</dd>
             </dl>
@@ -194,7 +206,9 @@ function PolicyDetail({ benefit, isSample, mine, hasAnalysis, conditionsHref, ai
           {/* 8 준비 서류 (정책 상세에 서류 정보가 아직 없어 문구 S5-DOC) */}
           <section className="ui-card s5-card">
             <h2 className="s5-card__title">준비 서류</h2>
-            <p className="s5-muted">공식 자료에 서류 안내가 없어요. 신청 페이지에서 확인해 주세요.</p>
+            <p className="s5-muted">{virtualData
+              ? '가상 정책에는 실제 제출 서류가 없어요.'
+              : '공식 자료에 서류 안내가 없어요. 신청 페이지에서 확인해 주세요.'}</p>
           </section>
 
           {/* 9 확인이 필요한 것 (내 조건으로 진단했을 때만) */}
@@ -228,10 +242,10 @@ function PolicyDetail({ benefit, isSample, mine, hasAnalysis, conditionsHref, ai
         {/* 10 출처 · 확인일 */}
         <p className="s5-source">
           출처 {sourceName(benefit.source.url)} · 마지막 확인 {monthDay(benefit.source.checked_at)} ·{' '}
-          {isSample ? benefit.source.url : <a href={benefit.source.url} target="_blank" rel="noopener noreferrer">
+          {virtualData ? benefit.source.url : <a href={benefit.source.url} target="_blank" rel="noopener noreferrer">
             {benefit.source.url}
           </a>}
-          {isStale(benefit.source.checked_at) ? ' · ⚠ 최신 내용은 공식 페이지에서 확인' : ''}
+          {!virtualData && isStale(benefit.source.checked_at) ? ' · ⚠ 최신 내용은 공식 페이지에서 확인' : ''}
         </p>
         <p className="s5-notice">
           정책 안내는 참고용이에요. 최종 자격과 최신 조건은 신청 기관에서 확인해 주세요.
@@ -248,7 +262,7 @@ function PolicyDetail({ benefit, isSample, mine, hasAnalysis, conditionsHref, ai
               : ''}
           </p>
         ) : null}
-        {isSample ? <p className="s5-muted">가상 예시에는 실제 신청 링크가 없어요.</p> : <a
+        {virtualData ? <p className="s5-muted">가상 예시에는 실제 신청 링크가 없어요.</p> : <a
           className="ui-button ui-button--primary ui-button--large ui-button--block"
           href={applyUrl}
           target="_blank"

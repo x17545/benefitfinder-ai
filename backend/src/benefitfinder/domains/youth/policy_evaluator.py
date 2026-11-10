@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Protocol
 
 from benefitfinder.domains.youth.eligibility import (
+    EligibilityStatus,
     check_age_with_military,
     check_job_seeker,
     check_home_ownership,
@@ -13,6 +14,9 @@ from benefitfinder.domains.youth.eligibility import (
     check_parent_income,
     combine_eligibility,
 )
+
+INCOME_LIMITS = {"P1": 30_000_000, "P6": 50_000_000}
+AGE_LIMITS = {"P1": (19, 34, True), "P3": (19, 34, True), "P6": (19, 39, False)}
 
 
 class YouthProfileLike(Protocol):
@@ -41,11 +45,17 @@ def evaluate_policies(profile: YouthProfileLike) -> dict:
     contract_type = contract.type if contract else None
     deposit_band = contract.deposit_band if contract else None
     parent_income = household.parent_income_band if household else None
+    income_won = getattr(profile, "income_won", None)
+
+    def income_status(policy: str) -> EligibilityStatus:
+        limit = INCOME_LIMITS[policy]
+        if income_won is not None:
+            return "met" if income_won <= limit else "not_met"
+        return check_income_band(profile.income_band, limit)
 
     common_age = {
-        "P1": check_age_with_military(profile.age, 19, 34, military_min, military_max, True),
-        "P3": check_age_with_military(profile.age, 19, 34, military_min, military_max, True),
-        "P6": check_age_with_military(profile.age, 19, 39, military_min, military_max, False),
+        key: check_age_with_military(profile.age, lower, upper, military_min, military_max, extended)
+        for key, (lower, upper, extended) in AGE_LIMITS.items()
     }
 
     conditions = {
@@ -53,7 +63,7 @@ def evaluate_policies(profile: YouthProfileLike) -> dict:
             "age": common_age["P1"],
             "home_ownership": check_home_ownership(ownership),
             "monthly_rent": check_monthly_rent(contract_type),
-            "income": check_income_band(profile.income_band, 30_000_000),
+            "income": income_status("P1"),
             "deposit": check_deposit_band(deposit_band),
             "parent_income": check_parent_income(parent_income),
         },
@@ -64,7 +74,7 @@ def evaluate_policies(profile: YouthProfileLike) -> dict:
         "P6": {
             "age": common_age["P6"],
             "home_ownership": check_home_ownership(ownership),
-            "income": check_income_band(profile.income_band, 50_000_000),
+            "income": income_status("P6"),
         },
     }
 

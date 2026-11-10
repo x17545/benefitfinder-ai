@@ -23,6 +23,18 @@ MVP_SOURCE_CHECKED_AT = "2026-10-26T09:00:00+09:00"
 MVP_DATA_UPDATED_AT = "2026-10-26T03:12:00+09:00"
 
 
+def mvp_policy_id(key: str) -> str:
+    return f"youth:example:{key}"
+
+
+def mvp_policy_source(key: str) -> dict[str, str]:
+    return {
+        "url": MVP_POLICY_SOURCES[key],
+        "checked_at": MVP_SOURCE_CHECKED_AT,
+        "document_version": "fictional-v1",
+    }
+
+
 def map_portfolio_policy(
     policy_id: str,
     amount_won: int,
@@ -54,17 +66,13 @@ def map_portfolio_policy(
 
 
     return {
-        "policy_id": f"youth:example:{policy_id}",
+        "policy_id": mvp_policy_id(policy_id),
         "amount_in_period_won": amount_won,
         "original_amount_won": original_amount_won,
         "amount_status": "unknown",
         "eligibility": eligibility,
         "ai_reason": None,
-        "source": {
-            "url": MVP_POLICY_SOURCES[policy_id],
-            "checked_at": MVP_SOURCE_CHECKED_AT,
-            "document_version": "fictional-v1",
-        },
+        "source": mvp_policy_source(policy_id),
     }
 
 

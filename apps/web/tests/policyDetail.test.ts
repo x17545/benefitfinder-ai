@@ -59,6 +59,10 @@ describe('S5 정책 상세 글자', () => {
     expect(findMyPolicyResult(fixture, revised, basis, false, false)).toBeNull();
     expect(findMyPolicyResult(fixture, matching, basis, true, false)).toBeNull();
     expect(findMyPolicyResult(fixture, matching, basis, false, true)).toBeNull();
+    const virtualBenefit = { ...matching, virtual_data: true };
+    expect(findMyPolicyResult(fixture, virtualBenefit, basis, false, false)).toBeNull();
+    fixture.virtual_data = true;
+    expect(findMyPolicyResult(fixture, virtualBenefit, basis, false, false)).toBe(policy);
   });
 });
 

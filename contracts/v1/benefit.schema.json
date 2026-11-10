@@ -13,6 +13,7 @@
     "summary": {"type": "string", "minLength": 1},
     "provider": {"type": "string", "minLength": 1},
     "categories": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+    "virtual_data": {"type": "boolean", "description": "백엔드 가상 정책 상세. 실제 모집·신청 정보로 표시하지 않는다."},
     "application": {
       "type": "object",
       "additionalProperties": false,
