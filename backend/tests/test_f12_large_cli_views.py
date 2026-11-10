@@ -81,7 +81,7 @@ class LargeCliViewsTests(TestCase):
             self.assertTrue(all(p.read_bytes() == data for p, data in inputs.items()))
 
     def test_trace_and_completion_mismatch_fail_without_report(self) -> None:
-        for failure in ('completion', 'source', 'selection', 'context_added'):
+        for failure in ('completion', 'source', 'selection', 'context_added', 'missing_groups', 'incomplete_group'):
             with self.subTest(failure=failure), TemporaryDirectory() as temp:
                 root = Path(temp)
                 manifest = chunk_fixture(root)
@@ -93,8 +93,19 @@ class LargeCliViewsTests(TestCase):
                     data['source']['document_version'] = 'wrong-version'
                 elif failure == 'selection':
                     data['chunks'][0]['selected']['amount'] = []
-                else:
+                elif failure == 'context_added':
                     data['chunks'][0]['context_added']['amount'] = []
+                elif failure == 'missing_groups':
+                    data['context_groups'] = []
+                else:
+                    data['chunks'][0]['contextualized']['amount'] = [[2, 3]]
+                    data['chunks'][0]['context_added']['amount'] = [[3, 3]]
+                    facts_path = root / 'chunked/facts-pending.json'
+                    facts = json.loads(facts_path.read_text())
+                    quote = facts['benefit_amount']['items'][0]['evidence']['quote']
+                    facts['benefit_amount']['items'][0]['evidence'].update(
+                        quote='\n'.join(quote.splitlines()[1:]), location='text lines 2-3')
+                    write_json(facts_path, facts)
                 write_json(path, data)
                 output = root / 'failed.json'
                 with redirect_stdout(StringIO()), redirect_stderr(StringIO()):

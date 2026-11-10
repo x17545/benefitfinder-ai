@@ -490,6 +490,15 @@ def _chunk_views(
                 or type(group['start']) is not int or type(group['end']) is not int
                 or not 1 <= group['start'] <= group['end'] <= len(lines)):
             _invalid()
+    # Check the declared unit geometry without reinterpreting the source or
+    # importing the extraction strategy. Overlap connects units; adjacency does not.
+    units: list[tuple[int, int]] = []
+    for a, b in sorted((g['start'], g['end']) for g in d['context_groups']):
+        if units and a <= units[-1][1]:
+            units[-1] = (units[-1][0], max(units[-1][1], b))
+        else:
+            units.append((a, b))
+    unit_at = {i: (a, b) for a, b in units for i in range(a, b + 1)}
     if not isinstance(d['chunks'], list) or not d['chunks']:
         _invalid()
     _limit(len(d['chunks']) <= 500)
@@ -519,9 +528,17 @@ def _chunk_views(
                     or added[kind] != context[kind] - model[kind]
                     or (not c['model_called'] and (model[kind] or context[kind]))):
                 _invalid()
+            expected = set(model[kind])
+            for a, b in {unit_at[n] for n in model[kind] if n in unit_at}:
+                if not c['start'] <= a <= b <= c['end']:
+                    _invalid()
+                expected.update(range(a, b + 1))
+            if context[kind] != expected:
+                _invalid()
             totals['model'][kind].update(model[kind])
             totals['context'][kind].update(context[kind])
-    if core_end != len(lines):
+    if (core_end != len(lines)
+            or any(not any(c['start'] <= a <= b <= c['end'] for c in d['chunks']) for a, b in units)):
         _invalid()
     facts = {'model': _large_facts(d['model_only_facts'], document, budget),
              'context': _large_facts(budget.read(directory / 'facts-pending.json'), document, budget)}
