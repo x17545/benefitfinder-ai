@@ -1043,7 +1043,7 @@ S1 시작 ─▶ S2 조건 선택 (1 ~ 13단계) ─▶ L 로딩 ─▶ S3 내 �
 
 - `recruit_status`: open(모집 중) / always(상시) / closed(모집 끝남). 마감 14일 이내면 화면이 'D-n' 표시. 자동화가 매일 신청 기간과 오늘 날짜로 다시 계산한다
 - `next_expected`: 다음 모집 예정 시기(공고에 있을 때만, 없으면 null)
-- `benefit.type`: monthly / lump_sum / maturity / interest / **service** (v3.0의 수집용 기획안). F14의 service/환산 필드는 현재 공용 계약에 구현돼 있지 않으므로 그대로 API에 추가하지 않는다. 소비자·스키마·예제·테스트를 함께 검토하는 후속 계약 작업이 필요하다
+- `benefit.type`: monthly / lump_sum / maturity / interest / **service** (v3.0의 수집용 기획안). F14 공용 상세는 가상·실제 공통으로 선택적 `service` 객체로 구분하고 현금 `benefit_amount`와 함께 보내지 않는다. 정본은 [서비스 계약](../../contracts/v1/service.schema.json)이며 아래는 수집용 기획안이다
 - `service`(type이 service일 때만): `{ "item": "면접 정장 대여", "unit": "회", "quantity": 3, "unit_value_won": 50000, "value_basis": "시중 대여료 근거 설명", "value_source_url": "https://...", "value_checked_at": "2026-11-01", "value_status": "verified" }`. 환산 금액 = `unit_value_won × quantity`(코드 계산). `value_status`가 verified가 아니면 금액을 보여 주지 않는다. service 정책은 F05 현금 조합 계산에 넣지 않는다
 - `pay_timing`: monthly_from_start / at_maturity / yearly / once (현재가치 계산용, 서윤이 정제·검수하고 정찬이 적재)
 - `amount_status`: verified / unknown
@@ -1627,4 +1627,4 @@ AI 사용 표시 (평가 기준 G7)
 | F11 | 배포·통합 | Must | 미구현 | 휴대폰 데이터망(외부 네트워크)에서 배포 URL로 처음부터 [신청하러 가기]까지 진행 | 전체 흐름이 끊김 없이 동작 |
 | F12 | 정책 원문 분석 Agent | Must | 일부 (로컬 E4B 추출·항목 검수·승인 내보내기·문맥 분할·대량 두 뷰 평가 구현. 운영 원문 수집/일괄 게시 후속) | README의 'Agent 실행 기록' 위치에서 최근 실행 기록 열기 (또는 표본 원문으로 수동 실행 명령) | 한 실행 안에 도구 2개 이상이 상황에 따라 호출된 순서, 뽑힌 규칙 후보와 원문 인용, 검수 상태가 보임 |
 | F13 | 맞춤 설명 (RAG) | Must | 일부 (PostgreSQL/가상 저장소 조항 조회·선택적 E4B·기본 문구·결과 근거 표시 구현. 실제 정책 운영 게시·계산 연결 후속) | 테스트 조건 A로 분석 → 결과 화면 지원금 행의 설명 읽기 | [AI] 표시가 붙은 두세 문장, 끝에 근거 조항 이름, 설명 속 금액이 카드 금액과 같음 |
-| F14 | 지원금이 아닌 서비스 | Must | 일부 (S6·서비스형 S5 개발 예시와 현금 합계 분리. 공용 계약·서버 판정과 실제 단가 검수는 후속) | 테스트 조건 A로 분석 → 결과 화면 [돈 말고 받을 수 있는 도움 n개] → [환산 기준] 펼치기 | 서비스 목록과 '약 ○만 원' 환산 금액, 단가·출처·확인일이 보이고 결과 화면 현금 총액은 그대로 |
+| F14 | 지원금이 아닌 서비스 | Must | 일부 (공용 계약과 FastAPI 가상 서비스 판정·환산·상세, 현금 합계 분리. 실제 서비스 자료 게시·단가 검수는 후속) | 테스트 조건 A로 분석 → 결과 화면 [돈 말고 받을 수 있는 도움 n개] → [환산 기준] 펼치기 | 서비스 목록과 '약 ○만 원' 환산 금액, 단가·출처·확인일이 보이고 결과 화면 현금 총액은 그대로 |

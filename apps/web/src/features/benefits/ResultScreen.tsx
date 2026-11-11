@@ -18,8 +18,6 @@ import { usePolicyInfo } from './policyInfo.ts';
 import { saveResultImage } from './resultImage.ts';
 import { ResultLists } from './ResultLists.tsx';
 import { readResultBasis, withResultBasis } from './resultBasis.ts';
-import { devSampleBenefit } from '../policy/devSampleBenefits.ts';
-import { isCurrentService, readServices } from '../services/serviceModel.ts';
 import '../services/ServicesScreen.css';
 import { allPolicyIds, pickView, policyName, portfolioLabel } from './resultModel.ts';
 import type { ResultView } from './resultModel.ts';
@@ -98,15 +96,9 @@ export function ResultScreen(): JSX.Element {
   const [selectedRank, setSelectedRank] = useState(1);
 
   const result = analysis.status === 'done' ? analysis.result : null;
-  const services = readServices(result, analysis.status === 'done' && analysis.isSample);
-  const info = usePolicyInfo([
-    ...(result !== null ? allPolicyIds(result) : []),
-    ...(services.isSample ? [] : services.entries.map((entry) => entry.policy_id)),
-  ]);
+  const info = usePolicyInfo(result !== null ? allPolicyIds(result) : []);
   // F14: 돈 말고 받을 수 있는 서비스 수 (현금 총액에는 더하지 않는다)
-  const serviceCount = services.entries.filter(({ policy_id }) =>
-    isCurrentService(services.isSample ? devSampleBenefit(policy_id) ?? undefined : info.get(policy_id)),
-  ).length;
+  const serviceCount = result?.services?.length ?? 0;
 
   // 결과 없이 주소로 들어오면 처음으로
   useEffect(() => {
@@ -352,7 +344,7 @@ export function ResultScreen(): JSX.Element {
           <a className="s6-entry" href={withResultBasis(paths.services, { period, present_value: presentValue })}>
             <span>
               돈 말고 받을 수 있는 도움 {serviceCount}개
-              <span className="s6-entry__note">{services.isSample ? ' · 개발용 가상 예시' : ' · 현금 총액과 따로 봐요'}</span>
+              <span className="s6-entry__note"> · 현금 총액과 따로 봐요</span>
             </span>
             <span aria-hidden="true">›</span>
           </a>

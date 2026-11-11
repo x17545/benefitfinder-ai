@@ -1,0 +1,135 @@
+{
+  "request_id": "example-request-empty",
+  "domain": "youth",
+  "view": "empty",
+  "results": {
+    "1y": {
+      "pv_off": {
+        "portfolios": [],
+        "calculation_status": "available",
+        "unavailable_reason": null
+      },
+      "pv_on": {
+        "portfolios": [],
+        "calculation_status": "available",
+        "unavailable_reason": null
+      }
+    },
+    "2y": {
+      "pv_off": {
+        "portfolios": [],
+        "calculation_status": "available",
+        "unavailable_reason": null
+      },
+      "pv_on": {
+        "portfolios": [],
+        "calculation_status": "available",
+        "unavailable_reason": null
+      }
+    },
+    "all": {
+      "pv_off": {
+        "portfolios": [],
+        "calculation_status": "available",
+        "unavailable_reason": null
+      },
+      "pv_on": {
+        "portfolios": [],
+        "calculation_status": "available",
+        "unavailable_reason": null
+      }
+    }
+  },
+  "ai_generated": false,
+  "data_updated_at": "2026-10-26T03:12:00+09:00",
+  "discount_rate": 0.025,
+  "discount_rate_status": "verified",
+  "virtual_data": true,
+  "services": [
+    {
+      "title": "[가상] 청년 면접 정장 대여",
+      "categories": [
+        "employment"
+      ],
+      "application": {
+        "status": "open",
+        "starts_on": null,
+        "ends_on": null,
+        "url": null
+      },
+      "source": {
+        "url": "https://policy.example/youth/service-s2",
+        "checked_at": "2026-11-01T09:00:00+09:00",
+        "document_version": "fictional-service-v1"
+      },
+      "service": {
+        "item": "면접 정장 한 벌 대여 (3박 4일)",
+        "unit": "회",
+        "quantity": 3,
+        "unit_value_won": 40000,
+        "value_basis": "[가상] 검증용 단가 기준표",
+        "value_source_url": "https://policy.example/youth/price-s2",
+        "value_checked_at": "2026-11-01",
+        "value_status": "verified",
+        "estimated_value_won": 120000
+      },
+      "policy_id": "youth:example:S2",
+      "eligibility": [
+        {
+          "condition_id": "employment",
+          "status": "met",
+          "reason": "가상 구직 기준에 맞습니다.",
+          "evidence": [
+            {
+              "quote": "[가상 예제] 구직활동 중인 청년을 대상으로 합니다.",
+              "location": "지원 대상",
+              "source": {
+                "url": "https://policy.example/youth/service-s2",
+                "checked_at": "2026-11-01T09:00:00+09:00",
+                "document_version": "fictional-service-v1"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "policy_id": "youth:example:S3",
+      "title": "[가상] 청년 주거 상담",
+      "categories": [
+        "housing"
+      ],
+      "application": {
+        "status": "open",
+        "starts_on": null,
+        "ends_on": null,
+        "url": null
+      },
+      "source": {
+        "url": "https://policy.example/youth/service-s3",
+        "checked_at": "2026-11-01T09:00:00+09:00",
+        "document_version": "fictional-service-v1"
+      },
+      "service": {
+        "item": "임대차 계약 상담",
+        "unit": "회",
+        "quantity": 1,
+        "unit_value_won": null,
+        "value_basis": null,
+        "value_source_url": null,
+        "value_checked_at": null,
+        "value_status": "unknown",
+        "estimated_value_won": null
+      },
+      "eligibility": [
+        {
+          "condition_id": "monthly_rent",
+          "status": "needs_review",
+          "reason": "가상 월세 기준 확인이 필요합니다.",
+          "evidence": []
+        }
+      ]
+    }
+  ],
+  "services_total_won": 120000
+}

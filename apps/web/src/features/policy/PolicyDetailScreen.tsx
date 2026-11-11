@@ -13,9 +13,8 @@ import { readResultBasis, withResultBasis } from '../benefits/resultBasis.ts';
 import type { PortfolioPolicy } from '../benefits/resultModel.ts';
 import { clearMyData } from '../profile/clearMyData.ts';
 import { useFlowState } from '../profile/flowStore.ts';
-import { devSampleServices } from '../services/devSampleServices.ts';
-import { findServiceForDetail, readServices, serviceValueWon } from '../services/serviceModel.ts';
-import type { ServiceEntry } from '../services/serviceModel.ts';
+import { findServiceForDetail } from '../services/serviceModel.ts';
+import type { RecommendedService } from '../../shared/api/generated/recommendation-response.ts';
 import { ServiceValueBasis } from '../services/ServiceValueBasis.tsx';
 import '../services/ServicesScreen.css';
 import { devSampleBenefit } from './devSampleBenefits.ts';
@@ -39,15 +38,12 @@ export function PolicyDetailScreen({ policyId }: PolicyDetailScreenProps): JSX.E
   const { consent } = useFlowState();
   const basis = readResultBasis(window.location.search);
   const result = consent && analysis.status === 'done' ? analysis.result : null;
-  const mine = state.status === 'ok' && result !== null && analysis.status === 'done'
+  const mine = state.status === 'ok' && state.benefit.service === undefined && result !== null && analysis.status === 'done'
     ? findMyPolicyResult(result, state.benefit, basis, state.isSample, analysis.isSample) : null;
   // 서비스형 정책(F14)은 조합에 들어가지 않으므로 S6 목록의 진단을 쓴다
-  const serviceDiagnosis = state.status === 'ok' && mine === null && state.benefit.benefit_amount == null
-    ? findServiceForDetail(readServices(result, analysis.status === 'done' && analysis.isSample), state.benefit, state.isSample)
+  const serviceDiagnosis = state.status === 'ok'
+    ? findServiceForDetail(result, state.benefit, analysis.status === 'done' && analysis.isSample)
     : null;
-  // 상세 주소를 직접 열어도 예제의 공개 내용은 보이되 개인 진단으로 표시하지 않는다.
-  const service = serviceDiagnosis ?? (state.status === 'ok' && state.isSample
-    ? devSampleServices()?.find((entry) => entry.policy_id === policyId) ?? null : null);
   const conditionsHref = consent ? paths.conditions(result !== null ? CONDITION_STEPS : 1) : paths.start;
 
   const title = state.status === 'ok' ? state.benefit.title : '정책 상세';
@@ -60,7 +56,7 @@ export function PolicyDetailScreen({ policyId }: PolicyDetailScreenProps): JSX.E
       }} />
       {state.status === 'ok' ? (
         <PolicyDetail benefit={state.benefit} isSample={state.isSample} mine={mine}
-          service={service} serviceDiagnosis={serviceDiagnosis?.eligibility ?? null}
+          serviceDiagnosis={serviceDiagnosis?.eligibility ?? null}
           hasAnalysis={result !== null} conditionsHref={conditionsHref} aiGenerated={result?.ai_generated ?? false} />
       ) : (
         <main className="screen__body s5-body">
@@ -99,15 +95,14 @@ interface PolicyDetailProps {
   benefit: NormalizedBenefit;
   isSample: boolean;
   mine: PortfolioPolicy | null;
-  /** 서비스형 정책이면 S6 목록의 항목 */
-  service: ServiceEntry | null;
-  serviceDiagnosis: ServiceEntry['eligibility'] | null;
+  serviceDiagnosis: RecommendedService['eligibility'] | null;
   hasAnalysis: boolean;
   conditionsHref: string;
   aiGenerated: boolean;
 }
 
-function PolicyDetail({ benefit, isSample, mine, service, serviceDiagnosis, hasAnalysis, conditionsHref, aiGenerated }: PolicyDetailProps): JSX.Element {
+function PolicyDetail({ benefit, isSample, mine, serviceDiagnosis, hasAnalysis, conditionsHref, aiGenerated }: PolicyDetailProps): JSX.Element {
+  const service = benefit.service ?? null;
   const virtualData = isSample || benefit.virtual_data === true;
   const tag = recruitTag(benefit.application);
   const closed = benefit.application.status === 'closed';
@@ -117,7 +112,7 @@ function PolicyDetail({ benefit, isSample, mine, service, serviceDiagnosis, hasA
   const conflictInfo = usePolicyInfo(isSample ? [] : conflicts.map((conflict) => conflict.policy_id));
   const diagnosis = service !== null ? serviceDiagnosis : mine?.eligibility ?? null;
   const reviewItems = diagnosis?.filter((item) => item.status === 'needs_review') ?? [];
-  const serviceValue = service !== null ? serviceValueWon(service.service) : null;
+  const serviceValue = service?.estimated_value_won ?? null;
 
   function conflictName(id: string): string {
     return (isSample ? devSampleBenefit(id)?.title : conflictInfo.get(id)?.title) ?? `정책 ${shortPolicyId(id)}`;
@@ -127,11 +122,11 @@ function PolicyDetail({ benefit, isSample, mine, service, serviceDiagnosis, hasA
     <>
       <main className="screen__body s5-body">
         {isSample ? (
-          <p className="s5-dev-note">{service !== null
-            ? '개발용 가상 서비스예요. 예시 진단은 입력 조건과 무관해요.'
-            : '개발용 화면: 정책 상세 API가 아직 없어 가상 예시를 보여 줘요'}</p>
+          <p className="s5-dev-note">개발용 화면: 정책 상세 API가 아직 없어 가상 예시를 보여 줘요</p>
         ) : virtualData ? (
-          <p className="s5-dev-note">가상 정책의 상세예요. 실제 모집이나 지원금을 뜻하지 않아요.</p>
+          <p className="s5-dev-note">{service !== null
+            ? '가상 서비스의 상세예요. 실제 모집이나 지원을 뜻하지 않아요.'
+            : '가상 정책의 상세예요. 실제 모집이나 지원금을 뜻하지 않아요.'}</p>
         ) : null}
 
         {/* 1 · 2 기관 · 모집 상태 · 정책 이름 */}
@@ -174,7 +169,8 @@ function PolicyDetail({ benefit, isSample, mine, service, serviceDiagnosis, hasA
             )}
           </section>
 
-          {benefit.virtual_data === true && benefit.eligibility_conditions.length > 0 ? (
+          {benefit.virtual_data === true && benefit.eligibility_conditions.length > 0 &&
+            (service === null || diagnosis === null) ? (
             <section className="ui-card s5-card">
               <h2 className="s5-card__title">가상 정책의 공개 기준</h2>
               {benefit.eligibility_conditions.flatMap((condition) => condition.evidence.map((item, index) => (
@@ -188,14 +184,14 @@ function PolicyDetail({ benefit, isSample, mine, service, serviceDiagnosis, hasA
             <>
               <section className="ui-card s5-card">
                 <h2 className="s5-card__title">받을 수 있는 것</h2>
-                <p className="s5-amount">{service.service.item}</p>
+                <p className="s5-amount">{service.item}</p>
               </section>
               <section className="ui-card s5-card">
                 <h2 className="s5-card__title">돈으로 치면</h2>
                 {serviceValue !== null ? (
                   <>
                     <p className="s5-amount">약 {formatManWon(serviceValue).replace(/^약 /, '')}</p>
-                    <p className="s6-value-basis"><ServiceValueBasis service={service.service} virtualData={virtualData} /></p>
+                    <p className="s6-value-basis"><ServiceValueBasis service={service} virtualData={virtualData} /></p>
                   </>
                 ) : (
                   <p className="s5-muted">시중 가격 근거를 찾지 못해 금액으로 바꾸지 않았어요.</p>

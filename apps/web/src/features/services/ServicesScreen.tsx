@@ -1,20 +1,16 @@
 import type { JSX } from 'react';
 import { navigate, paths } from '../../app/router.ts';
 import { conditionLabel } from '../../domains/youth/conditionLabels.ts';
-import type { NormalizedBenefit } from '../../shared/api/benefits.ts';
+import type { RecommendedService } from '../../shared/api/generated/recommendation-response.ts';
 import { SiteFooter } from '../../shared/ui/SiteFooter.tsx';
 import { StatusChip } from '../../shared/ui/StatusChip.tsx';
 import { TopBar } from '../../shared/ui/TopBar.tsx';
 import { useAnalysis } from '../benefits/analysisStore.ts';
-import { formatManWon, recruitTag, shortPolicyId } from '../benefits/format.ts';
-import { usePolicyInfo } from '../benefits/policyInfo.ts';
+import { formatManWon, recruitTag } from '../benefits/format.ts';
 import { readResultBasis, withResultBasis } from '../benefits/resultBasis.ts';
-import { devSampleBenefit } from '../policy/devSampleBenefits.ts';
 import { clearMyData } from '../profile/clearMyData.ts';
 import { useFlowState } from '../profile/flowStore.ts';
 import { ServiceValueBasis } from './ServiceValueBasis.tsx';
-import { isCurrentService, readServices, serviceValueWon, servicesTotalWon, sortServices } from './serviceModel.ts';
-import type { ServiceEntry } from './serviceModel.ts';
 import './ServicesScreen.css';
 
 /** S6 돈 말고 받을 수 있는 도움 (기획서 4.7-1). 주소 /services */
@@ -22,19 +18,10 @@ export function ServicesScreen(): JSX.Element {
   const analysis = useAnalysis();
   const { consent } = useFlowState();
   const result = consent && analysis.status === 'done' ? analysis.result : null;
-  const list = readServices(result, analysis.status === 'done' && analysis.isSample);
   const basis = readResultBasis(window.location.search);
-  const info = usePolicyInfo(list.isSample ? [] : list.entries.map((entry) => entry.policy_id));
-
-  function benefitOf(id: string): NormalizedBenefit | undefined {
-    return (list.isSample ? devSampleBenefit(id) : info.get(id)) ?? undefined;
-  }
-
-  const entries = sortServices(
-    list.entries.filter(({ policy_id }) => isCurrentService(benefitOf(policy_id))),
-    (id) => benefitOf(id)?.application.status === 'open',
-  );
-  const total = servicesTotalWon(entries);
+  const entries = result?.services ?? [];
+  const total = result?.services_total_won ?? null;
+  const virtualData = result?.virtual_data === true || (analysis.status === 'done' && analysis.isSample);
 
   return (
     <div className="page-width screen">
@@ -46,9 +33,7 @@ export function ServicesScreen(): JSX.Element {
         }}
       />
       <main className="screen__body s6-body">
-        {list.isSample ? (
-          <p className="s6-dev-note">개발용 가상 예시예요. 서비스와 진단은 입력 조건과 무관해요.</p>
-        ) : list.virtualData && entries.length > 0 ? (
+        {virtualData && entries.length > 0 ? (
           <p className="s6-dev-note">가상 서비스 목록이에요. 실제로 받을 수 있는 서비스가 아니에요.</p>
         ) : null}
 
@@ -68,7 +53,7 @@ export function ServicesScreen(): JSX.Element {
           </section>
         ) : entries.length === 0 ? (
           <section className="ui-card s6-card">
-            <p className="s6-muted">{list.available
+            <p className="s6-muted">{result.services !== undefined
               ? '지금 조건으로 받을 수 있는 서비스가 없어요.'
               : '이 분석에서는 서비스 목록을 제공하지 않아요.'}</p>
           </section>
@@ -86,8 +71,8 @@ export function ServicesScreen(): JSX.Element {
             {/* 3 · 4 · 5 서비스 행 */}
             <ul className="s6-list">
               {entries.map((entry) => (
-                <ServiceRow key={entry.policy_id} entry={entry} benefit={benefitOf(entry.policy_id)}
-                  detailHref={withResultBasis(paths.policy(entry.policy_id), basis)} virtualData={list.virtualData} />
+                <ServiceRow key={entry.policy_id} entry={entry}
+                  detailHref={withResultBasis(paths.policy(entry.policy_id), basis)} virtualData={virtualData} />
               ))}
             </ul>
           </>
@@ -96,7 +81,7 @@ export function ServicesScreen(): JSX.Element {
         {/* 6 안내문 (S6-NOTE + COM-AI) */}
         <p className="s6-note">
           환산 금액은 이해를 돕기 위한 참고값이에요. 실제로 돈을 주는 것은 아니에요.{' '}
-          {list.virtualData ? '가상 예시의 자격과 금액은 실제 신청에 사용할 수 없어요.' :
+          {virtualData ? '가상 예시의 자격과 금액은 실제 신청에 사용할 수 없어요.' :
             '검수한 정책과 입력 조건으로 계산한 참고 결과예요. 최종 자격과 최신 조건은 신청 기관에서 확인해 주세요.'}
         </p>
       </main>
@@ -106,16 +91,15 @@ export function ServicesScreen(): JSX.Element {
 }
 
 interface ServiceRowProps {
-  entry: ServiceEntry;
-  benefit: NormalizedBenefit | undefined;
+  entry: RecommendedService;
   detailHref: string;
   virtualData: boolean;
 }
 
-function ServiceRow({ entry, benefit, detailHref, virtualData }: ServiceRowProps): JSX.Element {
-  const value = serviceValueWon(entry.service);
-  const tag = benefit !== undefined ? recruitTag(benefit.application) : null;
-  const housing = benefit?.categories.includes('housing') ?? false;
+function ServiceRow({ entry, detailHref, virtualData }: ServiceRowProps): JSX.Element {
+  const value = entry.service.estimated_value_won;
+  const tag = recruitTag(entry.application);
+  const housing = entry.categories.includes('housing');
 
   return (
     <li className="s6-row">
@@ -138,7 +122,7 @@ function ServiceRow({ entry, benefit, detailHref, virtualData }: ServiceRowProps
         </span>
         <span className="s6-row__text">
           <span className="s6-row__name">
-            {benefit?.title ?? `정책 ${shortPolicyId(entry.policy_id)}`} <span aria-hidden="true">›</span>
+            {entry.title} <span aria-hidden="true">›</span>
           </span>
           <span className="s6-row__item">{entry.service.item}</span>
         </span>
@@ -148,7 +132,7 @@ function ServiceRow({ entry, benefit, detailHref, virtualData }: ServiceRowProps
           ) : (
             <span className="s6-muted">환산 기준 없음</span>
           )}
-          {tag !== null ? <span className={`s6-tag s6-tag--${tag.tone}`}>{tag.label}</span> : null}
+          <span className={`s6-tag s6-tag--${tag.tone}`}>{tag.label}</span>
         </span>
       </a>
 
@@ -165,7 +149,7 @@ function ServiceRow({ entry, benefit, detailHref, virtualData }: ServiceRowProps
       {value !== null ? (
         <details className="s6-basis">
           <summary>환산 기준</summary>
-          <p><ServiceValueBasis service={entry.service} virtualData={virtualData || benefit?.virtual_data === true} /></p>
+          <p><ServiceValueBasis service={entry.service} virtualData={virtualData} /></p>
         </details>
       ) : (
         <p className="s6-small">시중 가격 근거를 찾지 못해 금액으로 바꾸지 않았어요. 합계에서도 뺐어요.</p>

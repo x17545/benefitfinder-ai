@@ -160,6 +160,7 @@ DB 스키마 변경은 `backend/migrations/versions/`에 이력으로 관리한�
 | F02 정책 검색, F03 분석 흐름·진행 상태 | 백엔드 `application`, DB 조회·판정·계산 코드·근거 템플릿 |
 | F04 자격, F05 조합·현재가치, F06 상황 변화 | `domain`의 순수 계산, `domains/youth` 정책 조건, `application` 조율 |
 | F07 상세·신청 안내 | `application`·`api`, 저장소 인터페이스 |
+| F14 서비스 | `application`의 자격·근거 있는 환산, `api`의 추천·공개 상세, S6·서비스형 S5 |
 | F08 갱신 | `jobs` 실행, `ingestion` 정제·검수, `ai` 원문 분석·규칙 후보 추출, `infrastructure` 원천·LLM·DB 어댑터 |
 | F11 배포·통합·이용량·통계 | API 경계·외부 설정, 웹 이벤트. 배포 제품은 추후 선택 |
 

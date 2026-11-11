@@ -1,0 +1,51 @@
+{
+  "id": "youth:example:S2",
+  "domain": "youth",
+  "title": "[가상] 청년 면접 정장 대여",
+  "summary": "협업용 가상 서비스입니다. 실제 지원을 뜻하지 않습니다.",
+  "provider": "가상 정책기관",
+  "categories": [
+    "employment"
+  ],
+  "virtual_data": true,
+  "application": {
+    "status": "open",
+    "starts_on": null,
+    "ends_on": null,
+    "url": null
+  },
+  "source": {
+    "url": "https://policy.example/youth/service-s2",
+    "checked_at": "2026-11-01T09:00:00+09:00",
+    "document_version": "fictional-service-v1"
+  },
+  "service": {
+    "item": "면접 정장 한 벌 대여 (3박 4일)",
+    "unit": "회",
+    "quantity": 3,
+    "unit_value_won": 40000,
+    "value_basis": "[가상] 검증용 단가 기준표",
+    "value_source_url": "https://policy.example/youth/price-s2",
+    "value_checked_at": "2026-11-01",
+    "value_status": "verified",
+    "estimated_value_won": 120000
+  },
+  "domain_data": {},
+  "eligibility_conditions": [
+    {
+      "id": "employment",
+      "description": "구직 중인 청년",
+      "evidence": [
+        {
+          "quote": "[가상 예제] 구직활동 중인 청년을 대상으로 합니다.",
+          "location": "지원 대상",
+          "source": {
+            "url": "https://policy.example/youth/service-s2",
+            "checked_at": "2026-11-01T09:00:00+09:00",
+            "document_version": "fictional-service-v1"
+          }
+        }
+      ]
+    }
+  ]
+}

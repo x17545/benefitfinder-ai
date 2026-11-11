@@ -10,6 +10,7 @@ from benefitfinder.application.response_mapper import (
     build_recommendation_response,
 )
 from benefitfinder.application.recommendation_explanations import RecommendationExplainer
+from benefitfinder.application.service_catalog import ServiceCatalog
 
 
 def get_recommendation_service(
@@ -24,6 +25,10 @@ def get_recommendation_explainer(request: Request) -> RecommendationExplainer:
     return request.app.state.recommendation_explainer
 
 
+def get_service_catalog(request: Request) -> ServiceCatalog:
+    return request.app.state.service_catalog
+
+
 router = APIRouter(
     prefix="/api/v1",
     tags=["recommendations"],
@@ -35,6 +40,7 @@ async def create_recommendations(
     request: RecommendationRequest,
     recommendation_service: Callable[..., dict[str, Any]] = Depends(get_recommendation_service),
     recommendation_explainer: RecommendationExplainer = Depends(get_recommendation_explainer),
+    service_catalog: ServiceCatalog = Depends(get_service_catalog),
 ) -> dict[str, Any]:
     """가상 MVP 정책 추천 결과를 반환한다."""
 
@@ -56,5 +62,6 @@ async def create_recommendations(
         calculation=calculation,
         annual_rate=annual_rate,
     )
+    response.update(service_catalog.recommend(request.domain, request.profile))
 
     return await recommendation_explainer.enrich(response)
