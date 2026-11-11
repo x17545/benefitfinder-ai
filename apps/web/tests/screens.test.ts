@@ -50,12 +50,16 @@ function fixture(text: string): RecommendationResponse {
 
 beforeEach(() => {
   vi.resetModules();
+  vi.stubEnv('DEV', false);
   screen.location.search = '';
   vi.stubGlobal('window', { location: screen.location, sessionStorage: storage(), localStorage: storage() });
   screen.effects = [];
   screen.result = null;
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
+});
 
 async function renderResult(): Promise<string> {
   const { ResultScreen } = await import('../src/features/benefits/ResultScreen.tsx');
@@ -93,6 +97,36 @@ describe('remember choice on S1', () => {
 });
 
 describe('period-specific empty results', () => {
+  it('keeps the service entry with no cash, and leaves cash amounts unchanged when both exist', async () => {
+    const services = [{
+      policy_id: 'youth:example:S1',
+      service: {
+        item: '가상 이사 지원', unit: '회', quantity: 1, unit_value_won: 250_000,
+        value_basis: '가상 시중 가격', value_source_url: 'https://policy.example/virtual-price',
+        value_checked_at: '2026-11-01', value_status: 'verified',
+      },
+      eligibility: [],
+    }];
+    screen.location.search = '?period=2y&pv=1';
+    screen.result = Object.assign(fixture(emptyText), { services });
+    const onlyServices = await renderResult();
+    expect(onlyServices).toContain('확인할 수 있는 서비스가 있어요');
+    expect(onlyServices).toContain('돈 말고 받을 수 있는 도움 1개');
+    expect(onlyServices).toContain('/services?period=2y&amp;pv=1');
+    expect(onlyServices).not.toContain('지금 다루는 정책 중엔 맞는 게 없어요');
+    expect(onlyServices).not.toContain('추천 조합 요약');
+
+    screen.location.search = '';
+    screen.result = fixture(fixtureText);
+    const cash = await renderResult();
+    const mainSummary = (html: string) => html.match(/aria-label="추천 조합 요약"[\s\S]*?<\/section>/)?.[0];
+    expect(mainSummary(cash)).toContain('540만 원');
+    screen.result = Object.assign(screen.result, { services });
+    const both = await renderResult();
+    expect(mainSummary(both)).toBe(mainSummary(cash));
+    expect(both).toContain('돈 말고 받을 수 있는 도움 1개');
+  });
+
   it('labels virtual policy calculations returned by the API without the sample button', async () => {
     screen.result = { ...fixture(fixtureText), virtual_data: true };
     const html = await renderResult();

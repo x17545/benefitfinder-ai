@@ -86,7 +86,44 @@ const SAMPLES: NormalizedBenefit[] = [
     source: LOAN_SOURCE,
     domain_data: {},
   },
+  // S6 서비스(F14) 가상 예시. 돈 대신 받는 지원이라 benefit_amount가 없다.
+  serviceSample('youth:example:S1', '[가상] 청년 이사 차량 지원', '[가상] 이사할 때 차량과 인력을 지원해요.', ['housing'],
+    { status: 'open', starts_on: '2026-10-01', ends_on: '2026-11-20', url: null }),
+  serviceSample('youth:example:S2', '[가상] 청년 면접 정장 대여', '[가상] 면접 볼 때 입을 정장을 빌려줘요.', ['employment'],
+    { status: 'open', starts_on: '2026-10-01', ends_on: '2026-12-31', url: null }),
+  serviceSample('youth:example:S3', '[가상] 취업 증명사진 촬영 지원', '[가상] 이력서용 증명사진 촬영을 지원해요.', ['employment'],
+    { status: 'open', starts_on: null, ends_on: null, url: null }),
+  serviceSample('youth:example:S4', '[가상] 청년 1:1 취업 컨설팅', '[가상] 전문 상담사가 취업 준비를 함께 봐 줘요.', ['employment'],
+    { status: 'open', starts_on: '2026-10-01', ends_on: '2026-12-31', url: null }),
 ];
+
+function serviceSample(
+  id: string,
+  title: string,
+  summary: string,
+  categories: string[],
+  application: NormalizedBenefit['application'],
+): NormalizedBenefit {
+  const source = { ...SOURCE, url: 'https://policy.example/youth/sample-service', checked_at: '2026-11-01T09:00:00+09:00' };
+  return {
+    id,
+    domain: 'youth',
+    title,
+    summary,
+    provider: '[가상] 지방자치단체',
+    categories,
+    application,
+    eligibility_conditions: [
+      { id: 'age', description: '[가상] 만 19 ~ 34세', evidence: evidence('신청일 기준 만 19세 이상 34세 이하인 청년', '지원 대상', source) },
+    ],
+    benefit_amount: null,
+    reviewed: true,
+    conflicts: [],
+    lifetime_once: false,
+    source,
+    domain_data: {},
+  };
+}
 
 /** 개발 서버에서만 가상 정책 상세를 돌려준다. 배포 화면에서는 늘 null */
 export function devSampleBenefit(id: string): NormalizedBenefit | null {

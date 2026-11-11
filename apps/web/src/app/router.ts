@@ -9,6 +9,7 @@ export type Route =
   | { name: 'loading' }
   | { name: 'result' }
   | { name: 'whatIf' }
+  | { name: 'services' }
   | { name: 'policy'; policyId: string }
   | { name: 'about' }
   | { name: 'privacy' }
@@ -20,6 +21,7 @@ export const paths = {
   loading: '/loading',
   result: '/result',
   whatIf: '/what-if',
+  services: '/services',
   policy: (policyId: string): string => `/policy/${encodeURIComponent(policyId)}`,
   about: '/about',
   privacy: '/privacy',
@@ -30,6 +32,7 @@ const FIXED_ROUTES: Record<string, Route> = {
   '/loading': { name: 'loading' },
   '/result': { name: 'result' },
   '/what-if': { name: 'whatIf' },
+  '/services': { name: 'services' },
   '/about': { name: 'about' },
   '/privacy': { name: 'privacy' },
 };

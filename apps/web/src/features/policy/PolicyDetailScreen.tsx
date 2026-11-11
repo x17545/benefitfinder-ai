@@ -6,13 +6,18 @@ import { SiteFooter } from '../../shared/ui/SiteFooter.tsx';
 import { StatusChip } from '../../shared/ui/StatusChip.tsx';
 import { TopBar } from '../../shared/ui/TopBar.tsx';
 import { useAnalysis } from '../benefits/analysisStore.ts';
-import { isStale, monthDay, recruitTag, shortPolicyId, sourceName } from '../benefits/format.ts';
+import { formatManWon, isStale, monthDay, recruitTag, shortPolicyId, sourceName } from '../benefits/format.ts';
 import { usePolicyInfo } from '../benefits/policyInfo.ts';
 import { PolicyExplanation } from '../benefits/PolicyExplanation.tsx';
 import { readResultBasis, withResultBasis } from '../benefits/resultBasis.ts';
 import type { PortfolioPolicy } from '../benefits/resultModel.ts';
 import { clearMyData } from '../profile/clearMyData.ts';
 import { useFlowState } from '../profile/flowStore.ts';
+import { devSampleServices } from '../services/devSampleServices.ts';
+import { findServiceForDetail, readServices, serviceValueWon } from '../services/serviceModel.ts';
+import type { ServiceEntry } from '../services/serviceModel.ts';
+import { ServiceValueBasis } from '../services/ServiceValueBasis.tsx';
+import '../services/ServicesScreen.css';
 import { devSampleBenefit } from './devSampleBenefits.ts';
 import {
   amountSummary,
@@ -36,6 +41,13 @@ export function PolicyDetailScreen({ policyId }: PolicyDetailScreenProps): JSX.E
   const result = consent && analysis.status === 'done' ? analysis.result : null;
   const mine = state.status === 'ok' && result !== null && analysis.status === 'done'
     ? findMyPolicyResult(result, state.benefit, basis, state.isSample, analysis.isSample) : null;
+  // 서비스형 정책(F14)은 조합에 들어가지 않으므로 S6 목록의 진단을 쓴다
+  const serviceDiagnosis = state.status === 'ok' && mine === null && state.benefit.benefit_amount == null
+    ? findServiceForDetail(readServices(result, analysis.status === 'done' && analysis.isSample), state.benefit, state.isSample)
+    : null;
+  // 상세 주소를 직접 열어도 예제의 공개 내용은 보이되 개인 진단으로 표시하지 않는다.
+  const service = serviceDiagnosis ?? (state.status === 'ok' && state.isSample
+    ? devSampleServices()?.find((entry) => entry.policy_id === policyId) ?? null : null);
   const conditionsHref = consent ? paths.conditions(result !== null ? CONDITION_STEPS : 1) : paths.start;
 
   const title = state.status === 'ok' ? state.benefit.title : '정책 상세';
@@ -48,6 +60,7 @@ export function PolicyDetailScreen({ policyId }: PolicyDetailScreenProps): JSX.E
       }} />
       {state.status === 'ok' ? (
         <PolicyDetail benefit={state.benefit} isSample={state.isSample} mine={mine}
+          service={service} serviceDiagnosis={serviceDiagnosis?.eligibility ?? null}
           hasAnalysis={result !== null} conditionsHref={conditionsHref} aiGenerated={result?.ai_generated ?? false} />
       ) : (
         <main className="screen__body s5-body">
@@ -86,12 +99,15 @@ interface PolicyDetailProps {
   benefit: NormalizedBenefit;
   isSample: boolean;
   mine: PortfolioPolicy | null;
+  /** 서비스형 정책이면 S6 목록의 항목 */
+  service: ServiceEntry | null;
+  serviceDiagnosis: ServiceEntry['eligibility'] | null;
   hasAnalysis: boolean;
   conditionsHref: string;
   aiGenerated: boolean;
 }
 
-function PolicyDetail({ benefit, isSample, mine, hasAnalysis, conditionsHref, aiGenerated }: PolicyDetailProps): JSX.Element {
+function PolicyDetail({ benefit, isSample, mine, service, serviceDiagnosis, hasAnalysis, conditionsHref, aiGenerated }: PolicyDetailProps): JSX.Element {
   const virtualData = isSample || benefit.virtual_data === true;
   const tag = recruitTag(benefit.application);
   const closed = benefit.application.status === 'closed';
@@ -99,7 +115,9 @@ function PolicyDetail({ benefit, isSample, mine, hasAnalysis, conditionsHref, ai
   const applyUrl = applicationUrl ?? benefit.source.url;
   const conflicts = benefit.conflicts ?? [];
   const conflictInfo = usePolicyInfo(isSample ? [] : conflicts.map((conflict) => conflict.policy_id));
-  const reviewItems = mine?.eligibility.filter((item) => item.status === 'needs_review') ?? [];
+  const diagnosis = service !== null ? serviceDiagnosis : mine?.eligibility ?? null;
+  const reviewItems = diagnosis?.filter((item) => item.status === 'needs_review') ?? [];
+  const serviceValue = service !== null ? serviceValueWon(service.service) : null;
 
   function conflictName(id: string): string {
     return (isSample ? devSampleBenefit(id)?.title : conflictInfo.get(id)?.title) ?? `정책 ${shortPolicyId(id)}`;
@@ -109,7 +127,9 @@ function PolicyDetail({ benefit, isSample, mine, hasAnalysis, conditionsHref, ai
     <>
       <main className="screen__body s5-body">
         {isSample ? (
-          <p className="s5-dev-note">개발용 화면: 정책 상세 API가 아직 없어 가상 예시를 보여 줘요</p>
+          <p className="s5-dev-note">{service !== null
+            ? '개발용 가상 서비스예요. 예시 진단은 입력 조건과 무관해요.'
+            : '개발용 화면: 정책 상세 API가 아직 없어 가상 예시를 보여 줘요'}</p>
         ) : virtualData ? (
           <p className="s5-dev-note">가상 정책의 상세예요. 실제 모집이나 지원금을 뜻하지 않아요.</p>
         ) : null}
@@ -127,11 +147,11 @@ function PolicyDetail({ benefit, isSample, mine, hasAnalysis, conditionsHref, ai
         <div className="s5-grid">
           {/* 3 · 4 내 자격 진단 + 원문 인용 */}
           <section className="ui-card s5-card">
-            {mine !== null ? (
+            {diagnosis !== null ? (
               <>
-                <h2 className="s5-card__title">{diagnosisSummary(mine.eligibility)}</h2>
+                <h2 className="s5-card__title">{diagnosisSummary(diagnosis)}</h2>
                 <ul className="s5-conditions">
-                  {mine.eligibility.map((condition) => (
+                  {diagnosis.map((condition) => (
                     <li key={condition.condition_id} className="s5-condition">
                       <StatusChip status={condition.status}>{conditionLabel(condition.condition_id)}</StatusChip>
                       {condition.evidence.map((item, index) => (
@@ -163,12 +183,33 @@ function PolicyDetail({ benefit, isSample, mine, hasAnalysis, conditionsHref, ai
             </section>
           ) : null}
 
-          {/* 5 지원 내용 */}
-          <section className="ui-card s5-card">
-            <h2 className="s5-card__title">지원 내용</h2>
-            <p className="s5-amount">{amountSummary(benefit.benefit_amount)}</p>
-            {benefit.lifetime_once === true ? <p className="s5-muted">평생 한 번만 받을 수 있어요</p> : null}
-          </section>
+          {/* 5 지원 내용. 서비스형(F14)이면 받을 수 있는 것 + 돈으로 치면 */}
+          {service !== null ? (
+            <>
+              <section className="ui-card s5-card">
+                <h2 className="s5-card__title">받을 수 있는 것</h2>
+                <p className="s5-amount">{service.service.item}</p>
+              </section>
+              <section className="ui-card s5-card">
+                <h2 className="s5-card__title">돈으로 치면</h2>
+                {serviceValue !== null ? (
+                  <>
+                    <p className="s5-amount">약 {formatManWon(serviceValue).replace(/^약 /, '')}</p>
+                    <p className="s6-value-basis"><ServiceValueBasis service={service.service} virtualData={virtualData} /></p>
+                  </>
+                ) : (
+                  <p className="s5-muted">시중 가격 근거를 찾지 못해 금액으로 바꾸지 않았어요.</p>
+                )}
+                <p className="s5-muted">지원금 조합 총액에는 더하지 않았어요.</p>
+              </section>
+            </>
+          ) : (
+            <section className="ui-card s5-card">
+              <h2 className="s5-card__title">지원 내용</h2>
+              <p className="s5-amount">{amountSummary(benefit.benefit_amount)}</p>
+              {benefit.lifetime_once === true ? <p className="s5-muted">평생 한 번만 받을 수 있어요</p> : null}
+            </section>
+          )}
 
           {/* 6 함께 받을 수 없는 정책 (근거가 있을 때만) */}
           {conflicts.length > 0 ? (
@@ -212,7 +253,7 @@ function PolicyDetail({ benefit, isSample, mine, hasAnalysis, conditionsHref, ai
           </section>
 
           {/* 9 확인이 필요한 것 (내 조건으로 진단했을 때만) */}
-          {mine !== null ? (
+          {diagnosis !== null ? (
             <section className="ui-card s5-card s5-card--sub">
               <h2 className="s5-card__title">확인이 필요한 것</h2>
               {reviewItems.length > 0 ? (
@@ -231,7 +272,7 @@ function PolicyDetail({ benefit, isSample, mine, hasAnalysis, conditionsHref, ai
           ) : null}
 
           {/* 9-1 맞춤 설명 (내 조건으로 진단했고 설명이 있을 때만) */}
-          {mine !== null && (mine.ai_reason?.trim() || (mine.ai_sources?.length ?? 0) > 0) ? (
+          {service === null && mine !== null && (mine.ai_reason?.trim() || (mine.ai_sources?.length ?? 0) > 0) ? (
             <section className="ui-card s5-card">
               <h2 className="s5-card__title">내 상황에서 볼 점</h2>
               <PolicyExplanation policy={mine} aiGenerated={aiGenerated} />

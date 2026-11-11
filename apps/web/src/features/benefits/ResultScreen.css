@@ -425,9 +425,13 @@
 }
 
 .s3-policy__actions {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: flex;
   gap: 8px;
+}
+
+/* 버튼이 하나만 있어도 줄 끝에 붙는다 */
+.s3-policy__actions > * {
+  flex: 1;
 }
 
 /* 확인 필요 박스 · 안내 */
@@ -529,8 +533,11 @@
   }
 
   .s3-policy__actions {
-    grid-template-columns: repeat(2, 160px);
-    justify-content: end;
+    justify-content: flex-end;
+  }
+
+  .s3-policy__actions > * {
+    flex: 0 0 160px;
   }
 }
 

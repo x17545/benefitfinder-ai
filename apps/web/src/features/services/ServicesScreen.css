@@ -1,0 +1,233 @@
+/* S6 돈 말고 받을 수 있는 도움 */
+.s6-body {
+  gap: 16px;
+  word-break: keep-all;
+}
+
+.s6-muted {
+  margin: 0;
+  color: var(--color-muted);
+}
+
+.s6-small {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-muted);
+}
+
+.s6-dev-note {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--color-check-soft);
+  color: var(--color-check);
+  font-size: var(--text-sub);
+}
+
+.s6-head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.s6-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 20px;
+}
+
+.s6-card__title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+}
+
+/* 2 합계: 노란 테두리 카드 */
+.s6-total {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 20px;
+  border: 2px solid var(--color-accent);
+  border-radius: var(--radius-card);
+  background: var(--color-card);
+}
+
+.s6-total__label {
+  font-size: 14px;
+  color: var(--color-muted);
+}
+
+.s6-total__amount {
+  font-size: 28px;
+  font-weight: 800;
+}
+
+.s6-total__note {
+  font-size: 13px;
+  color: var(--color-accent-ink);
+}
+
+/* 3 서비스 행 */
+.s6-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+
+@media (min-width: 1024px) {
+  .s6-list {
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+  }
+}
+
+.s6-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px 20px;
+  border-radius: var(--radius-card);
+  background: var(--color-card);
+}
+
+.s6-row__main {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.s6-row__icon {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-icon-bg);
+  color: var(--color-icon-ink);
+}
+
+.s6-row__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.s6-row__name {
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.s6-row__item {
+  font-size: 14px;
+  color: var(--color-muted);
+}
+
+.s6-row__value {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  text-align: right;
+}
+
+.s6-row__value strong {
+  font-size: 17px;
+}
+
+.s6-row__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.s6-tag {
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.s6-tag--ok {
+  background: var(--color-ok-soft);
+  color: var(--color-ok);
+}
+
+.s6-tag--check {
+  background: var(--color-check-soft);
+  color: var(--color-check);
+}
+
+.s6-tag--muted {
+  background: var(--color-sub);
+  color: var(--color-muted);
+}
+
+/* 4 환산 기준 (접힘) */
+.s6-basis {
+  border-radius: 12px;
+  background: var(--color-bg);
+}
+
+.s6-basis summary {
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.s6-basis p {
+  margin: 0;
+  padding: 0 14px 12px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--color-muted);
+}
+
+.s6-note {
+  margin: 0;
+  font-size: var(--text-tiny);
+  color: var(--color-muted);
+}
+
+/* S3의 [돈 말고 받을 수 있는 도움 n개 ›] */
+.s6-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  border-radius: var(--radius-card);
+  background: var(--color-card);
+  color: var(--color-ink);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.s6-entry__note {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--color-muted);
+}
+
+/* 서비스형 S5: 받을 수 있는 것 · 돈으로 치면 */
+.s6-value-basis {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--color-bg);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--color-muted);
+}
