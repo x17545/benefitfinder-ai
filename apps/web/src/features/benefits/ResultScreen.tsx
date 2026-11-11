@@ -18,6 +18,8 @@ import { usePolicyInfo } from './policyInfo.ts';
 import { saveResultImage } from './resultImage.ts';
 import { ResultLists } from './ResultLists.tsx';
 import { readResultBasis, withResultBasis } from './resultBasis.ts';
+import { readServices } from '../services/serviceModel.ts';
+import '../services/ServicesScreen.css';
 import { allPolicyIds, pickView, policyName, portfolioLabel } from './resultModel.ts';
 import type { ResultView } from './resultModel.ts';
 import './ResultScreen.css';
@@ -96,6 +98,8 @@ export function ResultScreen(): JSX.Element {
 
   const result = analysis.status === 'done' ? analysis.result : null;
   const info = usePolicyInfo(result !== null ? allPolicyIds(result) : []);
+  // F14: 돈 말고 받을 수 있는 서비스 수 (현금 총액에는 더하지 않는다)
+  const serviceCount = readServices(result).entries.length;
 
   // 결과 없이 주소로 들어오면 처음으로
   useEffect(() => {
@@ -326,6 +330,16 @@ export function ResultScreen(): JSX.Element {
               ))}
             </div>
           </section>
+        ) : null}
+
+        {serviceCount > 0 ? (
+          <a className="s6-entry" href={paths.services}>
+            <span>
+              돈 말고 받을 수 있는 도움 {serviceCount}개
+              <span className="s6-entry__note"> · 현금 총액과 따로 봐요</span>
+            </span>
+            <span aria-hidden="true">›</span>
+          </a>
         ) : null}
 
         {portfolios.length === 0 && fallback.length > 0 ? (

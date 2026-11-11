@@ -8,6 +8,7 @@ import { PolicyDetailScreen } from '../features/policy/PolicyDetailScreen.tsx';
 import { ConditionScreen } from '../features/profile/ConditionScreen.tsx';
 import { loadSavedConditions } from '../features/profile/savedConditions.ts';
 import { StartScreen } from '../features/profile/StartScreen.tsx';
+import { ServicesScreen } from '../features/services/ServicesScreen.tsx';
 import { WhatIfScreen } from '../features/whatIf/WhatIfScreen.tsx';
 import { ToastHost } from '../shared/ui/Toast.tsx';
 import { PlaceholderScreen } from './PlaceholderScreen.tsx';
@@ -52,6 +53,8 @@ function renderRoute(route: Route): JSX.Element {
       return <ResultScreen />;
     case 'whatIf':
       return <WhatIfScreen />;
+    case 'services':
+      return <ServicesScreen />;
     case 'policy':
       return <PolicyDetailScreen key={route.policyId} policyId={route.policyId} />;
     case 'about':
