@@ -1,5 +1,5 @@
 import type { JSX } from 'react';
-import { navigate, paths } from '../../app/router.ts';
+import { CONDITION_STEPS, navigate, paths } from '../../app/router.ts';
 import { conditionLabel } from '../../domains/youth/conditionLabels.ts';
 import type { RecommendedService } from '../../shared/api/generated/recommendation-response.ts';
 import { SiteFooter } from '../../shared/ui/SiteFooter.tsx';
@@ -11,6 +11,7 @@ import { readResultBasis, withResultBasis } from '../benefits/resultBasis.ts';
 import { clearMyData } from '../profile/clearMyData.ts';
 import { useFlowState } from '../profile/flowStore.ts';
 import { ServiceValueBasis } from './ServiceValueBasis.tsx';
+import { hasExpiredServices } from './serviceModel.ts';
 import './ServicesScreen.css';
 
 /** S6 돈 말고 받을 수 있는 도움 (기획서 4.7-1). 주소 /services */
@@ -20,6 +21,7 @@ export function ServicesScreen(): JSX.Element {
   const result = consent && analysis.status === 'done' ? analysis.result : null;
   const basis = readResultBasis(window.location.search);
   const entries = result?.services ?? [];
+  const expiredServices = hasExpiredServices(entries);
   const total = result?.services_total_won ?? null;
   const virtualData = result?.virtual_data === true || (analysis.status === 'done' && analysis.isSample);
 
@@ -33,7 +35,7 @@ export function ServicesScreen(): JSX.Element {
         }}
       />
       <main className="screen__body s6-body">
-        {virtualData && entries.length > 0 ? (
+        {virtualData && entries.length > 0 && !expiredServices ? (
           <p className="s6-dev-note">가상 서비스 목록이에요. 실제로 받을 수 있는 서비스가 아니에요.</p>
         ) : null}
 
@@ -49,6 +51,14 @@ export function ServicesScreen(): JSX.Element {
             <p className="s6-muted">조건을 고르면 받을 수 있는 서비스를 찾아 드려요.</p>
             <a className="ui-button ui-button--primary" href={consent ? paths.conditions(1) : paths.start}>
               조건 고르기
+            </a>
+          </section>
+        ) : expiredServices ? (
+          <section className="ui-card s6-card">
+            <h2 className="s6-card__title">서비스 모집 일정을 다시 확인해 주세요</h2>
+            <p className="s6-muted">지난 분석에 마감된 서비스가 있어요.</p>
+            <a className="ui-button ui-button--primary" href={paths.conditions(CONDITION_STEPS)}>
+              조건 확인하고 다시 분석하기
             </a>
           </section>
         ) : entries.length === 0 ? (

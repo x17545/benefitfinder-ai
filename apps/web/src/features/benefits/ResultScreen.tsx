@@ -18,6 +18,7 @@ import { usePolicyInfo } from './policyInfo.ts';
 import { saveResultImage } from './resultImage.ts';
 import { ResultLists } from './ResultLists.tsx';
 import { readResultBasis, withResultBasis } from './resultBasis.ts';
+import { hasExpiredServices } from '../services/serviceModel.ts';
 import '../services/ServicesScreen.css';
 import { allPolicyIds, pickView, policyName, portfolioLabel } from './resultModel.ts';
 import type { ResultView } from './resultModel.ts';
@@ -98,7 +99,8 @@ export function ResultScreen(): JSX.Element {
   const result = analysis.status === 'done' ? analysis.result : null;
   const info = usePolicyInfo(result !== null ? allPolicyIds(result) : []);
   // F14: 돈 말고 받을 수 있는 서비스 수 (현금 총액에는 더하지 않는다)
-  const serviceCount = result?.services?.length ?? 0;
+  const expiredServices = hasExpiredServices(result?.services);
+  const serviceCount = expiredServices ? 0 : result?.services?.length ?? 0;
 
   // 결과 없이 주소로 들어오면 처음으로
   useEffect(() => {
@@ -116,7 +118,7 @@ export function ResultScreen(): JSX.Element {
     const item = result.results[key];
     return hasResultContent(item.pv_off) || hasResultContent(item.pv_on);
   });
-  if (!anyContent && serviceCount === 0) {
+  if (!anyContent && serviceCount === 0 && !expiredServices) {
     return <EmptyResult />;
   }
 
@@ -197,6 +199,8 @@ export function ResultScreen(): JSX.Element {
             <h1 className="screen__title">아직 조합 계산 전인 정책</h1>
           ) : serviceCount > 0 ? (
             <h1 className="screen__title">확인할 수 있는 서비스가 있어요</h1>
+          ) : expiredServices ? (
+            <h1 className="screen__title">서비스 모집 일정을 다시 확인해 주세요</h1>
           ) : null}
         </section>
 
@@ -270,7 +274,8 @@ export function ResultScreen(): JSX.Element {
           </p>
         ) : null}
 
-        {serviceCount === 0 && view.calculation_status === 'available' && !hasResults(view) && !hasPendingReview ? (
+        {serviceCount === 0 && !expiredServices && view.calculation_status === 'available' &&
+          !hasResults(view) && !hasPendingReview ? (
           <section className="s3-empty"><EmptyResultContent /></section>
         ) : null}
 
@@ -340,7 +345,12 @@ export function ResultScreen(): JSX.Element {
           </section>
         ) : null}
 
-        {serviceCount > 0 ? (
+        {expiredServices ? (
+          <section className="s3-note s3-note--check">
+            <p>지난 분석에 마감된 서비스가 있어요.</p>
+            <a href={paths.conditions(CONDITION_STEPS)}>조건 확인하고 다시 분석하기</a>
+          </section>
+        ) : serviceCount > 0 ? (
           <a className="s6-entry" href={withResultBasis(paths.services, { period, present_value: presentValue })}>
             <span>
               돈 말고 받을 수 있는 도움 {serviceCount}개

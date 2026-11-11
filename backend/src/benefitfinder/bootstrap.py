@@ -149,11 +149,13 @@ def create_app(
         evaluate_policies=evaluate_policies,
     )
     app.state.recommendation_explainer = explainer
-    cash_benefit = example_benefits(policies).get
+    cash_benefits = example_benefits(policies)
     services = service_catalog if service_catalog is not None else ServiceCatalog(example_services())
+    if services.policy_ids.intersection(cash_benefits):
+        raise ValueError("cash_service_policy_id_collision")
 
     def find_benefit(policy_id: str) -> dict[str, Any] | None:
-        return cash_benefit(policy_id) or services.detail(policy_id)
+        return cash_benefits.get(policy_id) or services.detail(policy_id)
 
     app.state.benefit_lookup = find_benefit
     app.state.service_catalog = services

@@ -5,7 +5,7 @@ import legacyText from '../../../contracts/fixtures/empty-response.json?raw';
 import { isNormalizedBenefit } from '../src/shared/api/benefits.ts';
 import { isRecommendationResponse } from '../src/shared/api/recommendations.ts';
 import { isService } from '../src/shared/api/serviceValidation.ts';
-import { findServiceForDetail, valueBasisText } from '../src/features/services/serviceModel.ts';
+import { findServiceForDetail, hasExpiredServices, valueBasisText } from '../src/features/services/serviceModel.ts';
 
 const parsedResult: unknown = JSON.parse(resultText);
 const parsedDetail: unknown = JSON.parse(detailText);
@@ -63,9 +63,16 @@ describe('F14 server response validation', () => {
     expect(findServiceForDetail(result, { ...detail, id: 'other' }, false)).toBeNull();
     expect(findServiceForDetail(result, { ...detail, virtual_data: false }, false)).toBeNull();
     expect(findServiceForDetail(result, { ...detail, source: { ...detail.source, document_version: 'new' } }, false)).toBeNull();
+    expect(findServiceForDetail(result, { ...detail, application: { ...detail.application, status: 'closed' } }, false)).toBeNull();
     expect(valueBasisText(priced.service)).toBe(
       '시중 가격 1회 약 40,000원 × 3회 · 기준 [가상] 검증용 단가 기준표 · 11/01 확인',
     );
     expect(valueBasisText(unknown.service)).toBe('');
+  });
+
+  it('expires a cached service result only after its Korean calendar deadline', () => {
+    const rows = [{ ...priced, application: { ...priced.application, ends_on: '2026-11-12' } }, unknown];
+    expect(hasExpiredServices(rows, new Date('2026-11-12T14:59:59Z'))).toBe(false);
+    expect(hasExpiredServices(rows, new Date('2026-11-12T15:00:00Z'))).toBe(true);
   });
 });

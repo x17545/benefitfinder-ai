@@ -4,12 +4,16 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Literal
 from urllib.parse import urlsplit
 
 MAX_SAFE_WON = 2**53 - 1
 Verdict = Literal["met", "not_met", "needs_review"]
+
+
+def korea_today() -> date:
+    return datetime.now(timezone(timedelta(hours=9))).date()
 
 
 @dataclass(frozen=True)
@@ -20,7 +24,7 @@ class ServicePrice:
     checked_at: date | None
     reviewed: bool
 
-    def total_for(self, quantity: int) -> int | None:
+    def total_for(self, quantity: int, today: date) -> int | None:
         """A number without review and a complete reference is not a price."""
         if (
             not self.reviewed
@@ -31,6 +35,7 @@ class ServicePrice:
             or any(character.isspace() for character in self.url)
             or not self.url.startswith(("https://", "http://"))
             or self.checked_at is None
+            or self.checked_at > today
         ):
             return None
         try:
@@ -72,9 +77,23 @@ class ServiceOffer:
         if type(self.quantity) is not int or not 1 <= self.quantity <= MAX_SAFE_WON:
             raise ValueError("invalid_service_quantity")
 
-    def public_service(self) -> dict[str, Any]:
+    def application_on(self, today: date) -> dict[str, str | None]:
+        application = self.application.copy()
+        starts_on = application["starts_on"]
+        ends_on = application["ends_on"]
+        if ends_on is not None and date.fromisoformat(ends_on) < today:
+            application["status"] = "closed"
+        elif (
+            application["status"] != "closed"
+            and starts_on is not None
+            and date.fromisoformat(starts_on) > today
+        ):
+            application["status"] = "upcoming"
+        return application
+
+    def public_service(self, today: date) -> dict[str, Any]:
         price = self.price
-        value = price.total_for(self.quantity) if price is not None else None
+        value = price.total_for(self.quantity, today) if price is not None else None
         return {
             "item": self.item,
             "unit": self.unit,
@@ -87,7 +106,7 @@ class ServiceOffer:
             "estimated_value_won": value,
         }
 
-    def public_detail(self) -> dict[str, Any]:
+    def public_detail(self, today: date) -> dict[str, Any]:
         return {
             "id": self.policy_id,
             "domain": self.policy_id.split(":", 1)[0],
@@ -95,14 +114,14 @@ class ServiceOffer:
             "summary": self.summary,
             "provider": self.provider,
             "categories": [self.category],
-            "application": self.application.copy(),
+            "application": self.application_on(today),
             "source": self.source.copy(),
             "eligibility_conditions": [
                 {"id": rule.condition_id, "description": rule.quote,
                  "evidence": rule.evidence(self.source)}
                 for rule in self.conditions
             ],
-            "service": self.public_service(),
+            "service": self.public_service(today),
             "virtual_data": self.virtual_data,
             "domain_data": {},
         }
@@ -125,26 +144,35 @@ class ServiceOffer:
 
 
 class ServiceCatalog:
-    def __init__(self, offers: tuple[ServiceOffer, ...]) -> None:
+    def __init__(
+        self, offers: tuple[ServiceOffer, ...], *, today: Callable[[], date] = korea_today,
+    ) -> None:
         self._offers = {offer.policy_id: offer for offer in offers}
         if len(self._offers) != len(offers):
             raise ValueError("duplicate_service_policy")
+        self._today = today
+
+    @property
+    def policy_ids(self) -> frozenset[str]:
+        return frozenset(self._offers)
 
     def detail(self, policy_id: str) -> dict[str, Any] | None:
         offer = self._offers.get(policy_id)
-        return None if offer is None else offer.public_detail()
+        return None if offer is None else offer.public_detail(self._today())
 
     def recommend(self, domain: str, profile: Any) -> dict[str, Any]:
         """Return an independent, request-local view; never change the cash candidate set."""
         data = profile.domain_data
         interests = data.interests if data is not None else None
+        today = self._today()
         rows: list[dict[str, Any]] = []
         for offer in self._offers.values():
             if not offer.policy_id.startswith(domain + ":"):
                 continue
             if interests and offer.category not in interests:
                 continue
-            if offer.application["status"] in ("closed", "upcoming"):
+            application = offer.application_on(today)
+            if application["status"] in ("closed", "upcoming"):
                 continue
             eligibility = offer.diagnosis(profile)
             if any(condition["status"] == "not_met" for condition in eligibility):
@@ -153,9 +181,9 @@ class ServiceCatalog:
                 "policy_id": offer.policy_id,
                 "title": offer.title,
                 "categories": [offer.category],
-                "application": offer.application.copy(),
+                "application": application,
                 "source": offer.source.copy(),
-                "service": offer.public_service(),
+                "service": offer.public_service(today),
                 "eligibility": eligibility,
             })
 

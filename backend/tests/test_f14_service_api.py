@@ -123,10 +123,13 @@ class F14ServiceApiTests(unittest.TestCase):
             replace(offer.price, url="https:///no-host"),
             replace(offer.price, checked_at=None),
             replace(offer.price, basis=" "),
+            replace(offer.price, checked_at=date(2026, 11, 13)),
             replace(offer.price, unit_value_won=MAX_SAFE_WON),
         ):
             with self.subTest(price=price):
-                client = self.new_client(ServiceCatalog((replace(offer, price=price),)))
+                client = self.new_client(ServiceCatalog(
+                    (replace(offer, price=price),), today=lambda: date(2026, 11, 12),
+                ))
                 recommendation = self.recommend(client, self.payload)
                 self.assertIsNone(recommendation["services_total_won"])
                 service = recommendation["services"][0]["service"]
@@ -135,6 +138,33 @@ class F14ServiceApiTests(unittest.TestCase):
                               "value_checked_at", "value_basis"):
                     self.assertIsNone(service[field])
                 self.assertEqual(self.detail(client, offer.policy_id)["service"], service)
+
+    def test_recruitment_window_uses_inclusive_korean_dates_for_list_and_detail(self) -> None:
+        offer = example_services()[0]
+        today = date(2026, 11, 12)
+        for label, starts, ends, expected in (
+            ("마감 당일", "2026-11-10", "2026-11-12", "open"),
+            ("마감 후", "2026-11-10", "2026-11-11", "closed"),
+            ("시작 전", "2026-11-13", "2026-11-20", "upcoming"),
+        ):
+            with self.subTest(case=label):
+                scheduled = replace(offer, application={
+                    **offer.application, "starts_on": starts, "ends_on": ends,
+                })
+                client = self.new_client(ServiceCatalog((scheduled,), today=lambda: today))
+                response = self.recommend(client, self.payload)
+                if expected == "open":
+                    self.assertEqual(response["services"][0]["policy_id"], offer.policy_id)
+                    self.assertEqual(response["services_total_won"], 250_000)
+                else:
+                    self.assertEqual(response["services"], [])
+                    self.assertIsNone(response["services_total_won"])
+                self.assertEqual(self.detail(client, offer.policy_id)["application"]["status"], expected)
+
+    def test_cash_policy_id_cannot_be_reused_as_service(self) -> None:
+        colliding = replace(example_services()[0], policy_id="youth:example:P1")
+        with self.assertRaisesRegex(ValueError, "cash_service_policy_id_collision"):
+            create_app(service_catalog=ServiceCatalog((colliding,)))
 
     def test_total_overflow_is_not_rounded_or_used_as_cash(self) -> None:
         offer = example_services()[1]
