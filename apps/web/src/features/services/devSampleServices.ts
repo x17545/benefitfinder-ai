@@ -26,7 +26,7 @@ const SAMPLES: ServiceEntry[] = [
     policy_id: 'youth:example:S1',
     service: {
       item: '1톤 이사 차량과 인력 1회', unit: '회', quantity: 1, unit_value_won: 250_000,
-      value_basis: '[가상] 이사 업체 3곳 견적 평균', value_source_url: null, value_checked_at: '2026-11-01',
+      value_basis: '[가상] 이사 업체 3곳 견적 평균', value_source_url: SOURCE.url, value_checked_at: '2026-11-01',
       value_status: 'verified',
     },
     eligibility: [
@@ -38,7 +38,7 @@ const SAMPLES: ServiceEntry[] = [
     policy_id: 'youth:example:S2',
     service: {
       item: '면접 정장 한 벌 대여 (3박 4일)', unit: '회', quantity: 3, unit_value_won: 40_000,
-      value_basis: '[가상] 시중 대여점 3곳 가격', value_source_url: null, value_checked_at: '2026-11-01',
+      value_basis: '[가상] 시중 대여점 3곳 가격', value_source_url: SOURCE.url, value_checked_at: '2026-11-01',
       value_status: 'verified',
     },
     eligibility: [
@@ -50,7 +50,7 @@ const SAMPLES: ServiceEntry[] = [
     policy_id: 'youth:example:S3',
     service: {
       item: '증명사진 촬영과 보정 1회', unit: '회', quantity: 1, unit_value_won: 30_000,
-      value_basis: '[가상] 사진관 3곳 가격', value_source_url: null, value_checked_at: '2026-11-01',
+      value_basis: '[가상] 사진관 3곳 가격', value_source_url: SOURCE.url, value_checked_at: '2026-11-01',
       value_status: 'verified',
     },
     eligibility: [met('age', '신청일 기준 만 19세 이상 39세 이하인 청년')],

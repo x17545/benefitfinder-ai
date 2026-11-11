@@ -8,10 +8,12 @@ import { TopBar } from '../../shared/ui/TopBar.tsx';
 import { useAnalysis } from '../benefits/analysisStore.ts';
 import { formatManWon, recruitTag, shortPolicyId } from '../benefits/format.ts';
 import { usePolicyInfo } from '../benefits/policyInfo.ts';
+import { readResultBasis, withResultBasis } from '../benefits/resultBasis.ts';
 import { devSampleBenefit } from '../policy/devSampleBenefits.ts';
 import { clearMyData } from '../profile/clearMyData.ts';
 import { useFlowState } from '../profile/flowStore.ts';
-import { readServices, serviceValueWon, servicesTotalWon, sortServices, valueBasisText } from './serviceModel.ts';
+import { ServiceValueBasis } from './ServiceValueBasis.tsx';
+import { isCurrentService, readServices, serviceValueWon, servicesTotalWon, sortServices } from './serviceModel.ts';
 import type { ServiceEntry } from './serviceModel.ts';
 import './ServicesScreen.css';
 
@@ -20,14 +22,18 @@ export function ServicesScreen(): JSX.Element {
   const analysis = useAnalysis();
   const { consent } = useFlowState();
   const result = consent && analysis.status === 'done' ? analysis.result : null;
-  const list = readServices(result);
+  const list = readServices(result, analysis.status === 'done' && analysis.isSample);
+  const basis = readResultBasis(window.location.search);
   const info = usePolicyInfo(list.isSample ? [] : list.entries.map((entry) => entry.policy_id));
 
   function benefitOf(id: string): NormalizedBenefit | undefined {
     return (list.isSample ? devSampleBenefit(id) : info.get(id)) ?? undefined;
   }
 
-  const entries = sortServices(list.entries, (id) => benefitOf(id)?.application.status === 'open');
+  const entries = sortServices(
+    list.entries.filter(({ policy_id }) => isCurrentService(benefitOf(policy_id))),
+    (id) => benefitOf(id)?.application.status === 'open',
+  );
   const total = servicesTotalWon(entries);
 
   return (
@@ -36,12 +42,14 @@ export function ServicesScreen(): JSX.Element {
         title="돈 말고 받을 수 있는 도움"
         onBack={() => {
           if (window.history.length > 1) window.history.back();
-          else navigate(result !== null ? paths.result : paths.start);
+          else navigate(result !== null ? withResultBasis(paths.result, basis) : paths.start);
         }}
       />
       <main className="screen__body s6-body">
         {list.isSample ? (
-          <p className="s6-dev-note">개발용 화면: 추천 결과에 서비스 목록이 아직 없어 가상 예시를 보여 줘요</p>
+          <p className="s6-dev-note">개발용 가상 예시예요. 서비스와 진단은 입력 조건과 무관해요.</p>
+        ) : list.virtualData && entries.length > 0 ? (
+          <p className="s6-dev-note">가상 서비스 목록이에요. 실제로 받을 수 있는 서비스가 아니에요.</p>
         ) : null}
 
         {/* 1 제목 */}
@@ -60,21 +68,26 @@ export function ServicesScreen(): JSX.Element {
           </section>
         ) : entries.length === 0 ? (
           <section className="ui-card s6-card">
-            <p className="s6-muted">지금 조건으로 받을 수 있는 서비스가 없어요.</p>
+            <p className="s6-muted">{list.available
+              ? '지금 조건으로 받을 수 있는 서비스가 없어요.'
+              : '이 분석에서는 서비스 목록을 제공하지 않아요.'}</p>
           </section>
         ) : (
           <>
             {/* 2 합계 안내 */}
             <section className="s6-total">
               <span className="s6-total__label">돈으로 치면 모두</span>
-              <strong className="s6-total__amount">약 {formatManWon(total).replace(/^약 /, '')}</strong>
+              <strong className="s6-total__amount">{total === null
+                ? '환산 합계 없음'
+                : `약 ${formatManWon(total).replace(/^약 /, '')}`}</strong>
               <span className="s6-total__note">이 금액은 지원금 조합 총액에 더하지 않았어요.</span>
             </section>
 
             {/* 3 · 4 · 5 서비스 행 */}
             <ul className="s6-list">
               {entries.map((entry) => (
-                <ServiceRow key={entry.policy_id} entry={entry} benefit={benefitOf(entry.policy_id)} />
+                <ServiceRow key={entry.policy_id} entry={entry} benefit={benefitOf(entry.policy_id)}
+                  detailHref={withResultBasis(paths.policy(entry.policy_id), basis)} virtualData={list.virtualData} />
               ))}
             </ul>
           </>
@@ -82,8 +95,9 @@ export function ServicesScreen(): JSX.Element {
 
         {/* 6 안내문 (S6-NOTE + COM-AI) */}
         <p className="s6-note">
-          환산 금액은 이해를 돕기 위한 참고값이에요. 실제로 돈을 주는 것은 아니에요. 검수한 정책과 입력 조건으로
-          계산한 참고 결과예요. 최종 자격과 최신 조건은 신청 기관에서 확인해 주세요.
+          환산 금액은 이해를 돕기 위한 참고값이에요. 실제로 돈을 주는 것은 아니에요.{' '}
+          {list.virtualData ? '가상 예시의 자격과 금액은 실제 신청에 사용할 수 없어요.' :
+            '검수한 정책과 입력 조건으로 계산한 참고 결과예요. 최종 자격과 최신 조건은 신청 기관에서 확인해 주세요.'}
         </p>
       </main>
       <SiteFooter onClearData={clearMyData} />
@@ -94,17 +108,18 @@ export function ServicesScreen(): JSX.Element {
 interface ServiceRowProps {
   entry: ServiceEntry;
   benefit: NormalizedBenefit | undefined;
+  detailHref: string;
+  virtualData: boolean;
 }
 
-function ServiceRow({ entry, benefit }: ServiceRowProps): JSX.Element {
+function ServiceRow({ entry, benefit, detailHref, virtualData }: ServiceRowProps): JSX.Element {
   const value = serviceValueWon(entry.service);
   const tag = benefit !== undefined ? recruitTag(benefit.application) : null;
   const housing = benefit?.categories.includes('housing') ?? false;
-  const basis = valueBasisText(entry.service);
 
   return (
     <li className="s6-row">
-      <a className="s6-row__main" href={paths.policy(entry.policy_id)}>
+      <a className="s6-row__main" href={detailHref}>
         <span className="s6-row__icon" aria-hidden="true">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             {housing ? (
@@ -150,7 +165,7 @@ function ServiceRow({ entry, benefit }: ServiceRowProps): JSX.Element {
       {value !== null ? (
         <details className="s6-basis">
           <summary>환산 기준</summary>
-          <p>{basis}</p>
+          <p><ServiceValueBasis service={entry.service} virtualData={virtualData || benefit?.virtual_data === true} /></p>
         </details>
       ) : (
         <p className="s6-small">시중 가격 근거를 찾지 못해 금액으로 바꾸지 않았어요. 합계에서도 뺐어요.</p>

@@ -18,7 +18,8 @@ import { usePolicyInfo } from './policyInfo.ts';
 import { saveResultImage } from './resultImage.ts';
 import { ResultLists } from './ResultLists.tsx';
 import { readResultBasis, withResultBasis } from './resultBasis.ts';
-import { readServices } from '../services/serviceModel.ts';
+import { devSampleBenefit } from '../policy/devSampleBenefits.ts';
+import { isCurrentService, readServices } from '../services/serviceModel.ts';
 import '../services/ServicesScreen.css';
 import { allPolicyIds, pickView, policyName, portfolioLabel } from './resultModel.ts';
 import type { ResultView } from './resultModel.ts';
@@ -97,9 +98,15 @@ export function ResultScreen(): JSX.Element {
   const [selectedRank, setSelectedRank] = useState(1);
 
   const result = analysis.status === 'done' ? analysis.result : null;
-  const info = usePolicyInfo(result !== null ? allPolicyIds(result) : []);
+  const services = readServices(result, analysis.status === 'done' && analysis.isSample);
+  const info = usePolicyInfo([
+    ...(result !== null ? allPolicyIds(result) : []),
+    ...(services.isSample ? [] : services.entries.map((entry) => entry.policy_id)),
+  ]);
   // F14: 돈 말고 받을 수 있는 서비스 수 (현금 총액에는 더하지 않는다)
-  const serviceCount = readServices(result).entries.length;
+  const serviceCount = services.entries.filter(({ policy_id }) =>
+    isCurrentService(services.isSample ? devSampleBenefit(policy_id) ?? undefined : info.get(policy_id)),
+  ).length;
 
   // 결과 없이 주소로 들어오면 처음으로
   useEffect(() => {
@@ -117,7 +124,7 @@ export function ResultScreen(): JSX.Element {
     const item = result.results[key];
     return hasResultContent(item.pv_off) || hasResultContent(item.pv_on);
   });
-  if (!anyContent) {
+  if (!anyContent && serviceCount === 0) {
     return <EmptyResult />;
   }
 
@@ -196,6 +203,8 @@ export function ResultScreen(): JSX.Element {
             </h1>
           ) : hasPendingReview ? (
             <h1 className="screen__title">아직 조합 계산 전인 정책</h1>
+          ) : serviceCount > 0 ? (
+            <h1 className="screen__title">확인할 수 있는 서비스가 있어요</h1>
           ) : null}
         </section>
 
@@ -228,7 +237,7 @@ export function ResultScreen(): JSX.Element {
           </section>
         ) : null}
 
-        <div className="s3-controls">
+        {anyContent ? <div className="s3-controls">
           <div className="s3-tabs" role="tablist" aria-label="기간">
             {PERIOD_TABS.map((tab) => (
               <button
@@ -261,7 +270,7 @@ export function ResultScreen(): JSX.Element {
               </span>
             </label>
           </div>
-        </div>
+        </div> : null}
 
         {view.calculation_status === 'unavailable' ? (
           <p className="s3-note s3-note--check">
@@ -269,7 +278,7 @@ export function ResultScreen(): JSX.Element {
           </p>
         ) : null}
 
-        {view.calculation_status === 'available' && !hasResults(view) && !hasPendingReview ? (
+        {serviceCount === 0 && view.calculation_status === 'available' && !hasResults(view) && !hasPendingReview ? (
           <section className="s3-empty"><EmptyResultContent /></section>
         ) : null}
 
@@ -332,21 +341,21 @@ export function ResultScreen(): JSX.Element {
           </section>
         ) : null}
 
-        {serviceCount > 0 ? (
-          <a className="s6-entry" href={paths.services}>
-            <span>
-              돈 말고 받을 수 있는 도움 {serviceCount}개
-              <span className="s6-entry__note"> · 현금 총액과 따로 봐요</span>
-            </span>
-            <span aria-hidden="true">›</span>
-          </a>
-        ) : null}
-
         {portfolios.length === 0 && fallback.length > 0 ? (
           <section className="s3-section">
             <p className="s2-desc">함께 묶을 수 있는 정책이 없어서, 받을 수 있는 지원금을 하나씩 보여 드려요.</p>
             <FallbackList items={fallback} info={info} />
           </section>
+        ) : null}
+
+        {serviceCount > 0 ? (
+          <a className="s6-entry" href={withResultBasis(paths.services, { period, present_value: presentValue })}>
+            <span>
+              돈 말고 받을 수 있는 도움 {serviceCount}개
+              <span className="s6-entry__note">{services.isSample ? ' · 개발용 가상 예시' : ' · 현금 총액과 따로 봐요'}</span>
+            </span>
+            <span aria-hidden="true">›</span>
+          </a>
         ) : null}
 
         {selected?.unverified_pairs !== undefined && selected.unverified_pairs.length > 0 ? (
@@ -377,7 +386,7 @@ export function ResultScreen(): JSX.Element {
 
       <SiteFooter onClearData={clearMyData} />
 
-      <div className="s3-bottom">
+      {anyContent ? <div className="s3-bottom">
         <div className="s3-bottom__inner">
           {selected !== undefined ? (
             <Button size="large" variant="secondary" onClick={saveImage}>
@@ -393,7 +402,7 @@ export function ResultScreen(): JSX.Element {
             상황이 바뀌면 어떻게 될까?
           </Button>
         </div>
-      </div>
+      </div> : null}
     </div>
   );
 }
