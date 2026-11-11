@@ -8,6 +8,7 @@ import fixtureText from '../../../contracts/fixtures/recommendation-response.jso
 import emptyText from '../../../contracts/fixtures/empty-response.json?raw';
 import fallbackText from '../../../contracts/fixtures/fallback-response.json?raw';
 import unavailableText from '../../../contracts/fixtures/pv-unknown-response.json?raw';
+import servicesText from '../../../contracts/fixtures/service-recommendation-response.json?raw';
 
 const screen = vi.hoisted(() => ({
   result: null as RecommendationResponse | null,
@@ -97,21 +98,39 @@ describe('remember choice on S1', () => {
 });
 
 describe('period-specific empty results', () => {
+  it('keeps cash totals but asks for a new analysis when a service snapshot has expired', async () => {
+    const snapshot = fixture(servicesText);
+    const services = (snapshot.services ?? []).map((entry) => ({
+      ...entry, application: { ...entry.application, ends_on: '2000-01-01' },
+    }));
+    const flow = await import('../src/features/profile/flowStore.ts');
+    flow.updateFlowState({ consent: true });
+    screen.result = { ...fixture(fixtureText), services, services_total_won: snapshot.services_total_won ?? null };
+    const cash = await renderResult();
+    expect(cash).toContain('540만 원');
+    expect(cash).toContain('조건 확인하고 다시 분석하기');
+    expect(cash).not.toContain('돈 말고 받을 수 있는 도움 2개');
+
+    const { ServicesScreen } = await import('../src/features/services/ServicesScreen.tsx');
+    const list = renderToStaticMarkup(createElement(ServicesScreen));
+    expect(list).toContain('서비스 모집 일정을 다시 확인해 주세요');
+    expect(list).not.toContain('약 12만 원');
+    expect(list).not.toContain('청년 면접 정장 대여');
+
+    screen.result = { ...snapshot, services };
+    const serviceOnly = await renderResult();
+    expect(serviceOnly).toContain('조건 확인하고 다시 분석하기');
+    expect(serviceOnly).not.toContain('지금 다루는 정책 중엔 맞는 게 없어요');
+  });
+
   it('keeps the service entry with no cash, and leaves cash amounts unchanged when both exist', async () => {
-    const services = [{
-      policy_id: 'youth:example:S1',
-      service: {
-        item: '가상 이사 지원', unit: '회', quantity: 1, unit_value_won: 250_000,
-        value_basis: '가상 시중 가격', value_source_url: 'https://policy.example/virtual-price',
-        value_checked_at: '2026-11-01', value_status: 'verified',
-      },
-      eligibility: [],
-    }];
+    const serviceResult = fixture(servicesText);
+    const { services, services_total_won } = serviceResult;
     screen.location.search = '?period=2y&pv=1';
-    screen.result = Object.assign(fixture(emptyText), { services });
+    screen.result = serviceResult;
     const onlyServices = await renderResult();
     expect(onlyServices).toContain('확인할 수 있는 서비스가 있어요');
-    expect(onlyServices).toContain('돈 말고 받을 수 있는 도움 1개');
+    expect(onlyServices).toContain('돈 말고 받을 수 있는 도움 2개');
     expect(onlyServices).toContain('/services?period=2y&amp;pv=1');
     expect(onlyServices).not.toContain('지금 다루는 정책 중엔 맞는 게 없어요');
     expect(onlyServices).not.toContain('추천 조합 요약');
@@ -121,10 +140,10 @@ describe('period-specific empty results', () => {
     const cash = await renderResult();
     const mainSummary = (html: string) => html.match(/aria-label="추천 조합 요약"[\s\S]*?<\/section>/)?.[0];
     expect(mainSummary(cash)).toContain('540만 원');
-    screen.result = Object.assign(screen.result, { services });
+    screen.result = Object.assign(screen.result, { services, services_total_won });
     const both = await renderResult();
     expect(mainSummary(both)).toBe(mainSummary(cash));
-    expect(both).toContain('돈 말고 받을 수 있는 도움 1개');
+    expect(both).toContain('돈 말고 받을 수 있는 도움 2개');
   });
 
   it('labels virtual policy calculations returned by the API without the sample button', async () => {

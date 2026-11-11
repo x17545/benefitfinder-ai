@@ -35,6 +35,12 @@ export function isDateTime(value: unknown): boolean {
   return isNonEmptyString(value) && !Number.isNaN(Date.parse(value));
 }
 
+export function isDate(value: unknown): value is string {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
 export function isHttpUrl(value: unknown): boolean {
   if (!isNonEmptyString(value)) { return false; }
   try {
@@ -43,6 +49,14 @@ export function isHttpUrl(value: unknown): boolean {
   } catch {
     return false;
   }
+}
+
+export function isApplication(value: unknown): boolean {
+  return isRecord(value) &&
+    (value.status === 'open' || value.status === 'closed' || value.status === 'upcoming' || value.status === 'unknown') &&
+    (value.starts_on === null || isDate(value.starts_on)) &&
+    (value.ends_on === null || isDate(value.ends_on)) &&
+    (value.url === null || isHttpUrl(value.url));
 }
 
 export function isSource(value: unknown): boolean {

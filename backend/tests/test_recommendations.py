@@ -34,14 +34,10 @@ class RecommendationApiTest(unittest.TestCase):
             .read_text(encoding="utf-8")
         )
 
-        common_schema = json.loads(
-            (schema_dir / "common.schema.json")
-            .read_text(encoding="utf-8")
-        )
-
-        registry = Registry().with_resource(
-            "https://benefitfinder.example/contracts/v1/common.schema.json",
-            Resource.from_contents(common_schema),
+        registry = Registry().with_resources(
+            (schema["$id"], Resource.from_contents(schema))
+            for path in schema_dir.glob("*.schema.json")
+            for schema in (json.loads(path.read_text(encoding="utf-8")),)
         )
 
         cls.validator = Draft202012Validator(

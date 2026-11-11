@@ -1,10 +1,10 @@
 import type { JSX } from 'react';
 import { isHttpUrl } from '../../shared/api/responseValidation.ts';
 import { valueBasisText } from './serviceModel.ts';
-import type { ServiceValue } from './serviceModel.ts';
+import type { InKindService } from '../../shared/api/generated/service.ts';
 
 export function ServiceValueBasis({ service, virtualData }: {
-  service: ServiceValue;
+  service: InKindService;
   virtualData: boolean;
 }): JSX.Element {
   return (

@@ -1,25 +1,12 @@
 import type { NormalizedBenefit } from './generated/benefit.ts';
 import { BENEFITS_PATH } from '../config/api.ts';
 import {
-  arrayOf, isEvidence, isHttpUrl, isMoney, isNonEmptyString, isNullableMoney,
+  arrayOf, isApplication, isEvidence, isMoney, isNonEmptyString, isNullableMoney,
   isNullableString, isRecord, isSource, optional,
 } from './responseValidation.ts';
+import { isService } from './serviceValidation.ts';
 
 export type { NormalizedBenefit };
-
-function isNullableDate(value: unknown): boolean {
-  if (value === null) { return true; }
-  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) { return false; }
-  const date = new Date(`${value}T00:00:00Z`);
-  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
-}
-
-function isApplication(value: unknown): boolean {
-  return isRecord(value) &&
-    (value.status === 'open' || value.status === 'closed' || value.status === 'upcoming' || value.status === 'unknown') &&
-    isNullableDate(value.starts_on) && isNullableDate(value.ends_on) &&
-    (value.url === null || isHttpUrl(value.url));
-}
 
 function isCondition(value: unknown): boolean {
   return isRecord(value) && isNonEmptyString(value.id) && isNonEmptyString(value.description) &&
@@ -54,6 +41,7 @@ export function isNormalizedBenefit(value: unknown): value is NormalizedBenefit 
     optional(value.virtual_data, (item) => typeof item === 'boolean') &&
     isApplication(value.application) && arrayOf(value.eligibility_conditions, isCondition) && isSource(value.source) &&
     isRecord(value.domain_data) && optional(value.benefit_amount, isBenefitAmount) &&
+    (value.service === undefined || (value.benefit_amount == null && isService(value.service))) &&
     optional(value.reviewed, isNullableBoolean) && optional(value.lifetime_once, isNullableBoolean) &&
     optional(value.conflicts, (item) => item === null || arrayOf(item, isConflict))
   );

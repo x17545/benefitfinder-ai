@@ -1,111 +1,78 @@
-import { describe, expect, it, vi } from 'vitest';
-import resultText from '../../../contracts/fixtures/recommendation-response.json?raw';
-import detailText from '../../../contracts/fixtures/youth-benefit.json?raw';
-import type { NormalizedBenefit } from '../src/shared/api/benefits.ts';
-import type { RecommendationResponse } from '../src/shared/api/recommendations.ts';
-import {
-  findServiceForDetail,
-  isCurrentService,
-  isServiceEntry,
-  readServices,
-  serviceValueWon,
-  servicesTotalWon,
-  sortServices,
-  valueBasisText,
-} from '../src/features/services/serviceModel.ts';
-import type { ServiceEntry } from '../src/features/services/serviceModel.ts';
+import { describe, expect, it } from 'vitest';
+import resultText from '../../../contracts/fixtures/service-recommendation-response.json?raw';
+import detailText from '../../../contracts/fixtures/youth-service-benefit.json?raw';
+import legacyText from '../../../contracts/fixtures/empty-response.json?raw';
+import { isNormalizedBenefit } from '../src/shared/api/benefits.ts';
+import { isRecommendationResponse } from '../src/shared/api/recommendations.ts';
+import { isService } from '../src/shared/api/serviceValidation.ts';
+import { findServiceForDetail, hasExpiredServices, valueBasisText } from '../src/features/services/serviceModel.ts';
 
-const base = JSON.parse(resultText) as RecommendationResponse;
-const benefit = JSON.parse(detailText) as NormalizedBenefit;
-
-function entry(id: string, unitValue: number | null, quantity: number, verified = true): ServiceEntry {
-  return {
-    policy_id: id,
-    service: {
-      item: '면접 정장 한 벌 대여', unit: '회', quantity, unit_value_won: unitValue,
-      value_basis: '[가상] 시중 대여점 3곳 가격',
-      value_source_url: 'https://policy.example/virtual-price', value_checked_at: '2026-11-01',
-      value_status: verified ? 'verified' : 'unknown',
-    },
-    eligibility: [],
-  };
+const parsedResult: unknown = JSON.parse(resultText);
+const parsedDetail: unknown = JSON.parse(detailText);
+if (!isRecommendationResponse(parsedResult) || !isNormalizedBenefit(parsedDetail)) {
+  throw new Error('invalid synthetic F14 contract fixtures');
 }
+const result = parsedResult;
+const detail = parsedDetail;
+const priced = result.services?.[0];
+const unknown = result.services?.[1];
+if (!priced || !unknown) throw new Error('expected two service fixtures');
 
-describe('S6 서비스 목록 (F14)', () => {
-  it('환산 금액은 단가 × 횟수이고, 근거가 확인되지 않으면 금액을 만들지 않는다', () => {
-    expect(serviceValueWon(entry('a', 40_000, 3).service)).toBe(120_000);
-    expect(serviceValueWon(entry('b', null, 5).service)).toBeNull();
-    expect(serviceValueWon(entry('c', 40_000, 3, false).service)).toBeNull();
+describe('F14 server response validation', () => {
+  it('accepts legacy responses, explicit empty results, and unpriced services without confusing them', () => {
+    expect(isRecommendationResponse(JSON.parse(legacyText))).toBe(true);
+    expect(isRecommendationResponse({ ...result, services: [], services_total_won: null })).toBe(true);
+    expect(isRecommendationResponse({ ...result, services: [unknown], services_total_won: null })).toBe(true);
+    expect(isRecommendationResponse({ ...result, services: [unknown], services_total_won: 0 })).toBe(false);
+    expect(isRecommendationResponse({ ...result, services: undefined })).toBe(false);
+    expect(isRecommendationResponse({ ...result, services_total_won: undefined })).toBe(false);
   });
 
-  it('verified라도 단가 출처·유효한 확인일·근거 설명이 없거나 곱셈 범위를 넘으면 미상이다', () => {
-    const { service } = entry('a', 40_000, 3);
+  it('requires the priced row and the declared sum to agree with complete evidence', () => {
     for (const override of [
-      { value_source_url: null }, { value_source_url: 'data:,sample' },
-      { value_checked_at: '2026-02-30' }, { value_checked_at: null }, { value_basis: ' ' },
+      { value_source_url: null }, { value_source_url: 'data:,sample' }, { value_source_url: 'https:/test.example' },
+      { value_checked_at: '2026-02-30' }, { value_basis: ' ' }, { estimated_value_won: 40_000 },
       { unit_value_won: Number.MAX_SAFE_INTEGER, quantity: 2 },
     ]) {
-      expect(serviceValueWon({ ...service, ...override })).toBeNull();
+      expect(isService({ ...priced.service, ...override })).toBe(false);
     }
+    expect(isService({ ...unknown.service, unit_value_won: 40_000 })).toBe(false);
+    expect(isRecommendationResponse({ ...result, services_total_won: 100_000 })).toBe(false);
+    expect(isRecommendationResponse({ ...result, services: [priced, priced] })).toBe(false);
+    expect(isRecommendationResponse({
+      ...result, services: [{ ...priced, application: { ...priced.application, status: 'closed' } }],
+    })).toBe(false);
+    expect(isRecommendationResponse({
+      ...result, services: [{ ...priced, eligibility: [{ ...priced.eligibility[0], evidence: [] }] }],
+    })).toBe(false);
+    expect(isNormalizedBenefit({ ...detail, benefit_amount: { type: 'monthly' } })).toBe(false);
   });
 
-  it('합계는 환산 기준이 없는 서비스를 빼고 더한다', () => {
-    expect(servicesTotalWon([entry('a', 250_000, 1), entry('b', 40_000, 3), entry('c', null, 5)])).toBe(370_000);
-    expect(servicesTotalWon([entry('a', null, 1)])).toBeNull();
-    expect(servicesTotalWon([entry('a', Number.MAX_SAFE_INTEGER, 1), entry('b', 1, 1)])).toBeNull();
+  it('does not turn an out-of-range sum into a rounded server total', () => {
+    const service = { ...priced.service, quantity: 1, unit_value_won: Number.MAX_SAFE_INTEGER,
+      estimated_value_won: Number.MAX_SAFE_INTEGER };
+    const services = [{ ...priced, service }, { ...priced, policy_id: 'youth:example:big', service }];
+    expect(isRecommendationResponse({ ...result, services, services_total_won: null })).toBe(true);
+    expect(isRecommendationResponse({ ...result, services, services_total_won: Number.MAX_SAFE_INTEGER })).toBe(false);
   });
 
-  it('환산 금액 큰 순, 같으면 모집 중인 것 먼저, 금액 없는 것은 맨 뒤', () => {
-    const sorted = sortServices(
-      [entry('none', null, 1), entry('small', 30_000, 1), entry('closed', 120_000, 1), entry('open', 40_000, 3)],
-      (id) => id === 'open',
+  it('uses the detail public service while only linking a diagnosis from the same policy version', () => {
+    expect(detail.service?.estimated_value_won).toBe(120_000);
+    expect(findServiceForDetail(result, detail, false)).toBe(priced);
+    expect(findServiceForDetail(null, detail, false)).toBeNull();
+    expect(findServiceForDetail(result, { ...detail, id: 'other' }, false)).toBeNull();
+    expect(findServiceForDetail(result, { ...detail, virtual_data: false }, false)).toBeNull();
+    expect(findServiceForDetail(result, { ...detail, source: { ...detail.source, document_version: 'new' } }, false)).toBeNull();
+    expect(findServiceForDetail(result, { ...detail, application: { ...detail.application, status: 'closed' } }, false)).toBeNull();
+    expect(valueBasisText(priced.service)).toBe(
+      '시중 가격 1회 약 40,000원 × 3회 · 기준 [가상] 검증용 단가 기준표 · 11/01 확인',
     );
-    expect(sorted.map((item) => item.policy_id)).toEqual(['open', 'closed', 'small', 'none']);
+    expect(valueBasisText(unknown.service)).toBe('');
   });
 
-  it('환산 기준 문구 S6-BASE', () => {
-    expect(valueBasisText(entry('a', 40_000, 3).service)).toBe(
-      '시중 가격 1회 약 40,000원 × 3회 · 기준 [가상] 시중 대여점 3곳 가격 · 11/01 확인',
-    );
-  });
-
-  it('유효한 추천 행만 쓰고 중복·자격 미충족·근거 없는 확정 진단은 합계에서 제외한다', () => {
-    const confirmed = { condition_id: 'age', status: 'not_met', evidence: [{ quote: '[가상] 예제', source: benefit.source }], reason: '' };
-    const excluded = { ...entry('youth:example:excluded', 10_000, 1), eligibility: [confirmed] };
-    const ungrounded = { ...entry('youth:example:invalid', 10_000, 1), eligibility: [{ ...confirmed, status: 'met', evidence: [] }] };
-    const item = entry('youth:example:S9', 10_000, 1);
-    const result = { ...base, services: [item, item, excluded, ungrounded, { policy_id: 'broken' }] };
-    const list = readServices(result);
-    expect(list.isSample).toBe(false);
-    expect(list.entries.map((item) => item.policy_id)).toEqual(['youth:example:S9']);
-    expect(isServiceEntry({ policy_id: 'x' })).toBe(false);
-    expect(isCurrentService({ ...benefit, application: { ...benefit.application, status: 'closed' } })).toBe(false);
-    expect(isCurrentService({ ...benefit, application: { ...benefit.application, status: 'upcoming' } })).toBe(false);
-  });
-
-  it('상세의 자료 종류·정책 ID·원문 버전이 맞을 때만 서비스 진단을 연결한다', () => {
-    const service = entry(benefit.id, 10_000, 1);
-    service.eligibility = [{
-      condition_id: 'age', status: 'met', reason: '', evidence: [{ quote: '[가상] 연령', source: benefit.source }],
-    }];
-    const list = readServices({ ...base, virtual_data: false, services: [service] });
-    expect(findServiceForDetail(list, benefit, false)).toBe(service);
-    expect(findServiceForDetail(list, { ...benefit, id: 'other' }, false)).toBeNull();
-    expect(findServiceForDetail(list, { ...benefit, virtual_data: true }, false)).toBeNull();
-    expect(findServiceForDetail(list, benefit, true)).toBeNull();
-    expect(findServiceForDetail(list, { ...benefit, source: { ...benefit.source, document_version: 'new' } }, false)).toBeNull();
-  });
-
-  it('서버가 services를 보내지 않으면 개발 서버에서만 가상 예시를 쓰고, 결과가 없으면 비어 있다', () => {
-    expect(readServices(base).isSample).toBe(true);
-    expect(readServices(null).entries).toEqual([]);
-    expect(readServices({ ...base, services: [] })).toMatchObject({ available: true, entries: [], isSample: false });
-    expect(readServices({ ...base, services: null })).toMatchObject({ available: false, entries: [], isSample: false });
-    vi.stubEnv('DEV', false);
-    try {
-      expect(readServices(base)).toMatchObject({ available: false, entries: [], isSample: false });
-    } finally {
-      vi.unstubAllEnvs();
-    }
+  it('expires a cached service result only after its Korean calendar deadline', () => {
+    const rows = [{ ...priced, application: { ...priced.application, ends_on: '2026-11-12' } }, unknown];
+    expect(hasExpiredServices(rows, new Date('2026-11-12T14:59:59Z'))).toBe(false);
+    expect(hasExpiredServices(rows, new Date('2026-11-12T15:00:00Z'))).toBe(true);
   });
 });

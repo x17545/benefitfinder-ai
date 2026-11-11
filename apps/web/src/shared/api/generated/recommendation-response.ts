@@ -1,5 +1,6 @@
 /* Generated from contracts/v1. Run pnpm types:generate; do not edit. */
 
+export type Categories = string[];
 /**
  * 선택 탭의 계산 결과. 6.3 예시 위치에 fallback_list를 둔다.
  */
@@ -358,6 +359,14 @@ export interface RecommendationResponse {
    */
   virtual_data?: boolean;
   /**
+   * F14 비현금 서비스. 생략은 서비스 미지원, 빈 배열은 조회했지만 후보 없음. 기간·현재가치와 별도.
+   */
+  services?: RecommendedService[];
+  /**
+   * 근거 있는 서비스 환산액만 합한 서버 값. 환산 가능 항목이 없거나 안전 정수 범위를 넘으면 null.
+   */
+  services_total_won?: number | null;
+  /**
    * 전역 초기 기준. results[1y][pv_off]의 표시 섹션과 일치한다.
    */
   view: 'portfolio' | 'fallback_list' | 'empty';
@@ -376,6 +385,51 @@ export interface RecommendationResponse {
    */
   discount_rate: number | null;
   discount_rate_status: 'verified' | 'unknown';
+}
+export interface RecommendedService {
+  policy_id: string;
+  title: string;
+  categories: Categories;
+  application: Application;
+  source: Source;
+  service: InKindService;
+  eligibility: ConditionResult[];
+}
+export interface Application {
+  status: 'open' | 'closed' | 'upcoming' | 'unknown';
+  starts_on: string | null;
+  ends_on: string | null;
+  url: string | null;
+}
+export interface Source {
+  url: string;
+  checked_at: string;
+  document_version: string;
+}
+/**
+ * F14 공개 서비스 내용과 서버 환산 결과. estimated_value_won은 근거 확인 단가 × 횟수이며 현금 조합에는 포함하지 않는다. 검증하지 못한 단가와 환산 근거는 모두 null.
+ */
+export interface InKindService {
+  item: string;
+  unit: string;
+  quantity: number;
+  unit_value_won: number | null;
+  value_basis: string | null;
+  value_source_url: string | null;
+  value_checked_at: string | null;
+  value_status: 'verified' | 'unknown';
+  estimated_value_won: number | null;
+}
+export interface ConditionResult {
+  condition_id: string;
+  status: 'met' | 'not_met' | 'needs_review';
+  reason: string;
+  evidence: Evidence[];
+}
+export interface Evidence {
+  quote: string;
+  location?: string;
+  source: Source;
 }
 export interface PeriodResult {
   pv_off: ResultView;
@@ -401,22 +455,6 @@ export interface Portfolio {
     b: string;
     note: string;
   }[];
-}
-export interface ConditionResult {
-  condition_id: string;
-  status: 'met' | 'not_met' | 'needs_review';
-  reason: string;
-  evidence: Evidence[];
-}
-export interface Evidence {
-  quote: string;
-  location?: string;
-  source: Source;
-}
-export interface Source {
-  url: string;
-  checked_at: string;
-  document_version: string;
 }
 export interface ExcludedItem {
   policy_id: string;

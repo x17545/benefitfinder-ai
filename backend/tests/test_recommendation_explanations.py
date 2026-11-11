@@ -41,11 +41,16 @@ def all_policies(response: dict[str, Any]) -> list[dict[str, Any]]:
 class RecommendationExplanationTests(TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        common = json.loads((ROOT / "contracts/v1/common.schema.json").read_text())
-        schema = json.loads((ROOT / "contracts/v1/recommendation-response.schema.json").read_text())
+        schemas = {
+            path.name: json.loads(path.read_text())
+            for path in (ROOT / "contracts/v1").glob("*.schema.json")
+        }
+        registry = Registry().with_resources(
+            (schema["$id"], Resource.from_contents(schema)) for schema in schemas.values()
+        )
         cls.validator = Draft202012Validator(
-            schema,
-            registry=Registry().with_resource(common["$id"], Resource.from_contents(common)),
+            schemas["recommendation-response.schema.json"],
+            registry=registry,
             format_checker=FormatChecker(),
         )
 

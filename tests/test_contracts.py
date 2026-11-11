@@ -13,8 +13,10 @@ from referencing import Registry, Resource
 CONTRACTS = Path(__file__).resolve().parents[1] / "contracts"
 FIXTURE_SCHEMAS = {
     "youth-benefit.json": "benefit.schema.json",
+    "youth-service-benefit.json": "benefit.schema.json",
     "recommendation-request.json": "recommendation-request.schema.json",
     "recommendation-response.json": "recommendation-response.schema.json",
+    "service-recommendation-response.json": "recommendation-response.schema.json",
     "empty-response.json": "recommendation-response.schema.json",
     "fallback-response.json": "recommendation-response.schema.json",
     "simulation-request.json": "simulation-request.schema.json",
@@ -100,6 +102,27 @@ class ContractTests(unittest.TestCase):
             with self.subTest(profile=profile):
                 request["profile"] = profile
                 self.validator("recommendation-request.schema.json").validate(request)
+
+    def test_service_contract_does_not_treat_missing_basis_as_money(self):
+        validator = self.validator("recommendation-response.schema.json")
+        response = self.fixture("service-recommendation-response.json")
+        validator.validate(response)
+        unpaired = copy.deepcopy(response)
+        del unpaired["services_total_won"]
+        with self.assertRaises(ValidationError):
+            validator.validate(unpaired)
+        for field, value in (
+            ("value_source_url", None), ("value_basis", " "),
+            ("value_checked_at", "2026-02-30"), ("value_status", "unknown"),
+        ):
+            bad = copy.deepcopy(response)
+            bad["services"][0]["service"][field] = value
+            with self.subTest(field=field), self.assertRaises(ValidationError):
+                validator.validate(bad)
+        detail = self.fixture("youth-service-benefit.json")
+        detail["benefit_amount"] = {"type": "lump_sum", "amount_won": 120_000}
+        with self.assertRaises(ValidationError):
+            self.validator("benefit.schema.json").validate(detail)
 
     def test_sentence_input_is_rejected(self):
         request = self.fixture("recommendation-request.json")

@@ -32,6 +32,7 @@ from benefitfinder.application.recommendation_service import (
     recommend_mvp_all_periods,
 )
 from benefitfinder.application.region_options import RegionCatalog
+from benefitfinder.application.service_catalog import ServiceCatalog
 from benefitfinder.application.simulation_service import simulate_mvp
 from benefitfinder.domains.youth.policy_evaluator import evaluate_policies
 from benefitfinder.domains.youth.scenario import change_profile, next_threshold
@@ -40,6 +41,7 @@ from benefitfinder.infrastructure.database.repositories.published_clauses import
 )
 from benefitfinder.infrastructure.example_explanation_data import recommendation_explanation_data
 from benefitfinder.infrastructure.example_benefits import example_benefits
+from benefitfinder.infrastructure.example_services import example_services
 from benefitfinder.infrastructure.ollama_explanations import OllamaExplanationCompletion
 from benefitfinder.infrastructure.published_clauses import InMemoryPublishedClauses
 from benefitfinder.infrastructure.region_codes import OfficialRegionCatalog
@@ -69,6 +71,7 @@ def create_app(
     explanation_generator: ExplanationGenerator | None = None,
     explanation_timeout_seconds: float = 5,
     explanation_database_url: str | None = None,
+    service_catalog: ServiceCatalog | None = None,
 ) -> FastAPI:
     """Assemble and return a new FastAPI application.
 
@@ -146,7 +149,16 @@ def create_app(
         evaluate_policies=evaluate_policies,
     )
     app.state.recommendation_explainer = explainer
-    app.state.benefit_lookup = example_benefits(policies).get
+    cash_benefits = example_benefits(policies)
+    services = service_catalog if service_catalog is not None else ServiceCatalog(example_services())
+    if services.policy_ids.intersection(cash_benefits):
+        raise ValueError("cash_service_policy_id_collision")
+
+    def find_benefit(policy_id: str) -> dict[str, Any] | None:
+        return cash_benefits.get(policy_id) or services.detail(policy_id)
+
+    app.state.benefit_lookup = find_benefit
+    app.state.service_catalog = services
     policy_names = {policy.policy_id.rsplit(":", 1)[1]: policy.policy_name for policy in policies}
     app.state.simulation_service = partial(
         simulate_mvp,

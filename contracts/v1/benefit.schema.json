@@ -6,6 +6,8 @@
   "type": "object",
   "additionalProperties": false,
   "required": ["id", "domain", "title", "summary", "provider", "categories", "application", "eligibility_conditions", "source", "domain_data"],
+  "if": {"required": ["service"]},
+  "then": {"properties": {"benefit_amount": {"type": "null"}}},
   "properties": {
     "id": {"type": "string", "minLength": 1},
     "domain": {"$ref": "common.schema.json#/$defs/domain_id"},
@@ -38,6 +40,7 @@
         }
       }
     },
+    "service": {"$ref": "service.schema.json"},
     "benefit_amount": {
       "type": ["object", "null"],
       "additionalProperties": false,

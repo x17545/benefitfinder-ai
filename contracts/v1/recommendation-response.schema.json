@@ -5,6 +5,10 @@
   "description": "POST /api/v1/recommendations 최종 result. 13단계 선택지 단일 계약이며 결과 추가 질문 필드는 없다. 3기간(1y/2y/all)xPV on/off 6가지를 results에 한 번에 담는다. view는 전역 초기 기준(기본 선택 1y+PV 끔, 즉 results[1y][pv_off]의 결과와 일치)이다. 기간/PV 탭 전환 시 화면은 다시 묻지 않고 선택 탭의 result_view를 따라 표시 섹션을 바꾼다(portfolios가 있으면 카드, 없으면 그 탭의 fallback_list, 둘 다 없으면 비어 있음). 조건 판정의 met/not_met은 근거 1개 이상 필수, 미상은 needs_review. need_check 상태값은 거부된다. 모든 업무 불변식을 스키마 하나로 강제하지 않고 구조+문서/테스트로 검증한다.",
   "type": "object",
   "additionalProperties": false,
+  "dependentRequired": {
+    "services": ["services_total_won"],
+    "services_total_won": ["services"]
+  },
   "required": [
     "request_id",
     "domain",
@@ -26,6 +30,17 @@
     "virtual_data": {
       "type": "boolean",
       "description": "true면 가상 정책·금액의 개발용 계산이다. 화면과 저장 이미지에 실제 추천이 아님을 표시한다. 생략은 실제 자료 검증 완료를 뜻하지 않는다."
+    },
+    "services": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/service_entry"},
+      "description": "F14 비현금 서비스. 생략은 서비스 미지원, 빈 배열은 조회했지만 후보 없음. 기간·현재가치와 별도."
+    },
+    "services_total_won": {
+      "type": ["integer", "null"],
+      "minimum": 0,
+      "maximum": 9007199254740991,
+      "description": "근거 있는 서비스 환산액만 합한 서버 값. 환산 가능 항목이 없거나 안전 정수 범위를 넘으면 null."
     },
     "view": {
       "enum": [
@@ -79,6 +94,21 @@
     }
   },
   "$defs": {
+    "service_entry": {
+      "title": "Recommended service",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policy_id", "title", "categories", "application", "source", "service", "eligibility"],
+      "properties": {
+        "policy_id": {"type": "string", "minLength": 1},
+        "title": {"type": "string", "minLength": 1},
+        "categories": {"$ref": "benefit.schema.json#/properties/categories"},
+        "application": {"$ref": "benefit.schema.json#/properties/application"},
+        "source": {"$ref": "common.schema.json#/$defs/source"},
+        "service": {"$ref": "service.schema.json"},
+        "eligibility": {"type": "array", "items": {"$ref": "#/$defs/condition_result"}}
+      }
+    },
     "period_result": {
       "type": "object",
       "additionalProperties": false,

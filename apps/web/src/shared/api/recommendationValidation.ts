@@ -1,8 +1,9 @@
-import type { RecommendationResponse } from './generated/recommendation-response.ts';
+import type { RecommendationResponse, RecommendedService } from './generated/recommendation-response.ts';
 import {
-  arrayOf, isDateTime, isEvidence, isMoney, isNonEmptyString, isNullableMoney,
+  arrayOf, isApplication, isDateTime, isEvidence, isMoney, isNonEmptyString, isNullableMoney,
   isNullableString, isRecord, isSource, isString, optional,
 } from './responseValidation.ts';
+import { isService } from './serviceValidation.ts';
 
 function isEligibilityStatus(value: unknown): boolean {
   return value === 'met' || value === 'not_met' || value === 'needs_review';
@@ -163,6 +164,31 @@ function isPeriodResult(value: unknown): boolean {
   return isRecord(value) && isResultView(value.pv_off) && isResultView(value.pv_on);
 }
 
+function isRecommendedService(value: unknown): value is RecommendedService {
+  return isRecord(value) && isNonEmptyString(value.policy_id) && isNonEmptyString(value.title) &&
+    arrayOf(value.categories, isNonEmptyString) && new Set(value.categories).size === value.categories.length &&
+    isApplication(value.application) && isSource(value.source) && isService(value.service) &&
+    arrayOf(value.eligibility, isCondition);
+}
+
+function hasValidServices(value: Record<string, unknown>): boolean {
+  const { services, services_total_won: declared } = value;
+  if (services === undefined) return declared === undefined;
+  if (!Array.isArray(services)) return false;
+  const ids = new Set<string>();
+  let sum: number | null = null;
+  for (const entry of services) {
+    if (!isRecommendedService(entry) || ids.has(entry.policy_id) ||
+      entry.application.status === 'closed' || entry.application.status === 'upcoming' ||
+      entry.eligibility.some((condition) => condition.status === 'not_met')) return false;
+    ids.add(entry.policy_id);
+    if (entry.service.estimated_value_won !== null) {
+      sum = (sum ?? 0) + entry.service.estimated_value_won;
+    }
+  }
+  return declared === (Number.isSafeInteger(sum) ? sum : null);
+}
+
 /** API와 캐시의 값은 unknown이다. 화면이 읽는 6개 분기와 중첩 필드를 검증한다. */
 export function isRecommendationResponse(value: unknown): value is RecommendationResponse {
   if (!isRecord(value) || !isRecord(value.results)) {
@@ -178,5 +204,6 @@ export function isRecommendationResponse(value: unknown): value is Recommendatio
     (value.discount_rate === null || (typeof value.discount_rate === 'number' &&
       Number.isFinite(value.discount_rate) && value.discount_rate >= 0)) &&
     (value.discount_rate_status === 'verified' || value.discount_rate_status === 'unknown') &&
-    isPeriodResult(value.results['1y']) && isPeriodResult(value.results['2y']) && isPeriodResult(value.results.all);
+    isPeriodResult(value.results['1y']) && isPeriodResult(value.results['2y']) && isPeriodResult(value.results.all) &&
+    hasValidServices(value);
 }

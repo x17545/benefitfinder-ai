@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benefitfinder.example/contracts/v1/service.schema.json",
+  "title": "In-kind service",
+  "description": "F14 공개 서비스 내용과 서버 환산 결과. estimated_value_won은 근거 확인 단가 × 횟수이며 현금 조합에는 포함하지 않는다. 검증하지 못한 단가와 환산 근거는 모두 null.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["item", "unit", "quantity", "unit_value_won", "value_basis", "value_source_url", "value_checked_at", "value_status", "estimated_value_won"],
+  "properties": {
+    "item": {"type": "string", "minLength": 1},
+    "unit": {"type": "string", "minLength": 1},
+    "quantity": {"type": "integer", "minimum": 1, "maximum": 9007199254740991},
+    "unit_value_won": {"type": ["integer", "null"], "minimum": 0, "maximum": 9007199254740991},
+    "value_basis": {"type": ["string", "null"], "pattern": "\\S"},
+    "value_source_url": {"type": ["string", "null"], "format": "uri", "pattern": "^https?://[^/?#\\s]+"},
+    "value_checked_at": {"type": ["string", "null"], "format": "date"},
+    "value_status": {"enum": ["verified", "unknown"]},
+    "estimated_value_won": {"type": ["integer", "null"], "minimum": 0, "maximum": 9007199254740991}
+  },
+  "if": {"properties": {"value_status": {"const": "verified"}}},
+  "then": {
+    "properties": {
+      "unit_value_won": {"type": "integer"},
+      "value_basis": {"type": "string"},
+      "value_source_url": {"type": "string"},
+      "value_checked_at": {"type": "string"},
+      "estimated_value_won": {"type": "integer"}
+    }
+  },
+  "else": {
+    "properties": {
+      "unit_value_won": {"type": "null"},
+      "value_basis": {"type": "null"},
+      "value_source_url": {"type": "null"},
+      "value_checked_at": {"type": "null"},
+      "estimated_value_won": {"type": "null"}
+    }
+  }
+}
