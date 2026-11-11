@@ -51,6 +51,7 @@ export function isNormalizedBenefit(value: unknown): value is NormalizedBenefit 
     isNonEmptyString(value.id) && isNonEmptyString(value.domain) && /^[a-z][a-z0-9_-]*$/.test(value.domain) &&
     isNonEmptyString(value.title) && isNonEmptyString(value.summary) && isNonEmptyString(value.provider) &&
     arrayOf(value.categories, isNonEmptyString) && new Set(value.categories).size === value.categories.length &&
+    optional(value.virtual_data, (item) => typeof item === 'boolean') &&
     isApplication(value.application) && arrayOf(value.eligibility_conditions, isCondition) && isSource(value.source) &&
     isRecord(value.domain_data) && optional(value.benefit_amount, isBenefitAmount) &&
     optional(value.reviewed, isNullableBoolean) && optional(value.lifetime_once, isNullableBoolean) &&

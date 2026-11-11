@@ -10,6 +10,10 @@ export interface NormalizedBenefit {
   summary: string;
   provider: string;
   categories: string[];
+  /**
+   * 백엔드 가상 정책 상세. 실제 모집·신청 정보로 표시하지 않는다.
+   */
+  virtual_data?: boolean;
   application: {
     status: 'open' | 'closed' | 'upcoming' | 'unknown';
     starts_on: string | null;

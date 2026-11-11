@@ -13,7 +13,7 @@ export function findMyPolicyResult(
   result: RecommendationResponse, benefit: NormalizedBenefit, basis: ResultBasis,
   isSample: boolean, sampleAnalysis: boolean,
 ): PortfolioPolicy | null {
-  if (isSample !== (sampleAnalysis || result.virtual_data === true)) return null;
+  if ((isSample || benefit.virtual_data === true) !== (sampleAnalysis || result.virtual_data === true)) return null;
   const view = pickView(result, basis.period, basis.present_value);
   return view.portfolios.flatMap((portfolio) => portfolio.policies).find((policy) =>
     policy.policy_id === benefit.id && policy.source.url === benefit.source.url &&

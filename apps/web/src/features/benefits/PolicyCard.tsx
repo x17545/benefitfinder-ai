@@ -11,6 +11,7 @@ interface PolicyCardProps {
   policy: PortfolioPolicy;
   info: ReadonlyMap<string, NormalizedBenefit>;
   detailHref: string;
+  virtualData: boolean;
   /** 결과 설명을 생성형 AI가 썼을 때만 AI 표시 */
   aiGenerated: boolean;
 }
@@ -38,7 +39,7 @@ function PolicyIcon({ categories }: { categories: readonly string[] }): JSX.Elem
 }
 
 /** 지원금 행 (S3 9 ~ 12번) */
-export function PolicyCard({ policy, info, aiGenerated, detailHref }: PolicyCardProps): JSX.Element {
+export function PolicyCard({ policy, info, aiGenerated, detailHref, virtualData }: PolicyCardProps): JSX.Element {
   const benefit = info.get(policy.policy_id);
   const tag = benefit !== undefined ? recruitTag(benefit.application) : null;
   const amount = policy.amount_in_period_won;
@@ -89,9 +90,9 @@ export function PolicyCard({ policy, info, aiGenerated, detailHref }: PolicyCard
         <a className="ui-button ui-button--secondary" href={detailHref}>
           자세히 보기
         </a>
-        <a className="ui-button ui-button--primary" href={applyUrl} target="_blank" rel="noopener noreferrer">
+        {!virtualData && benefit?.virtual_data !== true ? <a className="ui-button ui-button--primary" href={applyUrl} target="_blank" rel="noopener noreferrer">
           신청하러 가기 ↗
-        </a>
+        </a> : null}
       </div>
     </article>
   );

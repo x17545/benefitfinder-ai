@@ -1,6 +1,6 @@
 # FastAPI HTTP API
 
-`GET /health`, 공통 오류 처리와 가상 정책을 사용하는 `POST /api/v1/recommendations`를 구현했다. 추천 응답은 3기간 × 현재가치 on/off 계산과 F13 설명을 담은 JSON이다. F13 조항은 `DATABASE_URL` 설정 시 PostgreSQL에서 조회한다. 실제 정책 계산 DB·SSE는 후속이다. 전체 [구현 상태](../../../../docs/README.md)를 따른다.
+`GET /health`, 공통 오류 처리와 가상 정책을 사용하는 추천·상황 변화·상세 API를 구현했다. 추천 응답은 3기간 × 현재가치 on/off 계산과 F13 설명을 담은 JSON이다. F13 조항은 `DATABASE_URL` 설정 시 PostgreSQL에서 조회한다. 실제 정책 계산 DB·SSE는 후속이다. 전체 [구현 상태](../../../../docs/README.md)를 따른다.
 
 | 경로 | 책임 |
 |---|---|
@@ -46,4 +46,22 @@ curl --fail --silent --show-error http://127.0.0.1:8000/api/v1/recommendations \
 
 ```bash
 uv run --locked python -m unittest backend.tests.test_recommendation_explanations -v
+```
+
+## S4 상황 변화와 S5 정책 상세
+
+`POST /api/v1/simulations`는 취업·연 소득 증가·독립·나이 +1에 대해 추천과 같은 가상 정책·조합 계산을 사용한다. 전후 카드 총액은 선택 기간·현재가치 기준이고, 실효한계세율은 가정한 연 소득과 할인하지 않은 1년 지원금으로 계산한다. 소득을 모르는 경우 임의로 정하지 않는다. 이미 혼자라면 독립 시나리오에서 조건을 바꾸지 않는다. 조합 교체와 자격 기준 이탈을 구분하고, 실제 공고 근거가 없으므로 `todo`는 비운다.
+
+`GET /api/v1/benefits/{benefit_id}`는 같은 정책 ID·출처·버전의 공개 상세를 반환한다. 화면은 현재 분석과 일치할 때만 개인별 진단을 연결한다. 신청 주소나 날짜를 만들어 넣지 않는다. 두 응답의 `virtual_data: true`는 백엔드가 가상 정책을 사용했다는 뜻이다. 실정책 DB 연결, 실제 모집·신청 안내와 공유 하루 상한은 후속이다.
+
+백엔드 실행 후 아래 명령으로 가상 주거 시나리오와 가상 취업 정책을 재현할 수 있다. 결과 파일은 Git 제외 경로에 둔다.
+
+```bash
+mkdir -p data/local/s4-s5-api
+curl --fail --silent --show-error http://127.0.0.1:8000/api/v1/simulations \
+  -H 'Content-Type: application/json' \
+  --data-binary @contracts/fixtures/simulation-request.json \
+  --output data/local/s4-s5-api/simulation.json
+curl --fail --silent --show-error http://127.0.0.1:8000/api/v1/benefits/youth%3Aexample%3AP3 \
+  --output data/local/s4-s5-api/employment-detail.json
 ```

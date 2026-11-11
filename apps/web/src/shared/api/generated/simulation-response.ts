@@ -4,6 +4,10 @@
  * POST /api/v1/simulations 응답. before/after_total_won은 선택 기간(basis_period) 카드합, annual은 연간 환산 지원금으로 분리한다. effective_marginal_rate=(연간 지원금 감소분/연간 소득 증가분)*100. 세금/4대보험 제외, 지원금 변화만 계산. 소득이 바뀌지 않으면 income_change와 effective_marginal_rate는 null.
  */
 export interface ChangeSimulationResult {
+  /**
+   * 가상 정책으로 계산한 결과. 실제 수급액으로 표시하지 않는다.
+   */
+  virtual_data?: boolean;
   scenario: 'employed' | 'income_up' | 'independent' | 'age_plus_one';
   /**
    * 선택 기간. before/after_total_won의 카드합 기준.

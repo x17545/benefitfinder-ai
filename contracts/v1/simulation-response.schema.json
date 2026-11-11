@@ -14,6 +14,10 @@
     "calculation_note"
   ],
   "properties": {
+    "virtual_data": {
+      "type": "boolean",
+      "description": "가상 정책으로 계산한 결과. 실제 수급액으로 표시하지 않는다."
+    },
     "scenario": {
       "enum": [
         "employed",

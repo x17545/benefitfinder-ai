@@ -139,6 +139,8 @@ function SimulationResult({ result, isSample, presentValue }: SimulationResultPr
     <>
       {isSample ? (
         <p className="s4-dev-note">개발용 가상 예시: 입력 조건과 무관한 1년 기준이며 현재가치를 적용하지 않았어요</p>
+      ) : result.virtual_data === true ? (
+        <p className="s4-dev-note">입력 조건을 바탕으로 가상 정책을 다시 계산했어요. 실제 받을 수 있는 지원금이 아니에요.</p>
       ) : null}
 
       <div className="s4-grid">

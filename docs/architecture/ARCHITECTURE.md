@@ -133,7 +133,7 @@ DB 스키마 변경은 `backend/migrations/versions/`에 이력으로 관리한�
 
 ## 7. API 경계와 구현 상태
 
-`GET /health`와 공식 지역 목록 `GET /api/v1/options`, 가상 MVP 정책의 `POST /api/v1/recommendations`는 구현했다. 추천은 JSON 응답이며 가상 정책임을 `virtual_data: true`로 알린다. F13 게시 조항은 PostgreSQL 조회를 지원하지만 실제 지역별 정책·계산 데이터 연결은 후속이다. 그 외 아래 `/api/v1` 경로와 SSE는 목표 설계다. 현재 개발용 필드·자료형과 이벤트 데이터의 원본은 `contracts/v1/`이다. 6장의 필드·형식과 11.2의 임시 기본값은 다음 회의에서 확인할 초안으로 유지한다.
+`GET /health`와 공식 지역 목록 `GET /api/v1/options`, 가상 MVP 정책의 `POST /api/v1/recommendations`는 구현했다. 추천은 JSON 응답이며 가상 정책임을 `virtual_data: true`로 알린다. F13 게시 조항은 PostgreSQL 조회를 지원하지만 실제 지역별 정책·계산 데이터 연결은 후속이다. 상황 변화와 상세 API는 같은 가상 MVP 정책을 사용한다. 메타와 SSE는 목표 설계다. 현재 개발용 필드·자료형과 이벤트 데이터의 원본은 `contracts/v1/`이다. 6장의 필드·형식과 11.2의 임시 기본값은 다음 회의에서 확인할 초안으로 유지한다.
 
 | Method | 경로 | 용도 |
 |---|---|---|
@@ -141,8 +141,8 @@ DB 스키마 변경은 `backend/migrations/versions/`에 이력으로 관리한�
 | GET | `/api/v1/meta` | 마지막 갱신·기준금리·분석 이용량 정보 |
 | GET | `/api/v1/options` | 공식 법정동코드 기반 시도·자치 시군구와 선택 구간 (구현됨, 원천·갱신 기준은 [백엔드 안내](../../backend/README.md#실제-지역-선택-api)) |
 | POST | `/api/v1/recommendations` | 선택 조건으로 분석, SSE 진행·조합 결과 |
-| POST | `/api/v1/simulations` | 같은 조건과 변경 시나리오의 전후 비교 |
-| GET | `/api/v1/benefits/{benefit_id}` | 공통 혜택 상세 조회 |
+| POST | `/api/v1/simulations` | 가상 정책의 선택 기간 전후 비교와 1년 명목 비교 (구현됨) |
+| GET | `/api/v1/benefits/{benefit_id}` | 가상 정책의 공개 상세 조회 (구현됨) |
 
 지원 분야는 초기 `youth` 하나다. 계약이 다른 분야 식별자를 허용하더라도, 서버는 아직 지원하지 않는 분야에 `unsupported_domain` 오류를 반환해야 한다. 입력 오류는 `invalid_request`, 의존 서비스 장애는 `dependency_unavailable`처럼 구분한다. 상세 HTTP 상태는 `contracts/README.md`를 따른다.
 

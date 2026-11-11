@@ -30,6 +30,7 @@ export function isSimulationResult(value: unknown): value is ChangeSimulationRes
     isRecord(value) &&
     typeof value.scenario === 'string' && SCENARIOS.includes(value.scenario) &&
     typeof value.basis_period === 'string' && PERIODS.includes(value.basis_period) &&
+    optional(value.virtual_data, (item) => typeof item === 'boolean') &&
     isMoney(value.before_total_won) && isMoney(value.after_total_won) &&
     isRecord(value.annual) && isMoney(value.annual.before_won) && isMoney(value.annual.after_won) &&
     isNonEmptyString(value.calculation_note) &&

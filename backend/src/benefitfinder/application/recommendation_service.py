@@ -20,6 +20,8 @@ class RecommendationRequestLike(Protocol):
 
 PolicyEvaluator = Callable[[Any], dict[str, Any]]
 
+MVP_ANNUAL_RATE = 0.025
+
 MVP_AMOUNTS = {
     "1y": {
         "P1": 2_400_000,
@@ -89,7 +91,7 @@ MVP_PAYMENTS = {
 
 def recommend_mvp_all_periods(
     request: RecommendationRequestLike,
-    annual_rate: float | None = 0.025,
+    annual_rate: float | None = MVP_ANNUAL_RATE,
     *,
     evaluate_policies: PolicyEvaluator,
 ) -> dict[str, Any]:
