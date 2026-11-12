@@ -140,7 +140,8 @@ def run_f12_queue(data_dir: Path, *, limit: int = 5) -> dict[str, object]:
             rules = tuple(rule for rule in result.rules
                           if {cite.document_id for cite in rule.citations} == {facts.document.id})
             if rules or facts.eligibility or facts.amounts or facts.payment_timing:
-                snapshot = prepare_snapshot(RuleReviewBatch((facts.document,), policies, rules))
+                snapshot = prepare_snapshot(RuleReviewBatch((facts.document,), policies, rules),
+                                            at=datetime.now(KST))
                 write_f12_review_pair(directory / f'd{index:02}', snapshot, facts)
 
     counts = run_pending_analysis(tasks, PolicyAnalysisFiles(data_dir, write_reviews, model={

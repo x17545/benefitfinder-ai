@@ -138,6 +138,30 @@ def tool_payloads(messages: list[dict[str, object]]) -> list[dict[str, object]]:
 
 
 class PolicyAnalysisAgentTests(TestCase):
+    def test_tool_history_is_serializable_by_the_actual_compatible_transport(self):
+        from benefitfinder.infrastructure.compatible_llm import _wire_messages
+        scripted = ScriptedChat([
+            reply({'id': 'actual-provider-call-id', **fetch('doc-1', 1, 7)}),
+            reply(call('check_missing')), reply(call('save_candidate')),
+        ])
+        def chat(messages, tools):
+            _wire_messages(messages)
+            return scripted(messages, tools)
+        result = analyze_policy(make_input((DOC_ONE,)), chat=chat)
+        self.assertEqual(len(result.trace), 3)
+
+    def test_same_quote_with_different_rule_directions_has_distinct_candidate_ids(self):
+        scripted = ScriptedChat([
+            reply(fetch('doc-1', 1, 7), call('lookup_policy', name='달빛')),
+            reply(extract('doc-1', 'conditional', 5, 6, target_id=TARGET_ID,
+                          direction='both', exception_lines=[6]),
+                  extract('doc-1', 'conditional', 5, 6, target_id=TARGET_ID,
+                          direction='source_to_target', exception_lines=[6])),
+            reply(call('check_missing')), reply(call('save_candidate')),
+        ])
+        result = analyze_policy(make_input((DOC_ONE,)), chat=scripted)
+        self.assertEqual(len({rule.id for rule in result.rules}), 2)
+
     def test_multi_document_tools_coverage_missing_rules_and_trace(self) -> None:
         chat = ScriptedChat(
             [
@@ -215,7 +239,8 @@ class PolicyAnalysisAgentTests(TestCase):
         self.assertEqual(rule.citations[0].content_sha256, make_input().documents[0].content_sha256)
         self.assertEqual(rule.conditions, (DOC_ONE.splitlines()[4],))
         self.assertEqual(rule.exceptions, (DOC_ONE.splitlines()[5],))
-        self.assertEqual(rule.unresolved, (source_quote,))
+        self.assertIn(source_quote, rule.unresolved)
+        self.assertTrue(any('예외' in value for value in rule.unresolved))
         self.assertEqual(rule.citations[0].location, "lines 5-6")
 
         self.assertEqual(observed, list(result.trace))
@@ -334,7 +359,8 @@ class PolicyAnalysisAgentTests(TestCase):
         payloads = tool_payloads(chat.messages[-1])
         errors = [payload["error"] for payload in payloads if "error" in payload]
         self.assertEqual(errors, ["coverage_incomplete", "check_stale"])
-        self.assertEqual(result.missing[-1].field, "timing")
+        self.assertIn('timing', {item.field for item in result.missing})
+        self.assertEqual(result.missing[-1].field, 'overlap')
         self.assertEqual(result.trace[-1].outcome, "needs_review")
 
 

@@ -129,20 +129,20 @@ _TOOLS = [
             "Create a pending citation from a range that a previous tool response showed. "
             "For overlap rules, target_id must have been resolved by lookup_policy and "
             "direction must be an exact RuleDirection code. Detail fields contain line numbers; "
-            "code copies their source text."
+            "code copies their source text. For eligibility/amount/timing/application/service/"
+            "exceptions, use ONLY doc_id, kind, start_line, end_line. Omit ALL other fields."
         ),
         {
             "doc_id": {"type": "string"},
             "kind": {"type": "string", "enum": sorted(_FACT_KINDS | _ADDITIONAL_KINDS | _RULE_KINDS)},
             "start_line": {"type": "integer"},
             "end_line": {"type": "integer"},
-            "target_id": {"type": "string"},
-            "direction": {"type": "string", "enum": sorted(_RULE_DIRECTIONS)},
-            "condition_lines": _LINE_SELECTION,
-            "exception_lines": _LINE_SELECTION,
-            "period_lines": _LINE_SELECTION,
-            "amount_effect_lines": _LINE_SELECTION,
-            "unresolved_lines": _LINE_SELECTION,
+            "target_id": {"type": "string", "description": "Overlap ONLY: a prior lookup_policy result ID."},
+            "direction": {"type": "string", "enum": sorted(_RULE_DIRECTIONS),
+                          "description": "Overlap ONLY and REQUIRED for overlap. Use unknown if unclear."},
+            **{key: {**_LINE_SELECTION, 'description': 'Overlap ONLY. ' + _LINE_SELECTION['description']}
+               for key in ('condition_lines', 'exception_lines', 'period_lines',
+                           'amount_effect_lines', 'unresolved_lines')},
         },
         ("doc_id", "kind", "start_line", "end_line"),
     ),
@@ -159,7 +159,8 @@ _TOOLS = [
         "save_candidate",
         (
             "Finish with needs_review after every source line was shown and the latest candidates "
-            "were checked. This does not approve, write a database row, or publish anything."
+            "were checked. If any extract_rule occurred after check_missing, first call check_missing "
+            "again. If rejected, follow next_tool in the error response. This never approves or publishes."
         ),
         {},
         (),
@@ -188,6 +189,13 @@ exact target_id that lookup_policy uniquely resolved in an earlier turn. Never l
 similar or ambiguous name. Preserve conditional, historical, deduction, cap, exception, period,
 and amount-effect source sentences; do not reduce them to an unconditional ban. Mark unsupported
 or unclear overlap details with unresolved line numbers.
+
+For eligibility, amount, timing, application, service, exceptions, extract_rule has exactly FOUR
+arguments: doc_id, kind, start_line, end_line. Do NOT add condition_lines, amount_effect_lines,
+direction or target_id for these six kinds, even when the cited sentence mentions conditions.
+Only overlap rules use those optional detail fields. Before extracting ANY overlap rule, call
+lookup_policy and wait for its result. ALWAYS supply direction for an overlap rule; use unknown
+when its direction is unclear. Never skip lookup merely because the catalog already lists an ID.
 
 Call save_candidate last. Every result remains needs_review and is never approved or published.
 Use at most four tool calls in one response. Do not answer with prose when a tool call is needed.
@@ -235,6 +243,7 @@ class _PriorState:
     confirmed_targets: frozenset[str]
     facts: dict[str, tuple[tuple[RuleCitation, ...], tuple[PolicyAmountCandidate, ...], tuple[RuleCitation, ...]]]
     additional: tuple[AnalysisEvidence, ...]
+    rules: tuple[RuleCandidate, ...]
     revision: int
     check_count: int
     last_check: _CheckState | None
@@ -384,6 +393,7 @@ def _snapshot(state: _RunState) -> _PriorState:
             for key, value in state.facts.items()
         },
         additional=tuple(state.additional),
+        rules=tuple(state.rules),
         revision=state.revision,
         check_count=len(state.checks),
         last_check=state.checks[-1] if state.checks else None,
@@ -504,6 +514,23 @@ def _has_age(citations: tuple[RuleCitation, ...]) -> bool:
     return any(pattern.search(citation.quote) for citation in citations)
 
 
+def _unresolved_mentions(prior: _PriorState, input: PolicyAnalysisInput) -> list[dict[str, str]]:
+    """Flag explicit catalog mentions for review; never infer or resolve a policy link."""
+    result = []
+    for document in input.documents:
+        text = _name_key(document.text)
+        for policy in input.policies:
+            if policy.id == input.policy_id:
+                continue
+            mentioned = any(_name_key(name) in text for name in (policy.name, *policy.aliases))
+            resolved = any(policy.id in rule.target_policy_ids and any(
+                citation.document_id == document.id for citation in rule.citations
+            ) for rule in prior.rules)
+            if mentioned and not resolved:
+                result.append({'document_id': document.id, 'name': policy.name})
+    return result
+
+
 def _check(prior: _PriorState, input: PolicyAnalysisInput) -> tuple[AnalysisMissing, ...]:
     result: list[AnalysisMissing] = []
     for document in input.documents:
@@ -524,6 +551,9 @@ def _check(prior: _PriorState, input: PolicyAnalysisInput) -> tuple[AnalysisMiss
             for field_name, present in checks
             if not present
         )
+    result.extend(AnalysisMissing(doc_id, 'overlap') for doc_id in sorted({
+        item['document_id'] for item in _unresolved_mentions(prior, input)
+    }))
     return tuple(result)
 
 
@@ -598,6 +628,9 @@ class _AnalysisRun:
                 "current_revision": self.state.revision,
             },
             "saved": self.state.saved,
+            "check_required_before_save": not self.state.checks or (
+                self.state.checks[-1].revision != self.state.revision
+            ),
         }
 
     def _messages(self) -> list[dict[str, object]]:
@@ -761,6 +794,8 @@ class _AnalysisRun:
                     "recheck_remaining": max(0, _MAX_MISSING_CHECKS - check.number),
                     "checked_fields": checked_fields,
                     "latest_candidates": True,
+                    "unresolved_policy_mentions": _unresolved_mentions(prior, self.input),
+                    "mention_instruction": 'For each unresolved mention, use lookup_policy and inspect its actual overlap clause. A mention alone is not a rule.',
                     "review_status": "needs_review",
                 },
                 outcome,
@@ -828,7 +863,7 @@ class _AnalysisRun:
             if any(
                 (condition_lines, exception_lines, period_lines, amount_effect_lines, unresolved_lines)
             ):
-                raise _ToolInvalid("invalid_arguments")
+                raise _ToolInvalid("fact_kinds_require_only_doc_id_kind_start_line_end_line")
             key = (document.id, kind, start, end)
             if key in state.duplicate_keys:
                 return _ToolReply({"status": "needs_review", "duplicate": True}, "duplicate")
@@ -862,6 +897,8 @@ class _AnalysisRun:
 
         if kind not in _RULE_KINDS:
             raise _ToolInvalid("invalid_kind")
+        if not isinstance(values.get('target_id'), str):
+            raise _ToolInvalid('overlap_requires_lookup_policy_then_target_id_and_direction')
         target_id = _string(values, "target_id", 120)
         if target_id not in prior.confirmed_targets or target_id == self.input.policy_id:
             raise _ToolInvalid("target_not_confirmed")
@@ -870,11 +907,20 @@ class _AnalysisRun:
             raise _ToolInvalid("direction_required")
         direction = RuleDirection(direction_text)
         rule_kind = RuleKind(kind)
+        context_start = max(1, start - 2)
+        context_end = min(len(_source_lines(document)), end + 2)
+        if not set(range(context_start, context_end + 1)) <= prior.shown[document.id]:
+            raise _ToolInvalid('overlap_requires_previously_shown_neighbor_context')
+        context = _citation(document, context_start, context_end)
         conditions = _selected_lines(document, condition_lines or tuple(range(start, end + 1)))
         exceptions = _selected_lines(document, exception_lines)
         period = "\n".join(_selected_lines(document, period_lines)) or None
         amount_effect = "\n".join(_selected_lines(document, amount_effect_lines)) or None
         unresolved = list(_selected_lines(document, unresolved_lines))
+        if context.quote != citation.quote:
+            # The selected line can omit a neighboring exception or time qualifier.
+            # Keep that exact context pending; it is never interpreted as an execution rule.
+            unresolved.append(context.quote)
         if rule_kind is RuleKind.SIMULTANEOUS_EXCLUSION and exceptions:
             rule_kind = RuleKind.CONDITIONAL
         if rule_kind is RuleKind.UNKNOWN or direction is RuleDirection.UNKNOWN:
@@ -900,13 +946,13 @@ class _AnalysisRun:
         rule = RuleCandidate(
             id="agent-"
             + hashlib.sha256(
-                f"{self.input.fingerprint()}\n{document.id}\n{target_id}\n{kind}\n{start}:{end}".encode()
+                (self.input.fingerprint() + '\n' + json.dumps(key, ensure_ascii=False)).encode()
             ).hexdigest()[:16],
             source_policy_id=self.input.policy_id,
             target_policy_ids=(target_id,),
             kind=rule_kind,
             description=citation.quote,
-            citations=(citation,),
+            citations=(citation,) if context == citation else (citation, context),
             direction=direction,
             conditions=conditions,
             exceptions=exceptions,
@@ -946,8 +992,7 @@ class _AnalysisRun:
             "tool_name": name,
             "content": json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
         }
-        if call_id is not None:
-            message["tool_call_id"] = call_id
+        # The compatible transport supplies wire IDs from ordered tool names.
         return message
 
     def _result(self) -> PolicyAnalysisResult:
@@ -1013,16 +1058,26 @@ class _AnalysisRun:
                         reply = self._execute(name, args, self.state, prior)
                 except _ToolInvalid as error:
                     self.state = backup
-                    reply = _ToolReply({"error": error.code}, "invalid", invalid=True)
+                    payload = {"error": error.code}
+                    if error.code in {'check_required', 'check_stale'}:
+                        payload['instruction'] = 'Call check_missing before save_candidate; extraction changed candidates.'
+                        payload['next_tool'] = 'check_missing'
+                    elif error.code in {'target_not_confirmed', 'overlap_requires_lookup_policy_then_target_id_and_direction'}:
+                        payload['instruction'] = 'Call lookup_policy using the target policy name, then extract with its target_id and direction.'
+                        payload['next_tool'] = 'lookup_policy'
+                    elif error.code == 'overlap_requires_previously_shown_neighbor_context':
+                        payload['instruction'] = 'Use fetch_document to read at least two neighboring lines on both sides of this clause, then retry extraction.'
+                        payload['next_tool'] = 'fetch_document'
+                    reply = _ToolReply(payload, "invalid", invalid=True)
                 except Exception:
                     self.state = backup
                     raise
 
-                tool_message = self._tool_message(trace_name, call_id, reply.payload)
+                tool_message = self._tool_message(name, call_id, reply.payload)
                 if turn_chars + _json_chars(tool_message) > _MAX_TOOL_TURN_CHARS:
                     self.state = backup
                     reply = _ToolReply({"error": "tool_result_too_large"}, "invalid", invalid=True)
-                    tool_message = self._tool_message(trace_name, call_id, reply.payload)
+                    tool_message = self._tool_message(name, call_id, reply.payload)
                 turn_chars += _json_chars(tool_message)
                 if reply.invalid:
                     self.invalid_feedback += 1

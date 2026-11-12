@@ -1,11 +1,15 @@
 """Real PostgreSQL leases, source invalidation and an unprivileged F12 worker."""
 
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import redirect_stdout, redirect_stderr
 from dataclasses import replace
 from datetime import timedelta
 import hashlib
+from io import StringIO
+import json
 import os
 from pathlib import Path
+from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 from uuid import uuid4
@@ -19,9 +23,13 @@ from backend.integration.test_policy_source_rechecks_postgres import (
     AT, batch, dedicated_database, publish, record,
 )
 from backend.tests.test_policy_analysis_pipeline import analysis_input
+from backend.tests.test_policy_analysis_agent import ScriptedChat, reply, call
 from benefitfinder.application.policy_analysis import PolicyAnalysisStoreError
 from benefitfinder.infrastructure.database.repositories.collected_policies import PostgresCollectedPolicies
 from benefitfinder.infrastructure.database.repositories.policy_analysis import PostgresPolicyAnalysisTasks
+from benefitfinder.infrastructure.llm_settings import LLMSettings
+from benefitfinder.infrastructure.policy_rule_files import load_f12_review_pair
+from benefitfinder.jobs.__main__ import main
 
 MIGRATION = Path(__file__).resolve().parents[1] / 'migrations/versions/0007_f12_analysis_tasks.sql'
 
@@ -210,3 +218,29 @@ class PolicyAnalysisQueuePostgresTest(unittest.TestCase):
             with psycopg.connect(self.url) as connection:
                 connection.execute(sql.SQL('DROP OWNED BY {}').format(sql.Identifier(role)))
                 connection.execute(sql.SQL('DROP ROLE {}').format(sql.Identifier(role)))
+
+    def test_cli_with_scripted_model_writes_readable_pending_review_pair(self):
+        scripted = ScriptedChat([
+            reply(call('fetch_document', doc_id='fictional-document', start_line=1, end_line=1)),
+            reply(call('extract_rule', doc_id='fictional-document', kind='eligibility', start_line=1, end_line=1)),
+            reply(call('check_missing')), reply(call('save_candidate')),
+        ])
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            path = root / 'input.json'
+            path.write_text(json.dumps({'format_version': 1, **self.value.payload()}))
+            output = StringIO()
+            with patch.dict(os.environ, {'F12_WRITE_DATABASE_URL': self.url}), \
+                 patch('benefitfinder.jobs.__main__.LLMSettings.from_env', return_value=LLMSettings('llama_cpp', 'http://127.0.0.1:18080/v1', 'fictional-test')), \
+                 patch('benefitfinder.jobs.__main__.CompatibleChat', return_value=lambda m,t,**kwargs: scripted(m,t)), \
+                 redirect_stdout(output), redirect_stderr(output):
+                self.assertEqual(main(['f12-analysis','register','--input',str(path)]), 0)
+                self.assertEqual(main(['f12-analysis','run','--data-dir',str(root)]), 0)
+            task = self.tasks.get_task(1)
+            self.assertEqual(task['status'], 'needs_review')
+            pair = root / task['output_ref'] / 'd01'
+            snapshot, facts = load_f12_review_pair(pair)
+            self.assertEqual(facts.document, self.value.documents[0])
+            self.assertEqual(facts.eligibility[0].quote, self.value.documents[0].text)
+            self.assertEqual(snapshot.reviews, ())
+            self.assertNotIn('가상 정책', output.getvalue())

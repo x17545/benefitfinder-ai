@@ -13,7 +13,7 @@ from benefitfinder.application.policy_analysis import (
 )
 
 _TOOLS = {'fetch_document', 'find_clauses', 'lookup_policy', 'extract_rule',
-          'check_missing', 'save_candidate'}
+          'check_missing', 'save_candidate', 'unknown'}
 
 
 def _encode(value: object) -> bytes:
