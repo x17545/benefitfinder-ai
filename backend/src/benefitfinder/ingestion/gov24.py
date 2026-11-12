@@ -188,7 +188,6 @@ def _validate_category_values(
     if not isinstance(category_values, Mapping) or not category_values:
         raise ValueError("category_values must be a non-empty mapping")
     normalized: dict[str, frozenset[str]] = {}
-    seen: set[str] = set()
     for category, values in category_values.items():
         if type(category) is not str or category not in _CATEGORIES:
             raise ValueError("only exact employment and housing categories are supported")
@@ -198,9 +197,6 @@ def _validate_category_values(
             raise ValueError("source category values must be non-empty exact strings")
         if len(set(values)) != len(values):
             raise ValueError("source category values must not repeat")
-        if seen.intersection(values):
-            raise ValueError("a source category value cannot map to multiple categories")
-        seen.update(values)
         normalized[category] = frozenset(values)
     return normalized
 
@@ -213,14 +209,18 @@ def _validate_selected_ids(external_ids: tuple[str, ...]) -> tuple[str, ...]:
     return tuple(_require_external_id(external_id) for external_id in external_ids)
 
 
-def _category_for(row: Mapping[str, object], categories: Mapping[str, frozenset[str]]) -> str:
+def _categories_for(
+    row: Mapping[str, object], categories: Mapping[str, frozenset[str]],
+) -> tuple[str, ...]:
     value = row.get(CATEGORY_FIELD)
     if type(value) is not str or not value:
         raise Gov24ParseError("invalid_category", "service category is missing")
     matches = [category for category, values in categories.items() if value in values]
-    if len(matches) != 1:
+    if not matches:
         raise Gov24ParseError("category_out_of_scope", "service category is not selected")
-    return matches[0]
+    # A confirmed composite literal can be explicitly mapped to both domains.
+    # Never split the source string or infer categories from the service name.
+    return tuple(matches)
 
 
 def _service_name(row: Mapping[str, object]) -> str:
@@ -367,7 +367,7 @@ def _collect_one(
     conditions_row = fetched["supportConditions"].row
     assert list_row is not None and detail_row is not None and conditions_row is not None
     try:
-        _category_for(list_row, categories)
+        _categories_for(list_row, categories)
         list_name = _service_name(list_row)
         if _service_name(detail_row) != list_name:
             raise Gov24ParseError("service_name_mismatch", "service names are inconsistent")

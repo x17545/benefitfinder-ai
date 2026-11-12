@@ -8,7 +8,10 @@ from benefitfinder.application.prepare_policy_analysis import PreparationSource
 
 
 class PostgresAnalysisSources:
-    def __init__(self, database_url: str) -> None:
+    def __init__(self, database_url: str, *, source: str = 'youthcenter') -> None:
+        if source not in ('youthcenter', 'gov24'):
+            raise ValueError('invalid_f12_preparation_source')
+        self._source = source
         try:
             if not database_url.strip() or not conninfo_to_dict(database_url).get('dbname'):
                 raise ValueError
@@ -28,15 +31,15 @@ class PostgresAnalysisSources:
                         '-c lock_timeout=500 -c timezone=UTC') as connection:
                 rows = connection.execute('''WITH selected AS MATERIALIZED (
                     SELECT external_id,material_sha256,fields FROM public.collected_policies
-                    WHERE source='youthcenter' AND missing_detected_at IS NULL AND external_id=ANY(%s)),
+                    WHERE source=%s AND missing_detected_at IS NULL AND external_id=ANY(%s)),
                     observed AS (
                     SELECT c.external_id,max(r.completed_at) AS accepted_at
                     FROM public.collected_policy_changes c
                     JOIN public.collected_policy_runs r ON r.source=c.source AND r.run_id=c.run_id
                     JOIN selected p ON p.external_id=c.external_id AND p.material_sha256=c.current_sha256
-                    WHERE c.source='youthcenter' GROUP BY c.external_id)
+                    WHERE c.source=%s GROUP BY c.external_id)
                     SELECT p.*,o.accepted_at FROM selected p JOIN observed o USING(external_id)
-                    ORDER BY p.external_id''', (list(external_ids),)).fetchall()
+                    ORDER BY p.external_id''', (self._source, list(external_ids), self._source)).fetchall()
             return {row['external_id']: PreparationSource(**row) for row in rows}
         except (psycopg.Error, OSError, ValueError, TypeError):
             raise ValueError('f12_preparation_sources_unavailable') from None

@@ -101,11 +101,15 @@ class AnalysisPreparationPlan:
     scope: ApiScopeMapping
     policies: tuple[AnalysisPolicy, ...]
     targets: tuple[AnalysisPreparationTarget, ...]
+    source: str = 'youthcenter'
 
     def __post_init__(self) -> None:
-        if (not isinstance(self.scope, ApiScopeMapping)
+        if (self.source not in ('youthcenter', 'gov24')
+            or not isinstance(self.scope, ApiScopeMapping)
             or not isinstance(self.policies, tuple) or not 1 <= len(self.policies) <= 100
             or not isinstance(self.targets, tuple) or not 1 <= len(self.targets) <= 100):
+            raise ValueError('invalid_f12_preparation_plan')
+        if self.source == 'gov24' and self.scope.category_field != 'serviceCategory':
             raise ValueError('invalid_f12_preparation_plan')
         ids = set()
         names = []
@@ -148,6 +152,7 @@ class PreparationSources(Protocol):
 def _build_input(
     plan: AnalysisPreparationPlan, target: AnalysisPreparationTarget,
     sources: dict[str, PreparationSource], material_hash: Callable[[dict[str, Any]], str],
+    project_fields: Callable[[dict[str, Any]], dict[str, Any]],
 ) -> PolicyAnalysisInput:
     policy = next(item for item in plan.policies if item.id == target.policy_id)
     documents = []
@@ -159,13 +164,19 @@ def _build_input(
             or source.accepted_at.utcoffset() is None
             or material_hash(source.fields) != source.material_sha256):
             raise ValueError('f12_preparation_source_invalid')
-        if (source.fields.get(mapping.name_field) not in (policy.name, *policy.aliases)
-            or any(source.fields.get(key) != value for key, value in mapping.scope_guards)):
+        fields = project_fields(source.fields)
+        if plan.source == 'gov24':
+            low, high = fields.get('ageStart'), fields.get('ageEnd')
+            if (type(low) is not int or type(high) is not int
+                or not 0 <= low <= high <= 120 or low > 39 or high < 19):
+                raise ValueError('f12_preparation_scope_changed')
+        if (fields.get(mapping.name_field) not in (policy.name, *policy.aliases)
+            or any(fields.get(key) != value for key, value in mapping.scope_guards)):
             raise ValueError('f12_preparation_scope_changed')
-        categories.update(plan.scope.categories(source.fields))
-        fragments = [f'[{mapping.name_field}]\n{source.fields[mapping.name_field]}']
+        categories.update(plan.scope.categories(fields))
+        fragments = [f'[{mapping.name_field}]\n{fields[mapping.name_field]}']
         for key in mapping.body_fields:
-            value = source.fields.get(key)
+            value = fields.get(key)
             if value is None or value == '':
                 continue
             if type(value) not in (str, int):
@@ -180,14 +191,17 @@ def _build_input(
         text = '\n\n'.join(fragments)
         version = hashlib.sha256((source.material_sha256 + '\0' + text).encode()).hexdigest()
         documents.append(SourceDocument(
-            'youthcenter:' + hashlib.sha256(mapping.external_id.encode()).hexdigest(),
+            plan.source + ':' + hashlib.sha256(mapping.external_id.encode()).hexdigest(),
             target.policy_id,
+            ('https://api.odcloud.kr/api/gov24/v3/serviceDetail?' + urlencode({
+                'cond[서비스ID::EQ]': mapping.external_id, 'returnType': 'JSON',
+            }) if plan.source == 'gov24' else
             'https://www.youthcenter.go.kr/go/ythip/getPlcy?' + urlencode({
                 'plcyNo': mapping.external_id, 'rtnType': 'json',
-            }),
+            })),
             'api-v1:' + version, source.accepted_at, text, True,
         ))
-        bindings.append(AnalysisSource('youthcenter', source.external_id, source.material_sha256))
+        bindings.append(AnalysisSource(plan.source, source.external_id, source.material_sha256))
     if categories != set(policy.categories):
         raise ValueError('f12_preparation_scope_changed')
     return PolicyAnalysisInput(target.policy_id, tuple(documents), plan.policies, tuple(bindings))
@@ -197,6 +211,7 @@ def prepare_analysis_inputs(
     plan: AnalysisPreparationPlan, sources: PreparationSources,
     register: Callable[[PolicyAnalysisInput], dict[str, Any]],
     material_hash: Callable[[dict[str, Any]], str],
+    project_fields: Callable[[dict[str, Any]], dict[str, Any]] = lambda fields: fields,
 ) -> dict[str, int]:
     """Read one consistent source snapshot; failures never approve or publish data."""
     counts = {'targets': len(plan.targets), 'registered': 0, 'replayed': 0, 'failed': 0}
@@ -204,7 +219,7 @@ def prepare_analysis_inputs(
     current = sources.load(ids)
     for target in plan.targets:
         try:
-            result = register(_build_input(plan, target, current, material_hash))
+            result = register(_build_input(plan, target, current, material_hash, project_fields))
             if type(result.get('replayed')) is not bool:
                 raise ValueError('f12_preparation_registration_invalid')
             counts['replayed' if result['replayed'] else 'registered'] += 1

@@ -63,10 +63,13 @@ class PostgresCollectedPolicies:
                 options=_OPTIONS,
                 application_name="benefitfinder-collected-policy-writer",
             ) as connection:
-                connection.execute(
-                    "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
-                    (_LOCK_NAMESPACE + batch.source_name,),
-                )
+                # Invalidation can write F13 rows shared by both sources. Acquire
+                # both source locks in the same order as publication/F13 writers.
+                for source in ("gov24", "youthcenter"):
+                    connection.execute(
+                        "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
+                        (_LOCK_NAMESPACE + source,),
+                    )
 
                 existing = connection.execute(
                     """
@@ -106,7 +109,7 @@ class PostgresCollectedPolicies:
                 connection.execute(
                     """
                     CREATE TEMP TABLE collected_policy_incoming (
-                        source text NOT NULL CHECK (source = 'youthcenter'),
+                        source text NOT NULL CHECK (source IN ('youthcenter', 'gov24')),
                         external_id text NOT NULL
                             CHECK (length(external_id) BETWEEN 1 AND 200
                                    AND btrim(external_id) <> ''),

@@ -35,7 +35,7 @@
 
 2026-11-13, 현재 코드의 구현 기준이다. 배포 완료를 뜻하지 않는다.
 
-[F08 통합 실행](../backend/src/benefitfinder/jobs/DAILY_REFRESH.md)은 정책 목록·기준금리를 독립적으로 시도하고 소스별 성공·실패와 알림 상태를 원자적으로 기록한다. 통합 중복 실행 차단·강제 종료 흔적·단일 Discord 보고와 Linux systemd/macOS launchd의 03:00 KST 설정 생성을 제공한다. `COLLECTION_WRITE_DATABASE_URL` 설정 시 완전한 수집 성공본·변경 이력의 DB 인계와 API 없는 재적재를 제공한다. `F12_WRITE_DATABASE_URL` 설정 시 두 수집이 끝난 뒤 준비된 공식 문서 분석 큐를 소비한다. 실제 운영 등록·API 수집·알림 도착, 보조금24·API 밖 원문 확보와 실제 매핑·검수는 후속이다.
+[F08 통합 실행](../backend/src/benefitfinder/jobs/DAILY_REFRESH.md)은 정책 목록·기준금리를 독립적으로 시도하고 소스별 성공·실패와 알림 상태를 원자적으로 기록한다. 통합 중복 실행 차단·강제 종료 흔적·단일 Discord 보고와 Linux systemd/macOS launchd의 03:00 KST 설정 생성을 제공한다. `COLLECTION_WRITE_DATABASE_URL` 설정 시 완전한 수집 성공본·변경 이력의 DB 인계와 API 없는 재적재를 제공한다. `F12_WRITE_DATABASE_URL` 설정 시 설정한 수집이 끝난 뒤 준비된 공식 문서 분석 큐를 소비한다. [보조금24](../backend/src/benefitfinder/infrastructure/database/GOV24.md)는 확인한 ID의 목록·상세·지원조건 API를 완전한 성공본으로 묶어 같은 DB·F12·재검수 흐름에 연결했다. 실제 운영 등록·API 수집·알림 도착, API 밖 원문 확보와 실제 매핑·검수는 후속이다.
 
 [수집 성공본 DB 인계](../backend/src/benefitfinder/infrastructure/database/COLLECTED_POLICIES.md)는 보존 원본·해시·시각·건수를 검증한 완전한 파일 생성본만 적재한다. DB의 직전 성공본으로 신규·변경·누락을 추적하고, 실패 시 원본과 직전 DB 성공본을 보존한다. 다음 수집 전에 미완료 인계를 재시도하며 미검수 원천을 계산용 정책·게시 조항으로 사용하지 않는다. [0006 원천 연결·재검수](../backend/src/benefitfinder/infrastructure/database/POLICY_SOURCE_RECHECKS.md)는 검수한 원천 ID·해시를 승인 입력에 고정하고 변경·누락 시 해당 게시 정책과 F13을 내린다. 기존 승인 정보와 무효화 이력·최신 원천 상태를 별도 읽기 전용 목록으로 인계한다. 같은 내용 재수집은 승인을 유지하며 재등장은 자동 재승인이 아니다. 새 사람 검수 버전의 게시 전환은 후속이다.
 

@@ -120,7 +120,7 @@ F13은 `DATABASE_URL` 설정 시 [PostgreSQL 게시 조항](backend/src/benefitf
 | DB | PostgreSQL. F13 게시 조항·검수 정책 카탈로그 조회와 계산 연결 구현. 실제 정책 게시·벡터/임베딩 검색은 후속 |
 | AI | 로컬 Ollama `gemma4:e4b` 추출·설명 검증, 기본 문구로 복귀. 운영 모델·예산은 확정 전 |
 | 자동화 | F08 정책·금리 통합 실행·재시도·웹훅과 03:00 KST Linux systemd/macOS launchd 설정 생성. 운영 등록·실제 API/알림 도착은 후속 |
-| 데이터 | 온통청년 수집·ECOS 기준금리 수동 갱신/DB 조회 구현. 보조금24와 운영 통합 자동 갱신은 후속 |
+| 데이터 | 온통청년 수집·ECOS 기준금리 수동 갱신/DB 조회 구현. 보조금24 선택 ID의 API·DB·F12 연결 구현. 실제 매핑·운영 갱신은 후속 |
 | 개발 도구 | uv, pnpm, GitHub Actions CI |
 | 배포 | Vercel/Render 실행 설정 있음. 운영 API·배포 주소의 전체 흐름 검증은 별도 |
 

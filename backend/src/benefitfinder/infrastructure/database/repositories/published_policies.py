@@ -121,8 +121,9 @@ def _publish_release(database_url: str, payload: dict[str, Any], *, approved_sha
                 raise ValueError("catalog_source_migration_required")
         # 0008's shared cash/service kind guard also uses this order for virtual
         # fixtures. Taking it before retirement avoids a policy/source inversion.
-        connection.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s,0))",
-                           ('benefitfinder:collected_policy_generations:youthcenter',))
+        for source in ('gov24', 'youthcenter'):
+            connection.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s,0))",
+                               ('benefitfinder:collected_policy_generations:' + source,))
         connection.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", (benefit['id'],))
         published_at = datetime.now(timezone.utc)
         connection.execute(

@@ -74,7 +74,7 @@ class PolicyAnalysisInput:
             bindings = set()
             for source in self.collection_sources:
                 key = (source.source, source.external_id)
-                if (source.source != "youthcenter" or key in bindings
+                if (source.source not in ("youthcenter", "gov24") or key in bindings
                     or not 1 <= len(source.external_id) <= 200 or not source.external_id.strip()
                     or "\0" in source.external_id
                     or re.fullmatch(r"[0-9a-f]{64}", source.material_sha256) is None):

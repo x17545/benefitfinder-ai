@@ -157,3 +157,7 @@ uv run --locked python -m unittest discover -s backend/integration -v
 ## F14 게시 서비스
 
 `test_published_services_postgres.py`는 전용 UUID `_test` DB에 0001·0002·0005·0006·0008을 적용한다. 서비스/현금 분리·승인 해시·별도 가격 근거·버전 전환/롤백·원천 변경·읽기 전용 역할·실제 HTTP 계약·게시 CLI를 가상 자료로 검증한다. F12의 0007과 독립적이며 실제 정책/단가의 사람 검수는 포함하지 않는다.
+
+## 보조금24 소스 검증
+
+`test_gov24_workflow_postgres.py`는 가상 자료와 UUID 전용 DB에서 0009까지 명시적으로 적용한다. 같은 원천 ID의 소스 분리, F12 안전 투영/재사용/변경 무효화, 두 원천의 동시 변경과 연결 카탈로그·F13 게시 회수·재검수 생성을 검사한다. 실제 API 수집·실제 정책 승인 검증과 구분한다.

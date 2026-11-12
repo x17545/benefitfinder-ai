@@ -49,3 +49,7 @@ psql "$DATABASE_URL" -X --set=ON_ERROR_STOP=1 --single-transaction \
 ## F14 게시 서비스 (0008)
 
 `versions/0008_service_catalog.sql`은 0001·0002·0005·0006 다음에 명시적으로 적용한다. 0007과 독립적이다. 같은 카탈로그에서 서비스와 현금 입력/정책 ID 종류를 구분하고 기존 승인·원천 변경 무효화 흐름을 재사용한다. 기존 현금 자료를 삭제하거나 자동 게시하지 않는다. [단가 근거·권한·검수 절차](../src/benefitfinder/infrastructure/database/SERVICE_CATALOG.md)를 따른다.
+
+## 보조금24 소스 확장 (0009)
+
+`versions/0009_gov24_policy_sources.sql`은 0005·0006·0007·0008 다음에 별도 마이그레이션 트랜잭션으로 적용한다. 기존 수집·카탈로그 연결·F12 테이블에 `gov24`를 허용하며 다른 소스는 계속 거부한다. 승인·원천·게시 이력을 보존하고 수집/게시/F13 쓰기의 잠금 순서를 `gov24` → `youthcenter` → 정책/행으로 통일한다. 직접 SQL 카탈로그 변경도 행 잠금 전에 같은 순서를 따른다. 운영 자동 적용은 하지 않는다. [실행·자료 영향](../src/benefitfinder/infrastructure/database/GOV24.md)을 검토한다.

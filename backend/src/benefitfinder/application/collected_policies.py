@@ -26,7 +26,7 @@ class CollectedPolicyBatch:
     def __post_init__(self) -> None:
         try:
             if (
-                self.source_name != "youthcenter"
+                self.source_name not in ("youthcenter", "gov24")
                 or re.fullmatch(r"[0-9a-f]{32}", self.run_id) is None
                 or self.completed_at.utcoffset() is None
                 or not isinstance(self.records, tuple)

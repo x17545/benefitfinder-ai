@@ -20,7 +20,8 @@ def _unique(pairs: list[tuple[str, object]]) -> dict[str, object]:
 
 def preparation_plan_from_payload(raw: object) -> AnalysisPreparationPlan:
     try:
-        if (not isinstance(raw, dict) or set(raw) != {'format_version', 'scope', 'policies', 'targets'}
+        if (not isinstance(raw, dict)
+            or set(raw) - {'source'} != {'format_version', 'scope', 'policies', 'targets'}
             or type(raw['format_version']) is not int or raw['format_version'] != 1
             or not isinstance(raw['policies'], list) or not isinstance(raw['targets'], list)):
             raise ValueError
@@ -52,7 +53,8 @@ def preparation_plan_from_payload(raw: object) -> AnalysisPreparationPlan:
                 documents.append(ApiDocumentMapping(item['external_id'], item['name_field'],
                     tuple(item['body_fields']), tuple(sorted(item['scope_guards'].items()))))
             targets.append(AnalysisPreparationTarget(row['policy_id'], tuple(documents)))
-        return AnalysisPreparationPlan(scope_mapping, tuple(policies), tuple(targets))
+        return AnalysisPreparationPlan(scope_mapping, tuple(policies), tuple(targets),
+                                       raw.get('source', 'youthcenter'))
     except (ValueError, TypeError, KeyError, AttributeError, RecursionError, OverflowError):
         raise ValueError('invalid_f12_preparation_plan') from None
 

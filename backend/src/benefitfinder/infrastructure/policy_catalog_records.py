@@ -181,7 +181,7 @@ class Payment(Record):
 
 
 class CollectionSource(Record):
-    source: Literal["youthcenter"]
+    source: Literal["youthcenter", "gov24"]
     external_id: str = Field(min_length=1, max_length=200)
     material_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
 
