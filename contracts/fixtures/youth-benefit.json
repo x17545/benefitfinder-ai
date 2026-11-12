@@ -6,6 +6,11 @@
   "provider": "가상 정책기관",
   "categories": ["housing"],
   "application": {"status": "unknown", "starts_on": null, "ends_on": null, "url": null},
+  "application_guide": {
+    "method": {"quote": "[가상 예제] 가상 신청 창구에 온라인으로 신청합니다.", "location": "가상 공고: 신청 방법", "source": {"url": "https://policy.example/youth/sample-housing", "checked_at": "2026-10-26T09:00:00+09:00", "document_version": "fictional-v1"}},
+    "office": {"quote": "[가상 예제] 접수는 가상 주거 접수센터가 담당합니다.", "location": "가상 공고: 접수 기관", "source": {"url": "https://policy.example/youth/sample-housing", "checked_at": "2026-10-26T09:00:00+09:00", "document_version": "fictional-v1"}},
+    "documents": [{"quote": "[가상 예제] 가상 거주 확인서를 제출합니다.", "location": "가상 공고: 제출 서류", "source": {"url": "https://policy.example/youth/sample-housing", "checked_at": "2026-10-26T09:00:00+09:00", "document_version": "fictional-v1"}}]
+  },
   "eligibility_conditions": [
     {
       "id": "age",

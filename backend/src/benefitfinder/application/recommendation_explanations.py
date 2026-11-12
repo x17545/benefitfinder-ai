@@ -33,9 +33,12 @@ class RecommendationExplainer:
         self._generator = generator
         self._timeout_seconds = timeout_seconds
 
-    async def enrich(self, response: dict[str, Any]) -> dict[str, Any]:
+    async def enrich(
+        self, response: dict[str, Any], *, policies: tuple[ExplanationRequest, ...] | None = None,
+    ) -> dict[str, Any]:
         """Search once per policy/version/verdict in this request; never cache across requests."""
         result = deepcopy(response)
+        templates = self._policies if policies is None else {policy.policy_id: policy for policy in policies}
         groups: dict[ExplanationRequest, list[dict[str, Any]]] = {}
         for period in result["results"].values():
             for view in period.values():
@@ -43,7 +46,7 @@ class RecommendationExplainer:
                     for policy in portfolio["policies"]:
                         policy["ai_generated"] = False
                         policy["ai_sources"] = []
-                        template = self._policies.get(policy["policy_id"])
+                        template = templates.get(policy["policy_id"])
                         if (
                             template is None
                             or policy["source"]["document_version"] != template.document_version
@@ -53,7 +56,7 @@ class RecommendationExplainer:
                             )
                             continue
                         # Public response verdicts already preserve needs_review when evidence is absent.
-                        conditions = safe_condition_results(
+                        conditions = template.conditions if policies is not None else safe_condition_results(
                             {item["condition_id"]: item["status"] for item in policy["eligibility"]}
                         )
                         key = replace(template, conditions=conditions, amount_won=None)

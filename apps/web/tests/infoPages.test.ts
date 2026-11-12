@@ -11,7 +11,8 @@ describe('공통 페이지', () => {
       expect(html).toContain(title);
     }
     expect(html).toContain('href="/privacy"');
-    expect(html).toContain('현재는 가상 정책');
+    expect(html).toContain('현재 자료 상태와 갱신 시각');
+    expect(html).not.toContain('현재는 가상 정책'); // 조회 전에는 자료 유형을 추정하지 않는다.
     expect(html).not.toContain('매일 새벽 3시에 새로 확인');
   });
 

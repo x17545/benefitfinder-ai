@@ -22,6 +22,8 @@
 | `health.schema.json` | - | GET /health 생존 확인 응답 |
 | `common.schema.json` | 위 예제에 포함 | 분야 식별자·출처·인용 근거 |
 
+`GET /api/v1/meta`의 선택 필드 `virtual_data: true`는 개발용 가상 정책·금리의 메타데이터를 뜻한다. 이때 금리 상태는 `unknown`이며 실제 자료의 갱신·검증으로 표시하지 않는다. 게시 자료가 비어 갱신 시각을 확인할 수 없으면 성공 응답 대신 공통 503을 반환한다. 잔여 횟수 조회는 차감하지 않는다.
+
 모든 파일은 JSON Schema Draft 2020-12를 사용한다. `$id`의 `benefitfinder.example` 주소는 로컬 참조 식별자이며 실제 서버 주소가 아니다. 검증 시 스키마를 로컬 레지스트리에 등록하므로 원격 문서를 조회하지 않는다.
 
 ## 공통 의미
@@ -35,6 +37,7 @@
 - `source`: 원문 URL, 마지막 확인 시점(`checked_at`), 문서 버전(`document_version`). 시각은 시간대가 있는 ISO 8601 형식이다.
 - `evidence`: 원문의 인용문과 해당 버전의 출처. 인용문은 실제 원문에서 확인해야 하며 AI가 생성한 문장을 넣지 않는다.
 - `application.status`: `open`, `closed`, `upcoming`, `unknown`. 상시 모집은 별도 `always` 값을 두지 않고 `open`+공식 상시 근거로 표현한다. 날짜만으로 확정할 수 없는 모집 상태는 `unknown`이며, 날짜 `null`을 `open`으로 추정하지 않는다.
+- `application_guide`: 현금·서비스 상세의 선택적 신청 안내다. `method`, `office`는 원문 인용(`quote`, `location`, `source`) 또는 `null`, `documents`는 같은 인용의 목록 또는 `null`이다. 객체가 있으면 세 키가 모두 필요하다. 생략/`null`·`documents: null`은 미확인이고 `documents: []`는 사람이 해당 원문을 확인했지만 서류 안내가 없는 경우다. 인용은 정책과 같은 출처 URL·문서 버전·확인일을 사용하고 게시 시 원문 해시·인용 포함 여부와 전체 승인 해시를 검사한다. 인용을 요약해 새 신청 조건을 만들거나 `provider`를 접수 기관으로 추정하지 않는다. 기존 입력에 안내가 없으면 새 필드를 직렬화하지 않아 기존 승인 해시를 유지한다. 가상 예제는 [혜택 상세](fixtures/youth-benefit.json)에 있으며 실제 서류 목록이 아니다.
 - `condition_results`/`eligibility[].status`: `met`(충족), `not_met`(미충족), `needs_review`(추가 확인 필요). `need_check` 표기는 거부된다. 충족·미충족에는 최소 하나의 근거가 필요하다.
 - `virtual_data`: 추천 응답의 선택적 boolean. `true`는 가상 정책·금액 계산이며 화면과 PNG에 실제 지원금이 아님을 표시한다. 이전 응답은 생략 가능하고, 생략·`false`를 실제 정책 검증 완료로 해석하지 않는다. 현재 MVP 추천 API는 항상 `true`다.
 - `ai_generated`: 응답 중 AI 생성 설명이 하나라도 있으면 `true`, 모두 기본 근거 템플릿이면 `false`다. 데이터 준비에서 Agent를 썼는지를 나타내는 플래그가 아니다. `ai_reason`(6장 초안 이름 유지)은 템플릿을 포함한 추천 이유 텍스트이며 이 플래그와 함께 해석한다. 최종 필드명은 회의에서 정리한다. 데이터 Agent의 활용은 이용 안내에 별도로 설명하며 사용자 검색·코드 판정/계산·템플릿 응답은 LLM 없이 동작한다.

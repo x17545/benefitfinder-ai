@@ -2,13 +2,13 @@
 
 작업 전에는 루트 지침과 이 경로의 [추가 에이전트 지침](AGENTS.md)을 함께 읽는다.
 
-Python + FastAPI와 PostgreSQL을 사용하는 백엔드 구조다. 생존 확인·공통 오류, 공식 지역 선택과 가상 정책 추천·상황 변화·상세 API를 제공한다. F14 서비스는 같은 추천·상세 API에서 제공하며 현금 합계와 분리한다. F13 설명은 환경 변수 `DATABASE_URL`로 PostgreSQL 게시 조항을 조회하거나 미설정 시 가상 메모리 예제를 사용한다. Python 의존성은 루트 uv 프로젝트에서 관리한다. 실제 정책 후보·자격·조합 계산의 DB 연결은 후속이다.
+Python + FastAPI와 PostgreSQL을 사용하는 백엔드 구조다. 생존 확인·공통 오류, 공식 지역 선택과 가상 정책 추천·상황 변화·상세 API를 제공한다. F14 서비스는 같은 추천·상세 API에서 제공하며 현금 합계와 분리한다. F13 설명은 환경 변수 `DATABASE_URL`로 PostgreSQL 게시 조항을 조회하거나 미설정 시 가상 메모리 예제를 사용한다. Python 의존성은 루트 uv 프로젝트에서 관리한다. `POLICY_DATABASE_URL` 설정 시 [게시 정책 카탈로그](src/benefitfinder/infrastructure/database/POLICY_CATALOG.md)에서 후보·자격·지급 일정·중복 제한을 읽어 추천·상세·상황 변화를 계산한다. 실제 자료의 검수·운영 게시는 별도다.
 
-`src/benefitfinder/`의 모듈을 한 애플리케이션으로 통합한다. AI·데이터 수집은 담당 디렉터리를 가지며 각각 별도 서버로 배포할 필요는 없다.
+`src/benefitfinder/`의 모듈을 한 애플리케이션으로 통합한다. AI·데이터 수집은 담당 디렉터리를 가지며 각각 별도 서버로 배포할 필요는 없다. F14의 [서비스·단가 카탈로그](src/benefitfinder/infrastructure/database/SERVICE_CATALOG.md)도 `POLICY_DATABASE_URL`의 같은 게시 이력을 사용하며, 사람의 원문·단가 검수와 전체 입력 해시 승인 후 추천·상세에서 조회한다. 원천 변경·누락은 기존 승인을 풀고 게시를 내린다.
 
 F13의 저장 모델·게시/버전 조회·시간 제한·읽기 역할은 [PostgreSQL 어댑터](src/benefitfinder/infrastructure/database/README.md), 적용 절차는 [마이그레이션](migrations/README.md), 가상 취업·주거 사례의 실제 DB→E4B→화면 재현은 [PostgreSQL 통합 검증](integration/README.md)을 따른다. 원문·결과·DB 파일·덤프는 로컬 Git 제외 경로에만 둔다.
 
-기능은 [기획 명세 v2](../docs/product/REQUIREMENTS.md)의 F01~F11과 사용자가 요청한 F13 연결을 따른다. 가상 정책의 자격·조합·현재가치를 계산해 JSON으로 반환하며, S4·S5는 같은 가상 정책으로 동작한다. [API 재현 방법](src/benefitfinder/api/README.md#s4-상황-변화와-s5-정책-상세)을 참고한다. 실제 정책과 SSE 연결은 후속 작업이다. 매일 갱신·검수 해제는 같은 패키지의 jobs/ingestion 영역이다.
+기능은 [기획 명세 v3](../docs/product/REQUIREMENTS.md)의 F01~F14를 따른다. 게시 정책 계산 모드와 가상 예제를 구분하며 JSON 또는 POST SSE로 반환한다. S4·S5는 추천과 같은 정책을 사용한다. SSE의 실제 계산·서비스·설명 진행, 연결 취소와 추천·상황 변화 전체의 최대 60초를 지원한다. [프로토콜·API 재현 방법](src/benefitfinder/api/README.md)을 참고한다. 실제 정책 검수·게시와 운영 연결은 후속이다. 매일 갱신·검수 해제는 같은 패키지의 jobs/ingestion 영역이다.
 
 ```text
 backend/
@@ -35,7 +35,7 @@ backend/
   tests/test_api.py               부트스트랩 TestClient 검증
 ```
 
-`bootstrap.py`·`main.py`에서 서버와 원천 어댑터를 조립한다. `GET /health`·`GET /api/v1/options`·`POST /api/v1/recommendations`가 동작한다. 추천은 가상 정책 계산이며 실제 정책 계산의 DB 연동 완료를 뜻하지 않는다. F13은 기본 문구로 동작하며 선택한 로컬 E4B 모델로 설명을 생성할 수 있다. [실행과 실패 시 동작](src/benefitfinder/api/README.md#f13-설명-실행)을 따른다. F13 게시 조항의 PostgreSQL 조회는 별도 통합 검사로 확인하며 실제 정책 자료·운영 게시·스케줄 연결은 후속이다.
+`bootstrap.py`·`main.py`에서 서버와 원천 어댑터를 조립한다. `GET /health`·`GET /api/v1/options`·`POST /api/v1/recommendations`가 동작한다. 기본 추천은 가상 정책 계산이며 `POLICY_DATABASE_URL` 설정 시 검수·게시된 현금 정책을 계산한다. 실제 정책 사실 검증 완료와는 구분한다. F13은 기본 문구로 동작하며 선택한 로컬 E4B 모델로 설명을 생성할 수 있다. [실행과 실패 시 동작](src/benefitfinder/api/README.md#f13-설명-실행)을 따른다. F13 게시 조항의 PostgreSQL 조회는 별도 통합 검사로 확인하며 실제 정책 자료·운영 게시·스케줄 연결은 후속이다.
 
 ## 실제 지역 선택 API
 
@@ -73,4 +73,4 @@ backend/
 
 2026-10-29 역할 기준: 양승현은 FastAPI·검색·자격 판정·조합 계산·통합 테스트·배포, 윤정찬은 원천 수집·원본/출처/버전 관리·PostgreSQL 적재, 탁서윤은 ingestion 정제·ai 원문 분석/중복 수혜 규칙 추출·jobs 자동화를 맡는다. 저장 모델·마이그레이션은 조회와 적재의 영향을 승현·정찬이 함께 검토한다. 김하정은 React 화면에서 API·SSE를 연결하고, 이현서는 요구사항·사용자 흐름·화면 설계를 맡는다. 상세 인계는 [기능 명세 9장](../docs/product/REQUIREMENTS.md#9-팀원별-담당-기능-및-협업-기준)을 따른다.
 
-제품의 핵심은 중복 수급 제한을 반영한 지원금 조합의 총액순 비교다. 데이터 Agent로 원문 규칙 후보를 추출하고 검증·사람 검수 후 게시한다. 사용자 검색·계산·템플릿 설명은 검수 데이터를 쓰는 일반 코드로 수행한다. 현재 [jobs](src/benefitfinder/jobs/README.md#로컬-모델로-후보-만들기)에서 공고 한 건의 중복 제한 후보를 로컬 모델로 생성하고 기존 검수 파일로 넘길 수 있다. 운영 모델과 검색 방식은 미확정이며 PostgreSQL 검수 저장·운영 게시·계산 연결은 아직 없다. 데이터 처리와 모듈 경계는 [정책 데이터 분석·정제](../docs/architecture/POLICY_DATA_PIPELINE.md)를 따른다.
+제품의 핵심은 중복 수급 제한을 반영한 지원금 조합의 총액순 비교다. 데이터 Agent로 원문 규칙 후보를 추출하고 검증·사람 검수 후 게시한다. 사용자 검색·계산·템플릿 설명은 검수 데이터를 쓰는 일반 코드로 수행한다. 현재 [jobs](src/benefitfinder/jobs/README.md#로컬-모델로-후보-만들기)에서 공고 한 건의 중복 제한 후보를 로컬 모델로 생성하고 기존 검수 파일로 넘길 수 있다. 운영 모델과 검색 방식은 미확정이며 검수 해시에 연결된 카탈로그 게시·조회·계산 경로를 추가했으며 F12의 자동 변환·실제 정책 검수·운영 게시는 후속이다. 데이터 처리와 모듈 경계는 [정책 데이터 분석·정제](../docs/architecture/POLICY_DATA_PIPELINE.md)를 따른다.

@@ -1,4 +1,15 @@
-# F13 실제 PostgreSQL 검증
+# 실제 PostgreSQL 검증
+
+`test_policy_preparation_postgres.py`는 저장 API 본문→F12 입력의 정확한 텍스트/해시, 같은 생성본의 재사용, 변경·누락·재등장, 분류 불일치의 독립 처리, 원천 갱신 경쟁·동시 등록·최소 작업 권한, CLI와 일일 준비→분석 순서를 가상 자료로 확인한다. 실제 정책 자료·사람 검수·운영 정시 실행은 포함하지 않는다.
+
+`test_policy_source_rechecks_postgres.py`는 별도 UUID `_test` DB에 0001·0002·0005·0006을 적용해 명시적 원천 연결·승인 시각·변경/누락 시 게시 정책과 F13 제외·재등장 시 자동 승인 차단·새 검수 버전·롤백·잠금·최소 수집 권한·열 단위 재검수 읽기 권한과 실제 CLI를 가상 자료로 검증한다. 기존 실제 게시 정책의 연결 누락 격리는 별도 구버전 테스트 DB에서 확인한다. 운영 DB·실제 사람 검수는 포함하지 않는다.
+
+0005 수집 저장 검사는 별도 임시 `_test` DB에서 완전한 생성본의 적재·변경 이력·재적재·누락·재등장·역전 방지·롤백과 권한 경계를 확인한다. 원천 응답은 가상 자료이며 실제 정책 사실 검증과 구분한다. [설정·실패 복구](../src/benefitfinder/infrastructure/database/COLLECTED_POLICIES.md)를 따른다.
+
+0004 ECOS 금리 검사는 별도 임시 `_test` DB를 만들고 제거한다. 가상 금리의 저장·재시작·갱신 역전 방지·실패 시 이전값 보존·제약·읽기 전용 권한·메타 API 연결을 확인한다. 실금리 수집과 운영 스케줄 검증은 [별도 범위](../src/benefitfinder/infrastructure/database/ECOS_RATES.md)다.
+
+
+0001 F13 조항과 0002 게시 정책 카탈로그를 같은 전용 테스트 DB에서 검증한다. 카탈로그 검사는 가상 승인 자료의 게시·추천·상세 연결, 버전 전환·원자적 롤백, 승인 해시 불일치, 읽기 권한, 잠금 장애를 추가로 확인한다. 실제 정책 게시를 수행하지 않는다. [카탈로그 실행 안내](../src/benefitfinder/infrastructure/database/POLICY_CATALOG.md)를 참고한다.
 
 이 디렉터리는 DB 없이 실행하는 `scripts/check.py` 기본 검사와 별개다. 실제 PostgreSQL 17에서 실행하며 SQLite나 메모리 테스트로 대체하지 않는다. CI는 PostgreSQL 17 서비스에서 같은 검사를 별도 필수 단계로 실행한다.
 
@@ -134,3 +145,23 @@ pnpm dev:web
 ```sh
 uv run --locked python -m unittest discover -s backend/integration -v
 ```
+
+## 공유 분석 이용량
+
+`test_analysis_usage_postgres.py`는 같은 전용 테스트 연결에서 별도의 UUID `_test` DB를 생성하고 0001·0003만 적용한 뒤 삭제한다. 125개 경합 요청의 정확한 100회 승인, 서로 다른 API 인스턴스의 추천·상황 변화 공유, 재시작 유지·이전 날짜 분리·비차감 조회·스키마 제약·접속/잠금/권한 실패를 검증한다. 집계에만 SELECT·INSERT·UPDATE를 가진 역할의 성공과 정책 문서 읽기 거부도 확인한다. 실제 사용자 조건·정책 자료는 넣지 않는다. 전체 discover 명령과 CI에서 함께 실행한다. 운영 적용은 [별도 설정 안내](../src/benefitfinder/infrastructure/database/ANALYSIS_USAGE.md)를 따른다.
+
+## F12 작업 큐 (0007)
+
+`test_policy_analysis_queue_postgres.py`는 별도 UUID 테스트 DB에서 등록 멱등성·동시 작업 확보·임대 만료·최대 재시도·원본 변경/누락/재등장·손상 입력·원천 읽기만 허용된 작업 역할을 검증한다. 0001·0002·0005·0006·0007을 적용하며 가상 자료만 사용한다. 전체 연동 검사와 마찬가지로 `F13_TEST_DATABASE_URL`은 별도 `_test` DB를 지정해야 한다. 실제 모델은 별도 GPU 실행으로 검증하고 실제 사람 검수와 구분한다.
+
+## F14 게시 서비스
+
+`test_published_services_postgres.py`는 전용 UUID `_test` DB에 0001·0002·0005·0006·0008을 적용한다. 서비스/현금 분리·승인 해시·별도 가격 근거·버전 전환/롤백·원천 변경·읽기 전용 역할·실제 HTTP 계약·게시 CLI를 가상 자료로 검증한다. F12의 0007과 독립적이며 실제 정책/단가의 사람 검수는 포함하지 않는다.
+
+## 보조금24 소스 검증
+
+`test_gov24_workflow_postgres.py`는 가상 자료와 UUID 전용 DB에서 0009까지 명시적으로 적용한다. 같은 원천 ID의 소스 분리, F12 안전 투영/재사용/변경 무효화, 두 원천의 동시 변경과 연결 카탈로그·F13 게시 회수·재검수 생성을 검사한다. 실제 API 수집·실제 정책 승인 검증과 구분한다.
+
+## F07 신청 안내 검증
+
+`test_application_guide_postgres.py`는 별도 가상 `_test` DB에서 0001·0002·0005~0009를 적용해 현금·서비스의 신청 방법·접수 기관·서류 인용을 게시→JSONB 조회→실제 HTTP 상세로 확인한다. 게시된 안내의 직접 수정은 기존 불변성 트리거가 거부하며, 안내 추가가 현금 계산·서비스 환산을 바꾸지 않는지 검사한다. 실제 정책 검수나 운영 게시 검증이 아니다.

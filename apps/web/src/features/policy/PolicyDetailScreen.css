@@ -226,3 +226,8 @@
     max-width: 360px;
   }
 }
+
+.s5-guide-quote {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
