@@ -268,6 +268,40 @@ class PublishedServicesPostgresTest(unittest.TestCase):
         self.assertEqual(self.repository.list_published(), ())
         self.assertEqual(list_policy_rechecks(self.url)['items'][0]['reason'], 'source_missing')
 
+    def test_publisher_role_needs_no_source_table_or_owner_permissions(self) -> None:
+        collected = PostgresCollectedPolicies(self.url)
+        collected.save(batch({'service-source':'fictional original'}, AT))
+        data = service_release_data()
+        data['benefit']['virtual_data'] = False
+        data['collection_sources'] = [{'source':'youthcenter','external_id':'service-source',
+            'material_sha256':hashlib.sha256(b'fictional original').hexdigest()}]
+        item = ServiceCatalogRecord.model_validate(data)
+        role = 'bf_service_publisher_'+uuid4().hex
+        with psycopg.connect(self.url) as connection:
+            connection.execute(sql.SQL("CREATE ROLE {} LOGIN PASSWORD 'fictional-test-only'").format(sql.Identifier(role)))
+            for statement in (
+                'GRANT USAGE ON SCHEMA public TO {}',
+                'GRANT SELECT,INSERT ON public.policy_catalog_releases TO {}',
+                'GRANT UPDATE (publication_status) ON public.policy_catalog_releases TO {}',
+                'GRANT SELECT (version) ON public.benefitfinder_schema_migrations TO {}',
+            ):
+                connection.execute(sql.SQL(statement).format(sql.Identifier(role)))
+        publisher_url = make_conninfo(self.url,user=role,password='fictional-test-only')
+        try:
+            for value in (item, ServiceCatalogRecord.model_validate(versioned(data,'fictional-v2'))):
+                publish_service(publisher_url,value,source_text=service_source_text(),
+                    price_source_text=price_source_text(),approved_sha256=service_record_hash(value),
+                    reviewer='fictional-human-reviewer',reviewed_at=datetime.now(timezone.utc))
+            self.assertEqual(len(self.repository.list_published()),1)
+            with self.assertRaises(psycopg.errors.InsufficientPrivilege), psycopg.connect(publisher_url) as connection:
+                connection.execute('SELECT material_sha256 FROM public.collected_policies')
+            collected.save(batch({'service-source':'fictional change'},AT+timedelta(seconds=1)))
+            self.assertEqual(self.repository.list_published(),())
+        finally:
+            with psycopg.connect(self.url) as connection:
+                connection.execute(sql.SQL('DROP OWNED BY {}').format(sql.Identifier(role)))
+                connection.execute(sql.SQL('DROP ROLE {}').format(sql.Identifier(role)))
+
     def test_service_cli_validates_both_sources_and_requires_separate_approval(self) -> None:
         with TemporaryDirectory() as temporary:
             root = Path(temporary)

@@ -33,7 +33,16 @@ GRANT USAGE ON SCHEMA public TO benefitfinder_reader;
 GRANT SELECT ON public.policy_catalog_releases TO benefitfinder_reader;
 ```
 
-게시자는 기존 `POLICY_PUBLISH_DATABASE_URL`과 게시 권한을 사용한다. [현금 게시 권한](POLICY_CATALOG.md)·[원천 연결](POLICY_SOURCE_RECHECKS.md)을 따른다. 서비스·현금 모두 원천 잠금 → 정책 잠금 → 이전 버전 퇴역/새 버전 삽입 순서를 지킨다. 실패하면 이전 게시 상태까지 롤백한다. 원천 변경·누락은 같은 트랜잭션에서 서비스를 내리고 재검수 이력을 남긴다. 내용이 같은 재수집은 승인을 유지하고 재등장은 자동 승인이 아니다.
+게시자는 기존 `POLICY_PUBLISH_DATABASE_URL`과 게시 권한을 사용한다. [현금 게시](POLICY_CATALOG.md)·[원천 연결](POLICY_SOURCE_RECHECKS.md)을 따른다. 별도 비소유자 게시 역할에 필요한 권한은 다음과 같다. 수집 테이블·검수 큐·F13 수정 권한이나 소유자 권한은 부여하지 않는다. 원천 검증·연결은 0006의 제한된 소유자 트리거가 수행한다.
+
+```sql
+GRANT USAGE ON SCHEMA public TO benefitfinder_publisher;
+GRANT SELECT, INSERT ON public.policy_catalog_releases TO benefitfinder_publisher;
+GRANT UPDATE (publication_status) ON public.policy_catalog_releases TO benefitfinder_publisher;
+GRANT SELECT (version) ON public.benefitfinder_schema_migrations TO benefitfinder_publisher;
+```
+
+서비스·현금 모두 원천 잠금 → 정책 잠금 → 이전 버전 퇴역/새 버전 삽입 순서를 지킨다. 실패하면 이전 게시 상태까지 롤백한다. 원천 변경·누락은 같은 트랜잭션에서 서비스를 내리고 재검수 이력을 남긴다. 내용이 같은 재수집은 승인을 유지하고 재등장은 자동 승인이 아니다.
 
 ## 검증과 명시적 게시
 
