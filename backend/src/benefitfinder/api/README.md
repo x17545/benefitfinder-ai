@@ -18,13 +18,14 @@ Pydantic 모델을 DB 모델이나 순수 domain 모델로 그대로 사용하�
 
 PostgreSQL 게시 조항은 [명시적 마이그레이션](../../../migrations/README.md) 후 SELECT 전용 역할의 `DATABASE_URL`을 서버에 전달한다. DB를 설정한 뒤 장애·빈 조회를 가상 메모리 근거로 대체하지 않는다. [DB 저장 계약](../infrastructure/database/README.md)과 [DB→E4B→화면 통합 검증](../../../integration/README.md)을 따른다.
 
-기본 실행은 모델 없이 `ai_generated: false`인 기본 문구를 제공한다. 로컬 Ollama에 `gemma4:e4b`가 설치돼 있으면 아래처럼 모델을 준비하고 API를 실행한다. 빈 요청으로 모델을 준비하는 방법은 [Ollama 공식 안내](https://docs.ollama.com/faq#how-can-i-preload-a-model-into-ollama-to-get-faster-response-times)를 따른다. `.env` 파일은 자동으로 읽지 않으며 환경 변수는 서버 프로세스에 전달한다.
+기본 실행은 모델 없이 `ai_generated: false`인 기본 문구를 제공한다. 개발용 모델은 [로컬 llama.cpp 설정](../../../../docs/development/LOCAL_LLM.md)에 따라 이 PC의 GPU에서 실행한다. 운영 외부 API는 같은 호출 형식에 HTTPS 주소·모델·키를 명시한다. `.env` 파일은 자동으로 읽지 않으며 환경 변수는 서버 프로세스에 전달한다.
 
 ```bash
-curl --fail --silent --show-error http://127.0.0.1:11434/api/generate \
-  -H 'Content-Type: application/json' \
-  -d '{"model":"gemma4:e4b","keep_alive":"5m","stream":false}'
-F13_OLLAMA_MODEL=gemma4:e4b uv run --locked uvicorn benefitfinder.main:app --host 127.0.0.1 --port 8000
+export LLM_PROVIDER=llama_cpp
+export LLM_BASE_URL=http://127.0.0.1:18080/v1
+export LLM_MODEL=gemma4-e4b
+export LLM_API_KEY_FILE=data/local/llama-cpp/api-key
+uv run --locked uvicorn benefitfinder.main:app --host 127.0.0.1 --port 8000
 ```
 
 다른 터미널에서 가상 계약 요청을 보낸다. 아래 경로는 Git 제외 경로이며 요청·응답 파일을 커밋하지 않는다.
