@@ -8,7 +8,7 @@ Python + FastAPI와 PostgreSQL을 사용하는 백엔드 구조다. 생존 확�
 
 F13의 저장 모델·게시/버전 조회·시간 제한·읽기 역할은 [PostgreSQL 어댑터](src/benefitfinder/infrastructure/database/README.md), 적용 절차는 [마이그레이션](migrations/README.md), 가상 취업·주거 사례의 실제 DB→E4B→화면 재현은 [PostgreSQL 통합 검증](integration/README.md)을 따른다. 원문·결과·DB 파일·덤프는 로컬 Git 제외 경로에만 둔다.
 
-기능은 [기획 명세 v2](../docs/product/REQUIREMENTS.md)의 F01~F11과 사용자가 요청한 F13 연결을 따른다. 가상 정책의 자격·조합·현재가치를 계산해 JSON으로 반환하며, S4·S5는 같은 가상 정책으로 동작한다. [API 재현 방법](src/benefitfinder/api/README.md#s4-상황-변화와-s5-정책-상세)을 참고한다. 실제 정책과 SSE 연결은 후속 작업이다. 매일 갱신·검수 해제는 같은 패키지의 jobs/ingestion 영역이다.
+기능은 [기획 명세 v3](../docs/product/REQUIREMENTS.md)의 F01~F14를 따른다. 가상 정책의 자격·조합·현재가치를 계산해 JSON 또는 POST SSE로 반환하며, S4·S5는 같은 가상 정책으로 동작한다. SSE의 실제 계산·서비스·설명 진행, 연결 취소와 추천·상황 변화 전체의 최대 60초를 지원한다. [프로토콜·API 재현 방법](src/benefitfinder/api/README.md)을 참고한다. 실제 정책 계산 DB와 공유 하루 상한은 후속 작업이다. 매일 갱신·검수 해제는 같은 패키지의 jobs/ingestion 영역이다.
 
 ```text
 backend/

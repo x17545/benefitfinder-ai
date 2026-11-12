@@ -1,6 +1,6 @@
 # FastAPI HTTP API
 
-`GET /health`, 공통 오류 처리와 가상 정책을 사용하는 추천·상황 변화·상세 API를 구현했다. 추천 응답은 3기간 × 현재가치 on/off 계산과 F13 설명을 담은 JSON이다. F13 조항은 `DATABASE_URL` 설정 시 PostgreSQL에서 조회한다. 실제 정책 계산 DB·SSE는 후속이다. 전체 [구현 상태](../../../../docs/README.md)를 따른다.
+`GET /health`, 공통 오류 처리와 가상 정책을 사용하는 추천·상황 변화·상세 API를 구현했다. 추천은 3기간 × 현재가치 on/off 계산과 F13 설명을 JSON 또는 POST SSE로 반환한다. F13 조항은 `DATABASE_URL` 설정 시 PostgreSQL에서 조회한다. 실제 정책 계산 DB와 공유 하루 상한은 후속이다. 전체 [구현 상태](../../../../docs/README.md)를 따른다.
 
 | 경로 | 책임 |
 |---|---|
@@ -12,7 +12,19 @@
 
 Pydantic 모델을 DB 모델이나 순수 domain 모델로 그대로 사용하지 않는다. 요청·응답을 변환하고 FastAPI의 기본 검증 오류도 [공통 계약](../../../../contracts/README.md)에 맞춘다. 생존 확인·공통 오류의 실제 HTTP·OpenAPI 계약은 테스트하며, 정책 API 추가 시 같은 검증을 확장한다.
 
-정책 분석 API 구현 시 프로필을 POST 본문으로 받아 SSE `progress` 후 `result` 또는 `error` 한 번으로 종료한다. 스트림 시작 전 오류는 HTTP 상태로, 시작 후 오류는 공통 계약을 담은 `error` 이벤트로 전달한다. 요청 ID·취소·60초 타임아웃을 처리하고 프로필을 URL·로그에 남기지 않는다. 정책 상세 GET에는 공개 정보만 반환하며 개인별 진단은 현재 분석 응답을 사용한다.
+`POST /api/v1/recommendations`는 `Accept: text/event-stream`을 받으면 SSE로 응답하고, 생략하거나 `q=0`이면 기존 JSON을 반환한다. 프로필은 POST 본문에만 넣는다. 조건·조합 계산(`analyze_recommendations`), 서비스 조회(`search_services`), 근거 설명(`explain_with_sources`)의 실제 실행 전후에 `running`·`done`을 보낸다. 현재 계산 함수 안의 검색·판정을 별도 단계로 꾸며 보내지 않는다. 진행 이벤트는 고정 문구만 담고 프로필·금액·정책 원문을 포함하지 않는다.
+
+검증·분야 오류는 스트림 시작 전 공통 HTTP JSON으로 반환한다. 시작 후 오류는 현재 단계의 `failed`와 공통 오류의 `error`로 끝나고, 성공은 `result` 한 번으로 끝난다. 오류 뒤 결과를 보내지 않는다. 10초 동안 새 이벤트가 없으면 주석 heartbeat를 보내며 캐시·프록시 버퍼링을 끈다. 브라우저 연결이 끊어지면 분석 코루틴을 취소한다.
+
+추천 JSON/SSE와 상황 변화 JSON 모두 계산·서비스·설명을 합쳐 최대 60초를 적용한다. 초과 시 JSON은 HTTP 503, 스트림은 `error`의 `calculation_limit_exceeded`로 끝난다. 동기 계산은 별도 스레드에서 실행하므로 이벤트 루프를 막지 않는다. Python 스레드 자체는 강제 종료할 수 없어 이미 실행 중인 동기 DB·계산 호출은 자체 제한까지 마칠 수 있지만 늦게 도착한 결과는 전송하지 않는다. DB·정확 탐색의 자체 자원 제한은 별도로 유지해야 한다. 요청 ID·취소·시간 초과 검사는 `backend/tests/test_analysis_stream.py`에서 실제 ASGI 메시지로 검증한다.
+
+정책 상세 GET에는 공개 정보만 반환하며 개인별 진단은 현재 분석 응답을 사용한다.
+
+```bash
+curl --no-buffer http://127.0.0.1:8000/api/v1/recommendations \
+  -H 'Content-Type: application/json' -H 'Accept: text/event-stream' \
+  --data-binary @contracts/fixtures/recommendation-request.json
+```
 
 ## F13 설명 실행
 

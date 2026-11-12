@@ -8,6 +8,7 @@ directly; they receive already-assembled objects here.
 from __future__ import annotations
 
 import uuid
+import math
 from functools import partial
 from typing import Any
 
@@ -72,6 +73,7 @@ def create_app(
     explanation_timeout_seconds: float = 5,
     explanation_database_url: str | None = None,
     service_catalog: ServiceCatalog | None = None,
+    analysis_timeout_seconds: float = 60,
 ) -> FastAPI:
     """Assemble and return a new FastAPI application.
 
@@ -80,6 +82,13 @@ def create_app(
     """
     if explanation_model is not None and explanation_generator is not None:
         raise ValueError("ambiguous_explanation_generator")
+    if (
+        isinstance(analysis_timeout_seconds, bool)
+        or not isinstance(analysis_timeout_seconds, (float, int))
+        or not math.isfinite(analysis_timeout_seconds)
+        or not 0 < analysis_timeout_seconds <= 60
+    ):
+        raise ValueError("invalid_analysis_timeout")
     if explanation_repository is not None and explanation_database_url is not None:
         raise ValueError("ambiguous_explanation_repository")
     if explanation_database_url is not None:
@@ -116,6 +125,11 @@ def create_app(
         )
         if exc.status_code == 400 and exc.detail == "unsupported_domain":
             code, message = "unsupported_domain", "아직 지원하지 않는 분야입니다."
+        if exc.status_code == 503 and exc.detail == "calculation_limit_exceeded":
+            code, message = (
+                "calculation_limit_exceeded",
+                "분석 시간을 초과했습니다. 다시 시도해 주세요.",
+            )
         headers = {
             name: value
             for name, value in (exc.headers or {}).items()
@@ -168,6 +182,7 @@ def create_app(
     )
 
     app.state.region_catalog = region_catalog if region_catalog is not None else OfficialRegionCatalog()
+    app.state.analysis_timeout_seconds = analysis_timeout_seconds
 
     app.include_router(health_router)
     app.include_router(options_router)
