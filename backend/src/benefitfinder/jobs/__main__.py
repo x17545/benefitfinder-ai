@@ -49,6 +49,7 @@ from benefitfinder.infrastructure.f12_evaluation_files import (
     evaluate_manifest,
     write_evaluation_report,
 )
+from benefitfinder.infrastructure.f12_catalog_files import prepare_f12_release, write_f12_catalog
 from benefitfinder.infrastructure.ollama_chat import OllamaChat
 from benefitfinder.infrastructure.compatible_llm import (
     CompatibleChat,
@@ -189,6 +190,24 @@ def f12_analysis_command(args: argparse.Namespace) -> int:
         return 1 if isinstance(result, dict) and result.get('failed', 0) else 0
     except Exception:
         print('F12 처리 실패: 입력·DB·LLM 설정과 로컬 실행 기록을 확인하세요.', file=sys.stderr)
+        return 2
+
+
+def f12_catalog_command(args: argparse.Namespace) -> int:
+    """Prepare a review-bound release without creating approval or touching the DB."""
+    try:
+        record = prepare_f12_release(
+            pair_dir=args.pair_dir, decisions_path=args.decisions, approved_path=args.approved,
+            record_path=args.input, plan_path=args.plan, source_text=args.source.read_text(encoding='utf-8'),
+            price_source_text=args.price_source.read_text(encoding='utf-8') if args.price_source else None,
+        )
+        write_f12_catalog(args.output, record)
+        digest = service_record_hash(record) if isinstance(record, ServiceCatalogRecord) else record_hash(record)
+        print(json.dumps({'record_sha256': digest, 'policy_id': record.benefit.id,
+                          'requires_publication_approval': True}, ensure_ascii=False))
+        return 0
+    except Exception:
+        print('F12 게시 입력 준비 실패: 원본 후보·최신 검수·내보내기·실행 규칙과 새 출력 경로를 확인하세요.', file=sys.stderr)
         return 2
 
 
@@ -883,6 +902,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     chunked = commands.add_parser("extract-chunked-facts", help="앞뒤 문맥을 보존한 로컬 E4B 추출")
     chunked.add_argument("--input", type=Path, required=True)
     chunked.add_argument("--output-dir", type=Path, required=True)
+    f12_catalog = commands.add_parser('catalog-from-f12', help='사람 검수 후보와 명시적 실행 규칙을 게시 입력으로 연결')
+    for flag in ('pair-dir', 'decisions', 'approved', 'input', 'plan', 'source', 'output'):
+        f12_catalog.add_argument('--' + flag, type=Path, required=True)
+    f12_catalog.add_argument('--price-source', type=Path)
     catalog = commands.add_parser("policy-catalog", help="검수된 정책 카탈로그 검증·명시적 게시")
     catalog_actions = catalog.add_subparsers(dest="catalog_action", required=True)
     for action in ("validate", "publish"):
@@ -911,6 +934,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     explain.add_argument("--category", choices=("employment", "housing"), default="employment")
     explain.add_argument("--model", help="설정한 제공자 모델. 제공자 미설정 시 명시적 Ollama 호환")
     args = parser.parse_args(argv)
+    if args.command == 'catalog-from-f12':
+        return f12_catalog_command(args)
     if args.command == 'refresh-gov24':
         return refresh_gov24_command(args.data_dir, args.plan)
     if args.command == 'ingest-gov24':

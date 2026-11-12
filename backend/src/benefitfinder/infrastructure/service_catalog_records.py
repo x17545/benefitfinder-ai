@@ -24,9 +24,12 @@ from benefitfinder.infrastructure.policy_catalog_records import (
     Condition,
     Conflict,
     Evidence,
+    ExplanationClause,
     ExecutableCondition,
+    F12ReviewProvenance,
     Record,
     Source,
+    explanation_citations,
 )
 
 
@@ -95,11 +98,19 @@ class ServiceCatalogRecord(Record):
     service_evidence: list[Evidence] = Field(min_length=1)
     price: ServiceUnitPrice | None
     source_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    explanation_clauses: list[ExplanationClause] | None = Field(
+        default=None, min_length=1, max_length=200, exclude_if=lambda value: value is None
+    )
+    f12_review: F12ReviewProvenance | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     collection_sources: list[CollectionSource] = Field(default_factory=list, max_length=20)
 
     @model_validator(mode="after")
     def validate_record(self) -> ServiceCatalogRecord:
         benefit = self.benefit
+        if len({c.policy_id for c in benefit.conflicts}) != len(benefit.conflicts):
+            raise ValueError("duplicate_conflict")
         origin_keys = [(item.source, item.external_id) for item in self.collection_sources]
         if len(origin_keys) != len(set(origin_keys)):
             raise ValueError("duplicate_collection_source")
@@ -116,6 +127,7 @@ class ServiceCatalogRecord(Record):
             raise ValueError("condition_rule_mismatch")
 
         evidence = list(self.service_evidence)
+        evidence += explanation_citations(self.explanation_clauses)
         evidence += [
             item for condition in benefit.eligibility_conditions for item in condition.evidence
         ]
@@ -171,6 +183,7 @@ def validate_service_sources(
     if hashlib.sha256(source_text.encode("utf-8")).hexdigest() != record.source_sha256:
         raise ValueError("source_hash_mismatch")
     evidence = list(record.service_evidence)
+    evidence += explanation_citations(record.explanation_clauses)
     evidence += [
         item
         for condition in record.benefit.eligibility_conditions

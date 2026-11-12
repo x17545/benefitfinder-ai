@@ -110,9 +110,18 @@ def _publish_release(database_url: str, payload: dict[str, Any], *, approved_sha
     checked_at = datetime.fromisoformat(benefit['source']['checked_at'].replace("Z", "+00:00"))
     if reviewed_at < checked_at:
         raise ValueError("approval_predates_source_check")
+    if payload.get('f12_review') is not None and reviewed_at < datetime.fromisoformat(
+        payload['f12_review']['latest_reviewed_at'].replace('Z', '+00:00')
+    ):
+        raise ValueError('approval_predates_f12_review')
     with psycopg.connect(database_url, connect_timeout=2) as connection:
         connection.execute("SET LOCAL statement_timeout = '5s'")
         connection.execute("SET LOCAL lock_timeout = '500ms'")
+        if payload.get('explanation_clauses') is not None and connection.execute(
+            "SELECT 1 FROM public.benefitfinder_schema_migrations WHERE version=%s",
+            ("0010_catalog_explanation_publication",),
+        ).fetchone() is None:
+            raise ValueError('catalog_explanation_migration_required')
         if payload.get('collection_sources'):
             if connection.execute(
                 "SELECT 1 FROM public.benefitfinder_schema_migrations WHERE version = %s",

@@ -16,6 +16,7 @@ from urllib.parse import urlsplit
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from benefitfinder.application.published_policies import PublishedPolicy
+from benefitfinder.application.policy_explanations import SAFE_CONDITIONS
 
 MAX_WON = 2**53 - 1
 
@@ -65,6 +66,32 @@ class ApplicationGuide(Record):
         if any(not item.quote.strip() or not item.location.strip() for item in self.citations()):
             raise ValueError("empty_application_guide_citation")
         return self
+
+
+class ExplanationClause(Record):
+    id: str = Field(min_length=1, max_length=120)
+    title: str = Field(min_length=1, max_length=120)
+    evidence: Evidence
+    topics: list[str] = Field(min_length=1, max_length=7)
+
+    @model_validator(mode="after")
+    def validate_clause(self) -> ExplanationClause:
+        if (
+            not self.id.strip() or not self.title.strip()
+            or not self.evidence.quote.strip() or not self.evidence.location.strip()
+            or len(set(self.topics)) != len(self.topics)
+            or not set(self.topics) <= SAFE_CONDITIONS | {"amount", "application"}
+        ):
+            raise ValueError("invalid_explanation_clause")
+        return self
+
+
+def explanation_citations(clauses: list[ExplanationClause] | None) -> list[Evidence]:
+    if clauses is None:
+        return []
+    if len({clause.id for clause in clauses}) != len(clauses):
+        raise ValueError("duplicate_explanation_clause")
+    return [clause.evidence for clause in clauses]
 
 
 class Condition(Record):
@@ -213,6 +240,23 @@ class CollectionSource(Record):
         return self
 
 
+class F12ReviewProvenance(Record):
+    """Canonical input digests; this records review provenance, never grants approval."""
+
+    pair_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    decisions_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    export_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    plan_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    source_document_id: str = Field(min_length=1, max_length=200)
+    latest_reviewed_at: str
+
+    @model_validator(mode="after")
+    def validate_time(self) -> F12ReviewProvenance:
+        if datetime.fromisoformat(self.latest_reviewed_at.replace("Z", "+00:00")).utcoffset() is None:
+            raise ValueError("f12_review_requires_timezone")
+        return self
+
+
 class CatalogRecord(Record):
     benefit: Benefit
     conditions: list[ExecutableCondition]
@@ -220,6 +264,12 @@ class CatalogRecord(Record):
     payment_evidence: list[Evidence]
     unresolved_combination_rules: bool
     source_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    explanation_clauses: list[ExplanationClause] | None = Field(
+        default=None, min_length=1, max_length=200, exclude_if=lambda value: value is None
+    )
+    f12_review: F12ReviewProvenance | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     collection_sources: list[CollectionSource] = Field(default_factory=list, max_length=20)
 
     @model_validator(mode="after")
@@ -240,11 +290,14 @@ class CatalogRecord(Record):
             raise ValueError("condition_rule_mismatch")
         if len(set(benefit.categories)) != len(benefit.categories):
             raise ValueError("duplicate_category")
+        if len({c.policy_id for c in benefit.conflicts}) != len(benefit.conflicts):
+            raise ValueError("duplicate_conflict")
         evidence = [
             item for condition in benefit.eligibility_conditions for item in condition.evidence
         ]
         evidence += [item for conflict in benefit.conflicts for item in conflict.evidence]
         evidence += self.payment_evidence
+        evidence += explanation_citations(self.explanation_clauses)
         if benefit.application_guide is not None:
             evidence += benefit.application_guide.citations()
         if any(item.source != benefit.source for item in evidence):
@@ -334,6 +387,7 @@ def validate_source_text(record: CatalogRecord, source_text: str) -> None:
     evidence = [e for c in record.benefit.eligibility_conditions for e in c.evidence]
     evidence += [e for c in record.benefit.conflicts for e in c.evidence]
     evidence += record.payment_evidence
+    evidence += explanation_citations(record.explanation_clauses)
     if record.benefit.application_guide is not None:
         evidence += record.benefit.application_guide.citations()
     if any(e.quote not in source_text for e in evidence):

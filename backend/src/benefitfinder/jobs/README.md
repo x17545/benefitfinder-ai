@@ -104,6 +104,8 @@ uv run --locked python -m benefitfinder.jobs rule-review extract-facts \
 
 ## 로컬 규칙 검수 실행
 
+사람 판단 이후에는 [F12 검수→카탈로그·F13 게시](../infrastructure/database/F12_CATALOG.md)의 `catalog-from-f12`를 사용할 수 있다. 원본 쌍·최신 판단·승인 내보내기에 검수자가 작성한 실행 규칙·대응표를 연결하고, 별도 전체 승인 후 같은 버전의 정책과 근거를 원자적으로 게시한다. 실행 규칙·지급 일정·승인을 자동 추정하지 않는다.
+
 다음 예제는 실제 정책과 무관한 가상 자료이며 DB·LLM·네트워크 없이 실행한다. 저장소 루트에서 실행하고, 기존 파일이 있으면 새 경로를 사용한다.
 
 ```bash

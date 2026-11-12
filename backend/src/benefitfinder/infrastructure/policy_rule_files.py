@@ -1038,7 +1038,19 @@ def write_f12_approved_export(
     decisions_path: Path,
 ) -> int:
     """Write only the candidates last approved by a person in the verified local history."""
-    latest = latest_f12_decisions(load_f12_decisions(decisions_path, snapshot, draft))
+    payload = f12_approved_export(snapshot, draft, load_f12_decisions(decisions_path, snapshot, draft))
+    _write_create_only(path, payload)
+    return len(payload["items"])
+
+
+def f12_approved_export(
+    snapshot: RuleReviewSnapshot,
+    draft: PolicyFactsDraft,
+    decisions: tuple[F12ReviewDecision, ...],
+) -> dict[str, object]:
+    """Reconstruct the exact export from its original pair and human decision history."""
+    validate_f12_decisions(snapshot, draft, decisions)
+    latest = latest_f12_decisions(decisions)
     ids = f12_item_ids(snapshot, draft)
     groups = (
         ("rule", (_candidate_to_json(review.candidate) for review in snapshot.reviews)),
@@ -1072,18 +1084,14 @@ def write_f12_approved_export(
             )
     if not items:
         raise RuleReviewFileError("f12_no_approved_items")
-    _write_create_only(
-        path,
-        {
-            "format_version": FORMAT_VERSION,
-            "kind": "f12_approved_review_export",
-            "pair_sha256": _f12_pair_digest(snapshot, draft),
-            "policy_id": draft.document.policy_id,
-            "source": _facts_source(draft.document),
-            "items": items,
-        },
-    )
-    return len(items)
+    return {
+        "format_version": FORMAT_VERSION,
+        "kind": "f12_approved_review_export",
+        "pair_sha256": _f12_pair_digest(snapshot, draft),
+        "policy_id": draft.document.policy_id,
+        "source": _facts_source(draft.document),
+        "items": items,
+    }
 
 
 def write_f12_review_pair(
