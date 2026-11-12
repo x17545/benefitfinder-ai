@@ -37,13 +37,13 @@ _KEY_PATTERN = re.compile(r"[A-Za-z0-9]+")
 _TIME_PATTERN = re.compile(r"[0-9]{8}")
 
 
-def KSTtoday() -> date:
+def kst_today() -> date:
     """Return the current date in Korea Standard Time."""
 
     return datetime.now(_KST).date()
 
 
-def UTCnow() -> datetime:
+def utc_now() -> datetime:
     """Return the current timezone-aware UTC time."""
 
     return datetime.now(timezone.utc)
@@ -155,8 +155,8 @@ class EcosBaseRate:
         self,
         api_key: str,
         *,
-        today: Callable[[], date] = KSTtoday,
-        now: Callable[[], datetime] = UTCnow,
+        today: Callable[[], date] = kst_today,
+        now: Callable[[], datetime] = utc_now,
     ) -> None:
         if not isinstance(api_key, str) or _KEY_PATTERN.fullmatch(api_key) is None:
             raise _fail()

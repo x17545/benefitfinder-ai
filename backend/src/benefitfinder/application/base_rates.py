@@ -51,7 +51,11 @@ class BaseRateRepository(Protocol):
     """Persistence boundary for the latest verified base rate."""
 
     def latest(self) -> BaseRateObservation | None:
-        """Return the latest stored observation, or ``None`` when unavailable."""
+        """Return the latest stored observation.
+
+        ``None`` means the repository is empty. Raise ``BaseRateUnavailable`` when
+        retrieval itself fails.
+        """
         ...
 
     def save(self, observation: BaseRateObservation) -> None:
