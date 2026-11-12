@@ -12,6 +12,12 @@
 
 Pydantic 모델을 DB 모델이나 순수 domain 모델로 그대로 사용하지 않는다. 요청·응답을 변환하고 FastAPI의 기본 검증 오류도 [공통 계약](../../../../contracts/README.md)에 맞춘다. 생존 확인·공통 오류의 실제 HTTP·OpenAPI 계약은 테스트하며, 정책 API 추가 시 같은 검증을 확장한다.
 
+## 서비스 메타데이터
+
+`GET /api/v1/meta`는 현재 게시 자료의 가장 최근 `published_at`, 추천 계산과 같은 연 할인율·확인 상태, 오늘(KST)의 서버 전체 `daily_remaining`을 반환한다. 조회는 분석 횟수를 차감하지 않으며, 100회를 소진해도 조회할 수 있다. 변하는 잔여 횟수를 캐시하지 않도록 `Cache-Control: no-store`를 보낸다.
+
+`POLICY_DATABASE_URL` 미설정 시에는 추천과 같은 가상 갱신 시각·가상 금리를 사용하고 `virtual_data: true`, `base_rate_status: unknown`으로 표시한다. 게시 카탈로그 모드에서는 `virtual_data: false`이며 실제 금리 연동 전에는 `base_rate: null`, `base_rate_status: unknown`이다. 게시 자료가 아직 없으면 갱신 시각을 만들지 않고 공통 503과 `Retry-After: 60`을 반환한다. 카탈로그·이용량 DB 오류도 공통 503이며 가상 자료나 메모리 횟수로 대체하지 않는다. `/health`는 이 준비 상태와 별개인 생존 확인이다. 실제 ECOS 수집·보관·자동 갱신과 화면 연결은 후속이다.
+
 `POST /api/v1/recommendations`는 `Accept: text/event-stream`을 받으면 SSE로 응답하고, 생략하거나 `q=0`이면 기존 JSON을 반환한다. 프로필은 POST 본문에만 넣는다. 조건·조합 계산(`analyze_recommendations`), 서비스 조회(`search_services`), 근거 설명(`explain_with_sources`)의 실제 실행 전후에 `running`·`done`을 보낸다. 현재 계산 함수 안의 검색·판정을 별도 단계로 꾸며 보내지 않는다. 진행 이벤트는 고정 문구만 담고 프로필·금액·정책 원문을 포함하지 않는다.
 
 검증·분야 오류는 스트림 시작 전 공통 HTTP JSON으로 반환한다. 시작 후 오류는 현재 단계의 `failed`와 공통 오류의 `error`로 끝나고, 성공은 `result` 한 번으로 끝난다. 오류 뒤 결과를 보내지 않는다. 10초 동안 새 이벤트가 없으면 주석 heartbeat를 보내며 캐시·프록시 버퍼링을 끈다. 브라우저 연결이 끊어지면 분석 코루틴을 취소한다.

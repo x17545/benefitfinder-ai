@@ -21,6 +21,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from benefitfinder.api.schemas import ErrorCode, ErrorResponse
 from benefitfinder.api.v1.routers.benefits import router as benefits_router
 from benefitfinder.api.v1.routers.health import router as health_router
+from benefitfinder.api.v1.routers.meta import router as meta_router
 from benefitfinder.api.v1.routers.options import router as options_router
 from benefitfinder.api.v1.routers.recommendations import router as recommendations_router
 from benefitfinder.api.v1.routers.simulations import router as simulations_router
@@ -37,6 +38,8 @@ from benefitfinder.application.region_options import RegionCatalog
 from benefitfinder.application.published_policies import PolicyCatalogUnavailable, PublishedPolicyRepository
 from benefitfinder.application.published_recommendations import PublishedRecommendations
 from benefitfinder.application.service_catalog import ServiceCatalog
+from benefitfinder.application.service_meta import ReadServiceMetadata
+from benefitfinder.application.response_mapper import MVP_DATA_UPDATED_AT
 from benefitfinder.application.analysis_usage import (
     AnalysisUsage,
     AnalysisUsageUnavailable,
@@ -275,10 +278,17 @@ def create_app(
     app.state.analysis_usage = (
         analysis_usage if analysis_usage is not None else MemoryAnalysisUsage()
     )
+    app.state.read_service_metadata = ReadServiceMetadata(
+        app.state.analysis_usage,
+        lambda: app.state.discount_rate,
+        policy_repository=policy_repository,
+        example_updated_at=MVP_DATA_UPDATED_AT,
+    )
 
     app.state.analysis_timeout_seconds = analysis_timeout_seconds
 
     app.include_router(health_router)
+    app.include_router(meta_router)
     app.include_router(options_router)
     app.include_router(recommendations_router)
     app.include_router(simulations_router)

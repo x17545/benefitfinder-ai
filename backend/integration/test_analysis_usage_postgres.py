@@ -85,6 +85,17 @@ class PostgresAnalysisUsageTests(unittest.TestCase):
         with psycopg.connect(self.url) as connection:
             connection.execute(statement, params)
 
+    def test_meta_reads_shared_postgres_remaining_without_reserving(self) -> None:
+        usage = PostgresAnalysisUsage(self.url)
+        usage.reserve()
+        with TestClient(create_app(analysis_usage_database_url=self.url)) as first:
+            with TestClient(create_app(analysis_usage_database_url=self.url)) as second:
+                self.assertEqual(first.get("/api/v1/meta").json()["daily_remaining"], 99)
+                self.assertEqual(second.get("/api/v1/meta").json()["daily_remaining"], 99)
+                usage.reserve()
+                self.assertEqual(first.get("/api/v1/meta").json()["daily_remaining"], 98)
+        self.assertEqual(PostgresAnalysisUsage(self.url).remaining(), 98)
+
     def test_concurrent_separate_instances_admit_exactly_limit(self) -> None:
         start = threading.Event()
 

@@ -2,7 +2,7 @@
 
 추천과 상황 변화를 합쳐 하루 100번의 분석 시작을 허용한다. 날짜 경계는 자정 KST다. 요청 스키마·분야·시나리오의 HTTP 검증이 끝나면 분석 전에 한 번 예약하며, 한도 초과는 스트림 시작 전 HTTP 429 `daily_limit_exceeded`다. 분석이 시작된 뒤 실패·시간 초과·연결 취소가 발생해도 되돌리지 않는다. 재시도는 새로운 한 번이다. 비싼 분석이 실행된 뒤 취소를 반복해 한도를 우회하지 않게 하는 처리다.
 
-`ANALYSIS_USAGE_DATABASE_URL`을 설정하면 PostgreSQL의 `public.analysis_daily_usage`에 날짜와 횟수만 저장한다. 모든 프로세스·서버가 같은 DB를 사용해야 하나의 100회 한도를 공유한다. DB의 현재 시각을 KST 날짜로 바꾸고 원자적 UPSERT로 예약한다. 프로필·IP·사용자·요청 ID·정책·프롬프트를 저장하지 않는다. `remaining()` 조회는 차감하지 않으며 메타 API 연결은 후속이다.
+`ANALYSIS_USAGE_DATABASE_URL`을 설정하면 PostgreSQL의 `public.analysis_daily_usage`에 날짜와 횟수만 저장한다. 모든 프로세스·서버가 같은 DB를 사용해야 하나의 100회 한도를 공유한다. DB의 현재 시각을 KST 날짜로 바꾸고 원자적 UPSERT로 예약한다. 프로필·IP·사용자·요청 ID·정책·프롬프트를 저장하지 않는다. `remaining()`과 `GET /api/v1/meta` 조회는 차감하지 않는다. 메타 API의 데이터 준비·오류 기준은 [HTTP API 안내](../../api/README.md#서비스-메타데이터)를 따른다.
 
 URL이 없을 때는 키·DB 없이 실행하는 **단일 프로세스 개발 예제**의 메모리 카운터를 사용한다. 프로세스를 재시작하면 초기화되며 여러 worker·서버의 전역 상한을 보장하지 않는다. 운영과 여러 프로세스 실행에서는 PostgreSQL 설정이 필요하다. 설정한 DB의 장애·잠금·권한·마이그레이션 누락은 HTTP 503 `dependency_unavailable`이며 메모리 카운터로 전환하지 않는다. 서버 시작은 연결·DDL을 수행하지 않는다. `.env` 파일은 자동으로 읽지 않는다.
 
