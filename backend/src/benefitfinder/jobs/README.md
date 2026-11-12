@@ -1,6 +1,6 @@
 # 작업 실행
 
-수집 원천에 명시적으로 연결된 게시 정책은 [0006 변경·재검수](../infrastructure/database/POLICY_SOURCE_RECHECKS.md)를 통해 변경·누락 시 게시에서 내린다. `policy-catalog rechecks --output <새 파일>`로 권한 600의 읽기 전용 목록을 내보내며 승인·완료 처리나 F12 자동 실행은 하지 않는다.
+수집 원천에 명시적으로 연결된 게시 정책은 [0006 변경·재검수](../infrastructure/database/POLICY_SOURCE_RECHECKS.md)를 통해 변경·누락 시 게시에서 내린다. `policy-catalog rechecks --output <새 파일>`로 권한 600의 읽기 전용 목록을 내보내며 승인·완료 처리는 하지 않는다. 준비된 공식 문서의 자동 분석은 별도 [F12 분석 큐](../infrastructure/database/F12_ANALYSIS.md)의 `f12-analysis register/run/status`로 실행한다.
 
 `refresh-data`는 온통청년 목록과 ECOS 금리를 함께 갱신하고 소스별 결과를 한 번 보고한다. 소스 한쪽이 실패해도 다른 쪽은 시도하며 성공본은 각 저장기가 보존한다. [통합 명령·실행 기록·Linux/macOS 스케줄·남은 범위](DAILY_REFRESH.md)를 따른다.
 

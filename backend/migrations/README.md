@@ -41,3 +41,7 @@ psql "$DATABASE_URL" -X --set=ON_ERROR_STOP=1 --single-transaction \
 ```
 
 적용 후 카탈로그는 비어 있다. [입력·검수·실행 절차](../src/benefitfinder/infrastructure/database/POLICY_CATALOG.md)를 따른다. 공유·운영 DB에는 별도 승인 없이 적용하지 않는다.
+
+## F12 오프라인 분석 (0007)
+
+`versions/0007_f12_analysis_tasks.sql`은 0001·0002·0005·0006 다음에 명시적으로 적용한다. 입력 해시·원천 연결·임대·시도 횟수·검수 대기 파일 해시를 보존하고 원천 변경/누락 시 기존 분석을 무효화한다. 기존 게시 카탈로그를 자동 승인·게시하지 않는다. [최소 권한·실행·실패 복구](../src/benefitfinder/infrastructure/database/F12_ANALYSIS.md)를 따른다.

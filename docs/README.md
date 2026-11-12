@@ -35,9 +35,11 @@
 
 2026-11-12, 현재 코드의 구현 기준이다. 배포 완료를 뜻하지 않는다.
 
-[F08 통합 실행](../backend/src/benefitfinder/jobs/DAILY_REFRESH.md)은 정책 목록·기준금리를 독립적으로 시도하고 소스별 성공·실패와 알림 상태를 원자적으로 기록한다. 통합 중복 실행 차단·강제 종료 흔적·단일 Discord 보고와 Linux systemd/macOS launchd의 03:00 KST 설정 생성을 제공한다. `COLLECTION_WRITE_DATABASE_URL` 설정 시 완전한 수집 성공본·변경 이력의 DB 인계와 API 없는 재적재를 제공한다. 실제 운영 등록·API 수집·알림 도착, 보조금24·변경 원문의 Agent 분석 연결은 후속이다.
+[F08 통합 실행](../backend/src/benefitfinder/jobs/DAILY_REFRESH.md)은 정책 목록·기준금리를 독립적으로 시도하고 소스별 성공·실패와 알림 상태를 원자적으로 기록한다. 통합 중복 실행 차단·강제 종료 흔적·단일 Discord 보고와 Linux systemd/macOS launchd의 03:00 KST 설정 생성을 제공한다. `COLLECTION_WRITE_DATABASE_URL` 설정 시 완전한 수집 성공본·변경 이력의 DB 인계와 API 없는 재적재를 제공한다. `F12_WRITE_DATABASE_URL` 설정 시 두 수집이 끝난 뒤 준비된 공식 문서 분석 큐를 소비한다. 실제 운영 등록·API 수집·알림 도착, 보조금24·원문 확보/입력 자동 준비는 후속이다.
 
-[수집 성공본 DB 인계](../backend/src/benefitfinder/infrastructure/database/COLLECTED_POLICIES.md)는 보존 원본·해시·시각·건수를 검증한 완전한 파일 생성본만 적재한다. DB의 직전 성공본으로 신규·변경·누락을 추적하고, 실패 시 원본과 직전 DB 성공본을 보존한다. 다음 수집 전에 미완료 인계를 재시도하며 미검수 원천을 계산용 정책·게시 조항으로 사용하지 않는다. [0006 원천 연결·재검수](../backend/src/benefitfinder/infrastructure/database/POLICY_SOURCE_RECHECKS.md)는 검수한 원천 ID·해시를 승인 입력에 고정하고 변경·누락 시 해당 게시 정책과 F13을 내린다. 기존 승인 정보와 무효화 이력·최신 원천 상태를 별도 읽기 전용 목록으로 인계한다. 같은 내용 재수집은 승인을 유지하며 재등장은 자동 재승인이 아니다. F12 자동 분석·대기 작업 소비·새 사람 검수 버전의 게시 전환은 후속이다.
+[수집 성공본 DB 인계](../backend/src/benefitfinder/infrastructure/database/COLLECTED_POLICIES.md)는 보존 원본·해시·시각·건수를 검증한 완전한 파일 생성본만 적재한다. DB의 직전 성공본으로 신규·변경·누락을 추적하고, 실패 시 원본과 직전 DB 성공본을 보존한다. 다음 수집 전에 미완료 인계를 재시도하며 미검수 원천을 계산용 정책·게시 조항으로 사용하지 않는다. [0006 원천 연결·재검수](../backend/src/benefitfinder/infrastructure/database/POLICY_SOURCE_RECHECKS.md)는 검수한 원천 ID·해시를 승인 입력에 고정하고 변경·누락 시 해당 게시 정책과 F13을 내린다. 기존 승인 정보와 무효화 이력·최신 원천 상태를 별도 읽기 전용 목록으로 인계한다. 같은 내용 재수집은 승인을 유지하며 재등장은 자동 재승인이 아니다. 새 사람 검수 버전의 게시 전환은 후속이다.
+
+[F12 분석 큐](../backend/src/benefitfinder/infrastructure/database/F12_ANALYSIS.md)는 확인된 취업·주거 공식 문서와 원천 해시를 등록받아 모델이 6개 도구 중 다음 동작을 선택하게 한다. 전체 문서 조회·누락 재탐색과 조건/예외의 원문 인용을 보존하고, 임대·최대 3회 재시도·부분 도구 기록·원본 변경 시 무효화를 제공한다. 결과는 항상 검수 대기다. 미분류·문서 미준비 원천, 실제 검수, 운영 원문 입력 자동 준비는 후속이며 사용자 프로필은 모델에 보내지 않는다.
 
 개발용 LLM은 [이 PC의 GPU에서 실행하는 llama.cpp](development/LOCAL_LLM.md)를 사용한다. F12 도구 호출·문맥별 구조화 추출과 F13 설명을 같은 설정으로 연결하며, 운영은 외부 API의 HTTPS 주소·모델·키를 명시하도록 분리한다. 기존 명시적 Ollama 실행은 호환 경로다. 실제 정책 검수·운영 게시와 외부 공급자 평가 완료를 뜻하지 않는다.
 

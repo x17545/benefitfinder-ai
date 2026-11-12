@@ -95,6 +95,12 @@ from benefitfinder.application.policy_explanations import explain_policy
 from benefitfinder.infrastructure.ollama_explanations import OllamaExplanationCompletion
 from benefitfinder.infrastructure.published_clauses import InMemoryPublishedClauses
 from benefitfinder.jobs.explanation_example import explanation_example
+from benefitfinder.application.policy_analysis import PolicyAnalysisStoreError
+from benefitfinder.application.policy_rules import PolicyReference, RuleReviewBatch
+from benefitfinder.application.run_policy_analysis import run_pending_analysis
+from benefitfinder.infrastructure.database.repositories.policy_analysis import PostgresPolicyAnalysisTasks
+from benefitfinder.infrastructure.policy_analysis_files import PolicyAnalysisFiles
+from benefitfinder.infrastructure.policy_analysis_inputs import load_policy_analysis_input
 from benefitfinder.infrastructure.policy_catalog_records import CatalogRecord, record_hash, validate_source_text
 from benefitfinder.infrastructure.database.repositories.published_policies import publish_policy
 from benefitfinder.infrastructure.database.repositories.policy_rechecks import list_policy_rechecks
@@ -102,6 +108,63 @@ from benefitfinder.infrastructure.policy_recheck_files import write_recheck_page
 
 API_KEY_ENV = "YOUTHCENTER_API_KEY"
 KST = ZoneInfo("Asia/Seoul")
+
+
+def run_f12_queue(data_dir: Path, *, limit: int = 5) -> dict[str, object]:
+    # Lazy import keeps non-LLM CLI commands independent of model initialization.
+    from benefitfinder.ai.policy_analysis_agent import analyze_policy
+
+    settings = LLMSettings.from_env()
+    if settings.provider == 'disabled':
+        raise ValueError('llm_not_configured')
+    chat = CompatibleChat(settings.endpoint())
+    tasks = PostgresPolicyAnalysisTasks(os.environ.get('F12_WRITE_DATABASE_URL', ''))
+
+    def analyze(claim, on_step):
+        deadline = monotonic() + 300
+
+        def guarded_chat(messages, tools):
+            if not tasks.is_current(claim):
+                raise PolicyAnalysisStoreError('f12_source_changed')
+            remaining = deadline - monotonic()
+            if remaining <= 0:
+                raise ValueError('f12_analysis_timeout')
+            return chat(messages, tools, timeout_seconds=min(45, remaining))
+
+        return analyze_policy(claim.input, chat=guarded_chat, budget_seconds=300, on_step=on_step)
+
+    def write_reviews(directory, claim, result):
+        policies = tuple(PolicyReference(policy.id, 'youth', policy.categories)
+                         for policy in claim.input.policies)
+        for index, facts in enumerate(result.facts, 1):
+            rules = tuple(rule for rule in result.rules
+                          if {cite.document_id for cite in rule.citations} == {facts.document.id})
+            if rules or facts.eligibility or facts.amounts or facts.payment_timing:
+                snapshot = prepare_snapshot(RuleReviewBatch((facts.document,), policies, rules))
+                write_f12_review_pair(directory / f'd{index:02}', snapshot, facts)
+
+    counts = run_pending_analysis(tasks, PolicyAnalysisFiles(data_dir, write_reviews, model={
+        'provider': settings.provider, 'name': settings.model,
+    }),
+                                  analyze, limit=limit)
+    return {**counts, **tasks.status()}
+
+
+def f12_analysis_command(args: argparse.Namespace) -> int:
+    try:
+        tasks = PostgresPolicyAnalysisTasks(os.environ.get('F12_WRITE_DATABASE_URL', ''))
+        if args.analysis_action == 'register':
+            result = tasks.register(load_policy_analysis_input(args.input),
+                                    origin_recheck_id=args.recheck_id)
+        elif args.analysis_action == 'status':
+            result = tasks.get_task(args.task_id) if args.task_id is not None else tasks.status()
+        else:
+            result = run_f12_queue(args.data_dir, limit=args.limit)
+        print(json.dumps(result, ensure_ascii=False, sort_keys=True))
+        return 1 if isinstance(result, dict) and result.get('failed', 0) else 0
+    except Exception:
+        print('F12 처리 실패: 입력·DB·LLM 설정과 로컬 실행 기록을 확인하세요.', file=sys.stderr)
+        return 2
 
 
 def policy_catalog_command(args: argparse.Namespace) -> int:
@@ -341,6 +404,11 @@ def refresh_data_command(data_dir: Path, *, notify_discord: bool = False) -> int
             raise DiscordWebhookError("discord_webhook_missing")
         DiscordWebhook(webhook).send(message)
 
+    def analyze_pending():
+        result = run_f12_queue(data_dir, limit=5)
+        return {key: result[key] for key in ('attempted', 'needs_review', 'stale', 'failed',
+                                            'source_records_awaiting_scope_or_documents')}
+
     try:
         code = run_daily_refresh(
             data_dir / "processed" / "f08",
@@ -348,6 +416,7 @@ def refresh_data_command(data_dir: Path, *, notify_discord: bool = False) -> int
             refresh_rate=refresh_ecos_rate_command,
             clock=lambda: datetime.now(KST),
             notify=notify if notify_discord else None,
+            analyze_pending=analyze_pending if 'F12_WRITE_DATABASE_URL' in os.environ else None,
         )
     except DailyRefreshError as error:
         print(f"F08 통합 갱신 실패: {error}", file=sys.stderr)
@@ -614,6 +683,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     daily = commands.add_parser("refresh-data", help="정책·기준금리 통합 갱신과 단일 결과 보고")
     daily.add_argument("--data-dir", type=Path, default=Path("data"))
     daily.add_argument("--notify-discord", action="store_true", help="디스코드로 소스별 결과 보고")
+    analysis = commands.add_parser('f12-analysis', help='공식 문서 등록·오프라인 분석·검수 대기 조회')
+    analysis_actions = analysis.add_subparsers(dest='analysis_action', required=True)
+    register = analysis_actions.add_parser('register')
+    register.add_argument('--input', type=Path, required=True)
+    register.add_argument('--recheck-id', type=int)
+    run = analysis_actions.add_parser('run')
+    run.add_argument('--data-dir', type=Path, default=Path('data'))
+    run.add_argument('--limit', type=int, default=5)
+    status = analysis_actions.add_parser('status')
+    status.add_argument('--task-id', type=int)
     collect = commands.add_parser("collect-youthcenter", help="온통청년 정책 목록 전체 수집")
     collect.add_argument("--data-dir", type=Path, default=Path("data"))
     ingest = commands.add_parser("ingest-youthcenter", help="완전한 수집 성공본만 DB에 재적재")
@@ -655,6 +734,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     explain.add_argument("--category", choices=("employment", "housing"), default="employment")
     explain.add_argument("--model", help="설정한 제공자 모델. 제공자 미설정 시 명시적 Ollama 호환")
     args = parser.parse_args(argv)
+    if args.command == 'f12-analysis':
+        return f12_analysis_command(args)
     if args.command == "refresh-data":
         return refresh_data_command(args.data_dir, notify_discord=args.notify_discord)
     if args.command == "ingest-youthcenter":

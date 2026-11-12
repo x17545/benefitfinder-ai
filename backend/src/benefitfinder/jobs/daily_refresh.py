@@ -15,6 +15,8 @@ from uuid import uuid4
 
 STATUS_FILE = "status.json"
 _MAX_STATE_BYTES = 65_536
+_ANALYSIS_COUNTS = ('attempted', 'needs_review', 'stale', 'failed',
+                    'source_records_awaiting_scope_or_documents')
 
 
 class DailyRefreshError(ValueError):
@@ -83,6 +85,14 @@ def _notification(attempt: dict[str, object], *, state_failed: bool) -> str:
         assert isinstance(stage, dict)
         # Stage names and codes are constructed in this process, never from raw data.
         lines.append(f"{label}: {'성공' if stage['exit_code'] == 0 else '실패'}")
+    if 'f12' in stages:
+        stage = stages['f12']
+        lines.append(f"F12 준비된 문서 분석: {'성공' if stage['exit_code'] == 0 else '실패'}")
+        for name, label in (('needs_review', '검수 대기 생성'), ('stale', '변경으로 무효화'),
+                            ('failed', '분석 실패'),
+                            ('source_records_awaiting_scope_or_documents', '분류·문서 준비 대기 원천')):
+            if name in stage.get('counts', {}):
+                lines.append(f"F12 {label}: {stage['counts'][name]}건")
     if state_failed:
         lines.append("실행 기록 저장 실패: daily_refresh_io_error")
     return "\n".join(lines)
@@ -95,6 +105,7 @@ def _run_locked(
     refresh_rate: Callable[[], int],
     clock: Callable[[], datetime],
     notify: Callable[[str], None] | None,
+    analyze_pending: Callable[[], int | dict[str, int]] | None,
 ) -> int:
     path = root / STATUS_FILE
     previous = _last_success(path)
@@ -155,6 +166,29 @@ def _run_locked(
                 _write_status(path, state)
             except OSError:
                 state_failed = True
+    # Source-specific file/DB locks have been released before model inference.
+    if analyze_pending is not None:
+        stages['f12'] = {'started_at': clock().isoformat(), 'finished_at': None,
+                         'status': 'running', 'exit_code': None}
+        try:
+            _write_status(path, state)
+        except OSError:
+            state_failed = True
+        try:
+            result = analyze_pending()
+            if isinstance(result, dict):
+                if set(result) != set(_ANALYSIS_COUNTS) or any(
+                    type(value) is not int or not 0 <= value < 2**63 for value in result.values()
+                ):
+                    raise ValueError
+                stages['f12']['counts'] = {key: result[key] for key in _ANALYSIS_COUNTS}
+                code = 1 if result['failed'] else 0
+            else:
+                code = result if type(result) is int and result in (0, 1, 2) else 1
+        except Exception:
+            code = 1
+        stages['f12'].update(finished_at=clock().isoformat(), exit_code=code,
+                             status='success' if code == 0 else 'failed')
     succeeded = all(stage["exit_code"] == 0 for stage in stages.values())
     attempt["finished_at"] = clock().isoformat()
     attempt["data_status"] = "success" if succeeded else "failed"
@@ -185,6 +219,7 @@ def run_daily_refresh(
     refresh_rate: Callable[[], int],
     clock: Callable[[], datetime],
     notify: Callable[[str], None] | None = None,
+    analyze_pending: Callable[[], int | dict[str, int]] | None = None,
 ) -> int:
     """Attempt both sources; preserve each source's own atomic last-success state."""
     descriptor = None
@@ -203,6 +238,7 @@ def run_daily_refresh(
             refresh_rate=refresh_rate,
             clock=clock,
             notify=notify,
+            analyze_pending=analyze_pending,
         )
     except OSError:
         raise DailyRefreshError("daily_refresh_io_error") from None

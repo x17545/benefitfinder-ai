@@ -36,6 +36,10 @@ class PolicyAnalysisInput:
 
     def __post_init__(self) -> None:
         try:
+            if not all(isinstance(items, tuple) for items in (
+                self.documents, self.policies, self.collection_sources
+            )):
+                raise ValueError
             if not 1 <= len(self.documents) <= 4 or not 1 <= len(self.policies) <= 100:
                 raise ValueError
             if not 1 <= len(self.collection_sources) <= 20:
@@ -48,6 +52,7 @@ class PolicyAnalysisInput:
                     or not policy.name.isprintable() or not policy.categories
                     or len(policy.categories) != len(set(policy.categories))
                     or not set(policy.categories) <= {"employment", "housing"}
+                    or not isinstance(policy.categories, tuple) or not isinstance(policy.aliases, tuple)
                     or len(policy.aliases) > 8
                     or any(not 1 <= len(alias.strip()) <= 120 or not alias.isprintable()
                            for alias in policy.aliases)):
@@ -70,7 +75,7 @@ class PolicyAnalysisInput:
             for source in self.collection_sources:
                 key = (source.source, source.external_id)
                 if (source.source != "youthcenter" or key in bindings
-                    or not 1 <= len(source.external_id.strip()) <= 200
+                    or not 1 <= len(source.external_id) <= 200 or not source.external_id.strip()
                     or "\0" in source.external_id
                     or re.fullmatch(r"[0-9a-f]{64}", source.material_sha256) is None):
                     raise ValueError
@@ -128,3 +133,8 @@ class AnalysisClaim:
     attempt: int
     input: PolicyAnalysisInput
     lease_until: datetime
+    origin_recheck_id: int | None = None
+
+
+class PolicyAnalysisStoreError(RuntimeError):
+    """A fixed offline-store code, never input text or a driver exception."""
