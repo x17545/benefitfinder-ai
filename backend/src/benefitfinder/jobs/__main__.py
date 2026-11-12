@@ -109,9 +109,22 @@ from benefitfinder.infrastructure.service_catalog_records import (
     ServiceCatalogRecord, service_record_hash, validate_service_sources,
 )
 from benefitfinder.infrastructure.database.repositories.published_services import publish_service
+from benefitfinder.application.prepare_policy_analysis import prepare_analysis_inputs
+from benefitfinder.infrastructure.policy_preparation_plans import load_preparation_plan
+from benefitfinder.infrastructure.database.repositories.analysis_sources import PostgresAnalysisSources
+from benefitfinder.ingestion.versioning import record_sha256
+from benefitfinder.ingestion.youthcenter import hashed_fields
 
 API_KEY_ENV = "YOUTHCENTER_API_KEY"
 KST = ZoneInfo("Asia/Seoul")
+
+
+def prepare_f12_inputs(plan_path: Path) -> dict[str, int]:
+    plan = load_preparation_plan(plan_path)
+    url = os.environ.get('F12_WRITE_DATABASE_URL', '')
+    tasks = PostgresPolicyAnalysisTasks(url)
+    return prepare_analysis_inputs(plan, PostgresAnalysisSources(url), tasks.register,
+        lambda fields: record_sha256(hashed_fields(YOUTHCENTER_POLICY_LIST, fields)))
 
 
 def run_f12_queue(data_dir: Path, *, limit: int = 5) -> dict[str, object]:
@@ -158,7 +171,9 @@ def run_f12_queue(data_dir: Path, *, limit: int = 5) -> dict[str, object]:
 def f12_analysis_command(args: argparse.Namespace) -> int:
     try:
         tasks = PostgresPolicyAnalysisTasks(os.environ.get('F12_WRITE_DATABASE_URL', ''))
-        if args.analysis_action == 'register':
+        if args.analysis_action == 'prepare':
+            result = prepare_f12_inputs(args.plan)
+        elif args.analysis_action == 'register':
             result = tasks.register(load_policy_analysis_input(args.input),
                                     origin_recheck_id=args.recheck_id)
         elif args.analysis_action == 'status':
@@ -442,6 +457,11 @@ def refresh_data_command(data_dir: Path, *, notify_discord: bool = False) -> int
         return {key: result[key] for key in ('attempted', 'needs_review', 'stale', 'failed',
                                             'source_records_awaiting_scope_or_documents')}
 
+    def prepare_analysis() -> dict[str, int]:
+        if 'F12_WRITE_DATABASE_URL' not in os.environ:
+            raise ValueError('f12_preparation_requires_database')
+        return prepare_f12_inputs(Path(os.environ['F12_PREPARATION_PLAN']))
+
     try:
         code = run_daily_refresh(
             data_dir / "processed" / "f08",
@@ -449,6 +469,7 @@ def refresh_data_command(data_dir: Path, *, notify_discord: bool = False) -> int
             refresh_rate=refresh_ecos_rate_command,
             clock=lambda: datetime.now(KST),
             notify=notify if notify_discord else None,
+            prepare_analysis=prepare_analysis if 'F12_PREPARATION_PLAN' in os.environ else None,
             analyze_pending=analyze_pending if 'F12_WRITE_DATABASE_URL' in os.environ else None,
         )
     except DailyRefreshError as error:
@@ -718,6 +739,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     daily.add_argument("--notify-discord", action="store_true", help="디스코드로 소스별 결과 보고")
     analysis = commands.add_parser('f12-analysis', help='공식 문서 등록·오프라인 분석·검수 대기 조회')
     analysis_actions = analysis.add_subparsers(dest='analysis_action', required=True)
+    prepare = analysis_actions.add_parser('prepare', help='확인된 API 본문 매핑으로 분석 입력 자동 등록')
+    prepare.add_argument('--plan', type=Path, required=True)
     register = analysis_actions.add_parser('register')
     register.add_argument('--input', type=Path, required=True)
     register.add_argument('--recheck-id', type=int)
