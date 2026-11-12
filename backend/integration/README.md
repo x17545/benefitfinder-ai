@@ -1,5 +1,7 @@
 # 실제 PostgreSQL 검증
 
+0005 수집 저장 검사는 별도 임시 `_test` DB에서 완전한 생성본의 적재·변경 이력·재적재·누락·재등장·역전 방지·롤백과 권한 경계를 확인한다. 원천 응답은 가상 자료이며 실제 정책 사실 검증과 구분한다. [설정·실패 복구](../src/benefitfinder/infrastructure/database/COLLECTED_POLICIES.md)를 따른다.
+
 0004 ECOS 금리 검사는 별도 임시 `_test` DB를 만들고 제거한다. 가상 금리의 저장·재시작·갱신 역전 방지·실패 시 이전값 보존·제약·읽기 전용 권한·메타 API 연결을 확인한다. 실금리 수집과 운영 스케줄 검증은 [별도 범위](../src/benefitfinder/infrastructure/database/ECOS_RATES.md)다.
 
 

@@ -2,6 +2,8 @@
 
 `refresh-data`는 온통청년 목록과 ECOS 금리를 함께 갱신하고 소스별 결과를 한 번 보고한다. 소스 한쪽이 실패해도 다른 쪽은 시도하며 성공본은 각 저장기가 보존한다. [통합 명령·실행 기록·Linux/macOS 스케줄·남은 범위](DAILY_REFRESH.md)를 따른다.
 
+`COLLECTION_WRITE_DATABASE_URL` 설정 시 온통청년의 완전한 수집 성공본과 변경 이력을 PostgreSQL에 인계한다. DB 실패 시 파일 성공본을 유지하고 다음 수집 전 재인계한다. `ingest-youthcenter --data-dir data`는 API 없이 마지막 성공본만 재적재한다. [0005·검증·권한·실패 복구](../infrastructure/database/COLLECTED_POLICIES.md)를 따른다. 부분 수집·미검수 자료를 계산용 정책으로 게시하지 않는다.
+
 `refresh-ecos-rate`는 ECOS 기준금리를 받아 PostgreSQL의 마지막 성공값을 갱신한다. `ECOS_API_KEY`, `BASE_RATE_WRITE_DATABASE_URL`과 명시적인 0004 마이그레이션이 필요하다. 실패 시 이전값을 보존한다. 통합 실행·스케줄·보고는 `refresh-data`에 연결했다. [금리·읽기/쓰기 권한·검증](../infrastructure/database/ECOS_RATES.md)을 따른다.
 
 현재 구현: `collect-youthcenter`는 [수동 수집](../ingestion/README.md#로컬-수집-실행)을, `refresh-youthcenter`는 [이전 성공본을 보존하는 F08 갱신](#f08-온통청년-갱신-한-번-실행)을 실행한다. F08은 선택적으로 디스코드 결과 알림을 보내고 macOS의 `launchd`로 매일 실행할 수 있다. `rule-review`는 로컬 검수 자료의 준비·명시적 승인·재검수·상태 조회를 실행한다.
@@ -289,7 +291,7 @@ uv run --locked --env-file data/local/f08.env python -m benefitfinder.jobs \
 
 ### macOS에서 매일 03:00 KST 실행
 
-아래 설정의 기본 작업은 정책·금리 통합 `refresh-data`다. `f08.env`에 `YOUTHCENTER_API_KEY`, `ECOS_API_KEY`, `BASE_RATE_WRITE_DATABASE_URL`, `DISCORD_WEBHOOK_URL`이 필요하며 금리 마이그레이션·쓰기 역할을 먼저 준비한다. 기존 단독 수집은 생성기에 `--job refresh-youthcenter`를 명시한다.
+아래 설정의 기본 작업은 정책·금리 통합 `refresh-data`다. `f08.env`에 `YOUTHCENTER_API_KEY`, `ECOS_API_KEY`, `BASE_RATE_WRITE_DATABASE_URL`, `DISCORD_WEBHOOK_URL`이 필요하며 금리 마이그레이션·쓰기 역할을 먼저 준비한다. 수집 DB 인계는 `COLLECTION_WRITE_DATABASE_URL`과 0005를 추가한다. 기존 단독 수집은 생성기에 `--job refresh-youthcenter`를 명시한다.
 
 `launchd` 달력은 Mac의 시간대를 따르므로 실제 시스템 시간대가 한국 표준시와 같은 경우에만 설정 파일을 생성한다. 셸의 `TZ` 환경 변수만 바꿔도 시스템 시간대 검증을 통과할 수는 없다. 개발 브랜치 전환이 실행 코드를 바꾸지 않도록 커밋별 로컬 실행 사본을 만든다. 백그라운드 작업이 개발용 Documents 폴더에 의존하지 않도록 실행 코드·Python·환경 설정·운영 데이터는 `Library/Application Support/BenefitFinder/F08` 아래에 둔다. 비밀값과 운영 데이터는 코드 실행 사본과 분리한다.
 
@@ -316,6 +318,6 @@ launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/dev.benefitfinder
 
 생성기는 파일만 만들며 스케줄 등록은 마지막 명령이 수행한다. 설치 시 즉시 수집하지 않고 다음 03:00에 실행한다. 로그는 서비스 데이터 폴더의 `data/logs/f08.stdout.log`와 `f08.stderr.log`에 남는다. 키·웹훅을 변경하면 설치된 서비스의 `f08.env`도 갱신한다. 중지하려면 `launchctl bootout "gui/$(id -u)/dev.benefitfinder.f08"`을 실행한다. 갱신할 때에는 기존 작업을 먼저 중지하고 새 커밋의 실행 사본과 설정 파일을 만든다.
 
-이 설정은 로그인한 Mac에서 동작한다. [Apple 문서](https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/ScheduledJobs.html)에 따라 예정 시각에 잠자기 상태였다면 깨어날 때 실행되며, 전원이 꺼져 있으면 실행하지 못한다. 기준금리는 통합 작업에 연결했다. 보조금24·공고 원문 재분석·수집 정책의 PostgreSQL 인계는 아직 연결하지 않았다.
+이 설정은 로그인한 Mac에서 동작한다. [Apple 문서](https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/ScheduledJobs.html)에 따라 예정 시각에 잠자기 상태였다면 깨어날 때 실행되며, 전원이 꺼져 있으면 실행하지 못한다. 기준금리와 설정한 경우 수집 성공본 DB 인계는 통합 작업에 연결했다. 보조금24·공고 원문 재분석은 아직 연결하지 않았다.
 
 자동화 주 담당은 탁서윤이다(2026-10-29). 실행·스케줄·재시도·실패 알림을 맡고, 윤정찬의 수집·원본 관리·PostgreSQL 적재와 Agent 분석·정제 흐름을 연결한다. 양승현은 API·계산 연동과 배포 환경의 통합 테스트를 맡는다. Agent 초안과 검수·게시 결과를 구분하고 미지원·상충·불명확은 검수 대기로 남긴다. 기존 모듈 의존 방향을 유지하며 jobs가 ai 내부를 직접 import하지 않고 조립 지점과 application 인터페이스로 연결한다.

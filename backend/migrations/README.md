@@ -1,5 +1,7 @@
 # PostgreSQL 마이그레이션
 
+`versions/0005_collected_policy_generations.sql`은 완전한 수집 성공본·최신 원천 레코드·변경 이력을 저장한다. 0001의 이력 테이블 다음에 별도 트랜잭션으로 적용한다. 미검수 원천 영역이며 기존 게시 정책·F13 조항·승인 상태를 바꾸지 않는다. [적재 설정·재실행·권한 경계](../src/benefitfinder/infrastructure/database/COLLECTED_POLICIES.md)를 따른다.
+
 `versions/0004_ecos_base_rate.sql`은 마지막 성공한 ECOS 기준금리·관측일·확인 시각과 고정 출처 코드를 저장한다. 0001의 이력 테이블 이후 별도 트랜잭션으로 적용한다. 0002·0003의 데이터는 바꾸지 않는다. 초기 금리·사용자 정보·API 키를 넣지 않으며 [수집·권한·운영 범위](../src/benefitfinder/infrastructure/database/ECOS_RATES.md)를 따른다.
 
 `versions/0001_f13_published_clauses.sql`은 F13 문서·조항·게시 상태와 `public.benefitfinder_schema_migrations` 이력을 만든다. psycopg 드라이버를 도입했으며 별도 ORM·마이그레이션 프레임워크는 사용하지 않는다. 윤정찬·양승현이 저장 모델·데이터 영향을 함께 검토한다. 앱 시작 시 자동 DDL·자동 게시를 수행하지 않는다.

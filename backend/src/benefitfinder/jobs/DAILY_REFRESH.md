@@ -6,6 +6,8 @@
 
 작업 프로세스에 `YOUTHCENTER_API_KEY`, `ECOS_API_KEY`, `BASE_RATE_WRITE_DATABASE_URL`을 설정한다. 알림을 요청하면 `DISCORD_WEBHOOK_URL`도 필요하다. 실제 값은 Git 제외 파일 `data/local/f08.env` 또는 실행 환경에만 두고 파일 권한을 600으로 제한한다. DB에는 [ECOS 0004 마이그레이션과 쓰기 역할](../infrastructure/database/ECOS_RATES.md)이 준비되어 있어야 한다. `.env`는 자동으로 읽지 않는다.
 
+수집 성공본도 DB에 인계하려면 [0005·전용 적재 역할](../infrastructure/database/COLLECTED_POLICIES.md)을 준비하고 `COLLECTION_WRITE_DATABASE_URL`을 설정한다. 미설정은 파일 보관 모드이며 DB 인계 성공을 뜻하지 않는다. 설정한 DB가 실패하면 온통청년 단계는 실패하되 금리는 독립적으로 시도한다. DB 실패 후에는 완전한 파일 성공본을 보존하고 다음 수집 전에 그 성공본의 인계를 재시도한다. `ingest-youthcenter --data-dir data`로 API를 다시 호출하지 않고 복구할 수도 있다.
+
 ```sh
 uv run --locked --env-file data/local/f08.env python -m benefitfinder.jobs \
   refresh-data --data-dir data --notify-discord
@@ -65,4 +67,4 @@ Linux 서비스는 전체 실행이 30분을 넘으면 systemd가 종료한다. 
 
 ## 남은 F08 범위
 
-이 명령의 성공은 온통청년 목록과 기준금리의 갱신이다. 보조금24, 수집 정책의 PostgreSQL 인계, 변경 원문 F12 분석·검수 대기 생성, 원문 변경 시 기존 승인 해제와 게시 전환까지 완료했다는 뜻이 아니다. 검수 자료가 없는 현재는 실제 정책을 자동 게시하지 않는다. 운영 API 키로 수집 성공·실제 Discord 도착·설치 호스트에서의 정시 실행은 별도 검증해야 한다.
+이 명령의 성공은 온통청년 목록과 기준금리의 갱신 및 설정한 경우 수집 성공본의 DB 인계다. 보조금24, 변경 원문 F12 분석·검수 대기 생성, 원문 변경 시 기존 승인 해제와 게시 전환까지 완료했다는 뜻이 아니다. 검수 자료가 없는 현재는 실제 정책을 자동 게시하지 않는다. 운영 API 키로 수집 성공·실제 Discord 도착·설치 호스트에서의 정시 실행은 별도 검증해야 한다.

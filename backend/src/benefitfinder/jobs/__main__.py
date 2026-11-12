@@ -27,6 +27,11 @@ from benefitfinder.ai.chunked_evidence import extract_chunked_evidence
 from benefitfinder.ai.policy_facts_agent import extract_policy_facts
 from benefitfinder.ai.policy_rule_agent import extract_rule_batch
 from benefitfinder.application.f12_review import F12ReviewDecision
+from benefitfinder.infrastructure.collection_files import read_collection_file
+from benefitfinder.infrastructure.database.repositories.collected_policies import (
+    PostgresCollectedPolicies,
+)
+from benefitfinder.ingestion.collected_generations import load_youthcenter_generation
 from benefitfinder.infrastructure.ecos_base_rate import EcosBaseRate
 from benefitfinder.infrastructure.database.repositories.base_rates import PostgresBaseRates
 from benefitfinder.application.policy_rules import RuleReviewSnapshot
@@ -212,6 +217,11 @@ def _refresh_youthcenter(data_dir: Path) -> int:
         print(f"환경 변수 {API_KEY_ENV}에 인증키를 설정하세요.", file=sys.stderr)
         return 2
 
+    database_enabled = "COLLECTION_WRITE_DATABASE_URL" in os.environ
+    if database_enabled and not os.environ.get("COLLECTION_WRITE_DATABASE_URL", "").strip():
+        print("수집 DB 인계 실패: collection_database_url_missing", file=sys.stderr)
+        return 2
+
     root = data_dir / "processed" / "f08-youthcenter"
     fetcher = YouthcenterHttpFetcher(api_key)
     snapshots = JsonFileSnapshotStore(data_dir / "raw" / "f08-youthcenter")
@@ -237,7 +247,14 @@ def _refresh_youthcenter(data_dir: Path) -> int:
         return result
 
     try:
-        complete = run_youthcenter_refresh(root, build, clock)
+        complete = run_youthcenter_refresh(
+            root,
+            build,
+            clock,
+            ingest_complete=(
+                (lambda: ingest_youthcenter_command(data_dir) == 0) if database_enabled else None
+            ),
+        )
     except RefreshError as exc:
         print(f"온통청년 갱신 실패: {exc}", file=sys.stderr)
         return 1
@@ -248,6 +265,32 @@ def _refresh_youthcenter(data_dir: Path) -> int:
         print(f"온통청년 갱신 실패. 마지막 성공본 유지: {root / STATUS_FILE}", file=sys.stderr)
         return 1
     print(f"온통청년 갱신 완료: {root / STATUS_FILE}")
+    if not database_enabled:
+        print("수집 DB 미설정: 완전한 파일 성공본만 보존했습니다.")
+    return 0
+
+
+def ingest_youthcenter_command(data_dir: Path) -> int:
+    """Replay the last complete local generation without fetching or approving."""
+    database_url = os.environ.get("COLLECTION_WRITE_DATABASE_URL", "").strip()
+    if not database_url:
+        print("수집 DB 인계 실패: collection_database_url_missing", file=sys.stderr)
+        return 2
+    try:
+        batch = load_youthcenter_generation(
+            lambda relative, limit: read_collection_file(data_dir, relative, limit)
+        )
+        result = PostgresCollectedPolicies(database_url).save(batch)
+    except Exception:
+        # Driver/validation exceptions can include DSNs, source fields or paths.
+        print("수집 DB 인계 실패: 성공본·원본·DB 설정을 확인하세요.", file=sys.stderr)
+        return 1
+    print(
+        f"수집 DB 인계 완료: 신규 {result.new}건, 변경 {result.changed}건, "
+        f"동일 {result.unchanged}건, 누락 {result.missing}건"
+    )
+    if result.replayed:
+        print("이미 인계한 같은 생성본입니다. DB 성공본과 변경 이력은 유지했습니다.")
     return 0
 
 
@@ -555,6 +598,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     daily.add_argument("--notify-discord", action="store_true", help="디스코드로 소스별 결과 보고")
     collect = commands.add_parser("collect-youthcenter", help="온통청년 정책 목록 전체 수집")
     collect.add_argument("--data-dir", type=Path, default=Path("data"))
+    ingest = commands.add_parser("ingest-youthcenter", help="완전한 수집 성공본만 DB에 재적재")
+    ingest.add_argument("--data-dir", type=Path, default=Path("data"))
     refresh = commands.add_parser(
         "refresh-youthcenter", help="완전한 온통청년 수집만 최신본으로 전환"
     )
@@ -590,6 +635,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.command == "refresh-data":
         return refresh_data_command(args.data_dir, notify_discord=args.notify_discord)
+    if args.command == "ingest-youthcenter":
+        return ingest_youthcenter_command(args.data_dir)
     if args.command == "refresh-ecos-rate":
         return refresh_ecos_rate_command()
     if args.command == "policy-catalog":
