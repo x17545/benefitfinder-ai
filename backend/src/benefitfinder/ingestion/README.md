@@ -2,7 +2,7 @@
 
 작업 전에는 루트 지침과 이 경로의 [추가 에이전트 지침](AGENTS.md)을 함께 읽는다.
 
-현재 구현: 온통청년 정책 목록의 원천 수집·원본 보관·버전 비교(`youthcenter.py`, `versioning.py`, `collect.py`), 규칙 후보의 근거 검사·명시적 검수 기록(`policy_rule_review.py`)과 로컬 검수 자료의 준비·승인·재검수(`rule_review_workflow.py`). 네트워크·원본 저장·버전 저장은 `application/collection.py`의 인터페이스로 주입받는다. 공용 DB가 정해지기 전까지는 infrastructure의 HTTP 어댑터와 로컬 JSON 파일 저장소로 실행한다. 공고 원문 수집·실제 Agent·혜택 정규화·운영 게시·PostgreSQL 저장과 매일 실행·알림은 아직 연결하지 않았다.
+현재 구현: 온통청년 정책 목록의 원천 수집·원본 보관·버전 비교(`youthcenter.py`, `versioning.py`, `collect.py`), 규칙 후보의 근거 검사·명시적 검수 기록(`policy_rule_review.py`)과 로컬 검수 자료의 준비·승인·재검수(`rule_review_workflow.py`). 네트워크·원본 저장·버전 저장은 `application/collection.py`의 인터페이스로 주입받는다. infrastructure의 HTTP·로컬 JSON 저장소로 실행하며 F08은 [완전한 성공본의 PostgreSQL 인계](../infrastructure/database/COLLECTED_POLICIES.md)도 제공한다. `collected_generations.py`는 주입받은 bounded 파일 읽기로 원본·내용 해시·시각·건수를 검증한다. 통합 실행·예약 파일·알림은 [jobs](../jobs/DAILY_REFRESH.md)에 있다. 공고 원문 보완 수집·혜택 정규화·F12 자동 분석 인계·운영 게시와 실제 운영 갱신 검증은 후속이다.
 
 - `collect_youthcenter()`는 모든 응답을 해석 없이 스냅숏(요청 파라미터·수집 시각·상태·SHA-256)으로 보관하고 정책 ID별 레코드 해시로 신규·변경·유지·삭제를 구분한다.
 - API 키는 요청 파라미터·스냅숏·오류에 넣지 않는다. 어댑터가 직접 추가하고, 어댑터 예외는 형식 이름만 기록한다.
