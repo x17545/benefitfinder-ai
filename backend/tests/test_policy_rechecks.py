@@ -36,6 +36,7 @@ def _row(task_id: int, *, reason: str = "source_changed") -> dict[str, object]:
         "latest_material_sha256": "d" * 64,
         "latest_missing_detected_at": None,
         "latest_run_id": f"latest-run-{task_id}",
+        "superseded_by_version": None,
     }
 
 

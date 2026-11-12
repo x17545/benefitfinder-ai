@@ -1,5 +1,7 @@
 # 작업 실행
 
+수집 원천에 명시적으로 연결된 게시 정책은 [0006 변경·재검수](../infrastructure/database/POLICY_SOURCE_RECHECKS.md)를 통해 변경·누락 시 게시에서 내린다. `policy-catalog rechecks --output <새 파일>`로 권한 600의 읽기 전용 목록을 내보내며 승인·완료 처리나 F12 자동 실행은 하지 않는다.
+
 `refresh-data`는 온통청년 목록과 ECOS 금리를 함께 갱신하고 소스별 결과를 한 번 보고한다. 소스 한쪽이 실패해도 다른 쪽은 시도하며 성공본은 각 저장기가 보존한다. [통합 명령·실행 기록·Linux/macOS 스케줄·남은 범위](DAILY_REFRESH.md)를 따른다.
 
 `COLLECTION_WRITE_DATABASE_URL` 설정 시 온통청년의 완전한 수집 성공본과 변경 이력을 PostgreSQL에 인계한다. DB 실패 시 파일 성공본을 유지하고 다음 수집 전 재인계한다. `ingest-youthcenter --data-dir data`는 API 없이 마지막 성공본만 재적재한다. [0005·검증·권한·실패 복구](../infrastructure/database/COLLECTED_POLICIES.md)를 따른다. 부분 수집·미검수 자료를 계산용 정책으로 게시하지 않는다.

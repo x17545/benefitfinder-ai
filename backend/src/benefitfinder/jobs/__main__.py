@@ -97,6 +97,8 @@ from benefitfinder.infrastructure.published_clauses import InMemoryPublishedClau
 from benefitfinder.jobs.explanation_example import explanation_example
 from benefitfinder.infrastructure.policy_catalog_records import CatalogRecord, record_hash, validate_source_text
 from benefitfinder.infrastructure.database.repositories.published_policies import publish_policy
+from benefitfinder.infrastructure.database.repositories.policy_rechecks import list_policy_rechecks
+from benefitfinder.infrastructure.policy_recheck_files import write_recheck_page
 
 API_KEY_ENV = "YOUTHCENTER_API_KEY"
 KST = ZoneInfo("Asia/Seoul")
@@ -129,6 +131,22 @@ def policy_catalog_command(args: argparse.Namespace) -> int:
         print("정책 카탈로그 처리 실패: 입력·근거·승인 파일과 DB 설정을 확인해 주세요.", file=sys.stderr)
         return 2
     print("승인된 정책 버전을 게시했습니다.")
+    return 0
+
+
+def policy_rechecks_command(args: argparse.Namespace) -> int:
+    """Export an immutable pending handoff with a dedicated read-only role."""
+    try:
+        page = list_policy_rechecks(
+            os.environ.get("POLICY_RECHECK_DATABASE_URL", ""),
+            after_id=args.after_id, limit=args.limit,
+        )
+        write_recheck_page(args.output, page)
+    except Exception:
+        print("재검수 목록 처리 실패: DB 설정·커서·새 출력 경로를 확인해 주세요.", file=sys.stderr)
+        return 2
+    print(json.dumps({"exported_count": len(page["items"]),
+                      "next_after_id": page["next_after_id"]}))
     return 0
 
 
@@ -626,6 +644,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         command.add_argument("--source", type=Path, required=True)
         if action == "publish":
             command.add_argument("--approval", type=Path, required=True)
+    rechecks = catalog_actions.add_parser("rechecks", help="재검수 대기 기록을 새 로컬 파일로 내보내기")
+    rechecks.add_argument("--output", type=Path, required=True)
+    rechecks.add_argument("--after-id", type=int, default=0)
+    rechecks.add_argument("--limit", type=int, default=100)
     _add_rule_review_commands(commands)
     explain = commands.add_parser(
         "explain-example", help="F13 가상 게시 조항으로 설명 생성·폴백 확인"
@@ -640,6 +662,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "refresh-ecos-rate":
         return refresh_ecos_rate_command()
     if args.command == "policy-catalog":
+        if args.catalog_action == "rechecks":
+            return policy_rechecks_command(args)
         return policy_catalog_command(args)
     if args.command == "collect-youthcenter":
         return collect_youthcenter_command(args.data_dir)

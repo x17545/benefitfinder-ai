@@ -1,5 +1,7 @@
 # PostgreSQL 마이그레이션
 
+`versions/0006_policy_source_rechecks.sql`은 0001·0002·0005 다음에 명시적으로 적용한다. 승인 해시에 포함한 원천 ID·내용 해시를 연결하고 수집 변경·누락 시 게시 정책·F13을 내리며 재검수 이력을 같은 트랜잭션으로 기록한다. **기존 실제 게시 정책은 검증된 연결이 없어 검수 대기/은퇴로 전환하며 기존 가상 정책은 유지한다.** 운영 적용 전 [데이터 영향·재게시·권한](../src/benefitfinder/infrastructure/database/POLICY_SOURCE_RECHECKS.md)을 확인한다. 새 실제 정책 게시에는 이 마이그레이션과 원천 연결이 필요하다.
+
 `versions/0005_collected_policy_generations.sql`은 완전한 수집 성공본·최신 원천 레코드·변경 이력을 저장한다. 0001의 이력 테이블 다음에 별도 트랜잭션으로 적용한다. 미검수 원천 영역이며 기존 게시 정책·F13 조항·승인 상태를 바꾸지 않는다. [적재 설정·재실행·권한 경계](../src/benefitfinder/infrastructure/database/COLLECTED_POLICIES.md)를 따른다.
 
 `versions/0004_ecos_base_rate.sql`은 마지막 성공한 ECOS 기준금리·관측일·확인 시각과 고정 출처 코드를 저장한다. 0001의 이력 테이블 이후 별도 트랜잭션으로 적용한다. 0002·0003의 데이터는 바꾸지 않는다. 초기 금리·사용자 정보·API 키를 넣지 않으며 [수집·권한·운영 범위](../src/benefitfinder/infrastructure/database/ECOS_RATES.md)를 따른다.

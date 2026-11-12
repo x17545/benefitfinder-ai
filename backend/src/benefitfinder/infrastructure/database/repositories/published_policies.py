@@ -103,7 +103,23 @@ def publish_policy(
     benefit = record.benefit
     with psycopg.connect(database_url, connect_timeout=2) as connection:
         connection.execute("SET LOCAL statement_timeout = '5s'")
+        connection.execute("SET LOCAL lock_timeout = '500ms'")
+        if record.collection_sources:
+            if connection.execute(
+                "SELECT 1 FROM public.benefitfinder_schema_migrations WHERE version = %s",
+                ("0006_policy_source_rechecks",),
+            ).fetchone() is None:
+                raise ValueError("catalog_source_migration_required")
+            # Collectors hold this source lock before changing rows. Take it
+            # before the policy lock/retirement so concurrent refresh cannot
+            # publish an approval of a stale generation or invert lock order.
+            for source in sorted({item.source for item in record.collection_sources}):
+                connection.execute(
+                    "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
+                    ("benefitfinder:collected_policy_generations:" + source,),
+                )
         connection.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", (benefit.id,))
+        published_at = datetime.now(timezone.utc)
         connection.execute(
             "UPDATE public.policy_catalog_releases SET publication_status='retired' "
             "WHERE policy_id=%s AND publication_status='published'",
@@ -121,6 +137,6 @@ def publish_policy(
                 approved_sha256,
                 reviewer.strip(),
                 reviewed_at,
-                now,
+                published_at,
             ),
         )

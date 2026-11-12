@@ -1,5 +1,7 @@
 # PostgreSQL 어댑터
 
+[원천 변경·재검수](POLICY_SOURCE_RECHECKS.md)는 승인 입력의 원천 ID·해시를 저장하고 수집 변경·누락 시 연결된 게시 정책과 F13을 내린다. 기존 승인·무효화 이력은 보존하며 전용 읽기 역할로 최신 원천 상태와 함께 내보낸다. 실제 정책 게시에는 0006과 명시적인 원천 연결이 필요하다.
+
 [수집 성공본 저장소](COLLECTED_POLICIES.md)는 F08의 완전한 원천 생성본·최신 레코드·변경 이력을 별도 미검수 영역에 저장한다. `COLLECTION_WRITE_DATABASE_URL`은 수집 작업에서만 사용하며 앱의 게시 자료 조회·승인·계산에 연결하지 않는다. DB 실패 후 같은 성공본 재적재와 이전 성공본 보존을 지원한다.
 
 F13 게시 조항의 조회 저장소를 `repositories/published_clauses.py`에 구현했다. psycopg 3 비동기 드라이버를 사용하며 ORM·벡터 확장은 추가하지 않았다. `DATABASE_URL`을 서버 프로세스에 전달하면 `bootstrap.create_app`이 PostgreSQL 저장소를 주입한다. URL이 없으면 기존 가상 메모리 예제를 사용한다. URL을 설정한 뒤 DB가 실패한 경우에는 메모리 조항으로 대체하지 않고 기본 안내를 반환한다. `.env` 파일은 자동으로 읽지 않는다.

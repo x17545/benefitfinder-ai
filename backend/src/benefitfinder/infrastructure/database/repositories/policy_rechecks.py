@@ -18,7 +18,13 @@ SELECT q.task_id, q.policy_id, q.document_version, q.reason,
        q.invalidated_document_versions,
        p.material_sha256 AS latest_material_sha256,
        p.missing_detected_at AS latest_missing_detected_at,
-       p.run_id AS latest_run_id
+       p.last_run_id AS latest_run_id,
+       (SELECT newer.document_version
+        FROM public.policy_catalog_releases original
+        JOIN public.policy_catalog_releases newer ON newer.policy_id = original.policy_id
+          AND newer.published_at > original.published_at
+        WHERE original.policy_id = q.policy_id AND original.document_version = q.document_version
+        ORDER BY newer.published_at DESC, newer.document_version LIMIT 1) AS superseded_by_version
 FROM public.policy_recheck_queue AS q
 LEFT JOIN public.collected_policies AS p
   ON p.source = q.source AND p.external_id = q.external_id
@@ -97,6 +103,7 @@ def _item_from_row(row: Mapping[str, object]) -> dict[str, object]:
         raise ValueError
 
     source = _optional_text(row, "source")
+    superseded_by = _optional_text(row, "superseded_by_version")
     external_id = _optional_text(row, "external_id")
     run_id = _optional_text(row, "run_id")
     if reason != "source_unlinked" and any(
@@ -124,6 +131,8 @@ def _item_from_row(row: Mapping[str, object]) -> dict[str, object]:
             row, "latest_missing_detected_at", optional=True
         ),
         "latest_run_id": _optional_text(row, "latest_run_id"),
+        "superseded_by_version": superseded_by,
+        "recheck_status": "pending" if superseded_by is None else "superseded",
     }
 
 

@@ -2,7 +2,7 @@
 
 `POLICY_DATABASE_URL`을 설정하면 추천·상세·상황 변화 API가 `policy_catalog_releases`의 현재 게시 버전을 사용한다. 미설정 실행은 기존 가상 예제다. 설정 후 조회 실패는 `503 dependency_unavailable`이며 가상 정책이나 빈 성공 결과로 대체하지 않는다. DB가 비어 있으면 정상 빈 결과다. import·서버 시작 때 접속·DDL·초기 데이터·게시를 실행하지 않는다.
 
-관리 역할로 [마이그레이션](../../../../migrations/README.md)의 0001·0002를 적용한 뒤 런타임에는 별도 읽기 역할을 사용한다.
+관리 역할로 [마이그레이션](../../../../migrations/README.md)의 0001·0002를 적용한 뒤 런타임에는 별도 읽기 역할을 사용한다. 실제 정책 게시에는 수집 영역 0005와 [원천 변경·재검수 0006](POLICY_SOURCE_RECHECKS.md)이 필요하며 기존 실제 게시 자료를 검수 대기로 내리는 데이터 영향을 먼저 확인한다.
 
 ```sql
 GRANT USAGE ON SCHEMA public TO benefitfinder_reader;
@@ -21,6 +21,7 @@ GRANT SELECT ON public.policy_catalog_releases TO benefitfinder_reader;
 | `payment_evidence` | 금액·시점의 인용·위치·출처. benefit과 같은 버전·확인일 |
 | `unresolved_combination_rules` | 미해결 중복·차감·예외 규칙이 있으면 `true`. 이때 `benefit.reviewed: true`는 거부 |
 | `source_sha256` | 별도 보관한 UTF-8 원문 텍스트의 정확한 SHA-256 |
+| `collection_sources` | 검수한 수집 원천의 `source`, `external_id`, `material_sha256` 목록. 실제 정책은 필수, 최대 20개이며 전체가 승인 해시에 포함됨. 원문 텍스트 해시와 구분 |
 
 실행 규칙은 다음 범위만 지원한다. 다른 연산자·필드·불완전한 매개변수는 거부한다.
 
