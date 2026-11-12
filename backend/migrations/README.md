@@ -24,3 +24,14 @@ psql "$DATABASE_URL" -X --command='TABLE public.benefitfinder_schema_migrations;
 쓰는 출처 이력이다. 로컬의 별도 `_test` DB에서 versions/0001 다음에 명시적으로 적용한다.
 원본 ID·후보·승인 사유·원문/쌍/내보내기 해시를 보존하며 반려·대기 항목은 적재하지 않는다.
 게시 상태를 바꾸지 않으며 운영용 마이그레이션 실행 목록에 포함하지 않는다.
+
+## 게시 정책 카탈로그 (0002)
+
+`versions/0002_published_policy_catalog.sql`은 정책·조건 실행 규칙·지급 일정·승인 해시·검수/게시 상태를 저장한다. 0001 다음에 별도 트랜잭션으로 적용한다. 기존 F13 조항을 바꾸거나 정책을 자동 게시하지 않는다.
+
+```sh
+psql "$DATABASE_URL" -X --set=ON_ERROR_STOP=1 --single-transaction \
+  --file=backend/migrations/versions/0002_published_policy_catalog.sql
+```
+
+적용 후 카탈로그는 비어 있다. [입력·검수·실행 절차](../src/benefitfinder/infrastructure/database/POLICY_CATALOG.md)를 따른다. 공유·운영 DB에는 별도 승인 없이 적용하지 않는다.

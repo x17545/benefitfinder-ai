@@ -1,16 +1,16 @@
 """청년 정책 추천 API 라우터."""
 
-from fastapi import APIRouter, Depends, HTTPException, Request
-
-from benefitfinder.api.schemas.recommendation import RecommendationRequest
-from benefitfinder.api.dependencies.analysis_usage import reserve_analysis
 from collections.abc import Callable
 from typing import Any
-from benefitfinder.application.recommendation_service import MVP_ANNUAL_RATE
-from benefitfinder.application.response_mapper import (
-    build_recommendation_response,
-)
+
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import Response
+
+from benefitfinder.api.dependencies.analysis_usage import reserve_analysis
+from benefitfinder.api.analysis_response import analysis_response, wants_event_stream
+from benefitfinder.api.schemas.recommendation import RecommendationRequest
 from benefitfinder.application.recommendation_explanations import RecommendationExplainer
+from benefitfinder.application.recommendation_flow import run_recommendation
 from benefitfinder.application.service_catalog import ServiceCatalog
 
 
@@ -30,21 +30,32 @@ def get_service_catalog(request: Request) -> ServiceCatalog:
     return request.app.state.service_catalog
 
 
+def get_discount_rate(request: Request) -> float | None:
+    return request.app.state.discount_rate
+
+
 router = APIRouter(
     prefix="/api/v1",
     tags=["recommendations"],
 )
 
 
-@router.post("/recommendations")
+@router.post(
+    "/recommendations",
+    response_model=None,
+    responses={
+        200: {"content": {"text/event-stream": {"schema": {"type": "string"}}}},
+    },
+)
 async def create_recommendations(
     request: RecommendationRequest,
     http_request: Request,
     recommendation_service: Callable[..., dict[str, Any]] = Depends(get_recommendation_service),
     recommendation_explainer: RecommendationExplainer = Depends(get_recommendation_explainer),
     service_catalog: ServiceCatalog = Depends(get_service_catalog),
-) -> dict[str, Any]:
-    """가상 MVP 정책 추천 결과를 반환한다."""
+    annual_rate: float | None = Depends(get_discount_rate),
+) -> Response:
+    """조립된 게시 정책 또는 명시적인 개발 예제로 추천한다."""
 
     if request.domain != "youth":
         raise HTTPException(
@@ -54,18 +65,19 @@ async def create_recommendations(
 
     await reserve_analysis(http_request)
 
-    # 가상 MVP 계산용 할인율. 실제 금리 출처 검증값은 아님.
-    annual_rate = MVP_ANNUAL_RATE
+    async def analyze(progress):
+        return await run_recommendation(
+            request,
+            calculate=recommendation_service,
+            annual_rate=annual_rate,
+            services=service_catalog,
+            explainer=recommendation_explainer,
+            progress=progress,
+        )
 
-    calculation = recommendation_service(
-        request,
-        annual_rate=annual_rate,
+    return await analysis_response(
+        http_request,
+        analyze,
+        timeout_seconds=http_request.app.state.analysis_timeout_seconds,
+        stream=wants_event_stream(http_request.headers.get("accept", "")),
     )
-
-    response = build_recommendation_response(
-        calculation=calculation,
-        annual_rate=annual_rate,
-    )
-    response.update(service_catalog.recommend(request.domain, request.profile))
-
-    return await recommendation_explainer.enrich(response)
