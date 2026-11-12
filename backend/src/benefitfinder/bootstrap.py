@@ -33,6 +33,11 @@ from benefitfinder.application.recommendation_service import (
 )
 from benefitfinder.application.region_options import RegionCatalog
 from benefitfinder.application.service_catalog import ServiceCatalog
+from benefitfinder.application.analysis_usage import (
+    AnalysisUsage,
+    AnalysisUsageUnavailable,
+    DailyAnalysisLimitExceeded,
+)
 from benefitfinder.application.simulation_service import simulate_mvp
 from benefitfinder.domains.youth.policy_evaluator import evaluate_policies
 from benefitfinder.domains.youth.scenario import change_profile, next_threshold
@@ -45,6 +50,8 @@ from benefitfinder.infrastructure.example_services import example_services
 from benefitfinder.infrastructure.ollama_explanations import OllamaExplanationCompletion
 from benefitfinder.infrastructure.published_clauses import InMemoryPublishedClauses
 from benefitfinder.infrastructure.region_codes import OfficialRegionCatalog
+from benefitfinder.infrastructure.memory_analysis_usage import MemoryAnalysisUsage
+from benefitfinder.infrastructure.database.repositories.analysis_usage import PostgresAnalysisUsage
 
 NOT_FOUND_MESSAGE = "요청한 리소스를 찾을 수 없습니다."
 INVALID_REQUEST_MESSAGE = "요청 값이 올바르지 않습니다."
@@ -72,6 +79,8 @@ def create_app(
     explanation_timeout_seconds: float = 5,
     explanation_database_url: str | None = None,
     service_catalog: ServiceCatalog | None = None,
+    analysis_usage: AnalysisUsage | None = None,
+    analysis_usage_database_url: str | None = None,
 ) -> FastAPI:
     """Assemble and return a new FastAPI application.
 
@@ -80,6 +89,10 @@ def create_app(
     """
     if explanation_model is not None and explanation_generator is not None:
         raise ValueError("ambiguous_explanation_generator")
+    if analysis_usage is not None and analysis_usage_database_url is not None:
+        raise ValueError("ambiguous_analysis_usage")
+    if analysis_usage_database_url is not None:
+        analysis_usage = PostgresAnalysisUsage(analysis_usage_database_url)
     if explanation_repository is not None and explanation_database_url is not None:
         raise ValueError("ambiguous_explanation_repository")
     if explanation_database_url is not None:
@@ -137,6 +150,30 @@ def create_app(
             content=error_body("invalid_request", INVALID_REQUEST_MESSAGE),
         )
 
+    @app.exception_handler(DailyAnalysisLimitExceeded)
+    async def daily_limit_handler(
+        request: Request, exc: DailyAnalysisLimitExceeded
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=429,
+            content=error_body(
+                "daily_limit_exceeded",
+                "오늘 이용량이 많아 잠시 쉬어요. 자정 이후 다시 이용해 주세요.",
+            ),
+        )
+
+    @app.exception_handler(AnalysisUsageUnavailable)
+    async def usage_unavailable_handler(
+        request: Request, exc: AnalysisUsageUnavailable
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=503,
+            content=error_body(
+                "dependency_unavailable",
+                "분석 이용량을 확인할 수 없습니다. 잠시 후 다시 시도해 주세요.",
+            ),
+        )
+
     @app.exception_handler(Exception)
     async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
         return JSONResponse(
@@ -168,6 +205,9 @@ def create_app(
     )
 
     app.state.region_catalog = region_catalog if region_catalog is not None else OfficialRegionCatalog()
+    app.state.analysis_usage = (
+        analysis_usage if analysis_usage is not None else MemoryAnalysisUsage()
+    )
 
     app.include_router(health_router)
     app.include_router(options_router)

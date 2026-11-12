@@ -14,6 +14,10 @@ Pydantic 모델을 DB 모델이나 순수 domain 모델로 그대로 사용하�
 
 정책 분석 API 구현 시 프로필을 POST 본문으로 받아 SSE `progress` 후 `result` 또는 `error` 한 번으로 종료한다. 스트림 시작 전 오류는 HTTP 상태로, 시작 후 오류는 공통 계약을 담은 `error` 이벤트로 전달한다. 요청 ID·취소·60초 타임아웃을 처리하고 프로필을 URL·로그에 남기지 않는다. 정책 상세 GET에는 공개 정보만 반환하며 개인별 진단은 현재 분석 응답을 사용한다.
 
+## 공유 분석 이용량
+
+추천·상황 변화는 합쳐 KST 하루 100번의 분석을 허용한다. 스키마·분야·시나리오 검증 뒤 차감하며 실패한 분석·재시도도 각각 포함한다. 한도 초과는 HTTP 429 `daily_limit_exceeded`, 이용량 DB 장애는 HTTP 503 `dependency_unavailable`이다. `ANALYSIS_USAGE_DATABASE_URL`을 설정하면 모든 서버가 PostgreSQL의 같은 날짜별 집계를 사용한다. 미설정은 재시작 시 초기화되는 단일 프로세스 개발 예제이므로 운영에서는 공유 DB 설정이 필요하다. [마이그레이션·권한·집계 범위](../infrastructure/database/ANALYSIS_USAGE.md)를 따른다. 프로필·IP·요청 ID를 저장하지 않는다.
+
 ## F13 설명 실행
 
 PostgreSQL 게시 조항은 [명시적 마이그레이션](../../../migrations/README.md) 후 SELECT 전용 역할의 `DATABASE_URL`을 서버에 전달한다. DB를 설정한 뒤 장애·빈 조회를 가상 메모리 근거로 대체하지 않는다. [DB 저장 계약](../infrastructure/database/README.md)과 [DB→E4B→화면 통합 검증](../../../integration/README.md)을 따른다.

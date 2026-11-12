@@ -1,10 +1,12 @@
 """S4 HTTP adapter. All policy math stays outside the router."""
 
+import asyncio
 from collections.abc import Callable
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
+from benefitfinder.api.dependencies.analysis_usage import reserve_analysis
 from benefitfinder.api.schemas.simulation import SimulationRequest
 
 router = APIRouter(prefix="/api/v1", tags=["simulations"])
@@ -15,8 +17,9 @@ def get_simulation_service(request: Request) -> Callable[..., dict[str, Any]]:
 
 
 @router.post("/simulations", responses={400: {"description": "Unsupported domain"}})
-def create_simulation(
+async def create_simulation(
     request: SimulationRequest,
+    http_request: Request,
     simulate: Callable[..., dict[str, Any]] = Depends(get_simulation_service),
 ) -> dict[str, Any]:
     if request.domain != "youth":
@@ -24,9 +27,11 @@ def create_simulation(
     income = request.income_change
     if income is not None and request.scenario not in ("employed", "income_up"):
         raise HTTPException(status_code=422)
+    await reserve_analysis(http_request)
     options = request.options
     try:
-        return simulate(
+        return await asyncio.to_thread(
+            simulate,
             profile=request.profile,
             scenario=request.scenario,
             period=(options.period or "1y") if options else "1y",

@@ -1,4 +1,4 @@
-# F13 실제 PostgreSQL 검증
+# 실제 PostgreSQL 검증
 
 이 디렉터리는 DB 없이 실행하는 `scripts/check.py` 기본 검사와 별개다. 실제 PostgreSQL 17에서 실행하며 SQLite나 메모리 테스트로 대체하지 않는다. CI는 PostgreSQL 17 서비스에서 같은 검사를 별도 필수 단계로 실행한다.
 
@@ -134,3 +134,7 @@ pnpm dev:web
 ```sh
 uv run --locked python -m unittest discover -s backend/integration -v
 ```
+
+## 공유 분석 이용량
+
+`test_analysis_usage_postgres.py`는 같은 전용 테스트 연결에서 별도의 UUID `_test` DB를 생성하고 0001·0003만 적용한 뒤 삭제한다. 125개 경합 요청의 정확한 100회 승인, 서로 다른 API 인스턴스의 추천·상황 변화 공유, 재시작 유지·이전 날짜 분리·비차감 조회·스키마 제약·접속/잠금/권한 실패를 검증한다. 집계에만 SELECT·INSERT·UPDATE를 가진 역할의 성공과 정책 문서 읽기 거부도 확인한다. 실제 사용자 조건·정책 자료는 넣지 않는다. 전체 discover 명령과 CI에서 함께 실행한다. 운영 적용은 [별도 설정 안내](../src/benefitfinder/infrastructure/database/ANALYSIS_USAGE.md)를 따른다.

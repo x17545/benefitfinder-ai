@@ -3,6 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from benefitfinder.api.schemas.recommendation import RecommendationRequest
+from benefitfinder.api.dependencies.analysis_usage import reserve_analysis
 from collections.abc import Callable
 from typing import Any
 from benefitfinder.application.recommendation_service import MVP_ANNUAL_RATE
@@ -38,6 +39,7 @@ router = APIRouter(
 @router.post("/recommendations")
 async def create_recommendations(
     request: RecommendationRequest,
+    http_request: Request,
     recommendation_service: Callable[..., dict[str, Any]] = Depends(get_recommendation_service),
     recommendation_explainer: RecommendationExplainer = Depends(get_recommendation_explainer),
     service_catalog: ServiceCatalog = Depends(get_service_catalog),
@@ -49,6 +51,8 @@ async def create_recommendations(
             status_code=400,
             detail="unsupported_domain",
         )
+
+    await reserve_analysis(http_request)
 
     # 가상 MVP 계산용 할인율. 실제 금리 출처 검증값은 아님.
     annual_rate = MVP_ANNUAL_RATE

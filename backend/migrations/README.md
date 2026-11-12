@@ -14,6 +14,8 @@ psql "$DATABASE_URL" -X --command='TABLE public.benefitfinder_schema_migrations;
 
 게시 버전 전환은 한 트랜잭션에서 이전 문서 `retired` → 새 문서 `published` 순서로 진행한다. 조항은 검수 승인과 게시를 별도 단계로 기록한다. F12 승인 파일은 게시 입력을 검토하기 위한 자료이며 이 마이그레이션이나 서버가 자동 게시하지 않는다.
 
+`versions/0003_analysis_usage.sql`은 추천·상황 변화를 합친 KST 날짜별 100회 집계다. 0001의 이력 테이블 이후 명시적으로 적용하며 정책 카탈로그의 0002와는 독립적이다. 날짜와 횟수만 저장하고 사용자 조건은 저장하지 않는다. [권한·실행 설정](../src/benefitfinder/infrastructure/database/ANALYSIS_USAGE.md)을 따른다.
+
 실패 복구는 트랜잭션 롤백을 기본으로 한다. 공유 데이터가 생긴 후에는 되돌리기용 새 마이그레이션을 검토하며 테이블 DROP 명령을 자동 제공하지 않는다. 운영·공유 DB 적용과 파괴적 변경은 승인된 별도 작업이다.
 
 [전용 테스트 DB 검증](../integration/README.md)은 실제 PostgreSQL에서 생성·읽기·쓰기·버전 전환·검수/게시 제외·장애를 확인한다. 가상 사례만 사용하고 원문·결과·덤프·자격 증명은 Git에 넣지 않는다.
