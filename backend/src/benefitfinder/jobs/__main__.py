@@ -76,6 +76,7 @@ from benefitfinder.ingestion.rule_review_workflow import (
 )
 from benefitfinder.ingestion.youthcenter import SOURCE_NAME, YOUTHCENTER_POLICY_LIST
 from benefitfinder.jobs.f12_review_display import format_f12_review
+from benefitfinder.jobs.daily_refresh import DailyRefreshError, run_daily_refresh
 from benefitfinder.jobs.rule_review_example import example_rule_batch
 from benefitfinder.jobs.youthcenter_refresh import (
     STATUS_FILE,
@@ -267,6 +268,38 @@ def refresh_youthcenter_command(data_dir: Path, *, notify_discord: bool = False)
             print(f"F08 알림 실패: {exc}", file=sys.stderr)
             return code or 1
         print("F08 디스코드 결과 알림 전송 완료")
+    return code
+
+
+def refresh_data_command(data_dir: Path, *, notify_discord: bool = False) -> int:
+    """Run configured F08 sources without publishing unreviewed policies."""
+
+    def notify(message: str) -> None:
+        webhook = os.environ.get("DISCORD_WEBHOOK_URL", "").strip()
+        if not webhook:
+            raise DiscordWebhookError("discord_webhook_missing")
+        DiscordWebhook(webhook).send(message)
+
+    try:
+        code = run_daily_refresh(
+            data_dir / "processed" / "f08",
+            refresh_policies=lambda: _refresh_youthcenter(data_dir),
+            refresh_rate=refresh_ecos_rate_command,
+            clock=lambda: datetime.now(KST),
+            notify=notify if notify_discord else None,
+        )
+    except DailyRefreshError as error:
+        print(f"F08 통합 갱신 실패: {error}", file=sys.stderr)
+        if notify_discord:
+            try:
+                notify(f"[F08] 정책·기준금리 갱신 준비 실패: {error}")
+            except DiscordWebhookError:
+                print("F08 알림 실패: discord_notification_failed", file=sys.stderr)
+        return 1
+    if code:
+        print("F08 통합 갱신 실패: 소스별 상태·실행 기록·알림 설정을 확인하세요.", file=sys.stderr)
+    else:
+        print("F08 정책·기준금리 갱신 완료")
     return code
 
 
@@ -517,6 +550,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m benefitfinder.jobs")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("refresh-ecos-rate", help="ECOS 기준금리의 마지막 성공값을 DB에 갱신")
+    daily = commands.add_parser("refresh-data", help="정책·기준금리 통합 갱신과 단일 결과 보고")
+    daily.add_argument("--data-dir", type=Path, default=Path("data"))
+    daily.add_argument("--notify-discord", action="store_true", help="디스코드로 소스별 결과 보고")
     collect = commands.add_parser("collect-youthcenter", help="온통청년 정책 목록 전체 수집")
     collect.add_argument("--data-dir", type=Path, default=Path("data"))
     refresh = commands.add_parser(
@@ -552,6 +588,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     explain.add_argument("--category", choices=("employment", "housing"), default="employment")
     explain.add_argument("--model", help="설정한 제공자 모델. 제공자 미설정 시 명시적 Ollama 호환")
     args = parser.parse_args(argv)
+    if args.command == "refresh-data":
+        return refresh_data_command(args.data_dir, notify_discord=args.notify_discord)
     if args.command == "refresh-ecos-rate":
         return refresh_ecos_rate_command()
     if args.command == "policy-catalog":

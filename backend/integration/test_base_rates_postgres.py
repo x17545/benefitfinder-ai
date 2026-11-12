@@ -1,9 +1,14 @@
 """Real PostgreSQL rate persistence in a disposable, fictional test database."""
 
 from datetime import date, datetime, timezone
+from contextlib import redirect_stderr, redirect_stdout
+from io import StringIO
+import json
 import os
 from pathlib import Path
+from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import Mock, patch
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
@@ -13,8 +18,10 @@ from psycopg.conninfo import conninfo_to_dict, make_conninfo
 
 from backend.tests.catalog_fixtures import MemoryPolicies, release_data
 from benefitfinder.application.base_rates import BaseRateObservation, BaseRateUnavailable
+from benefitfinder.application.collection import SourceFetcher, SourceResponse
 from benefitfinder.bootstrap import create_app
 from benefitfinder.infrastructure.database.repositories.base_rates import PostgresBaseRates
+from benefitfinder.jobs.__main__ import main
 
 MIGRATIONS = Path(__file__).resolve().parents[1] / "migrations/versions"
 
@@ -60,6 +67,67 @@ class PostgresBaseRateTests(unittest.TestCase):
             self.assertEqual(response.status_code, 200)
             self.assertEqual(response.json()["base_rate"], 0.025)
             self.assertEqual(response.json()["base_rate_status"], "verified")
+
+    def test_daily_cli_isolates_real_file_and_postgres_failures_and_reports_once(self) -> None:
+        self.repository.save(self.observation)
+        newer = BaseRateObservation(
+            0.03, date(2026, 11, 2), datetime(2026, 11, 3, tzinfo=timezone.utc)
+        )
+        body = {
+            "resultCode": 200,
+            "result": {
+                "youthPolicyList": [{"plcyNo": "fictional-A", "plcyNm": "가상 공고"}],
+                "pagging": {"totCount": 1},
+            },
+        }
+        fetcher = Mock(spec=SourceFetcher)
+        fetcher.fetch.return_value = SourceResponse(400, b"fictional failure", None)
+        with (
+            TemporaryDirectory() as temporary,
+            patch.dict(
+                "os.environ",
+                {
+                    "YOUTHCENTER_API_KEY": "fictional-key",
+                    "ECOS_API_KEY": "fictionalkey",
+                    "BASE_RATE_WRITE_DATABASE_URL": self.url,
+                    "DISCORD_WEBHOOK_URL": "https://discord.com/api/webhooks/123/fictional-token",
+                },
+            ),
+            patch("benefitfinder.jobs.__main__.YouthcenterHttpFetcher", return_value=fetcher),
+            patch(
+                "benefitfinder.jobs.__main__.EcosBaseRate",
+            ) as ecos,
+            patch("benefitfinder.jobs.__main__.DiscordWebhook.send") as notify,
+            redirect_stdout(
+                StringIO(),
+            ),
+            redirect_stderr(StringIO()),
+        ):
+            data = Path(temporary)
+            command = ["refresh-data", "--data-dir", temporary, "--notify-discord"]
+            ecos.return_value.fetch.return_value = newer
+            self.assertEqual(main(command), 1)
+            self.assertEqual(self.repository.latest(), newer)
+            policy_status = data / "processed/f08-youthcenter/status.json"
+            self.assertIsNone(json.loads(policy_status.read_text())["last_success"])
+            fetcher.fetch.return_value = SourceResponse(
+                200, json.dumps(body).encode(), "application/json"
+            )
+            ecos.return_value.fetch.side_effect = BaseRateUnavailable("PRIVATE KEY DSN")
+            self.assertEqual(main(command), 1)
+            selected = json.loads(policy_status.read_text())["last_success"]["run_id"]
+            records = (
+                data / "processed/f08-youthcenter/runs" / selected / "youthcenter/records.json"
+            )
+            self.assertIn("fictional-A", json.loads(records.read_text()))
+            self.assertEqual(self.repository.latest(), newer)
+            ecos.return_value.fetch.side_effect = None
+            self.assertEqual(main(command), 0)
+            summary = json.loads((data / "processed/f08/status.json").read_text())
+            self.assertEqual(summary["last_attempt"]["notification_status"], "sent")
+            self.assertIsNotNone(summary["last_success"])
+            self.assertEqual(notify.call_count, 3)
+            self.assertTrue(all("PRIVATE" not in call.args[0] for call in notify.call_args_list))
 
     def test_delayed_refresh_never_overwrites_a_newer_observation(self) -> None:
         self.repository.save(self.observation)
