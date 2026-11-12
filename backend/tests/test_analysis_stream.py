@@ -16,6 +16,7 @@ from referencing import Registry, Resource
 
 from benefitfinder.api.analysis_response import wants_event_stream
 from benefitfinder.bootstrap import create_app
+from backend.tests.catalog_fixtures import MemoryPolicies, release_data
 
 ROOT = Path(__file__).resolve().parents[2]
 PAYLOAD = json.loads((ROOT / "contracts/fixtures/recommendation-request.json").read_text())
@@ -40,6 +41,33 @@ def events(body):
 
 
 class AnalysisStreamTests(TestCase):
+    def test_published_stream_preserves_unknown_rate_and_current_explanation_templates(self):
+        repository = MemoryPolicies(release_data())
+        app = create_app(policy_repository=repository)
+        captured = []
+
+        class InspectExplainer:
+            async def enrich(self, response, *, policies):
+                captured.extend(policies)
+                return response
+
+        app.state.recommendation_explainer = InspectExplainer()
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/v1/recommendations", json=PAYLOAD, headers={"Accept": "text/event-stream"}
+            )
+        received = events(response.text)
+        self.assertEqual(received[-1][0], "result")
+        result = received[-1][1]
+        self.assertIsNone(result["discount_rate"])
+        self.assertEqual(result["discount_rate_status"], "unknown")
+        self.assertEqual(result["results"]["1y"]["pv_on"]["calculation_status"], "unavailable")
+        self.assertEqual(
+            [(policy.policy_id, policy.document_version) for policy in captured],
+            [("youth:catalog:A", "fictional-v1")],
+        )
+        self.assertEqual(captured[0].conditions, ())
+
     def test_json_and_sse_have_the_same_result_and_progress_matches_contract(self):
         with TestClient(create_app()) as client:
             expected = client.post("/api/v1/recommendations", json=PAYLOAD).json()

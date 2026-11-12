@@ -1,6 +1,6 @@
 # FastAPI HTTP API
 
-`GET /health`, 공통 오류 처리와 가상 정책을 사용하는 추천·상황 변화·상세 API를 구현했다. 추천은 3기간 × 현재가치 on/off 계산과 F13 설명을 JSON 또는 POST SSE로 반환한다. F13 조항은 `DATABASE_URL` 설정 시 PostgreSQL에서 조회한다. 실제 정책 계산 DB와 공유 하루 상한은 후속이다. 전체 [구현 상태](../../../../docs/README.md)를 따른다.
+`GET /health`, 공통 오류 처리와 추천·상황 변화·상세 API를 구현했다. 추천은 3기간 × 현재가치 on/off 계산과 F13 설명을 JSON 또는 POST SSE로 반환한다. `POLICY_DATABASE_URL` 설정 시 검수·게시한 PostgreSQL 정책을 계산하고, 미설정은 가상 개발 예제다. F13 조항은 `DATABASE_URL` 설정 시 PostgreSQL에서 조회한다. 실제 정책 검수·게시와 공유 하루 상한은 후속이다. 전체 [구현 상태](../../../../docs/README.md)를 따른다.
 
 | 경로 | 책임 |
 |---|---|

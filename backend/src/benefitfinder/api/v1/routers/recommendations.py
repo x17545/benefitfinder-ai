@@ -10,7 +10,6 @@ from benefitfinder.api.analysis_response import analysis_response, wants_event_s
 from benefitfinder.api.schemas.recommendation import RecommendationRequest
 from benefitfinder.application.recommendation_explanations import RecommendationExplainer
 from benefitfinder.application.recommendation_flow import run_recommendation
-from benefitfinder.application.recommendation_service import MVP_ANNUAL_RATE
 from benefitfinder.application.service_catalog import ServiceCatalog
 
 
@@ -28,6 +27,10 @@ def get_recommendation_explainer(request: Request) -> RecommendationExplainer:
 
 def get_service_catalog(request: Request) -> ServiceCatalog:
     return request.app.state.service_catalog
+
+
+def get_discount_rate(request: Request) -> float | None:
+    return request.app.state.discount_rate
 
 
 router = APIRouter(
@@ -49,8 +52,9 @@ async def create_recommendations(
     recommendation_service: Callable[..., dict[str, Any]] = Depends(get_recommendation_service),
     recommendation_explainer: RecommendationExplainer = Depends(get_recommendation_explainer),
     service_catalog: ServiceCatalog = Depends(get_service_catalog),
+    annual_rate: float | None = Depends(get_discount_rate),
 ) -> Response:
-    """가상 MVP 정책 추천 결과를 반환한다."""
+    """조립된 게시 정책 또는 명시적인 개발 예제로 추천한다."""
 
     if request.domain != "youth":
         raise HTTPException(
@@ -62,7 +66,7 @@ async def create_recommendations(
         return await run_recommendation(
             request,
             calculate=recommendation_service,
-            annual_rate=MVP_ANNUAL_RATE,
+            annual_rate=annual_rate,
             services=service_catalog,
             explainer=recommendation_explainer,
             progress=progress,

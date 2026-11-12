@@ -81,9 +81,41 @@ from benefitfinder.application.policy_explanations import explain_policy
 from benefitfinder.infrastructure.ollama_explanations import OllamaExplanationCompletion
 from benefitfinder.infrastructure.published_clauses import InMemoryPublishedClauses
 from benefitfinder.jobs.explanation_example import explanation_example
+from benefitfinder.infrastructure.policy_catalog_records import CatalogRecord, record_hash, validate_source_text
+from benefitfinder.infrastructure.database.repositories.published_policies import publish_policy
 
 API_KEY_ENV = "YOUTHCENTER_API_KEY"
 KST = ZoneInfo("Asia/Seoul")
+
+
+def policy_catalog_command(args: argparse.Namespace) -> int:
+    """Validate a curated release; publish only with a separate human approval file."""
+    try:
+        record = CatalogRecord.model_validate_json(args.input.read_text(encoding="utf-8"))
+        source = args.source.read_text(encoding="utf-8")
+        validate_source_text(record, source)
+        digest = record_hash(record)
+        if args.catalog_action == "validate":
+            print(json.dumps({"record_sha256": digest, "policy_id": record.benefit.id,
+                              "document_version": record.benefit.source.document_version}, ensure_ascii=False))
+            return 0
+        approval = json.loads(args.approval.read_text(encoding="utf-8"))
+        if set(approval) != {"record_sha256", "reviewed_by", "reviewed_at"}:
+            raise ValueError("invalid_approval_fields")
+        database_url = os.environ.get("POLICY_PUBLISH_DATABASE_URL", "")
+        if not database_url:
+            raise ValueError("missing_publish_database_url")
+        publish_policy(
+            database_url, record, source_text=source, approved_sha256=approval["record_sha256"],
+            reviewer=approval["reviewed_by"],
+            reviewed_at=datetime.fromisoformat(approval["reviewed_at"].replace("Z", "+00:00")),
+        )
+    except Exception:
+        # Validation/driver errors may contain original text, credentials or local paths.
+        print("정책 카탈로그 처리 실패: 입력·근거·승인 파일과 DB 설정을 확인해 주세요.", file=sys.stderr)
+        return 2
+    print("승인된 정책 버전을 게시했습니다.")
+    return 0
 
 
 def collect_youthcenter_command(data_dir: Path) -> int:
@@ -439,6 +471,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     chunked = commands.add_parser("extract-chunked-facts", help="앞뒤 문맥을 보존한 로컬 E4B 추출")
     chunked.add_argument("--input", type=Path, required=True)
     chunked.add_argument("--output-dir", type=Path, required=True)
+    catalog = commands.add_parser("policy-catalog", help="검수된 정책 카탈로그 검증·명시적 게시")
+    catalog_actions = catalog.add_subparsers(dest="catalog_action", required=True)
+    for action in ("validate", "publish"):
+        command = catalog_actions.add_parser(action)
+        command.add_argument("--input", type=Path, required=True)
+        command.add_argument("--source", type=Path, required=True)
+        if action == "publish":
+            command.add_argument("--approval", type=Path, required=True)
     _add_rule_review_commands(commands)
     explain = commands.add_parser(
         "explain-example", help="F13 가상 게시 조항으로 설명 생성·폴백 확인"
@@ -446,6 +486,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     explain.add_argument("--category", choices=("employment", "housing"), default="employment")
     explain.add_argument("--model", help="로컬 Ollama 모델; 생략하면 템플릿 사용")
     args = parser.parse_args(argv)
+    if args.command == "policy-catalog":
+        return policy_catalog_command(args)
     if args.command == "collect-youthcenter":
         return collect_youthcenter_command(args.data_dir)
     if args.command == "refresh-youthcenter":

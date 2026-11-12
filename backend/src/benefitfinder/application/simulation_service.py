@@ -29,6 +29,7 @@ def simulate_mvp(
     recommend: Callable[..., dict[str, Any]],
     change_profile: Callable[..., tuple[Any, Any, tuple[int, int] | None, str]],
     next_threshold: Callable[..., str | None],
+    annual_rate: float | None = MVP_ANNUAL_RATE,
 ) -> dict[str, Any]:
     annual_before_profile, after_profile, income, scenario_note = change_profile(
         profile, scenario, income_change,
@@ -36,7 +37,7 @@ def simulate_mvp(
     def calculate(value: Any) -> dict[str, Any]:
         return recommend(
             SimpleNamespace(domain="youth", profile=value, options=None),
-            annual_rate=MVP_ANNUAL_RATE,
+            annual_rate=annual_rate,
         )
 
     before = calculate(profile)
@@ -59,23 +60,28 @@ def simulate_mvp(
             if key in old:
                 continue
             other_status = comparison["eligibility"][key]["status"]
+            published = "catalog" in before
             if gained:
                 reason = (
-                    "가상 조건이 바뀌어 계산 후보에 들어왔어요."
+                    ("조건이 바뀌어 계산 후보에 들어왔어요." if published else "가상 조건이 바뀌어 계산 후보에 들어왔어요.")
                     if other_status == "not_met"
                     else "새 조합에 포함됐어요. 새 자격을 얻었다는 뜻은 아니에요."
                 )
             else:
                 reason = (
-                    "바뀐 조건에서 가상 정책의 자격 기준을 벗어났어요."
+                    ("바뀐 조건에서 정책의 자격 기준을 벗어났어요." if published else "바뀐 조건에서 가상 정책의 자격 기준을 벗어났어요.")
                     if other_status == "not_met"
                     else "새 조합에서 빠졌어요. 자격을 잃었다는 뜻은 아니에요."
                 )
+            schedule = before["catalog"]["payments"] if published else MVP_PAYMENTS
+            # Lost policies are in before; gained policies are in after.
+            if published and key not in schedule:
+                schedule = after["catalog"]["payments"]
             rows.append({
-                "policy_id": mvp_policy_id(key),
+                "policy_id": key if published else mvp_policy_id(key),
                 "reason": reason,
                 "amount_won": calculate_period_value(
-                    MVP_PAYMENTS[key], period, MVP_ANNUAL_RATE if present_value else None,
+                    schedule[key], period, annual_rate if present_value else None,
                 ),
             })
         return rows
@@ -83,7 +89,7 @@ def simulate_mvp(
     return {
         "scenario": scenario,
         "basis_period": period,
-        "virtual_data": True,
+        "virtual_data": before["virtual_data"] or after["virtual_data"],
         "before_total_won": before_total,
         "after_total_won": after_total,
         "annual": {"before_won": annual_before, "after_won": annual_after},
