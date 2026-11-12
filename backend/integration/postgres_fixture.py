@@ -15,6 +15,7 @@ MIGRATION = (
     Path(__file__).resolve().parents[1] / "migrations/versions/0001_f13_published_clauses.sql"
 )
 CHECKED_AT = datetime(2026, 11, 7, 1, 30, tzinfo=timezone.utc)
+CATALOG_MIGRATION = MIGRATION.with_name("0002_published_policy_catalog.sql")
 
 
 def test_database_url() -> str:
@@ -45,6 +46,11 @@ def migrate_test_database(url: str) -> None:
             is None
         ):
             raise ValueError("unexpected_test_schema_version")
+        if connection.execute(
+            "SELECT 1 FROM public.benefitfinder_schema_migrations WHERE version=%s",
+            ("0002_published_policy_catalog",),
+        ).fetchone() is None:
+            connection.execute(CATALOG_MIGRATION.read_text())
 
 
 def seed_test_database(url: str) -> None:

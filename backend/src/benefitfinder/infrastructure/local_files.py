@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import os
 from collections.abc import Mapping, Sequence
@@ -51,10 +52,16 @@ class JsonFileSnapshotStore:
         self._root = raw_root
 
     def save(self, snapshot: RawSnapshot) -> str:
-        stamp = snapshot.fetched_at.strftime("%Y%m%dT%H%M%S%z")
+        stamp = snapshot.fetched_at.strftime("%Y%m%dT%H%M%S%f%z")
         page = snapshot.request.params.get("pageNum") or snapshot.request.params.get("page")
         page_part = f"-p{page}" if page else ""
-        stem = f"{stamp}{page_part}-{snapshot.content_sha256[:12]}"
+        context = hashlib.sha256(_json_bytes({
+            'url': snapshot.request.url, 'params': dict(snapshot.request.params),
+            'status_code': snapshot.status_code, 'content_type': snapshot.content_type,
+        })).hexdigest()[:12]
+        # Preserve previous generation metadata even when identical bodies are
+        # fetched again within a second or returned by different API requests.
+        stem = f"{stamp}{page_part}-{context}-{snapshot.content_sha256[:12]}"
         is_json = (snapshot.content_type or "").split(";")[0].strip().endswith("json")
         suffix = "json" if is_json else "body"
         relative = Path(snapshot.source_name) / "snapshots" / f"{stem}.{suffix}"

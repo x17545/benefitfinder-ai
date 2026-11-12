@@ -1,6 +1,6 @@
 # 처음 개발 시작하기
 
-모든 명령은 저장소 루트(`benefitfinder-ai/`)의 터미널에서 실행한다. 웹과 API는 DB·AI 키 없이 실행할 수 있다. 웹은 시작·조건 입력·분석·결과 화면을 제공하며, 백엔드는 생존 확인과 가상 정책 추천 API를 제공한다. F13 게시 조항의 PostgreSQL 조회를 지원하며 실제 정책 추천 DB는 후속이다. DB 설정·마이그레이션·화면 검증은 [통합 검증 안내](../../backend/integration/README.md)를 따른다. F13의 기본 문구·선택적 로컬 모델 실행은 [API 안내](../../backend/src/benefitfinder/api/README.md#f13-설명-실행)를 따른다.
+모든 명령은 저장소 루트(`benefitfinder-ai/`)의 터미널에서 실행한다. 웹과 API는 DB·AI 키 없이 실행할 수 있다. 웹은 시작·조건 입력·분석·결과 화면을 제공하며, 백엔드는 생존 확인과 가상 정책 추천 API를 제공한다. F13 게시 조항과 검수·게시된 현금 정책의 PostgreSQL 계산 연결을 지원한다. 실제 정책 검수·운영 게시는 별도다. DB 설정·마이그레이션·화면 검증은 [통합 검증 안내](../../backend/integration/README.md)를 따른다. F13의 기본 문구·선택적 로컬 모델 실행은 [API 안내](../../backend/src/benefitfinder/api/README.md#f13-설명-실행)를 따른다.
 
 ## 1. 도구 설치 (처음 한 번)
 
@@ -66,7 +66,7 @@ pnpm dev
 
 두 서버를 함께 실행하며 `Ctrl+C`로 종료한다. 파일 변경은 Vite·Uvicorn이 반영한다. 각각 실행하려면 터미널 두 개에서 `pnpm dev:web`과 `pnpm dev:api`를 실행한다. API만 작업할 때는 아래 명령도 같다.
 
-기본 백엔드는 공식 행정구역 목록의 `GET /api/v1/options`와 가상 정책의 `POST /api/v1/recommendations`를 제공한다. 지역 목록 조회는 공식 사이트 연결이 필요하며, 조회 실패를 가상 지역으로 대체하지 않는다. 추천 결과의 `virtual_data: true`는 화면과 저장 이미지에 가상 계산임을 표시한다. 정책 상세 API·실제 지역별 정책 조회는 후속이다. 분석 실패 화면의 [예제 결과로 보기]는 개발 전용 버튼이다.
+기본 백엔드는 공식 행정구역 목록의 `GET /api/v1/options`와 가상 정책의 `POST /api/v1/recommendations`를 제공한다. 지역 목록 조회는 공식 사이트 연결이 필요하며, 조회 실패를 가상 지역으로 대체하지 않는다. 추천 결과의 `virtual_data: true`는 화면과 저장 이미지에 가상 계산임을 표시한다. 정책 상세 API를 제공하며 실제 정책 자료의 검수·게시는 후속이다. 분석 실패 화면의 [예제 결과로 보기]는 개발 전용 버튼이다.
 
 ```sh
 uv run --locked uvicorn benefitfinder.main:app --reload --reload-dir backend/src --host 127.0.0.1 --port 8000
@@ -74,11 +74,15 @@ uv run --locked uvicorn benefitfinder.main:app --reload --reload-dir backend/src
 
 기본 실행에 `.env` 복사는 필요 없다. 서버 주소를 바꾸면 `apps/web/.env.example`을 같은 폴더의 `.env`로 복사해 `API_PROXY_TARGET`을 수정하고 Vite를 다시 실행한다. `/api/v1`·`/health`는 개발 프록시를 사용한다. `backend/.env.example`은 서버 환경 변수 양식이며 파일을 자동으로 읽지 않는다. `DATABASE_URL`을 전달하면 F13 게시 조항을 PostgreSQL에서 조회한다. 미설정 시 가상 메모리 예제를 사용하며 자동 DDL은 실행하지 않는다. 마이그레이션·실제 DB 검증은 [PostgreSQL 검증 안내](../../backend/integration/README.md)를 따른다. `/health`는 DB·데이터·LLM 준비 상태를 확인하지 않는다.
 
-F13은 기본 안내 템플릿으로 동작한다. `F13_OLLAMA_MODEL=gemma4:e4b`를 명시하고 같은 실행 환경의 `127.0.0.1:11434`에 모델이 준비된 경우에만 로컬 AI 설명을 요청한다. 모델 오류·지연 시 기본 안내로 돌아가며 계산은 유지한다. Render에 환경 변수만 넣어도 개발 PC의 Ollama에 연결되는 것은 아니다.
+추천·상황 변화의 하루 100회 제한은 기본적으로 단일 프로세스 메모리에 집계한다. 운영·여러 worker에서는 `ANALYSIS_USAGE_DATABASE_URL`로 공유 PostgreSQL을 설정한다. [마이그레이션·별도 쓰기 역할·KST 초기화·실패 시 처리](../../backend/src/benefitfinder/infrastructure/database/ANALYSIS_USAGE.md)를 따른다. 이용량 표에는 날짜와 횟수만 저장한다.
+
+F13은 기본 안내 템플릿으로 동작한다. 개발 중 AI 추출·설명은 [로컬 llama.cpp 설정](LOCAL_LLM.md)으로 이 PC의 GPU를 사용한다. `LLM_PROVIDER=llama_cpp`와 모델·주소·키 파일을 서버 프로세스에 전달한다. 운영은 `external_api`에 HTTPS 주소·모델·키를 명시한다. 모델 오류·지연 시 설명은 기본 안내로 돌아가며 계산은 유지한다. 기존 `F13_OLLAMA_MODEL`은 명시적 호환 경로로 유지한다.
 
 Vercel Preview에서 API를 쓰려면 [웹 배포 연결 안내](../../apps/web/README.md#vercel-배포-연결)의 `API_PROXY_TARGET`을 설정한다. 미설정 Preview도 화면은 빌드하지만 `/api/*`와 `/health`는 HTTP 503·`dependency_unavailable`로 응답한다. 운영 API로 자동 연결하지 않으며 잘못된 주소를 명시하면 빌드를 중단한다. 실제 배포는 별도 승인 후 수행한다.
 
 ## 4. 매일 쓰는 검사
+
+게시 정책 DB로 실행하려면 관리 역할로 0001·0002를 명시적으로 적용하고, 사람 검수·게시한 자료와 SELECT 전용 역할의 `POLICY_DATABASE_URL`을 준비한다. 추천·상세·상황 변화가 이 카탈로그를 사용하며 조회 장애는 503으로 반환한다. 이 모드는 가상 금리를 사용하지 않는다. `BASE_RATE_DATABASE_URL`로 마지막 성공한 ECOS 금리를 읽으며 미설정·빈 테이블·조회 실패 시 현재가치 보기는 계산 불가다. [금리 갱신·0004·역할 설정](../../backend/src/benefitfinder/infrastructure/database/ECOS_RATES.md)을 따른다. [게시 절차와 지원 규칙](../../backend/src/benefitfinder/infrastructure/database/POLICY_CATALOG.md)을 따른다. 서비스는 같은 `POLICY_DATABASE_URL`에서 조회하며 별도 0008과 [공고·단가 근거 검수](../../backend/src/benefitfinder/infrastructure/database/SERVICE_CATALOG.md)가 필요하다.
 
 ```sh
 uv run --locked python scripts/check.py  # 저장소·계약·API·Ruff·웹 전체
