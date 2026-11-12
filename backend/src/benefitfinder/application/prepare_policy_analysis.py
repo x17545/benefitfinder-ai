@@ -23,6 +23,38 @@ def safe_source_field(value: str) -> bool:
 
 
 @dataclass(frozen=True)
+class ApiScopeMapping:
+    category_field: str
+    category_values: tuple[tuple[str, tuple[str, ...]], ...]
+
+    def __post_init__(self) -> None:
+        if (not safe_source_field(self.category_field)
+            or not isinstance(self.category_values, tuple) or len(self.category_values) != 2):
+            raise ValueError('invalid_f12_preparation_plan')
+        keys = []
+        for pair in self.category_values:
+            if (not isinstance(pair, tuple) or len(pair) != 2
+                or pair[0] not in ('employment', 'housing')
+                or not isinstance(pair[1], tuple) or not 1 <= len(pair[1]) <= 50
+                or any(type(value) is not str or not 1 <= len(value) <= 200
+                       or not value.strip() or not value.isprintable() for value in pair[1])
+                or len(set(pair[1])) != len(pair[1])):
+                raise ValueError('invalid_f12_preparation_plan')
+            keys.append(pair[0])
+        if set(keys) != {'employment', 'housing'}:
+            raise ValueError('invalid_f12_preparation_plan')
+
+    def categories(self, fields: dict[str, Any]) -> set[str]:
+        value = fields.get(self.category_field)
+        if type(value) is not str:
+            raise ValueError('f12_preparation_scope_changed')
+        categories = {category for category, values in self.category_values if value in values}
+        if not categories:
+            raise ValueError('f12_preparation_scope_changed')
+        return categories
+
+
+@dataclass(frozen=True)
 class ApiDocumentMapping:
     external_id: str
     name_field: str
@@ -66,11 +98,13 @@ class AnalysisPreparationTarget:
 
 @dataclass(frozen=True)
 class AnalysisPreparationPlan:
+    scope: ApiScopeMapping
     policies: tuple[AnalysisPolicy, ...]
     targets: tuple[AnalysisPreparationTarget, ...]
 
     def __post_init__(self) -> None:
-        if (not isinstance(self.policies, tuple) or not 1 <= len(self.policies) <= 100
+        if (not isinstance(self.scope, ApiScopeMapping)
+            or not isinstance(self.policies, tuple) or not 1 <= len(self.policies) <= 100
             or not isinstance(self.targets, tuple) or not 1 <= len(self.targets) <= 100):
             raise ValueError('invalid_f12_preparation_plan')
         ids = set()
@@ -118,6 +152,7 @@ def _build_input(
     policy = next(item for item in plan.policies if item.id == target.policy_id)
     documents = []
     bindings = []
+    categories = set()
     for mapping in target.documents:
         source = sources[mapping.external_id]
         if (source.external_id != mapping.external_id
@@ -127,6 +162,7 @@ def _build_input(
         if (source.fields.get(mapping.name_field) not in (policy.name, *policy.aliases)
             or any(source.fields.get(key) != value for key, value in mapping.scope_guards)):
             raise ValueError('f12_preparation_scope_changed')
+        categories.update(plan.scope.categories(source.fields))
         fragments = [f'[{mapping.name_field}]\n{source.fields[mapping.name_field]}']
         for key in mapping.body_fields:
             value = source.fields.get(key)
@@ -152,6 +188,8 @@ def _build_input(
             'api-v1:' + version, source.accepted_at, text, True,
         ))
         bindings.append(AnalysisSource('youthcenter', source.external_id, source.material_sha256))
+    if categories != set(policy.categories):
+        raise ValueError('f12_preparation_scope_changed')
     return PolicyAnalysisInput(target.policy_id, tuple(documents), plan.policies, tuple(bindings))
 
 

@@ -5,7 +5,7 @@ from pathlib import Path
 
 from benefitfinder.application.policy_analysis import AnalysisPolicy
 from benefitfinder.application.prepare_policy_analysis import (
-    AnalysisPreparationPlan, AnalysisPreparationTarget, ApiDocumentMapping,
+    AnalysisPreparationPlan, AnalysisPreparationTarget, ApiDocumentMapping, ApiScopeMapping,
 )
 
 
@@ -20,10 +20,18 @@ def _unique(pairs: list[tuple[str, object]]) -> dict[str, object]:
 
 def preparation_plan_from_payload(raw: object) -> AnalysisPreparationPlan:
     try:
-        if (not isinstance(raw, dict) or set(raw) != {'format_version', 'policies', 'targets'}
+        if (not isinstance(raw, dict) or set(raw) != {'format_version', 'scope', 'policies', 'targets'}
             or type(raw['format_version']) is not int or raw['format_version'] != 1
             or not isinstance(raw['policies'], list) or not isinstance(raw['targets'], list)):
             raise ValueError
+        scope = raw['scope']
+        if (not isinstance(scope, dict) or set(scope) != {'category_field', 'category_values'}
+            or not isinstance(scope['category_values'], dict)
+            or set(scope['category_values']) != {'employment', 'housing'}
+            or any(not isinstance(value, list) for value in scope['category_values'].values())):
+            raise ValueError
+        scope_mapping = ApiScopeMapping(scope['category_field'],
+            tuple((key, tuple(value)) for key, value in sorted(scope['category_values'].items())))
         policies = []
         for row in raw['policies']:
             if (not isinstance(row, dict) or set(row) != {'id', 'name', 'categories', 'aliases'}
@@ -44,7 +52,7 @@ def preparation_plan_from_payload(raw: object) -> AnalysisPreparationPlan:
                 documents.append(ApiDocumentMapping(item['external_id'], item['name_field'],
                     tuple(item['body_fields']), tuple(sorted(item['scope_guards'].items()))))
             targets.append(AnalysisPreparationTarget(row['policy_id'], tuple(documents)))
-        return AnalysisPreparationPlan(tuple(policies), tuple(targets))
+        return AnalysisPreparationPlan(scope_mapping, tuple(policies), tuple(targets))
     except (ValueError, TypeError, KeyError, AttributeError, RecursionError, OverflowError):
         raise ValueError('invalid_f12_preparation_plan') from None
 

@@ -128,6 +128,15 @@ class PolicyPreparationPostgresTest(unittest.TestCase):
                          {'targets':2,'registered':1,'replayed':0,'failed':1})
         self.assertEqual(self.tasks.claim().input.policy_id,'youth:fictional:B')
 
+    def test_actual_source_category_must_match_target_even_when_other_guards_pass(self) -> None:
+        self.save({'A':{**fields(),'category':'fictional-housing'}})
+        plan = plan_data()
+        plan['targets'][0]['documents'][0]['scope_guards'] = {'ageScope':'fictional-youth'}
+        self.assertEqual(self.prepare(plan)['failed'],1)
+        self.assertEqual(self.tasks.status()['tasks'],{})
+        plan['policies'][0]['categories'] = ['housing']
+        self.assertEqual(self.prepare(plan)['registered'],1)
+
     def test_racing_source_refresh_is_rechecked_before_registration(self) -> None:
         snapshots = self.sources.load(('A',))
         self.save({'A':fields(body='가상 원문 변경')})

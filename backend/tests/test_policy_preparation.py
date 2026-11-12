@@ -32,6 +32,8 @@ def material_hash(data: dict) -> str:
 def plan_data(*keys: str) -> dict:
     keys = keys or ('A',)
     return {'format_version':1,
+        'scope':{'category_field':'category','category_values':{
+            'employment':['fictional-employment'],'housing':['fictional-housing']}},
         'policies':[{'id':'youth:fictional:'+key,'name':'가상 청년 취업 '+key,
                      'categories':['employment'],'aliases':[]} for key in keys],
         'targets':[{'policy_id':'youth:fictional:'+key,'documents':[{
@@ -98,6 +100,27 @@ class PolicyPreparationTest(unittest.TestCase):
             counts, registered = self.prepare(current=current)
             self.assertEqual(counts['failed'],1)
             self.assertEqual(registered,[])
+
+    def test_source_categories_are_required_even_if_other_guards_pass(self):
+        raw = plan_data()
+        raw['targets'][0]['documents'][0]['scope_guards'] = {'ageScope':'fictional-youth'}
+        for category in ('fictional-housing','education',None,['fictional-employment']):
+            data = {**fields(),'category':category}
+            counts, registered = self.prepare(raw,{'A':PreparationSource('A',material_hash(data),AT,data)})
+            self.assertEqual(counts['failed'],1)
+            self.assertEqual(registered,[])
+        raw['policies'][0]['categories'] = ['housing']
+        data = {**fields(),'category':'fictional-housing'}
+        self.assertEqual(self.prepare(raw,{'A':PreparationSource('A',material_hash(data),AT,data)})[0]['registered'],1)
+
+    def test_explicit_source_scope_mapping_rejects_unknown_or_unbounded_configuration(self):
+        for scope in ({}, {'category_field':'category','category_values':{'education':['x']}},
+                      {'category_field':'profile','category_values':{'employment':['x'],'housing':['y']}},
+                      {'category_field':'category','category_values':{'employment':[],'housing':['y']}}):
+            raw = plan_data()
+            raw['scope'] = scope
+            with self.assertRaisesRegex(ValueError,'^invalid_f12_preparation_plan$'):
+                preparation_plan_from_payload(raw)
 
     def test_independent_targets_keep_success_and_registration_replay_is_distinct(self):
         plan = preparation_plan_from_payload(plan_data('A','B'))
@@ -183,3 +206,15 @@ class PolicyPreparationTest(unittest.TestCase):
         self.assertEqual(len(value.documents),2)
         self.assertNotEqual(value.documents[0].id,value.documents[1].id)
         self.assertEqual({item.external_id for item in value.collection_sources},{'A','B'})
+
+    def test_merged_policy_categories_must_equal_all_confirmed_source_categories(self):
+        raw = plan_data()
+        raw['policies'][0].update(categories=['employment','housing'],aliases=['가상 청년 취업 B'])
+        first = raw['targets'][0]['documents'][0]
+        first['scope_guards'] = {'ageScope':'fictional-youth'}
+        raw['targets'][0]['documents'].append({**first,'external_id':'B'})
+        second = {**fields('B'),'category':'fictional-housing'}
+        current = {'A':source(),'B':PreparationSource('B',material_hash(second),AT,second)}
+        self.assertEqual(self.prepare(raw,current)[0]['registered'],1)
+        raw['policies'][0]['categories'] = ['employment']
+        self.assertEqual(self.prepare(raw,current)[0]['failed'],1)
