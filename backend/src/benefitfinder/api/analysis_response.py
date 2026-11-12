@@ -6,6 +6,7 @@ import asyncio
 from collections.abc import Awaitable, Callable
 from contextlib import suppress
 import json
+import time
 from typing import Any
 import uuid
 
@@ -68,8 +69,11 @@ async def analysis_response(
     timeout_seconds: float,
     stream: bool,
 ) -> Response:
+    started = getattr(request.state, "analysis_started_at", time.monotonic())
+
     async def run(progress: Progress) -> dict[str, Any]:
-        deadline = asyncio.timeout(timeout_seconds)
+        remaining = max(0, timeout_seconds - (time.monotonic() - started))
+        deadline = asyncio.timeout(remaining)
         try:
             async with deadline:
                 return await analyze(progress)

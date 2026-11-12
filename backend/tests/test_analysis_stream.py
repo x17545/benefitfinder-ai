@@ -150,6 +150,26 @@ class AnalysisStreamTests(TestCase):
         self.assertEqual(response.status_code, 500)
         self.assertEqual(response.json()["code"], "internal_error")
 
+    def test_admission_time_uses_the_same_deadline_for_json_and_sse(self):
+        app = create_app(analysis_timeout_seconds=0.01)
+
+        @app.middleware("http")
+        async def prior_admission(request, call_next):
+            request.state.analysis_started_at = time.monotonic() - 0.02
+            return await call_next(request)
+
+        with TestClient(app) as client:
+            response = client.post("/api/v1/recommendations", json=PAYLOAD)
+            self.assertEqual(response.status_code, 503)
+            self.assertEqual(response.json()["code"], "calculation_limit_exceeded")
+            response = client.post(
+                "/api/v1/recommendations", json=PAYLOAD, headers={"Accept": "text/event-stream"}
+            )
+            received = events(response.text)
+            self.assertEqual(received[-1][0], "error")
+            self.assertEqual(received[-1][1]["code"], "calculation_limit_exceeded")
+            self.assertFalse(any(kind == "result" for kind, _ in received))
+
     def test_deadline_budget_is_positive_and_cannot_exceed_sixty_seconds(self):
         for invalid in (True, 0, -1, 60.1, float("nan"), float("inf"), "60"):
             with (
