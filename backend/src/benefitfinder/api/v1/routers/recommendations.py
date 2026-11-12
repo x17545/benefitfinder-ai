@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 from typing import Any
+from time import monotonic
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
@@ -31,7 +32,8 @@ def get_service_catalog(request: Request) -> ServiceCatalog:
 
 
 def get_discount_rate(request: Request) -> float | None:
-    return request.app.state.discount_rate
+    request.state.analysis_started_at = getattr(request.state, "analysis_started_at", monotonic())
+    return request.app.state.read_discount_rate()
 
 
 router = APIRouter(

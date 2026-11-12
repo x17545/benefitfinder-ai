@@ -39,6 +39,7 @@ from benefitfinder.application.published_policies import PolicyCatalogUnavailabl
 from benefitfinder.application.published_recommendations import PublishedRecommendations
 from benefitfinder.application.service_catalog import ServiceCatalog
 from benefitfinder.application.service_meta import ReadServiceMetadata
+from benefitfinder.application.base_rates import BaseRateRepository, BaseRateUnavailable
 from benefitfinder.application.response_mapper import MVP_DATA_UPDATED_AT
 from benefitfinder.application.analysis_usage import (
     AnalysisUsage,
@@ -62,6 +63,7 @@ from benefitfinder.infrastructure.published_clauses import InMemoryPublishedClau
 from benefitfinder.infrastructure.region_codes import OfficialRegionCatalog
 from benefitfinder.infrastructure.memory_analysis_usage import MemoryAnalysisUsage
 from benefitfinder.infrastructure.database.repositories.analysis_usage import PostgresAnalysisUsage
+from benefitfinder.infrastructure.database.repositories.base_rates import PostgresBaseRates
 
 from benefitfinder.domain.portfolio import CalculationLimitExceeded
 from benefitfinder.application.recommendation_service import MVP_ANNUAL_RATE
@@ -98,6 +100,8 @@ def create_app(
     analysis_timeout_seconds: float = 60,
     policy_repository: PublishedPolicyRepository | None = None,
     policy_database_url: str | None = None,
+    base_rate_repository: BaseRateRepository | None = None,
+    base_rate_database_url: str | None = None,
 ) -> FastAPI:
     """Assemble and return a new FastAPI application.
 
@@ -122,6 +126,10 @@ def create_app(
         raise ValueError("ambiguous_policy_repository")
     if policy_database_url is not None:
         policy_repository = PostgresPublishedPolicies(policy_database_url)
+    if base_rate_repository is not None and base_rate_database_url is not None:
+        raise ValueError("ambiguous_base_rate_repository")
+    if base_rate_database_url is not None:
+        base_rate_repository = PostgresBaseRates(base_rate_database_url)
     if explanation_repository is not None and explanation_database_url is not None:
         raise ValueError("ambiguous_explanation_repository")
     if explanation_database_url is not None:
@@ -233,6 +241,19 @@ def create_app(
     )
     app.state.recommendation_explainer = explainer
     app.state.discount_rate = MVP_ANNUAL_RATE if policy_repository is None else None
+
+    def read_discount_rate() -> float | None:
+        # No network request or mutable per-worker rate cache on the user path.
+        # Unknown or unreadable rates preserve nominal calculations.
+        if policy_repository is None or base_rate_repository is None:
+            return app.state.discount_rate
+        try:
+            observation = base_rate_repository.latest()
+            return observation.annual_rate if observation is not None else None
+        except BaseRateUnavailable:
+            return None
+
+    app.state.read_discount_rate = read_discount_rate
     cash_benefits = example_benefits(policies)
     services = service_catalog if service_catalog is not None else ServiceCatalog(
         example_services() if policy_repository is None else (),
@@ -264,7 +285,7 @@ def create_app(
             snapshot = policy_repository.list_published()
             rules = tuple(rule for policy in snapshot for rule in policy.conditions)
             return simulate_mvp(
-                **kwargs, annual_rate=None,
+                **kwargs, annual_rate=read_discount_rate(),
                 recommend=lambda request, annual_rate: catalog.calculate(request, snapshot, annual_rate, deadline=deadline),
                 change_profile=partial(change_published_profile, rules=rules),
                 next_threshold=partial(published_next_threshold, policies={
@@ -280,7 +301,7 @@ def create_app(
     )
     app.state.read_service_metadata = ReadServiceMetadata(
         app.state.analysis_usage,
-        lambda: app.state.discount_rate,
+        read_discount_rate,
         policy_repository=policy_repository,
         example_updated_at=MVP_DATA_UPDATED_AT,
     )

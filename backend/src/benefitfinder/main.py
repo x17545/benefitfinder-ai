@@ -18,4 +18,5 @@ app = create_app(
     analysis_usage_database_url=os.environ.get("ANALYSIS_USAGE_DATABASE_URL") or None,
 
     policy_database_url=os.environ.get("POLICY_DATABASE_URL") or None,
+    base_rate_database_url=os.environ.get("BASE_RATE_DATABASE_URL") or None,
 )

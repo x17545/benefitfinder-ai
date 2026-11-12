@@ -1,5 +1,7 @@
 # 실제 PostgreSQL 검증
 
+0004 ECOS 금리 검사는 별도 임시 `_test` DB를 만들고 제거한다. 가상 금리의 저장·재시작·갱신 역전 방지·실패 시 이전값 보존·제약·읽기 전용 권한·메타 API 연결을 확인한다. 실금리 수집과 운영 스케줄 검증은 [별도 범위](../src/benefitfinder/infrastructure/database/ECOS_RATES.md)다.
+
 
 0001 F13 조항과 0002 게시 정책 카탈로그를 같은 전용 테스트 DB에서 검증한다. 카탈로그 검사는 가상 승인 자료의 게시·추천·상세 연결, 버전 전환·원자적 롤백, 승인 해시 불일치, 읽기 권한, 잠금 장애를 추가로 확인한다. 실제 정책 게시를 수행하지 않는다. [카탈로그 실행 안내](../src/benefitfinder/infrastructure/database/POLICY_CATALOG.md)를 참고한다.
 

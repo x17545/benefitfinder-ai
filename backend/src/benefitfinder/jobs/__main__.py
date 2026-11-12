@@ -27,6 +27,8 @@ from benefitfinder.ai.chunked_evidence import extract_chunked_evidence
 from benefitfinder.ai.policy_facts_agent import extract_policy_facts
 from benefitfinder.ai.policy_rule_agent import extract_rule_batch
 from benefitfinder.application.f12_review import F12ReviewDecision
+from benefitfinder.infrastructure.ecos_base_rate import EcosBaseRate
+from benefitfinder.infrastructure.database.repositories.base_rates import PostgresBaseRates
 from benefitfinder.application.policy_rules import RuleReviewSnapshot
 from benefitfinder.infrastructure.chunk_e4b import LocalE4BChat
 from benefitfinder.infrastructure.chunk_evidence_files import write_chunk_checkpoint, write_chunked_run
@@ -115,6 +117,24 @@ def policy_catalog_command(args: argparse.Namespace) -> int:
         print("정책 카탈로그 처리 실패: 입력·근거·승인 파일과 DB 설정을 확인해 주세요.", file=sys.stderr)
         return 2
     print("승인된 정책 버전을 게시했습니다.")
+    return 0
+
+
+def refresh_ecos_rate_command() -> int:
+    """Fetch once, then atomically replace only a successful ECOS observation."""
+    try:
+        api_key = os.environ.get("ECOS_API_KEY", "")
+        database_url = os.environ.get("BASE_RATE_WRITE_DATABASE_URL", "")
+        if not api_key or not database_url:
+            raise ValueError("missing_base_rate_settings")
+        observation = EcosBaseRate(api_key).fetch()
+        PostgresBaseRates(database_url).save(observation)
+    except Exception:
+        # HTTP/DB errors can include a key in a URL or a password in a DSN.
+        print("기준금리 갱신 실패: ECOS·DB 설정을 확인하세요. 마지막 성공값은 유지됩니다.",
+              file=sys.stderr)
+        return 2
+    print("ECOS 기준금리 갱신 완료")
     return 0
 
 
@@ -454,6 +474,7 @@ def extract_chunked_command(source: Path, output: Path) -> int:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m benefitfinder.jobs")
     commands = parser.add_subparsers(dest="command", required=True)
+    commands.add_parser("refresh-ecos-rate", help="ECOS 기준금리의 마지막 성공값을 DB에 갱신")
     collect = commands.add_parser("collect-youthcenter", help="온통청년 정책 목록 전체 수집")
     collect.add_argument("--data-dir", type=Path, default=Path("data"))
     refresh = commands.add_parser(
@@ -486,6 +507,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     explain.add_argument("--category", choices=("employment", "housing"), default="employment")
     explain.add_argument("--model", help="로컬 Ollama 모델; 생략하면 템플릿 사용")
     args = parser.parse_args(argv)
+    if args.command == "refresh-ecos-rate":
+        return refresh_ecos_rate_command()
     if args.command == "policy-catalog":
         return policy_catalog_command(args)
     if args.command == "collect-youthcenter":
