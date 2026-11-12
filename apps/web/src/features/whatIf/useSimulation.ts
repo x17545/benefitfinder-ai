@@ -41,14 +41,18 @@ export function useSimulation(request: ChangeSimulationRequest | null): { state:
     }
     const parsed = JSON.parse(body) as ChangeSimulationRequest;
     const controller = new AbortController();
-    const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(60_000)]);
-    void postSimulation(parsed, fetch, signal).then((outcome) => {
-      if (!controller.signal.aborted) {
-        setLoaded({ key, state: toSimulationState(parsed.scenario, outcome) });
-        void refreshServiceMeta();
-      }
-    });
+    // StrictMode의 setup-cleanup-setup과 빠른 상황 변경에서 전송 전 예약을 취소한다.
+    const timer = window.setTimeout(() => {
+      const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(60_000)]);
+      void postSimulation(parsed, fetch, signal).then((outcome) => {
+        if (!controller.signal.aborted) {
+          setLoaded({ key, state: toSimulationState(parsed.scenario, outcome) });
+          void refreshServiceMeta();
+        }
+      });
+    }, 0);
     return () => {
+      window.clearTimeout(timer);
       controller.abort();
     };
   }, [body, key]);
