@@ -1,5 +1,11 @@
 # PostgreSQL 마이그레이션
 
+`versions/0006_policy_source_rechecks.sql`은 0001·0002·0005 다음에 명시적으로 적용한다. 승인 해시에 포함한 원천 ID·내용 해시를 연결하고 수집 변경·누락 시 게시 정책·F13을 내리며 재검수 이력을 같은 트랜잭션으로 기록한다. **기존 실제 게시 정책은 검증된 연결이 없어 검수 대기/은퇴로 전환하며 기존 가상 정책은 유지한다.** 운영 적용 전 [데이터 영향·재게시·권한](../src/benefitfinder/infrastructure/database/POLICY_SOURCE_RECHECKS.md)을 확인한다. 새 실제 정책 게시에는 이 마이그레이션과 원천 연결이 필요하다.
+
+`versions/0005_collected_policy_generations.sql`은 완전한 수집 성공본·최신 원천 레코드·변경 이력을 저장한다. 0001의 이력 테이블 다음에 별도 트랜잭션으로 적용한다. 미검수 원천 영역이며 기존 게시 정책·F13 조항·승인 상태를 바꾸지 않는다. [적재 설정·재실행·권한 경계](../src/benefitfinder/infrastructure/database/COLLECTED_POLICIES.md)를 따른다.
+
+`versions/0004_ecos_base_rate.sql`은 마지막 성공한 ECOS 기준금리·관측일·확인 시각과 고정 출처 코드를 저장한다. 0001의 이력 테이블 이후 별도 트랜잭션으로 적용한다. 0002·0003의 데이터는 바꾸지 않는다. 초기 금리·사용자 정보·API 키를 넣지 않으며 [수집·권한·운영 범위](../src/benefitfinder/infrastructure/database/ECOS_RATES.md)를 따른다.
+
 `versions/0001_f13_published_clauses.sql`은 F13 문서·조항·게시 상태와 `public.benefitfinder_schema_migrations` 이력을 만든다. psycopg 드라이버를 도입했으며 별도 ORM·마이그레이션 프레임워크는 사용하지 않는다. 윤정찬·양승현이 저장 모델·데이터 영향을 함께 검토한다. 앱 시작 시 자동 DDL·자동 게시를 수행하지 않는다.
 
 관리 역할의 `DATABASE_URL`을 셸에 설정한 뒤 저장소 루트에서 명시적으로 적용한다. URL을 명령행에 직접 쓰거나 공유 파일에 넣지 않는다. PostgreSQL의 `psql` 도구가 필요하다.
@@ -14,6 +20,8 @@ psql "$DATABASE_URL" -X --command='TABLE public.benefitfinder_schema_migrations;
 
 게시 버전 전환은 한 트랜잭션에서 이전 문서 `retired` → 새 문서 `published` 순서로 진행한다. 조항은 검수 승인과 게시를 별도 단계로 기록한다. F12 승인 파일은 게시 입력을 검토하기 위한 자료이며 이 마이그레이션이나 서버가 자동 게시하지 않는다.
 
+`versions/0003_analysis_usage.sql`은 추천·상황 변화를 합친 KST 날짜별 100회 집계다. 0001의 이력 테이블 이후 명시적으로 적용하며 정책 카탈로그의 0002와는 독립적이다. 날짜와 횟수만 저장하고 사용자 조건은 저장하지 않는다. [권한·실행 설정](../src/benefitfinder/infrastructure/database/ANALYSIS_USAGE.md)을 따른다.
+
 실패 복구는 트랜잭션 롤백을 기본으로 한다. 공유 데이터가 생긴 후에는 되돌리기용 새 마이그레이션을 검토하며 테이블 DROP 명령을 자동 제공하지 않는다. 운영·공유 DB 적용과 파괴적 변경은 승인된 별도 작업이다.
 
 [전용 테스트 DB 검증](../integration/README.md)은 실제 PostgreSQL에서 생성·읽기·쓰기·버전 전환·검수/게시 제외·장애를 확인한다. 가상 사례만 사용하고 원문·결과·덤프·자격 증명은 Git에 넣지 않는다.
@@ -22,3 +30,18 @@ psql "$DATABASE_URL" -X --command='TABLE public.benefitfinder_schema_migrations;
 쓰는 출처 이력이다. 로컬의 별도 `_test` DB에서 versions/0001 다음에 명시적으로 적용한다.
 원본 ID·후보·승인 사유·원문/쌍/내보내기 해시를 보존하며 반려·대기 항목은 적재하지 않는다.
 게시 상태를 바꾸지 않으며 운영용 마이그레이션 실행 목록에 포함하지 않는다.
+
+## 게시 정책 카탈로그 (0002)
+
+`versions/0002_published_policy_catalog.sql`은 정책·조건 실행 규칙·지급 일정·승인 해시·검수/게시 상태를 저장한다. 0001 다음에 별도 트랜잭션으로 적용한다. 기존 F13 조항을 바꾸거나 정책을 자동 게시하지 않는다.
+
+```sh
+psql "$DATABASE_URL" -X --set=ON_ERROR_STOP=1 --single-transaction \
+  --file=backend/migrations/versions/0002_published_policy_catalog.sql
+```
+
+적용 후 카탈로그는 비어 있다. [입력·검수·실행 절차](../src/benefitfinder/infrastructure/database/POLICY_CATALOG.md)를 따른다. 공유·운영 DB에는 별도 승인 없이 적용하지 않는다.
+
+## F12 오프라인 분석 (0007)
+
+`versions/0007_f12_analysis_tasks.sql`은 0001·0002·0005·0006 다음에 명시적으로 적용한다. 입력 해시·원천 연결·임대·시도 횟수·검수 대기 파일 해시를 보존하고 원천 변경/누락 시 기존 분석을 무효화한다. 기존 게시 카탈로그를 자동 승인·게시하지 않는다. [최소 권한·실행·실패 복구](../src/benefitfinder/infrastructure/database/F12_ANALYSIS.md)를 따른다.
