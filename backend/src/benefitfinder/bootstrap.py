@@ -10,6 +10,7 @@ from __future__ import annotations
 import uuid
 from functools import partial
 from typing import Any
+from time import monotonic
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -32,19 +33,26 @@ from benefitfinder.application.recommendation_service import (
     recommend_mvp_all_periods,
 )
 from benefitfinder.application.region_options import RegionCatalog
+from benefitfinder.application.published_policies import PolicyCatalogUnavailable, PublishedPolicyRepository
+from benefitfinder.application.published_recommendations import PublishedRecommendations
 from benefitfinder.application.service_catalog import ServiceCatalog
 from benefitfinder.application.simulation_service import simulate_mvp
 from benefitfinder.domains.youth.policy_evaluator import evaluate_policies
+from benefitfinder.domains.youth.published_eligibility import evaluate_condition
+from benefitfinder.domains.youth.published_scenario import change_published_profile, published_next_threshold
 from benefitfinder.domains.youth.scenario import change_profile, next_threshold
 from benefitfinder.infrastructure.database.repositories.published_clauses import (
     PostgresPublishedClauses,
 )
+from benefitfinder.infrastructure.database.repositories.published_policies import PostgresPublishedPolicies
 from benefitfinder.infrastructure.example_explanation_data import recommendation_explanation_data
 from benefitfinder.infrastructure.example_benefits import example_benefits
 from benefitfinder.infrastructure.example_services import example_services
 from benefitfinder.infrastructure.ollama_explanations import OllamaExplanationCompletion
 from benefitfinder.infrastructure.published_clauses import InMemoryPublishedClauses
 from benefitfinder.infrastructure.region_codes import OfficialRegionCatalog
+from benefitfinder.domain.portfolio import CalculationLimitExceeded
+from benefitfinder.application.recommendation_service import MVP_ANNUAL_RATE
 
 NOT_FOUND_MESSAGE = "요청한 리소스를 찾을 수 없습니다."
 INVALID_REQUEST_MESSAGE = "요청 값이 올바르지 않습니다."
@@ -72,6 +80,8 @@ def create_app(
     explanation_timeout_seconds: float = 5,
     explanation_database_url: str | None = None,
     service_catalog: ServiceCatalog | None = None,
+    policy_repository: PublishedPolicyRepository | None = None,
+    policy_database_url: str | None = None,
 ) -> FastAPI:
     """Assemble and return a new FastAPI application.
 
@@ -80,6 +90,10 @@ def create_app(
     """
     if explanation_model is not None and explanation_generator is not None:
         raise ValueError("ambiguous_explanation_generator")
+    if policy_repository is not None and policy_database_url is not None:
+        raise ValueError("ambiguous_policy_repository")
+    if policy_database_url is not None:
+        policy_repository = PostgresPublishedPolicies(policy_database_url)
     if explanation_repository is not None and explanation_database_url is not None:
         raise ValueError("ambiguous_explanation_repository")
     if explanation_database_url is not None:
@@ -144,13 +158,28 @@ def create_app(
             content=error_body("internal_error", INTERNAL_ERROR_MESSAGE),
         )
 
+    @app.exception_handler(PolicyCatalogUnavailable)
+    async def catalog_exception_handler(request: Request, exc: PolicyCatalogUnavailable) -> JSONResponse:
+        return JSONResponse(status_code=503, content=error_body(
+            "dependency_unavailable", "정책 자료를 조회할 수 없습니다. 잠시 후 다시 시도해 주세요.",
+        ))
+
+    @app.exception_handler(CalculationLimitExceeded)
+    async def calculation_exception_handler(request: Request, exc: CalculationLimitExceeded) -> JSONResponse:
+        return JSONResponse(status_code=503, content=error_body(
+            "calculation_limit_exceeded", "계산 한도를 초과했습니다. 잠시 후 다시 시도해 주세요.",
+        ))
+
     app.state.recommendation_service = partial(
         recommend_mvp_all_periods,
         evaluate_policies=evaluate_policies,
     )
     app.state.recommendation_explainer = explainer
+    app.state.discount_rate = MVP_ANNUAL_RATE if policy_repository is None else None
     cash_benefits = example_benefits(policies)
-    services = service_catalog if service_catalog is not None else ServiceCatalog(example_services())
+    services = service_catalog if service_catalog is not None else ServiceCatalog(
+        example_services() if policy_repository is None else (),
+    )
     if services.policy_ids.intersection(cash_benefits):
         raise ValueError("cash_service_policy_id_collision")
 
@@ -166,6 +195,27 @@ def create_app(
         change_profile=change_profile,
         next_threshold=partial(next_threshold, policy_names=policy_names),
     )
+
+    if policy_repository is not None:
+        catalog = PublishedRecommendations(policy_repository, evaluate_condition)
+        app.state.recommendation_service = catalog
+        app.state.benefit_lookup = catalog.detail
+
+        def simulate_published(**kwargs: Any) -> dict[str, Any]:
+            # All before/after views use one release snapshot, including a version rollover.
+            deadline = monotonic() + 45
+            snapshot = policy_repository.list_published()
+            rules = tuple(rule for policy in snapshot for rule in policy.conditions)
+            return simulate_mvp(
+                **kwargs, annual_rate=None,
+                recommend=lambda request, annual_rate: catalog.calculate(request, snapshot, annual_rate, deadline=deadline),
+                change_profile=partial(change_published_profile, rules=rules),
+                next_threshold=partial(published_next_threshold, policies={
+                    p.policy_id: (p.detail["title"], p.conditions) for p in snapshot
+                }),
+            )
+
+        app.state.simulation_service = simulate_published
 
     app.state.region_catalog = region_catalog if region_catalog is not None else OfficialRegionCatalog()
 

@@ -1,11 +1,12 @@
 """청년 정책 추천 API 라우터."""
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from starlette.concurrency import run_in_threadpool
 
 from benefitfinder.api.schemas.recommendation import RecommendationRequest
 from collections.abc import Callable
 from typing import Any
-from benefitfinder.application.recommendation_service import MVP_ANNUAL_RATE
+from benefitfinder.application.policy_explanations import ExplanationRequest
 from benefitfinder.application.response_mapper import (
     build_recommendation_response,
 )
@@ -29,6 +30,10 @@ def get_service_catalog(request: Request) -> ServiceCatalog:
     return request.app.state.service_catalog
 
 
+def get_discount_rate(request: Request) -> float | None:
+    return request.app.state.discount_rate
+
+
 router = APIRouter(
     prefix="/api/v1",
     tags=["recommendations"],
@@ -41,8 +46,9 @@ async def create_recommendations(
     recommendation_service: Callable[..., dict[str, Any]] = Depends(get_recommendation_service),
     recommendation_explainer: RecommendationExplainer = Depends(get_recommendation_explainer),
     service_catalog: ServiceCatalog = Depends(get_service_catalog),
+    annual_rate: float | None = Depends(get_discount_rate),
 ) -> dict[str, Any]:
-    """가상 MVP 정책 추천 결과를 반환한다."""
+    """조립된 게시 정책 또는 명시적인 개발 예제로 추천한다."""
 
     if request.domain != "youth":
         raise HTTPException(
@@ -50,10 +56,8 @@ async def create_recommendations(
             detail="unsupported_domain",
         )
 
-    # 가상 MVP 계산용 할인율. 실제 금리 출처 검증값은 아님.
-    annual_rate = MVP_ANNUAL_RATE
-
-    calculation = recommendation_service(
+    calculation = await run_in_threadpool(
+        recommendation_service,
         request,
         annual_rate=annual_rate,
     )
@@ -64,4 +68,12 @@ async def create_recommendations(
     )
     response.update(service_catalog.recommend(request.domain, request.profile))
 
+    if "catalog" in calculation:
+        policies = tuple(
+            ExplanationRequest(
+                policy_id=key, policy_name=detail["title"], category=detail["categories"][0],
+                document_version=detail["source"]["document_version"], amount_won=None,
+            ) for key, detail in calculation["catalog"]["details"].items()
+        )
+        return await recommendation_explainer.enrich(response, policies=policies)
     return await recommendation_explainer.enrich(response)

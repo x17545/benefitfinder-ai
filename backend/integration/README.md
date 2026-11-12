@@ -1,4 +1,6 @@
-# F13 실제 PostgreSQL 검증
+# 실제 PostgreSQL 검증
+
+0001 F13 조항과 0002 게시 정책 카탈로그를 같은 전용 테스트 DB에서 검증한다. 카탈로그 검사는 가상 승인 자료의 게시·추천·상세 연결, 버전 전환·원자적 롤백, 승인 해시 불일치, 읽기 권한, 잠금 장애를 추가로 확인한다. 실제 정책 게시를 수행하지 않는다. [카탈로그 실행 안내](../src/benefitfinder/infrastructure/database/POLICY_CATALOG.md)를 참고한다.
 
 이 디렉터리는 DB 없이 실행하는 `scripts/check.py` 기본 검사와 별개다. 실제 PostgreSQL 17에서 실행하며 SQLite나 메모리 테스트로 대체하지 않는다. CI는 PostgreSQL 17 서비스에서 같은 검사를 별도 필수 단계로 실행한다.
 
