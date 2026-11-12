@@ -9,7 +9,7 @@ import multiprocessing
 import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from threading import Event
+from threading import Event, Lock
 import unittest
 from unittest.mock import Mock, patch
 
@@ -122,6 +122,197 @@ class DailyRefreshTest(unittest.TestCase):
             ),
             0,
         )
+
+    def test_preparation_runs_after_sources_and_before_pending_analysis(self) -> None:
+        events = []
+        completed = set()
+        lock = Lock()
+
+        def source(name: str, code: int):
+            def refresh() -> int:
+                with lock:
+                    events.append(f"{name}_start")
+                    events.append(f"{name}_end")
+                    completed.add(name)
+                return code
+
+            return refresh
+
+        def prepare() -> dict[str, int]:
+            with lock:
+                self.assertEqual(completed, {"youthcenter", "ecos"})
+                events.append("prepare")
+            return {"targets": 2, "registered": 1, "replayed": 1, "failed": 0}
+
+        def analyze() -> int:
+            with lock:
+                self.assertEqual(events[-1], "prepare")
+                events.append("analyze")
+            return 0
+
+        self.assertEqual(
+            run_daily_refresh(
+                self.root,
+                refresh_policies=source("youthcenter", 0),
+                refresh_rate=source("ecos", 0),
+                clock=lambda: AT,
+                prepare_analysis=prepare,
+                analyze_pending=analyze,
+            ),
+            0,
+        )
+        self.assertEqual(events[-1], "analyze")
+        self.assertEqual(
+            self.state()["last_attempt"]["stages"]["f12_preparation"]["counts"],
+            {"targets": 2, "registered": 1, "replayed": 1, "failed": 0},
+        )
+
+    def test_source_failure_does_not_skip_preparation_or_pending_analysis(self) -> None:
+        self.assertEqual(self.run_sources(), 0)
+        previous = self.state()["last_success"]
+        sent = []
+        prepare = Mock(
+            return_value={"targets": 2, "registered": 1, "replayed": 1, "failed": 0}
+        )
+        analyze = Mock(return_value=0)
+        self.assertEqual(
+            run_daily_refresh(
+                self.root,
+                refresh_policies=lambda: 1,
+                refresh_rate=lambda: 2,
+                clock=lambda: AT,
+                notify=sent.append,
+                prepare_analysis=prepare,
+                analyze_pending=analyze,
+            ),
+            1,
+        )
+        prepare.assert_called_once_with()
+        analyze.assert_called_once_with()
+        state = self.state()
+        self.assertEqual(
+            state["last_attempt"]["stages"]["f12_preparation"]["status"], "success"
+        )
+        self.assertEqual(state["last_attempt"]["stages"]["f12"]["status"], "success")
+        self.assertEqual(state["last_success"], previous)
+        self.assertEqual(len(sent), 1)
+        self.assertIn("F12 입력 준비: 성공", sent[0])
+
+    def test_preparation_error_is_sanitized_and_does_not_skip_pending_analysis(self) -> None:
+        self.assertEqual(self.run_sources(), 0)
+        previous = self.state()["last_success"]
+        sent = []
+        prepare = Mock(side_effect=RuntimeError("PRIVATE https://example.test 원문"))
+        analyze = Mock(return_value=0)
+        self.assertEqual(
+            run_daily_refresh(
+                self.root,
+                refresh_policies=lambda: 0,
+                refresh_rate=lambda: 0,
+                clock=lambda: AT,
+                notify=sent.append,
+                prepare_analysis=prepare,
+                analyze_pending=analyze,
+            ),
+            1,
+        )
+        analyze.assert_called_once_with()
+        state = self.state()
+        stage = state["last_attempt"]["stages"]["f12_preparation"]
+        self.assertEqual(stage["status"], "failed")
+        self.assertEqual(stage["exit_code"], 1)
+        self.assertNotIn("counts", stage)
+        self.assertEqual(state["last_success"], previous)
+        self.assertEqual(len(sent), 1)
+        combined = (self.root / "status.json").read_text() + sent[0]
+        for secret in ("PRIVATE", "https://", "원문"):
+            self.assertNotIn(secret, combined)
+
+    def test_partial_preparation_denies_success_but_still_runs_pending_analysis(self) -> None:
+        self.assertEqual(self.run_sources(), 0)
+        previous = self.state()["last_success"]
+        sent = []
+        counts = {"targets": 4, "registered": 2, "replayed": 1, "failed": 1}
+        analysis_counts = {
+            "attempted": 3,
+            "needs_review": 1,
+            "stale": 0,
+            "failed": 0,
+            "source_records_awaiting_scope_or_documents": 2,
+        }
+        prepare = Mock(return_value=counts)
+        analyze = Mock(return_value=analysis_counts)
+        self.assertEqual(
+            run_daily_refresh(
+                self.root,
+                refresh_policies=lambda: 0,
+                refresh_rate=lambda: 0,
+                clock=lambda: AT,
+                notify=sent.append,
+                prepare_analysis=prepare,
+                analyze_pending=analyze,
+            ),
+            1,
+        )
+        analyze.assert_called_once_with()
+        state = self.state()
+        stages = state["last_attempt"]["stages"]
+        self.assertEqual(stages["f12_preparation"]["status"], "failed")
+        self.assertEqual(stages["f12_preparation"]["counts"], counts)
+        self.assertEqual(stages["f12"]["status"], "success")
+        self.assertEqual(stages["f12"]["counts"], analysis_counts)
+        self.assertEqual(state["last_success"], previous)
+        self.assertEqual(len(sent), 1)
+        self.assertIn("F12 입력 준비: 실패", sent[0])
+        self.assertIn("F12 입력 준비 대상: 4건", sent[0])
+        self.assertIn("F12 입력 준비 등록: 2건", sent[0])
+        self.assertIn("F12 입력 준비 재사용: 1건", sent[0])
+        self.assertIn("F12 입력 준비 실패: 1건", sent[0])
+
+    def test_invalid_preparation_counts_are_fixed_failures_without_leaking_values(self) -> None:
+        self.assertEqual(self.run_sources(), 0)
+        previous = self.state()["last_success"]
+        invalid_results = (
+            None,
+            {"targets": 2, "registered": 1, "replayed": 0},
+            {"targets": 3, "registered": 1, "replayed": 1, "failed": 0},
+            {"targets": True, "registered": 1, "replayed": 0, "failed": 0},
+            {"targets": -1, "registered": -1, "replayed": 0, "failed": 0},
+            {"targets": 2**63, "registered": 2**63, "replayed": 0, "failed": 0},
+            {
+                "targets": 1,
+                "registered": 1,
+                "replayed": 0,
+                "failed": 0,
+                "PRIVATE": "https://example.test 원문",
+            },
+        )
+        for invalid in invalid_results:
+            with self.subTest(invalid=invalid):
+                sent = []
+                analyze = Mock(return_value=0)
+                self.assertEqual(
+                    run_daily_refresh(
+                        self.root,
+                        refresh_policies=lambda: 0,
+                        refresh_rate=lambda: 0,
+                        clock=lambda: AT,
+                        notify=sent.append,
+                        prepare_analysis=Mock(return_value=invalid),
+                        analyze_pending=analyze,
+                    ),
+                    1,
+                )
+                analyze.assert_called_once_with()
+                state = self.state()
+                stage = state["last_attempt"]["stages"]["f12_preparation"]
+                self.assertEqual(stage["status"], "failed")
+                self.assertNotIn("counts", stage)
+                self.assertEqual(state["last_success"], previous)
+                self.assertEqual(len(sent), 1)
+                combined = (self.root / "status.json").read_text() + sent[0]
+                for secret in ("PRIVATE", "https://", "원문"):
+                    self.assertNotIn(secret, combined)
 
     def test_notification_failure_does_not_roll_back_data_or_restart_sources(self) -> None:
         notifier = Mock(side_effect=RuntimeError("PRIVATE WEBHOOK"))

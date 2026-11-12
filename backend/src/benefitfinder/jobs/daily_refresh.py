@@ -15,6 +15,7 @@ from uuid import uuid4
 
 STATUS_FILE = "status.json"
 _MAX_STATE_BYTES = 65_536
+_PREPARATION_COUNTS = ('targets', 'registered', 'replayed', 'failed')
 _ANALYSIS_COUNTS = ('attempted', 'needs_review', 'stale', 'failed',
                     'source_records_awaiting_scope_or_documents')
 
@@ -85,6 +86,15 @@ def _notification(attempt: dict[str, object], *, state_failed: bool) -> str:
         assert isinstance(stage, dict)
         # Stage names and codes are constructed in this process, never from raw data.
         lines.append(f"{label}: {'성공' if stage['exit_code'] == 0 else '실패'}")
+    if 'f12_preparation' in stages:
+        stage = stages['f12_preparation']
+        assert isinstance(stage, dict)
+        # Only fixed stage state and validated aggregate counts are formatted.
+        lines.append(f"F12 입력 준비: {'성공' if stage['exit_code'] == 0 else '실패'}")
+        for name, label in (('targets', '대상'), ('registered', '등록'),
+                            ('replayed', '재사용'), ('failed', '실패')):
+            if name in stage.get('counts', {}):
+                lines.append(f"F12 입력 준비 {label}: {stage['counts'][name]}건")
     if 'f12' in stages:
         stage = stages['f12']
         lines.append(f"F12 준비된 문서 분석: {'성공' if stage['exit_code'] == 0 else '실패'}")
@@ -105,6 +115,7 @@ def _run_locked(
     refresh_rate: Callable[[], int],
     clock: Callable[[], datetime],
     notify: Callable[[str], None] | None,
+    prepare_analysis: Callable[[], dict[str, int]] | None = None,
     analyze_pending: Callable[[], int | dict[str, int]] | None,
 ) -> int:
     path = root / STATUS_FILE
@@ -167,6 +178,45 @@ def _run_locked(
             except OSError:
                 state_failed = True
     # Source-specific file/DB locks have been released before model inference.
+    if prepare_analysis is not None:
+        stages['f12_preparation'] = {
+            'started_at': clock().isoformat(),
+            'finished_at': None,
+            'status': 'running',
+            'exit_code': None,
+        }
+        try:
+            _write_status(path, state)
+        except OSError:
+            state_failed = True
+        try:
+            result = prepare_analysis()
+            if (
+                not isinstance(result, dict)
+                or set(result) != set(_PREPARATION_COUNTS)
+                or any(
+                    type(value) is not int or not 0 <= value < 2**63
+                    for value in result.values()
+                )
+                or result['targets']
+                != result['registered'] + result['replayed'] + result['failed']
+            ):
+                raise ValueError
+            stages['f12_preparation']['counts'] = {
+                key: result[key] for key in _PREPARATION_COUNTS
+            }
+            code = 1 if result['failed'] != 0 else 0
+        except Exception:
+            code = 1
+        stages['f12_preparation'].update(
+            finished_at=clock().isoformat(),
+            exit_code=code,
+            status='success' if code == 0 else 'failed',
+        )
+        try:
+            _write_status(path, state)
+        except OSError:
+            state_failed = True
     if analyze_pending is not None:
         stages['f12'] = {'started_at': clock().isoformat(), 'finished_at': None,
                          'status': 'running', 'exit_code': None}
@@ -219,6 +269,7 @@ def run_daily_refresh(
     refresh_rate: Callable[[], int],
     clock: Callable[[], datetime],
     notify: Callable[[str], None] | None = None,
+    prepare_analysis: Callable[[], dict[str, int]] | None = None,
     analyze_pending: Callable[[], int | dict[str, int]] | None = None,
 ) -> int:
     """Attempt both sources; preserve each source's own atomic last-success state."""
@@ -238,6 +289,7 @@ def run_daily_refresh(
             refresh_rate=refresh_rate,
             clock=clock,
             notify=notify,
+            prepare_analysis=prepare_analysis,
             analyze_pending=analyze_pending,
         )
     except OSError:
