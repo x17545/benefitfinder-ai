@@ -1,4 +1,4 @@
-"""F08 youthcenter refresh plist generator (generate only).
+"""F08 daily refresh plist generator (generate only).
 
 Builds a plist holding a uv run command from a project directory.
 Main prepares an immutable ignored runtime dir separately;
@@ -20,6 +20,8 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 LABEL = "dev.benefitfinder.f08"
+JOB_CHOICES = ("refresh-data", "refresh-youthcenter")
+DEFAULT_JOB = "refresh-data"
 KST_GMTOFF = 32400
 SYSTEM_LOCALTIME = Path("/etc/localtime")
 RUN_HOUR = 3
@@ -48,10 +50,19 @@ def parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--uv", default=None)
     parser.add_argument("--project-dir", type=Path, default=None)
+    parser.add_argument("--job", choices=JOB_CHOICES, default=DEFAULT_JOB)
     return parser.parse_args(argv)
 
 
-def build_plist(uv: str, project_dir: Path, env_file: Path, data_dir: Path) -> dict[str, object]:
+def build_plist(
+    uv: str,
+    project_dir: Path,
+    env_file: Path,
+    data_dir: Path,
+    job: str = DEFAULT_JOB,
+) -> dict[str, object]:
+    if job not in JOB_CHOICES:
+        raise ValueError("unsupported F08 job")
     out_log = data_dir / "logs" / "f08.stdout.log"
     err_log = data_dir / "logs" / "f08.stderr.log"
     # uv interprets --env-file as a whitespace-delimited list, even in one argv entry.
@@ -70,7 +81,7 @@ def build_plist(uv: str, project_dir: Path, env_file: Path, data_dir: Path) -> d
         "python",
         "-m",
         "benefitfinder.jobs",
-        "refresh-youthcenter",
+        job,
         "--data-dir",
         str(data_dir),
         "--notify-discord",
@@ -111,7 +122,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if output.exists():
         print(f"keep existing file: {output}", file=sys.stderr)
         return 1
-    plist_data = build_plist(uv, project_dir, env_file, data_dir)
+    plist_data = build_plist(uv, project_dir, env_file, data_dir, job=args.job)
     try:
         output.parent.mkdir(parents=True, exist_ok=True)
         Path(str(plist_data["StandardOutPath"])).parent.mkdir(parents=True, exist_ok=True)

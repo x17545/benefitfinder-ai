@@ -50,9 +50,9 @@ class PostgresPublishedClausesTest(unittest.TestCase):
         with psycopg.connect(self.url) as connection:
             self.assertEqual(
                 connection.execute(
-                    "SELECT version FROM public.benefitfinder_schema_migrations"
+                    "SELECT version FROM public.benefitfinder_schema_migrations ORDER BY version"
                 ).fetchall(),
-                [("0001_f13_published_clauses",)],
+                [("0001_f13_published_clauses",), ("0002_published_policy_catalog",)],
             )
             with self.assertRaises(psycopg.errors.DuplicateTable), connection.transaction():
                 connection.execute(MIGRATION.read_text())
