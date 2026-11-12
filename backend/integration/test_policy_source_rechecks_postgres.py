@@ -99,6 +99,20 @@ def clauses(url: str, policy_id: str) -> None:
                 (policy_id, version, AT, AT))
 
 
+def insert_f13(connection: psycopg.Connection, version: str = "fictional-v1",
+               checked_at: datetime = AT, reviewed_at: datetime = AT) -> None:
+    connection.execute("""INSERT INTO public.f13_policy_documents
+        (policy_id,document_version,policy_name,category,source_url,checked_at,
+         publication_status,published_at) VALUES ('youth:catalog:A',%s,'가상 정책','housing',
+         'https://example.test/fictional',%s,'published',%s)""", (version, checked_at, checked_at))
+    connection.execute("""INSERT INTO public.f13_clauses
+        (policy_id,document_version,clause_id,title,body,source_location,topics,
+         review_status,reviewed_by,reviewed_at,publication_status,published_at)
+        VALUES ('youth:catalog:A',%s,'fictional-clause','가상 조건','가상 근거입니다.','가상 안내',
+                ARRAY['housing'],'approved','fictional-human-reviewer',%s,'published',%s)""",
+        (version, reviewed_at, checked_at))
+
+
 class PolicySourceRechecksPostgresTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -351,3 +365,37 @@ class PolicySourceRechecksPostgresTest(unittest.TestCase):
                             'fictional-human-reviewer',%s,'published',%s)""",
                     (Jsonb(data), record_hash(valid), AT, datetime.now(timezone.utc)))
         self.assertEqual(len(self.catalog.list_published()), 3)
+
+    def test_uncommitted_f13_publication_serializes_before_source_invalidation(self) -> None:
+        self.store.save(batch({"raw-a": "a-v1"}, AT))
+        publish(self.url, record("A", {"raw-a": "a-v1"}))
+        changed = batch({"raw-a": "a-v2"}, AT + timedelta(days=1))
+        with psycopg.connect(self.url) as connection:
+            insert_f13(connection)
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(self.store.save, changed)
+                with self.assertRaisesRegex(CollectedPolicyStoreError, "^collected_policy_storage_unavailable$"):
+                    future.result(timeout=3)
+            # The failed collector cannot commit past this invisible document.
+            self.assertEqual(list_policy_rechecks(self.url)["items"], [])
+        self.store.save(changed)
+        with psycopg.connect(self.url) as connection:
+            self.assertEqual(connection.execute("SELECT publication_status FROM public.f13_policy_documents").fetchone(), ("retired",))
+            self.assertEqual(connection.execute("SELECT review_status,publication_status FROM public.f13_clauses").fetchone(), ("pending", "retired"))
+        self.assertEqual(list_policy_rechecks(self.url)["items"][0]["invalidated_document_versions"], ["fictional-v1"])
+
+    def test_late_f13_needs_current_catalog_and_fresh_source_review(self) -> None:
+        self.store.save(batch({"raw-a": "a-v1"}, AT))
+        publish(self.url, record("A", {"raw-a": "a-v1"}))
+        self.store.save(batch({"raw-a": "a-v2"}, AT + timedelta(days=1)))
+        self.assertEqual(list_policy_rechecks(self.url)["items"][0]["invalidated_document_versions"], [])
+        for version in ("fictional-v1", "fictional-never-seen"):
+            with self.subTest(version=version), self.assertRaises(psycopg.Error), psycopg.connect(self.url) as connection:
+                insert_f13(connection, version)
+        publish(self.url, record("A", {"raw-a": "a-v2"}, "fictional-v2"), AT + timedelta(days=2))
+        with self.assertRaisesRegex(psycopg.Error, "f13_review_predates_source_change"), psycopg.connect(self.url) as connection:
+            insert_f13(connection, "fictional-new-explanation", checked_at=AT + timedelta(days=2))
+        with psycopg.connect(self.url) as connection:
+            insert_f13(connection, "fictional-new-explanation", checked_at=AT + timedelta(days=2), reviewed_at=AT + timedelta(days=2))
+        with psycopg.connect(self.url) as connection:
+            self.assertEqual(connection.execute("SELECT document_version FROM public.f13_policy_documents WHERE publication_status='published'").fetchall(), [("fictional-new-explanation",)])

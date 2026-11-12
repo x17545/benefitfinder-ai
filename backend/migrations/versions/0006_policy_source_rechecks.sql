@@ -209,14 +209,63 @@ CREATE TRIGGER collected_policy_rechecks AFTER INSERT ON public.collected_policy
     REFERENCING NEW TABLE AS new_policy_changes FOR EACH STATEMENT
     EXECUTE FUNCTION public.invalidate_changed_policy_sources();
 
-CREATE FUNCTION public.guard_invalidated_f13_version() RETURNS trigger
+-- Currently the only collected source is youthcenter. Lock before tuple locks
+-- (including drafts) so a concurrent F13 writer cannot be invisible to the
+-- collector or invert the collector's source -> F13 row lock order.
+CREATE FUNCTION public.lock_f13_source_writes() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog AS $$
 BEGIN
-    IF NEW.publication_status = 'published' AND EXISTS (
+    PERFORM pg_advisory_xact_lock(hashtextextended(
+        'benefitfinder:collected_policy_generations:youthcenter', 0));
+    RETURN NULL;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.lock_f13_source_writes() FROM PUBLIC;
+CREATE TRIGGER f13_document_source_lock BEFORE INSERT OR UPDATE
+    ON public.f13_policy_documents FOR EACH STATEMENT
+    EXECUTE FUNCTION public.lock_f13_source_writes();
+CREATE TRIGGER f13_clause_source_lock BEFORE INSERT OR UPDATE
+    ON public.f13_clauses FOR EACH STATEMENT
+    EXECUTE FUNCTION public.lock_f13_source_writes();
+
+CREATE FUNCTION public.guard_invalidated_f13_version() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog AS $$
+DECLARE
+    material_changed_at timestamptz;
+    checked_or_reviewed_at timestamptz;
+BEGIN
+    IF NEW.publication_status <> 'published' THEN RETURN NEW; END IF;
+    IF EXISTS (
         SELECT 1 FROM public.policy_recheck_queue q
         WHERE q.policy_id = NEW.policy_id
-          AND NEW.document_version = ANY(q.invalidated_document_versions)) THEN
+          AND (q.document_version = NEW.document_version
+               OR NEW.document_version = ANY(q.invalidated_document_versions))) THEN
         RAISE EXCEPTION 'f13_version_requires_new_review';
+    END IF;
+    IF EXISTS (SELECT 1 FROM public.policy_catalog_source_links l WHERE l.policy_id = NEW.policy_id)
+       OR EXISTS (SELECT 1 FROM public.policy_recheck_queue q WHERE q.policy_id = NEW.policy_id) THEN
+        IF NOT EXISTS (SELECT 1 FROM public.policy_catalog_releases r
+                       WHERE r.policy_id = NEW.policy_id AND r.review_status = 'approved'
+                         AND r.publication_status = 'published') THEN
+            RAISE EXCEPTION 'f13_requires_current_reviewed_catalog';
+        END IF;
+        SELECT max(run.completed_at) INTO material_changed_at
+        FROM public.policy_catalog_releases r
+        JOIN public.policy_catalog_source_links l
+          ON l.policy_id = r.policy_id AND l.document_version = r.document_version
+        JOIN public.collected_policy_changes c ON c.source = l.source AND c.external_id = l.external_id
+          AND c.current_sha256 = l.material_sha256
+        JOIN public.collected_policy_runs run ON run.source = c.source AND run.run_id = c.run_id
+        WHERE r.policy_id = NEW.policy_id AND r.publication_status = 'published';
+        IF TG_TABLE_NAME = 'f13_policy_documents' THEN
+            checked_or_reviewed_at := NEW.checked_at;
+        ELSE
+            checked_or_reviewed_at := NEW.reviewed_at;
+        END IF;
+        IF material_changed_at IS NULL OR checked_or_reviewed_at IS NULL
+           OR checked_or_reviewed_at < material_changed_at THEN
+            RAISE EXCEPTION 'f13_review_predates_source_change';
+        END IF;
     END IF;
     RETURN NEW;
 END;
