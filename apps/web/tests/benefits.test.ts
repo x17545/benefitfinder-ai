@@ -21,6 +21,7 @@ describe('policy detail validation', () => {
     delete value.reviewed;
     delete value.conflicts;
     delete value.lifetime_once;
+    delete value.application_guide;
     value.eligibility_conditions = [];
     expect(isNormalizedBenefit(value)).toBe(true);
     value.conflicts = [];

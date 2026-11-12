@@ -25,6 +25,7 @@ import {
   findMyPolicyResult,
 } from './policyDetailModel.ts';
 import { usePolicyDetail } from './usePolicyDetail.ts';
+import { ApplicationGuide } from './ApplicationGuide.tsx';
 import './PolicyDetailScreen.css';
 
 interface PolicyDetailScreenProps {
@@ -229,24 +230,7 @@ function PolicyDetail({ benefit, isSample, mine, serviceDiagnosis, hasAnalysis, 
             </section>
           ) : null}
 
-          {/* 7 신청 방법 */}
-          <section className="ui-card s5-card">
-            <h2 className="s5-card__title">신청 방법</h2>
-            <dl className="s5-rows">
-              <dt>신청 기간</dt>
-              <dd>{virtualData ? '가상 정책에는 실제 모집 일정이 없어요.' : applyPeriod(benefit.application)}</dd>
-              <dt>접수 기관</dt>
-              <dd>{benefit.provider}</dd>
-            </dl>
-          </section>
-
-          {/* 8 준비 서류 (정책 상세에 서류 정보가 아직 없어 문구 S5-DOC) */}
-          <section className="ui-card s5-card">
-            <h2 className="s5-card__title">준비 서류</h2>
-            <p className="s5-muted">{virtualData
-              ? '가상 정책에는 실제 제출 서류가 없어요.'
-              : '공식 자료에 서류 안내가 없어요. 신청 페이지에서 확인해 주세요.'}</p>
-          </section>
+          <ApplicationGuide benefit={benefit} virtualData={virtualData} />
 
           {/* 9 확인이 필요한 것 (내 조건으로 진단했을 때만) */}
           {diagnosis !== null ? (

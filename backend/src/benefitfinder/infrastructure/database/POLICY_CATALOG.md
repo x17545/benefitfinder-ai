@@ -11,7 +11,7 @@ GRANT SELECT ON public.policy_catalog_releases TO benefitfinder_reader;
 
 ## 입력과 검수
 
-내부 적재 형식은 `infrastructure/policy_catalog_records.py`의 `CatalogRecord`다. 외부 응답은 기존 `contracts/v1`을 유지한다. 실제 입력·원문·승인 파일은 Git 제외 `data/local/catalog/` 등에 보관한다.
+내부 적재 형식은 `infrastructure/policy_catalog_records.py`의 `CatalogRecord`다. 외부 응답은 `contracts/v1`이며 신청 안내는 선택 필드로 확장했다. 실제 입력·원문·승인 파일은 Git 제외 `data/local/catalog/` 등에 보관한다.
 
 | 필드 | 내용 |
 |---|---|
@@ -31,6 +31,14 @@ GRANT SELECT ON public.policy_catalog_releases TO benefitfinder_reader;
 - `selection` / `none_of`: 명시적 `field`, `values` 중 하나 이상 선택 / 전부 미선택을 판정한다. 허용 필드는 코드의 `SELECTION_FIELDS`이며 고용·지역·학력·혼인·주거·자가·계약·자산 선택·특수 조건·기수혜 선택을 지원한다. 미입력·모름은 확인 필요다. 생애 1회 정책은 기수혜 `none_of` 규칙을 함께 기록해야 검수 완료로 게시할 수 있다.
 
 모든 인용은 지정 원문에 실제로 포함되어야 한다. 검수 완료 정책은 확정 금액·지급 시점·일정 합계·미해결 중복 규칙 부재를 요구한다. 공식 출처와 공고 의미·코드 표현의 일치는 사람이 검수한다. 서명 없는 승인 파일은 검수자 인증을 대신하지 않는다. F12 승인 내보내기는 이 형식으로 자동 변환·승인·게시하지 않는다.
+
+### 신청 안내 (F07)
+
+`benefit.application_guide`는 현금·서비스 공통의 선택 필드다. `method`, `office`는 각각 `{quote, location, source}` 또는 `null`이며, `documents`는 같은 형태의 인용 목록(최대 100개) 또는 `null`이다. 인용마다 같은 정책 출처·버전·확인일과 실제 원문의 문장이 필요하다. 한 인용의 최대 길이는 2,500자, 위치는 500자이며 원문을 임의로 잘라 맞추지 않는다. 긴 목록은 의미를 보존한 원문 구획별로 나누고 사람이 확인한다.
+
+안내 객체 생략/`null`과 `documents: null`은 아직 확인하지 못한 상태다. `documents: []`는 검수자가 해당 원문에 서류 안내가 없음을 확인한 경우에만 쓴다. `method`/`office`가 없으면 공식 페이지 확인을 안내하고 운영 기관으로 접수 기관을 채우지 않는다. 준비 서류가 있을 때는 원문 그대로 표시한다. 확인하지 못한 자료를 '공식 자료에 없음'으로 표시하지 않는다.
+
+안내는 전체 승인 해시에 포함되므로 내용·누락 상태가 달라지면 새 문서 버전과 새 검수가 필요하다. 안내가 없는 기존 입력의 정규화 형태·승인 해시는 그대로 유지한다. JSONB에 함께 저장하므로 새 SQL 마이그레이션은 없다. F12 추출·수집 원천이 안내를 포함해도 게시 입력이나 사람 승인을 자동으로 만들지 않는다.
 
 다음 검증은 DB를 수정하지 않으며 정규화한 입력 전체의 해시를 출력한다.
 

@@ -49,6 +49,24 @@ class Evidence(Record):
     source: Source
 
 
+class ApplicationGuide(Record):
+    method: Evidence | None
+    office: Evidence | None
+    # None means not checked; [] is a human-confirmed absence in this source.
+    documents: list[Evidence] | None = Field(max_length=100)
+
+    def citations(self) -> list[Evidence]:
+        return [item for item in (self.method, self.office) if item is not None] + (
+            self.documents or []
+        )
+
+    @model_validator(mode="after")
+    def validate_citations(self) -> ApplicationGuide:
+        if any(not item.quote.strip() or not item.location.strip() for item in self.citations()):
+            raise ValueError("empty_application_guide_citation")
+        return self
+
+
 class Condition(Record):
     id: str = Field(min_length=1, max_length=120)
     description: str = Field(min_length=1)
@@ -103,6 +121,9 @@ class Benefit(Record):
     provider: str = Field(min_length=1)
     categories: list[Literal["employment", "housing"]] = Field(min_length=1, max_length=2)
     application: Application
+    application_guide: ApplicationGuide | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     eligibility_conditions: list[Condition] = Field(max_length=100)
     source: Source
     domain_data: dict[str, Any]
@@ -224,6 +245,8 @@ class CatalogRecord(Record):
         ]
         evidence += [item for conflict in benefit.conflicts for item in conflict.evidence]
         evidence += self.payment_evidence
+        if benefit.application_guide is not None:
+            evidence += benefit.application_guide.citations()
         if any(item.source != benefit.source for item in evidence):
             raise ValueError("evidence_source_mismatch")
         if any(c.policy_id == benefit.id for c in benefit.conflicts):
@@ -311,5 +334,7 @@ def validate_source_text(record: CatalogRecord, source_text: str) -> None:
     evidence = [e for c in record.benefit.eligibility_conditions for e in c.evidence]
     evidence += [e for c in record.benefit.conflicts for e in c.evidence]
     evidence += record.payment_evidence
+    if record.benefit.application_guide is not None:
+        evidence += record.benefit.application_guide.citations()
     if any(e.quote not in source_text for e in evidence):
         raise ValueError("quote_missing_from_source")

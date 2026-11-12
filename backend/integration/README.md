@@ -161,3 +161,7 @@ uv run --locked python -m unittest discover -s backend/integration -v
 ## 보조금24 소스 검증
 
 `test_gov24_workflow_postgres.py`는 가상 자료와 UUID 전용 DB에서 0009까지 명시적으로 적용한다. 같은 원천 ID의 소스 분리, F12 안전 투영/재사용/변경 무효화, 두 원천의 동시 변경과 연결 카탈로그·F13 게시 회수·재검수 생성을 검사한다. 실제 API 수집·실제 정책 승인 검증과 구분한다.
+
+## F07 신청 안내 검증
+
+`test_application_guide_postgres.py`는 별도 가상 `_test` DB에서 0001·0002·0005~0009를 적용해 현금·서비스의 신청 방법·접수 기관·서류 인용을 게시→JSONB 조회→실제 HTTP 상세로 확인한다. 게시된 안내의 직접 수정은 기존 불변성 트리거가 거부하며, 안내 추가가 현금 계산·서비스 환산을 바꾸지 않는지 검사한다. 실제 정책 검수나 운영 게시 검증이 아니다.

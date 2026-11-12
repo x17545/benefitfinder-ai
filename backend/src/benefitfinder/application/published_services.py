@@ -1,6 +1,7 @@
 """Published non-cash offers using the same reviewed youth eligibility evaluator."""
 
 from collections.abc import Callable
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -56,7 +57,12 @@ class PublishedServices:
 
     def detail(self, policy_id: str) -> dict[str, Any] | None:
         release = self.repository.get_published(policy_id)
-        return self._offer(release).public_detail(korea_today()) if release is not None else None
+        if release is None:
+            return None
+        detail = self._offer(release).public_detail(korea_today())
+        if 'application_guide' in release.detail:
+            detail['application_guide'] = deepcopy(release.detail['application_guide'])
+        return detail
 
     def recommend(self, domain: str, profile: Any) -> dict[str, Any]:
         offers = tuple(self._offer(release) for release in self.repository.list_published())
