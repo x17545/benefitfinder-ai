@@ -323,3 +323,7 @@ launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/dev.benefitfinder
 이 설정은 로그인한 Mac에서 동작한다. [Apple 문서](https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/ScheduledJobs.html)에 따라 예정 시각에 잠자기 상태였다면 깨어날 때 실행되며, 전원이 꺼져 있으면 실행하지 못한다. 기준금리와 설정한 경우 수집 성공본 DB 인계는 통합 작업에 연결했다. 보조금24·공고 원문 재분석은 아직 연결하지 않았다.
 
 자동화 주 담당은 탁서윤이다(2026-10-29). 실행·스케줄·재시도·실패 알림을 맡고, 윤정찬의 수집·원본 관리·PostgreSQL 적재와 Agent 분석·정제 흐름을 연결한다. 양승현은 API·계산 연동과 배포 환경의 통합 테스트를 맡는다. Agent 초안과 검수·게시 결과를 구분하고 미지원·상충·불명확은 검수 대기로 남긴다. 기존 모듈 의존 방향을 유지하며 jobs가 ai 내부를 직접 import하지 않고 조립 지점과 application 인터페이스로 연결한다.
+
+## F14 서비스·단가 게시
+
+`service-catalog validate/publish`는 [서비스 입력·가격 원문·별도 승인·0008 절차](../infrastructure/database/SERVICE_CATALOG.md)를 따른다. 공고와 가격 근거를 검증하고 전체 검수 해시로 게시한다. F12 후보를 승인 파일로 자동 변환하지 않으며 단가를 AI로 정하지 않는다. 실제 자료의 사람 검수는 별도다.

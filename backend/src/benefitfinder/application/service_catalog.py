@@ -6,11 +6,15 @@ from collections.abc import Callable
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Literal
+from typing import Any, Literal, Protocol
 from urllib.parse import urlsplit
 
 MAX_SAFE_WON = 2**53 - 1
 Verdict = Literal["met", "not_met", "needs_review"]
+
+
+class ServiceRecommendations(Protocol):
+    def recommend(self, domain: str, profile: Any) -> dict[str, Any]: ...
 
 
 def korea_today() -> date:
@@ -177,6 +181,7 @@ class ServiceCatalog:
         interests = data.interests if data is not None else None
         today = self._today()
         rows: list[dict[str, Any]] = []
+        virtual_data = False
         for offer in self._offers.values():
             if not offer.policy_id.startswith(domain + ":"):
                 continue
@@ -188,6 +193,7 @@ class ServiceCatalog:
             eligibility = offer.diagnosis(profile)
             if any(condition["status"] == "not_met" for condition in eligibility):
                 continue
+            virtual_data = virtual_data or offer.virtual_data
             rows.append({
                 "policy_id": offer.policy_id,
                 "title": offer.title,
@@ -209,4 +215,5 @@ class ServiceCatalog:
             if row["service"]["estimated_value_won"] is not None
         ]
         total = sum(values)
-        return {"services": rows, "services_total_won": total if values and total <= MAX_SAFE_WON else None}
+        return {"services": rows, "services_total_won": total if values and total <= MAX_SAFE_WON else None,
+                "virtual_data": virtual_data}

@@ -151,3 +151,7 @@ uv run --locked python -m unittest discover -s backend/integration -v
 ## F12 작업 큐 (0007)
 
 `test_policy_analysis_queue_postgres.py`는 별도 UUID 테스트 DB에서 등록 멱등성·동시 작업 확보·임대 만료·최대 재시도·원본 변경/누락/재등장·손상 입력·원천 읽기만 허용된 작업 역할을 검증한다. 0001·0002·0005·0006·0007을 적용하며 가상 자료만 사용한다. 전체 연동 검사와 마찬가지로 `F13_TEST_DATABASE_URL`은 별도 `_test` DB를 지정해야 한다. 실제 모델은 별도 GPU 실행으로 검증하고 실제 사람 검수와 구분한다.
+
+## F14 게시 서비스
+
+`test_published_services_postgres.py`는 전용 UUID `_test` DB에 0001·0002·0005·0006·0008을 적용한다. 서비스/현금 분리·승인 해시·별도 가격 근거·버전 전환/롤백·원천 변경·읽기 전용 역할·실제 HTTP 계약·게시 CLI를 가상 자료로 검증한다. F12의 0007과 독립적이며 실제 정책/단가의 사람 검수는 포함하지 않는다.

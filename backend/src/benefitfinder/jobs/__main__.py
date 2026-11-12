@@ -105,6 +105,10 @@ from benefitfinder.infrastructure.policy_catalog_records import CatalogRecord, r
 from benefitfinder.infrastructure.database.repositories.published_policies import publish_policy
 from benefitfinder.infrastructure.database.repositories.policy_rechecks import list_policy_rechecks
 from benefitfinder.infrastructure.policy_recheck_files import write_recheck_page
+from benefitfinder.infrastructure.service_catalog_records import (
+    ServiceCatalogRecord, service_record_hash, validate_service_sources,
+)
+from benefitfinder.infrastructure.database.repositories.published_services import publish_service
 
 API_KEY_ENV = "YOUTHCENTER_API_KEY"
 KST = ZoneInfo("Asia/Seoul")
@@ -195,6 +199,34 @@ def policy_catalog_command(args: argparse.Namespace) -> int:
         print("정책 카탈로그 처리 실패: 입력·근거·승인 파일과 DB 설정을 확인해 주세요.", file=sys.stderr)
         return 2
     print("승인된 정책 버전을 게시했습니다.")
+    return 0
+
+
+def service_catalog_command(args: argparse.Namespace) -> int:
+    """Validate service/price sources; publish only a separately supplied approval digest."""
+    try:
+        record = ServiceCatalogRecord.model_validate_json(args.input.read_text(encoding='utf-8'))
+        source = args.source.read_text(encoding='utf-8')
+        price_source = args.price_source.read_text(encoding='utf-8') if args.price_source is not None else None
+        validate_service_sources(record, source, price_source)
+        digest = service_record_hash(record)
+        if args.catalog_action == 'validate':
+            print(json.dumps({'record_sha256': digest, 'policy_id': record.benefit.id,
+                              'document_version': record.benefit.source.document_version}))
+            return 0
+        approval = json.loads(args.approval.read_text(encoding='utf-8'))
+        if set(approval) != {'record_sha256', 'reviewed_by', 'reviewed_at'}:
+            raise ValueError('invalid_approval_fields')
+        database_url = os.environ.get('POLICY_PUBLISH_DATABASE_URL', '')
+        if not database_url:
+            raise ValueError('missing_publish_database_url')
+        publish_service(database_url, record, source_text=source, price_source_text=price_source,
+                        approved_sha256=approval['record_sha256'], reviewer=approval['reviewed_by'],
+                        reviewed_at=datetime.fromisoformat(approval['reviewed_at']))
+    except Exception:
+        print('서비스 카탈로그 처리 실패: 공고·단가 근거·승인 파일과 DB 설정을 확인하세요.', file=sys.stderr)
+        return 2
+    print('승인된 서비스 버전을 게시했습니다.')
     return 0
 
 
@@ -728,6 +760,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     rechecks.add_argument("--output", type=Path, required=True)
     rechecks.add_argument("--after-id", type=int, default=0)
     rechecks.add_argument("--limit", type=int, default=100)
+    service_catalog = commands.add_parser('service-catalog', help='검수한 서비스·단가 근거 검증과 명시적 게시')
+    service_actions = service_catalog.add_subparsers(dest='catalog_action', required=True)
+    for action in ('validate', 'publish'):
+        command = service_actions.add_parser(action)
+        command.add_argument('--input', type=Path, required=True)
+        command.add_argument('--source', type=Path, required=True)
+        command.add_argument('--price-source', type=Path)
+        if action == 'publish':
+            command.add_argument('--approval', type=Path, required=True)
     _add_rule_review_commands(commands)
     explain = commands.add_parser(
         "explain-example", help="F13 가상 게시 조항으로 설명 생성·폴백 확인"
@@ -737,6 +778,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.command == 'f12-analysis':
         return f12_analysis_command(args)
+    if args.command == 'service-catalog':
+        return service_catalog_command(args)
     if args.command == "refresh-data":
         return refresh_data_command(args.data_dir, notify_discord=args.notify_discord)
     if args.command == "ingest-youthcenter":

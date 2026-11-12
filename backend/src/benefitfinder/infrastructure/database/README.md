@@ -33,3 +33,5 @@ GRANT SELECT ON public.f13_policy_documents, public.f13_clauses TO benefitfinder
 ```
 
 마이그레이션·게시 쓰기는 별도 관리 역할이 담당한다. [마이그레이션 절차](../../../../migrations/README.md)와 [실제 DB 검증](../../../../integration/README.md)을 따른다. PostgreSQL의 사용자 요청 저장·다른 서비스 계정·운영 DB에는 이 테스트 자료를 적용하지 않는다.
+
+[F14 서비스 카탈로그](SERVICE_CATALOG.md)는 같은 게시 이력·원천 연결을 사용한다. `kind: service`의 공식 내용과 별도 가격 문서를 전체 승인 해시에 묶고, 추천·공개 상세·메타에서 SELECT 전용 역할로 읽는다. 서비스 환산액은 현금 계산과 분리한다. 실제 서비스·단가의 사람 검수/게시는 별도다.

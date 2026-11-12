@@ -82,7 +82,7 @@ Vercel Preview에서 API를 쓰려면 [웹 배포 연결 안내](../../apps/web/
 
 ## 4. 매일 쓰는 검사
 
-게시 정책 DB로 실행하려면 관리 역할로 0001·0002를 명시적으로 적용하고, 사람 검수·게시한 자료와 SELECT 전용 역할의 `POLICY_DATABASE_URL`을 준비한다. 추천·상세·상황 변화가 이 카탈로그를 사용하며 조회 장애는 503으로 반환한다. 이 모드는 가상 금리를 사용하지 않는다. `BASE_RATE_DATABASE_URL`로 마지막 성공한 ECOS 금리를 읽으며 미설정·빈 테이블·조회 실패 시 현재가치 보기는 계산 불가다. [금리 갱신·0004·역할 설정](../../backend/src/benefitfinder/infrastructure/database/ECOS_RATES.md)을 따른다. [게시 절차와 지원 규칙](../../backend/src/benefitfinder/infrastructure/database/POLICY_CATALOG.md)을 따른다.
+게시 정책 DB로 실행하려면 관리 역할로 0001·0002를 명시적으로 적용하고, 사람 검수·게시한 자료와 SELECT 전용 역할의 `POLICY_DATABASE_URL`을 준비한다. 추천·상세·상황 변화가 이 카탈로그를 사용하며 조회 장애는 503으로 반환한다. 이 모드는 가상 금리를 사용하지 않는다. `BASE_RATE_DATABASE_URL`로 마지막 성공한 ECOS 금리를 읽으며 미설정·빈 테이블·조회 실패 시 현재가치 보기는 계산 불가다. [금리 갱신·0004·역할 설정](../../backend/src/benefitfinder/infrastructure/database/ECOS_RATES.md)을 따른다. [게시 절차와 지원 규칙](../../backend/src/benefitfinder/infrastructure/database/POLICY_CATALOG.md)을 따른다. 서비스는 같은 `POLICY_DATABASE_URL`에서 조회하며 별도 0008과 [공고·단가 근거 검수](../../backend/src/benefitfinder/infrastructure/database/SERVICE_CATALOG.md)가 필요하다.
 
 ```sh
 uv run --locked python scripts/check.py  # 저장소·계약·API·Ruff·웹 전체

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Any
 
 import psycopg
 from psycopg.conninfo import conninfo_to_dict
@@ -26,6 +27,7 @@ FROM public.policy_catalog_releases
 WHERE review_status = 'approved' AND publication_status = 'published'
   AND reviewed_by IS NOT NULL AND length(btrim(reviewed_by)) > 0
   AND reviewed_at IS NOT NULL AND published_at >= reviewed_at
+  AND (payload ->> 'kind') IS DISTINCT FROM 'service'
 """
 
 
@@ -96,34 +98,37 @@ def publish_policy(
         or approved_sha256 != record_hash(record)
     ):
         raise ValueError("invalid_catalog_approval")
-    checked_at = datetime.fromisoformat(record.benefit.source.checked_at.replace("Z", "+00:00"))
+    validate_source_text(record, source_text)
+    _publish_release(database_url, record.model_dump(mode='json'), approved_sha256=approved_sha256,
+                     reviewer=reviewer, reviewed_at=reviewed_at)
+
+
+def _publish_release(database_url: str, payload: dict[str, Any], *, approved_sha256: str,
+                     reviewer: str, reviewed_at: datetime) -> None:
+    """Persist an already source/approval-validated cash or service payload."""
+    benefit = payload['benefit']
+    checked_at = datetime.fromisoformat(benefit['source']['checked_at'].replace("Z", "+00:00"))
     if reviewed_at < checked_at:
         raise ValueError("approval_predates_source_check")
-    validate_source_text(record, source_text)
-    benefit = record.benefit
     with psycopg.connect(database_url, connect_timeout=2) as connection:
         connection.execute("SET LOCAL statement_timeout = '5s'")
         connection.execute("SET LOCAL lock_timeout = '500ms'")
-        if record.collection_sources:
+        if payload.get('collection_sources'):
             if connection.execute(
                 "SELECT 1 FROM public.benefitfinder_schema_migrations WHERE version = %s",
                 ("0006_policy_source_rechecks",),
             ).fetchone() is None:
                 raise ValueError("catalog_source_migration_required")
-            # Collectors hold this source lock before changing rows. Take it
-            # before the policy lock/retirement so concurrent refresh cannot
-            # publish an approval of a stale generation or invert lock order.
-            for source in sorted({item.source for item in record.collection_sources}):
-                connection.execute(
-                    "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
-                    ("benefitfinder:collected_policy_generations:" + source,),
-                )
-        connection.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", (benefit.id,))
+        # 0008's shared cash/service kind guard also uses this order for virtual
+        # fixtures. Taking it before retirement avoids a policy/source inversion.
+        connection.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s,0))",
+                           ('benefitfinder:collected_policy_generations:youthcenter',))
+        connection.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", (benefit['id'],))
         published_at = datetime.now(timezone.utc)
         connection.execute(
             "UPDATE public.policy_catalog_releases SET publication_status='retired' "
             "WHERE policy_id=%s AND publication_status='published'",
-            (benefit.id,),
+            (benefit['id'],),
         )
         connection.execute(
             """INSERT INTO public.policy_catalog_releases
@@ -131,9 +136,9 @@ def publish_policy(
                 reviewed_by,reviewed_at,publication_status,published_at)
                VALUES (%s,%s,%s,%s,'approved',%s,%s,'published',%s)""",
             (
-                benefit.id,
-                benefit.source.document_version,
-                Jsonb(record.model_dump(mode="json")),
+                benefit['id'],
+                benefit['source']['document_version'],
+                Jsonb(payload),
                 approved_sha256,
                 reviewer.strip(),
                 reviewed_at,

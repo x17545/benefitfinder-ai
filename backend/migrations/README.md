@@ -45,3 +45,7 @@ psql "$DATABASE_URL" -X --set=ON_ERROR_STOP=1 --single-transaction \
 ## F12 오프라인 분석 (0007)
 
 `versions/0007_f12_analysis_tasks.sql`은 0001·0002·0005·0006 다음에 명시적으로 적용한다. 입력 해시·원천 연결·임대·시도 횟수·검수 대기 파일 해시를 보존하고 원천 변경/누락 시 기존 분석을 무효화한다. 기존 게시 카탈로그를 자동 승인·게시하지 않는다. [최소 권한·실행·실패 복구](../src/benefitfinder/infrastructure/database/F12_ANALYSIS.md)를 따른다.
+
+## F14 게시 서비스 (0008)
+
+`versions/0008_service_catalog.sql`은 0001·0002·0005·0006 다음에 명시적으로 적용한다. 0007과 독립적이다. 같은 카탈로그에서 서비스와 현금 입력/정책 ID 종류를 구분하고 기존 승인·원천 변경 무효화 흐름을 재사용한다. 기존 현금 자료를 삭제하거나 자동 게시하지 않는다. [단가 근거·권한·검수 절차](../src/benefitfinder/infrastructure/database/SERVICE_CATALOG.md)를 따른다.
