@@ -16,7 +16,7 @@ Pydantic 모델을 DB 모델이나 순수 domain 모델로 그대로 사용하�
 
 `GET /api/v1/meta`는 현재 게시 자료의 가장 최근 `published_at`, 추천 계산과 같은 연 할인율·확인 상태, 오늘(KST)의 서버 전체 `daily_remaining`을 반환한다. 조회는 분석 횟수를 차감하지 않으며, 100회를 소진해도 조회할 수 있다. 변하는 잔여 횟수를 캐시하지 않도록 `Cache-Control: no-store`를 보낸다.
 
-`POLICY_DATABASE_URL` 미설정 시에는 추천과 같은 가상 갱신 시각·가상 금리를 사용하고 `virtual_data: true`, `base_rate_status: unknown`으로 표시한다. 게시 카탈로그 모드에서는 `virtual_data: false`이며 `BASE_RATE_DATABASE_URL`의 마지막 성공한 ECOS 금리를 읽는다. 금리 미설정·빈 테이블·조회 실패 시 `base_rate: null`, `base_rate_status: unknown`이다. 게시 자료가 아직 없으면 갱신 시각을 만들지 않고 공통 503과 `Retry-After: 60`을 반환한다. 카탈로그·이용량 DB 오류도 공통 503이며 가상 자료나 메모리 횟수로 대체하지 않는다. `/health`는 이 준비 상태와 별개인 생존 확인이다. [ECOS 수동 갱신·보관](../infrastructure/database/ECOS_RATES.md)을 제공하며 운영 자동 갱신과 화면 연결은 후속이다.
+`POLICY_DATABASE_URL` 미설정 시에는 추천과 같은 가상 갱신 시각·가상 금리를 사용하고 `virtual_data: true`, `base_rate_status: unknown`으로 표시한다. 게시 카탈로그 모드에서는 `virtual_data: false`이며 `BASE_RATE_DATABASE_URL`의 마지막 성공한 ECOS 금리를 읽는다. 금리 미설정·빈 테이블·조회 실패 시 `base_rate: null`, `base_rate_status: unknown`이다. 게시 자료가 아직 없으면 갱신 시각을 만들지 않고 공통 503과 `Retry-After: 60`을 반환한다. 카탈로그·이용량 DB 오류도 공통 503이며 가상 자료나 메모리 횟수로 대체하지 않는다. `/health`는 이 준비 상태와 별개인 생존 확인이다. [ECOS 수동 갱신·보관](../infrastructure/database/ECOS_RATES.md)과 [공통 화면의 메타 조회](../../../../apps/web/README.md#자료-상태와-서비스-메타데이터)를 제공하며 운영 자동 갱신은 후속이다.
 
 `POST /api/v1/recommendations`는 `Accept: text/event-stream`을 받으면 SSE로 응답하고, 생략하거나 `q=0`이면 기존 JSON을 반환한다. 프로필은 POST 본문에만 넣는다. 조건·조합 계산(`analyze_recommendations`), 서비스 조회(`search_services`), 근거 설명(`explain_with_sources`)의 실제 실행 전후에 `running`·`done`을 보낸다. 현재 계산 함수 안의 검색·판정을 별도 단계로 꾸며 보내지 않는다. 진행 이벤트는 고정 문구만 담고 프로필·금액·정책 원문을 포함하지 않는다.
 

@@ -33,7 +33,7 @@
 
 ## 구현 상태
 
-2026-11-12, 현재 코드의 구현 기준이다. 배포 완료를 뜻하지 않는다.
+2026-11-13, 현재 코드의 구현 기준이다. 배포 완료를 뜻하지 않는다.
 
 [F08 통합 실행](../backend/src/benefitfinder/jobs/DAILY_REFRESH.md)은 정책 목록·기준금리를 독립적으로 시도하고 소스별 성공·실패와 알림 상태를 원자적으로 기록한다. 통합 중복 실행 차단·강제 종료 흔적·단일 Discord 보고와 Linux systemd/macOS launchd의 03:00 KST 설정 생성을 제공한다. `COLLECTION_WRITE_DATABASE_URL` 설정 시 완전한 수집 성공본·변경 이력의 DB 인계와 API 없는 재적재를 제공한다. `F12_WRITE_DATABASE_URL` 설정 시 두 수집이 끝난 뒤 준비된 공식 문서 분석 큐를 소비한다. 실제 운영 등록·API 수집·알림 도착, 보조금24·API 밖 원문 확보와 실제 매핑·검수는 후속이다.
 
@@ -45,7 +45,7 @@
 
 개발용 LLM은 [이 PC의 GPU에서 실행하는 llama.cpp](development/LOCAL_LLM.md)를 사용한다. F12 도구 호출·문맥별 구조화 추출과 F13 설명을 같은 설정으로 연결하며, 운영은 외부 API의 HTTPS 주소·모델·키를 명시하도록 분리한다. 기존 명시적 Ollama 실행은 호환 경로다. 실제 정책 검수·운영 게시와 외부 공급자 평가 완료를 뜻하지 않는다.
 
-`GET /api/v1/meta`는 게시 자료의 최근 갱신 시각·추천과 같은 할인율 상태·공유 잔여 분석 횟수를 조회한다. 조회는 차감하지 않고 가상 개발 자료는 `virtual_data: true`로 구분한다. 게시 자료가 아직 없으면 시각을 추정하지 않고 503을 반환한다. `BASE_RATE_DATABASE_URL` 설정 시 저장된 ECOS 기준금리를 추천·상황 변화·메타 API가 함께 읽는다. 실제 운영 자동 갱신과 화면 연결은 후속이다. [응답·오류 기준](../backend/src/benefitfinder/api/README.md#서비스-메타데이터)을 따른다.
+`GET /api/v1/meta`는 게시 자료의 최근 갱신 시각·추천과 같은 할인율 상태·공유 잔여 분석 횟수를 조회한다. 조회는 차감하지 않고 가상 개발 자료는 `virtual_data: true`로 구분한다. 게시 자료가 아직 없으면 시각을 추정하지 않고 503을 반환한다. `BASE_RATE_DATABASE_URL` 설정 시 저장된 ECOS 기준금리를 추천·상황 변화·메타 API가 함께 읽는다. [공통 하단·시작·이용 안내](../apps/web/README.md#자료-상태와-서비스-메타데이터)는 같은 공개 상태를 표시하고 실패 시 유형·금리·횟수를 추정하지 않는다. 실제 운영 자동 갱신은 후속이다. [응답·오류 기준](../backend/src/benefitfinder/api/README.md#서비스-메타데이터)을 따른다.
 
 [ECOS 기준금리 수동 갱신](../backend/src/benefitfinder/infrastructure/database/ECOS_RATES.md)은 공식 일별 시계열을 읽고 PostgreSQL의 마지막 성공값을 원자적으로 교체한다. 늦게 도착한 과거 값과 실패는 이전 성공값을 덮어쓰지 않는다. 공식 공개 API의 항목·응답을 확인했고, 실제 운영 키·스케줄 등록·Discord 도착 검증은 후속이다.
 

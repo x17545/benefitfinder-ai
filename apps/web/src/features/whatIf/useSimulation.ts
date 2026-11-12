@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { postSimulation } from '../../shared/api/simulations.ts';
+import { refreshServiceMeta } from '../../shared/api/serviceMetaStore.ts';
 import type {
   ChangeSimulationRequest,
   ChangeSimulationResult,
@@ -44,6 +45,7 @@ export function useSimulation(request: ChangeSimulationRequest | null): { state:
     void postSimulation(parsed, fetch, signal).then((outcome) => {
       if (!controller.signal.aborted) {
         setLoaded({ key, state: toSimulationState(parsed.scenario, outcome) });
+        void refreshServiceMeta();
       }
     });
     return () => {
