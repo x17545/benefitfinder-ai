@@ -7,6 +7,7 @@ from typing import Any
 from uuid import uuid4
 
 from benefitfinder.application.recommendation_service import MVP_PAYMENTS
+from benefitfinder.application.published_recommendations import map_published_response
 from benefitfinder.domain.present_value import calculate_period_value
 
 
@@ -202,6 +203,9 @@ def build_recommendation_response(
     discount_rate_verified: bool = False,
 ) -> dict[str, Any]:
     """MVP 계산 결과로 최상위 API 응답 객체를 생성한다."""
+
+    if "catalog" in calculation:
+        return map_published_response(calculation, annual_rate)
 
     results = map_all_results(
         calculation=calculation,

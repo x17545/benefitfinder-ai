@@ -12,6 +12,8 @@
 
 ## 2. 데이터 준비와 사용자 요청
 
+현재 F08은 [전체 수집 성공본의 PostgreSQL 인계](../../backend/src/benefitfinder/infrastructure/database/COLLECTED_POLICIES.md)를 제공한다. 원본·해시·시각·건수 검사 후 미검수 원천과 DB 기준 변경 이력을 저장하며 게시 정책·조항·승인 상태와 분리한다. DB 장애 후에는 같은 성공본부터 재인계한다. 이 인계를 변경 공고의 자동 F12 실행·기존 승인 해제·운영 게시 완료로 해석하지 않는다.
+
 ```mermaid
 flowchart TD
     API[공식 API] --> Collect[정책·원문·출처·버전 수집]
