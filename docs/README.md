@@ -35,6 +35,8 @@
 
 2026-11-12, 현재 코드의 구현 기준이다. 배포 완료를 뜻하지 않는다.
 
+개발용 LLM은 [이 PC의 GPU에서 실행하는 llama.cpp](development/LOCAL_LLM.md)를 사용한다. F12 도구 호출·문맥별 구조화 추출과 F13 설명을 같은 설정으로 연결하며, 운영은 외부 API의 HTTPS 주소·모델·키를 명시하도록 분리한다. 기존 명시적 Ollama 실행은 호환 경로다. 실제 정책 검수·운영 게시와 외부 공급자 평가 완료를 뜻하지 않는다.
+
 `GET /api/v1/meta`는 게시 자료의 최근 갱신 시각·추천과 같은 할인율 상태·공유 잔여 분석 횟수를 조회한다. 조회는 차감하지 않고 가상 개발 자료는 `virtual_data: true`로 구분한다. 게시 자료가 아직 없으면 시각을 추정하지 않고 503을 반환한다. `BASE_RATE_DATABASE_URL` 설정 시 저장된 ECOS 기준금리를 추천·상황 변화·메타 API가 함께 읽는다. 실제 운영 자동 갱신과 화면 연결은 후속이다. [응답·오류 기준](../backend/src/benefitfinder/api/README.md#서비스-메타데이터)을 따른다.
 
 [ECOS 기준금리 수동 갱신](../backend/src/benefitfinder/infrastructure/database/ECOS_RATES.md)은 공식 일별 시계열을 읽고 PostgreSQL의 마지막 성공값을 원자적으로 교체한다. 늦게 도착한 과거 값과 실패는 이전 성공값을 덮어쓰지 않는다. 공식 공개 API의 항목·응답을 확인했고, 실제 운영 키·03:00 통합 스케줄·Discord 보고는 후속이다.

@@ -45,6 +45,12 @@ from benefitfinder.infrastructure.f12_evaluation_files import (
     write_evaluation_report,
 )
 from benefitfinder.infrastructure.ollama_chat import OllamaChat
+from benefitfinder.infrastructure.compatible_llm import (
+    CompatibleChat,
+    CompatibleExplanationCompletion,
+)
+from benefitfinder.infrastructure.llm_settings import LLMSettings
+from benefitfinder.application.source_chunks import evidence_schema
 from benefitfinder.infrastructure.policy_rule_files import (
     RULE_REVIEW_OUTPUT_EXISTS,
     RuleReviewFileError,
@@ -119,6 +125,31 @@ def policy_catalog_command(args: argparse.Namespace) -> int:
     print("승인된 정책 버전을 게시했습니다.")
     return 0
 
+
+def extraction_chat(model: str | None):
+    settings = LLMSettings.from_env()
+    if settings.provider != "disabled":
+        return CompatibleChat(settings.endpoint(model=model))
+    if model is not None:
+        return OllamaChat(model)
+    raise ValueError("llm_not_configured")
+
+
+def chunk_chat():
+    settings = LLMSettings.from_env()
+    if settings.provider == "disabled":
+        return LocalE4BChat()
+    chat = CompatibleChat(settings.endpoint())
+
+    def complete(messages, visible_lines):
+        return json.dumps(
+            chat.complete_json(
+                messages, evidence_schema(visible_lines), timeout_seconds=60, max_tokens=4096
+            ),
+            ensure_ascii=False,
+        )
+
+    return complete
 
 def refresh_ecos_rate_command() -> int:
     """Fetch once, then atomically replace only a successful ECOS observation."""
@@ -265,7 +296,8 @@ def rule_review_command(args: argparse.Namespace) -> int:
                 raise RuleReviewFileError(RULE_REVIEW_OUTPUT_EXISTS)
             started = monotonic()
             original = load_rule_batch(args.input)
-            chat = OllamaChat(args.model)
+            chat = extraction_chat(args.model)
+            model_name = args.model or LLMSettings.from_env().model
             batch, trace = extract_rule_batch(
                 original,
                 target_name=args.target_name,
@@ -277,19 +309,22 @@ def rule_review_command(args: argparse.Namespace) -> int:
                 draft = extract_policy_facts(original, chat=chat)
                 snapshot = prepare_snapshot(batch, at=datetime.now(KST))
                 write_f12_review_pair(args.output_dir, snapshot, draft)
-                print(f"모델 {args.model}: {' → '.join(trace)} ({monotonic() - started:.1f}초)")
+                print(f"모델 {model_name}: {' → '.join(trace)} ({monotonic() - started:.1f}초)")
                 print("rules-pending.json · facts-pending.json 저장. 둘 다 검수 대기.")
                 return 0
             write_rule_batch(args.output, batch)
-            print(f"모델 {args.model}: {' → '.join(trace)} ({monotonic() - started:.1f}초)")
+            print(f"모델 {model_name}: {' → '.join(trace)} ({monotonic() - started:.1f}초)")
             print(f"규칙 후보 {len(batch.candidates)}건. 다음 단계: rule-review prepare")
             return 0
         if args.review_action == "extract-facts":
             started = monotonic()
-            draft = extract_policy_facts(load_rule_batch(args.input), chat=OllamaChat(args.model))
+            model_name = args.model or LLMSettings.from_env().model
+            draft = extract_policy_facts(
+                load_rule_batch(args.input), chat=extraction_chat(args.model)
+            )
             write_policy_facts(args.output, draft)
             print(
-                f"모델 {args.model} ({monotonic() - started:.1f}초): "
+                f"모델 {model_name} ({monotonic() - started:.1f}초): "
                 f"자격 {len(draft.eligibility)}건, 금액 {len(draft.amounts)}건, "
                 f"지급 시점 {len(draft.payment_timing)}건. 검수 대기."
             )
@@ -356,7 +391,9 @@ def _add_overlap_arguments(parser: argparse.ArgumentParser) -> None:
         "--target-alias", action="append", default=[], help="같은 정책의 확인된 별칭 (반복 가능)"
     )
     parser.add_argument("--target-id", required=True, help="입력 정책 목록에 있는 상대 정책 ID")
-    parser.add_argument("--model", required=True, help="로컬 Ollama에 설치된 모델 이름")
+    parser.add_argument(
+        "--model", help="설정한 제공자의 모델 이름. 제공자 미설정 시 명시적 Ollama 호환"
+    )
 
 
 def _add_rule_review_commands(commands: argparse._SubParsersAction) -> None:
@@ -376,7 +413,7 @@ def _add_rule_review_commands(commands: argparse._SubParsersAction) -> None:
     )
     facts = actions.add_parser("extract-facts", help="공식 원문의 자격·금액·지급 시점 후보 생성")
     facts.add_argument("--input", type=Path, required=True, help="공식 문서 한 건이 있는 입력")
-    facts.add_argument("--model", required=True, help="로컬 Ollama에 설치된 모델 이름")
+    facts.add_argument("--model", help="설정한 제공자의 모델 이름. 생략 시 LLM_MODEL")
     facts.add_argument("--output", type=Path, required=True, help="새 로컬 검수 후보 파일 경로")
     prepare = actions.add_parser("prepare", help="전체 원문·정책·후보 파일로 검수 자료 준비")
     prepare.add_argument("--input", type=Path, required=True)
@@ -452,7 +489,8 @@ def extract_chunked_command(source: Path, output: Path) -> int:
         batch = load_rule_batch(source)
         output.mkdir(parents=True, exist_ok=False)
         facts, provenance = extract_chunked_evidence(
-            batch, chat=LocalE4BChat(),
+            batch,
+            chat=chunk_chat(),
             progress=lambda done, total: print(f"문맥 묶음 {done}/{total} 완료", flush=True),
             checkpoint=lambda record: write_chunk_checkpoint(output, record),
         )
@@ -462,8 +500,12 @@ def extract_chunked_command(source: Path, output: Path) -> int:
         print("분할 추출 실패: chunk_output_exists", file=sys.stderr)
         return 1
     except (ValueError, OSError, RuleReviewWorkflowError, RuleReviewFileError) as error:
-        allowed = {"chunk_input_invalid", "chunk_context_limit", "chunk_response_invalid",
-                   "chunk_model_failed"}
+        allowed = {
+            "chunk_input_invalid",
+            "chunk_context_limit",
+            "chunk_response_invalid",
+            "chunk_model_failed",
+        }
         code = str(error) if str(error) in allowed else "chunk_extraction_failed"
         print(f"분할 추출 실패: {code}", file=sys.stderr)
         return 1
@@ -487,8 +529,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     evaluate = commands.add_parser("evaluate-f12", help="사람 승인 근거 기준의 로컬 추출 평가")
     evaluate.add_argument("--manifest", type=Path, required=True)
     evaluate.add_argument("--output", type=Path, required=True)
-    evaluate.add_argument("--view", choices=("model", "context", "both"),
-                          help="v2 입력의 모델 원선택/문맥 보존 결과 (기본 both)")
+    evaluate.add_argument(
+        "--view",
+        choices=("model", "context", "both"),
+        help="v2 입력의 모델 원선택/문맥 보존 결과 (기본 both)",
+    )
     chunked = commands.add_parser("extract-chunked-facts", help="앞뒤 문맥을 보존한 로컬 E4B 추출")
     chunked.add_argument("--input", type=Path, required=True)
     chunked.add_argument("--output-dir", type=Path, required=True)
@@ -505,7 +550,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "explain-example", help="F13 가상 게시 조항으로 설명 생성·폴백 확인"
     )
     explain.add_argument("--category", choices=("employment", "housing"), default="employment")
-    explain.add_argument("--model", help="로컬 Ollama 모델; 생략하면 템플릿 사용")
+    explain.add_argument("--model", help="설정한 제공자 모델. 제공자 미설정 시 명시적 Ollama 호환")
     args = parser.parse_args(argv)
     if args.command == "refresh-ecos-rate":
         return refresh_ecos_rate_command()
@@ -522,11 +567,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "explain-example":
         request, clauses = explanation_example(args.category)
         try:
-            generator = (
-                GroundedPolicyExplainer(OllamaExplanationCompletion(args.model))
-                if args.model
-                else None
-            )
+            settings = LLMSettings.from_env()
+            if settings.provider != "disabled":
+                generator = GroundedPolicyExplainer(
+                    CompatibleExplanationCompletion(settings.endpoint(model=args.model))
+                )
+            else:
+                generator = (
+                    GroundedPolicyExplainer(OllamaExplanationCompletion(args.model))
+                    if args.model
+                    else None
+                )
         except ValueError:
             print("설명 예제 실행 실패: local_explanation_model_required", file=sys.stderr)
             return 2
