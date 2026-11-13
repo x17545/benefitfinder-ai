@@ -157,7 +157,7 @@ export function ConfirmStep(): JSX.Element {
                       : 's2-summary__value'
                 }
               >
-                {row.value ?? '골라 주세요'} <span aria-hidden="true">›</span>
+                {row.value ?? '골라 주세요'}&nbsp;<span aria-hidden="true">›</span>
               </span>
             </button>
           </li>

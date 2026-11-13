@@ -16,6 +16,7 @@ import {
   startAnalysis,
   useAnalysis,
 } from './analysisStore.ts';
+import { failureCopy } from './analysisFailure.ts';
 import './LoadingScreen.css';
 
 function start(): void {
@@ -110,8 +111,8 @@ export function LoadingScreen(): JSX.Element {
     return (
       <div className="page-width screen">
         <main className="l-body">
-          <h1 className="screen__title">분석에 실패했어요</h1>
-          <p className="s2-desc">잠시 후 다시 시도해 주세요. 고른 조건은 그대로 남아 있어요.</p>
+          <h1 className="screen__title">{failureCopy(analysis.reason).title}</h1>
+          <p className="s2-desc">{failureCopy(analysis.reason).description}</p>
           <div className="l-actions">
             <Button onClick={retryRegions}>다시 시도</Button>
             <Button
@@ -148,7 +149,9 @@ export function LoadingScreen(): JSX.Element {
       <main className="l-body" aria-live="polite">
         <div className="l-spinner" aria-hidden="true" />
         <h1 className="screen__title">가장 이득인 조합을 계산하고 있어요</h1>
-        <p className="s2-desc">아래 단계로 정책을 찾고 계산하고 있어요</p>
+        <p className="s2-desc">
+          {progress.length > 0 ? '아래 단계로 정책을 찾고 계산하고 있어요' : '조건에 맞는 정책을 찾고 있어요'}
+        </p>
         {progress.length > 0 ? (
           <ol className="l-steps">
             {progress.map((item) => (

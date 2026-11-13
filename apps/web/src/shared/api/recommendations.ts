@@ -50,7 +50,11 @@ function errorCodeFrom(body: unknown, status: number): RecommendationErrorCode {
   if (isRecord(body) && typeof body.code === 'string' && SERVER_ERROR_CODES.includes(body.code)) {
     return body.code as PublicErrorResponse['code'];
   }
-  return status === 429 ? 'daily_limit_exceeded' : 'http_error';
+  if (status === 429) {
+    return 'daily_limit_exceeded';
+  }
+  // 오류 본문이 없는 게이트웨이·서버 준비 중 응답도 '정책 자료를 쓸 수 없음'으로 안내한다.
+  return status === 502 || status === 503 || status === 504 ? 'dependency_unavailable' : 'http_error';
 }
 
 function parseJson(text: string): unknown {

@@ -109,7 +109,7 @@ export function ResultLists({ view, selected, info, aiGenerated = false }: Resul
           title={`아직 조합 계산 전인 정책 ${String(notReviewed.length)}개`}
           note={notReviewed.some((item) => item.verification_only === true)
             ? '승인한 근거와 확인 범위를 볼 수 있어요. 자격·금액·조합은 확인 전이에요.'
-            : '금액·중복 여부를 검수 중이예요. 정책별 자격 진단은 볼 수 있어요.'}
+            : '금액·중복 여부를 검수 중이에요. 정책별 자격 진단은 볼 수 있어요.'}
         >
           {notReviewed.map((item) => {
             if (item.review_explanation === undefined) {
