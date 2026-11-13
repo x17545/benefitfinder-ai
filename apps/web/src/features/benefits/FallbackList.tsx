@@ -26,7 +26,7 @@ export function FallbackList({ items, info }: FallbackListProps): JSX.Element {
               <span className="s3-policy__head">
                 <span className="s3-policy__title">
                   <span className="s3-policy__name">
-                    {policyName(item.policy_id, info)} <span aria-hidden="true">›</span>
+                    {policyName(item.policy_id, info)}&nbsp;<span aria-hidden="true">›</span>
                   </span>
                   {benefit?.benefit_amount?.amount_text ? (
                     <span className="s3-policy__summary">{benefit.benefit_amount.amount_text}</span>

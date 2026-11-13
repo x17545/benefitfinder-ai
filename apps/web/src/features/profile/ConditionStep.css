@@ -89,6 +89,28 @@
   background: linear-gradient(to bottom, transparent, var(--color-bg) 28%);
 }
 
+/*
+ * 휴대폰: 문서 대신 화면 상자 안에서 스크롤한다.
+ * iOS Safari는 문서를 스크롤하면 주소창이 접히면서 아래에 붙은 [다음]이 화면 밖으로 밀리거나
+ * 아래쪽이 잘렸다. 화면 높이를 보이는 영역(100dvh)에 맞추고 상자 안에서 스크롤하면
+ * 주소창이 접히지 않아 [다음]이 늘 화면 아래에 보인다.
+ */
+@media (max-width: 767px) {
+  .screen:has(> .s2-bottom) {
+    /* 숨김 글자(ui-sr-only) 같은 absolute 요소도 이 상자 안에 두어 문서가 스크롤되지 않게 */
+    position: relative;
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+  }
+
+  .s2-bottom {
+    padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
 @media (min-width: 768px) {
   .s2-bottom {
     display: flex;

@@ -67,50 +67,55 @@ export function StartScreen(): JSX.Element {
         </p>
 
         <div className="s1-actions">
-          <div className="s1-consents">
-            <div className="s1-consent">
+          {/* 휴대폰에서는 아래 .s1-start(필수 동의 + 시작하기)만 화면 아래에 붙고, 기억하기와 보관 안내는 본문에 남는다 */}
+          <p id="s1-consent-note" className="s1-consent-note">
+            입력과 결과는 새로고침을 위해 이 탭에 임시 보관해요
+          </p>
+          <div className="s1-consent s1-remember">
+            <input
+              id="s1-remember"
+              type="checkbox"
+              checked={remember}
+              onChange={(event) => {
+                updateFlowState({ remember: event.target.checked });
+              }}
+            />
+            <label htmlFor="s1-remember">
+              (선택) 이 기기에 내 조건 기억하기
+              <span className="s1-consent__hint">30일 동안, 언제든 지울 수 있어요</span>
+            </label>
+          </div>
+
+          <div className="s1-start">
+            <div className="s1-consent s1-required">
               <input
                 id="s1-consent"
                 type="checkbox"
                 checked={consent}
+                aria-describedby="s1-consent-note"
                 onChange={(event) => {
                   updateFlowState({ consent: event.target.checked });
                 }}
               />
               <label htmlFor="s1-consent">
                 <b>(필수)</b> 선택한 조건은 정책 분석에만 사용돼요
-                <span className="s1-consent__hint">입력과 결과는 새로고침을 위해 이 탭에 임시 보관해요</span>
               </label>
               <a className="s1-consent__link" href={paths.privacy}>
                 개인정보 처리방침
               </a>
             </div>
-            <div className="s1-consent">
-              <input
-                id="s1-remember"
-                type="checkbox"
-                checked={remember}
-                onChange={(event) => {
-                  updateFlowState({ remember: event.target.checked });
-                }}
-              />
-              <label htmlFor="s1-remember">
-                (선택) 이 기기에 내 조건 기억하기
-                <span className="s1-consent__hint">30일 동안, 언제든 지울 수 있어요</span>
-              </label>
-            </div>
-          </div>
 
-          <Button
-            size="large"
-            block
-            disabled={!consent}
-            onClick={() => {
-              navigate(paths.conditions(1));
-            }}
-          >
-            시작하기
-          </Button>
+            <Button
+              size="large"
+              block
+              disabled={!consent}
+              onClick={() => {
+                navigate(paths.conditions(1));
+              }}
+            >
+              시작하기
+            </Button>
+          </div>
         </div>
       </main>
 

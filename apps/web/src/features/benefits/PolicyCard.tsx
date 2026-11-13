@@ -55,7 +55,7 @@ export function PolicyCard({ policy, info, aiGenerated, detailHref, virtualData 
           <PolicyIcon categories={benefit?.categories ?? []} />
           <span className="s3-policy__title">
             <span className="s3-policy__name">
-              {policyName(policy.policy_id, info)} <span aria-hidden="true">›</span>
+              {policyName(policy.policy_id, info)}&nbsp;<span aria-hidden="true">›</span>
             </span>
             {benefit?.benefit_amount?.amount_text ? (
               <span className="s3-policy__summary">{benefit.benefit_amount.amount_text}</span>

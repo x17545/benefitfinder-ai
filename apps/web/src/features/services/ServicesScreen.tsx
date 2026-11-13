@@ -132,7 +132,7 @@ function ServiceRow({ entry, detailHref, virtualData }: ServiceRowProps): JSX.El
         </span>
         <span className="s6-row__text">
           <span className="s6-row__name">
-            {entry.title} <span aria-hidden="true">›</span>
+            {entry.title}&nbsp;<span aria-hidden="true">›</span>
           </span>
           <span className="s6-row__item">{entry.service.item}</span>
         </span>
