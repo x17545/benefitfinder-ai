@@ -256,7 +256,7 @@ function PolicyDetail({ benefit, isSample, mine, serviceDiagnosis, hasAnalysis, 
                 <ul className="s5-review">
                   {reviewItems.map((item) => (
                     <li key={item.condition_id}>
-                      <b>? {conditionLabel(item.condition_id)}</b>:{' '}
+                      <b>{conditionLabel(item.condition_id)}</b>:{' '}
                       {item.reason !== '' ? item.reason : '입력하지 않았거나 공식 기준이 불명확해요'}
                     </li>
                   ))}
