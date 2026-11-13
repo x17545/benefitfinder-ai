@@ -138,6 +138,34 @@ def tool_payloads(messages: list[dict[str, object]]) -> list[dict[str, object]]:
 
 
 class PolicyAnalysisAgentTests(TestCase):
+    def test_unshown_expanded_api_context_can_be_read_before_retrying(self):
+        text = '[addAplyQlfcCndCn]\n만 19세 이상 청년 대상\n가상 지역 거주 또는 지역 대학 재학생'
+        scripted = ScriptedChat([
+            reply(fetch('doc-1', 2, 2)),
+            reply(extract('doc-1', 'eligibility', 2, 2)),
+            reply(fetch('doc-1', 1, 3)),
+            reply(extract('doc-1', 'eligibility', 2, 2)),
+            reply(call('check_missing')), reply(call('save_candidate')),
+        ])
+
+        def chat(messages, tools):
+            if len(scripted.messages) == 2:
+                feedback = tool_payloads(messages)[-1]
+                self.assertEqual(feedback['error'], 'evidence_not_previously_shown')
+                self.assertEqual(feedback['next_tool'], 'fetch_document')
+                self.assertEqual(feedback['next_tool_arguments'], {
+                    'doc_id': 'doc-1', 'start_line': 1, 'end_line': 3,
+                })
+                self.assertNotIn('가상 지역', json.dumps(feedback, ensure_ascii=False))
+            return scripted(messages, tools)
+
+        result = analyze_policy(make_input((text,)), chat=chat)
+        self.assertEqual(result.trace[1].outcome, 'invalid')
+        self.assertEqual(result.trace[-1].outcome, 'needs_review')
+        self.assertEqual(len(result.facts[0].eligibility), 1)
+        self.assertEqual(result.facts[0].eligibility[0].quote, text)
+        self.assertEqual(result.facts[0].eligibility[0].location, 'lines 1-3')
+
     def test_incomplete_check_requires_recheck_after_reading_remaining_lines(self):
         scripted = ScriptedChat([
             reply(fetch('doc-1', 1, 2)), reply(call('check_missing')),

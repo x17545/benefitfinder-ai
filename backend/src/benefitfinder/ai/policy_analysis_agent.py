@@ -216,9 +216,10 @@ never assume what Y/N means. Missing overlap evidence never means unrestricted c
 
 
 class _ToolInvalid(Exception):
-    def __init__(self, code: str) -> None:
+    def __init__(self, code: str, *, required_read: dict[str, str | int] | None = None) -> None:
         super().__init__(code)
         self.code = code
+        self.required_read = required_read
 
 
 @dataclass
@@ -865,7 +866,9 @@ class _AnalysisRun:
             max_chars=_MAX_EXTRACT_CHARS,
         )
         if not set(range(start, end + 1)) <= prior.shown[document.id]:
-            raise _ToolInvalid("evidence_not_previously_shown")
+            raise _ToolInvalid("evidence_not_previously_shown", required_read={
+                'doc_id': document.id, 'start_line': start, 'end_line': end,
+            })
         citation = _citation(document, start, end)
         condition_lines = _line_numbers(values, "condition_lines", start, end)
         exception_lines = _line_numbers(values, "exception_lines", start, end)
@@ -1114,7 +1117,13 @@ class _AnalysisRun:
                 except _ToolInvalid as error:
                     self.state = backup
                     payload = {"error": error.code}
-                    if error.code in {'check_required', 'check_stale'}:
+                    if error.code == 'evidence_not_previously_shown' and error.required_read is not None:
+                        payload['instruction'] = ('Read the required citation context with fetch_document '
+                                                  'in a separate turn before retrying extract_rule. '
+                                                  'The required range may include the entire API field.')
+                        payload['next_tool'] = 'fetch_document'
+                        payload['next_tool_arguments'] = error.required_read
+                    elif error.code in {'check_required', 'check_stale'}:
                         payload['instruction'] = 'Call check_missing before save_candidate; extraction changed candidates.'
                         payload['next_tool'] = 'check_missing'
                     elif error.code == 'coverage_incomplete':
