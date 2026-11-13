@@ -13,7 +13,7 @@ from time import monotonic
 from unicodedata import normalize
 
 from benefitfinder.ai.policy_analysis_semantics import benefit_amounts, evidence_kind, payment_context
-from benefitfinder.ai.policy_evidence_context import api_field_ranges, evidence_context
+from benefitfinder.ai.policy_evidence_context import api_field_ranges, evidence_context, source_field_ranges
 from benefitfinder.ai.policy_rule_agent import Chat
 from benefitfinder.application.policy_analysis import (
     AnalysisEvidence,
@@ -1036,15 +1036,16 @@ class _AnalysisRun:
             trace=tuple(self.trace),
         )
 
-    def _preserve_api_fields(self) -> None:
-        """Retain already-read typed API fields even when the model skips them.
+    def _preserve_source_fields(self) -> None:
+        """Retain already-read explicit source sections even when the model skips them.
 
         This copies source evidence only. Raw codes are not interpreted, and
         periods/thresholds never become calculated payments or eligibility.
         """
         prior = _snapshot(self.state)
         for document in self.input.documents:
-            for source_field in api_field_ranges(document.text):
+            typed_api = bool(api_field_ranges(document.text))
+            for source_field in source_field_ranges(document.text):
                 start, end = source_field.start_line, source_field.end_line
                 if start == end:
                     continue
@@ -1056,7 +1057,7 @@ class _AnalysisRun:
                     continue
                 kinds = [kind]
                 quote = _quote(document, start, end)
-                if source_field.kind == 'support':
+                if typed_api and source_field.kind == 'support':
                     if benefit_amounts(quote):
                         kinds.append('amount')
                     if payment_context(quote):
@@ -1075,7 +1076,7 @@ class _AnalysisRun:
     def run(self) -> PolicyAnalysisResult:
         while self.model_calls < _MAX_MODEL_CALLS:
             self._check_budget()
-            self._preserve_api_fields()
+            self._preserve_source_fields()
             messages = self._messages()
             self.model_calls += 1
             try:

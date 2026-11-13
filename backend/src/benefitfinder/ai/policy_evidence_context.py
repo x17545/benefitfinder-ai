@@ -7,7 +7,7 @@ import re
 
 
 @dataclass(frozen=True)
-class ApiFieldRange:
+class EvidenceFieldRange:
     name: str
     start_line: int
     end_line: int
@@ -67,6 +67,15 @@ _FIELD_KINDS = {
     name: kind
     for kind, names in _FIELD_GROUPS
     for name in names
+}
+_PROSE_FIELD_KINDS = {
+    **dict.fromkeys(('지원대상', '신청대상', '신청자격', '지원기준', '소득요건', '재산요건'), 'eligibility'),
+    **dict.fromkeys(('신청방법', '접수방법', '신청기간', '접수기간', '신청절차',
+                     '지원방법', '상담방법', '제출서류', '구비서류'), 'application'),
+    **dict.fromkeys(('사업기간', '운영기간'), 'program_period'),
+    **dict.fromkeys(('지원내용', '지원금액', '지급방법', '지급시기', '지급기간'), 'support'),
+    **dict.fromkeys(('이용료', '이용일시', '이용시간', '운영시간', '서비스내용'), 'service'),
+    **dict.fromkeys(('유의사항', '지원제외', '지원제외대상', '제외대상'), 'exceptions'),
 }
 _EVIDENCE_KINDS = frozenset(
     {
@@ -159,7 +168,7 @@ def _header_name(line: str) -> str | None:
     return match.group(1) if match is not None else None
 
 
-def api_field_ranges(text: str) -> tuple[ApiFieldRange, ...]:
+def api_field_ranges(text: str) -> tuple[EvidenceFieldRange, ...]:
     """Return header-delimited fields with trailing blank source lines omitted."""
     lines = _source_lines(text)
     headers = [
@@ -176,7 +185,7 @@ def api_field_ranges(text: str) -> tuple[ApiFieldRange, ...]:
                 end = number
                 break
         result.append(
-            ApiFieldRange(
+            EvidenceFieldRange(
                 name=name,
                 start_line=start,
                 end_line=end,
@@ -186,13 +195,47 @@ def api_field_ranges(text: str) -> tuple[ApiFieldRange, ...]:
     return tuple(result)
 
 
+def _prose_label(body: str) -> str:
+    label = re.sub(r'^#{1,6}\s+', '', body.strip())
+    label = _SECTION_LABEL_PREFIX.sub('', label).strip().rstrip(':：').strip()
+    return ''.join(label.split())
+
+
+def source_field_ranges(text: str) -> tuple[EvidenceFieldRange, ...]:
+    """Use API fields, or explicit standalone prose headings and their bodies.
+
+    Unknown Markdown/chapter/standard section headings still stop a known section.
+    Inline labels and unlabeled prose are left for the model and human review.
+    """
+    fields = api_field_ranges(text)
+    if fields:
+        return fields
+    lines = _source_lines(text)
+    boundaries = []
+    for number, line in enumerate(lines, 1):
+        body = _line_body(line)
+        label = _prose_label(body)
+        kind = _PROSE_FIELD_KINDS.get(label)
+        if kind is not None or _is_section_heading(body):
+            boundaries.append((number, label, kind))
+    result = []
+    for index, (start, label, kind) in enumerate(boundaries):
+        if kind is None:
+            continue
+        end = boundaries[index + 1][0] - 1 if index + 1 < len(boundaries) else len(lines)
+        while end > start and not _line_body(lines[end - 1]).strip():
+            end -= 1
+        result.append(EvidenceFieldRange(label, start, end, kind))
+    return tuple(result)
+
+
 def _valid_range(line_count: int, start: int, end: int) -> bool:
     return type(start) is int and type(end) is int and 1 <= start <= end <= line_count
 
 
 def _containing_field(
-    fields: tuple[ApiFieldRange, ...], start: int, end: int
-) -> ApiFieldRange | None:
+    fields: tuple[EvidenceFieldRange, ...], start: int, end: int
+) -> EvidenceFieldRange | None:
     return next(
         (field for field in fields if field.start_line <= start <= end <= field.end_line),
         None,
@@ -200,10 +243,10 @@ def _containing_field(
 
 
 def field_kind(text: str, start: int, end: int) -> str | None:
-    """Classify one selection only when it stays inside one known API field."""
+    """Classify one selection only when it stays inside one known source field."""
     if not _valid_range(len(_source_lines(text)), start, end):
         return None
-    field = _containing_field(api_field_ranges(text), start, end)
+    field = _containing_field(source_field_ranges(text), start, end)
     if field is None or field.kind == "unknown":
         return None
     return field.kind
@@ -286,7 +329,7 @@ def evidence_context(
         or not _valid_range(len(lines), start, end)
     ):
         return (start, end)
-    fields = api_field_ranges(text)
+    fields = source_field_ranges(text)
     field = _containing_field(fields, start, end)
     if field is not None:
         if field.kind == "unknown" and kind != "source_context":

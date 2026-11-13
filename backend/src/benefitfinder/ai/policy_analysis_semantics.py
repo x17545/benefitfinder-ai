@@ -11,6 +11,8 @@ def evidence_kind(text: str, kind: str, start: int, end: int) -> str:
     quote = ''.join(text.splitlines(keepends=True)[start - 1:end])
     if source_kind in {'application', 'program_period'}:
         return source_kind
+    if source_kind == 'service':
+        return 'service'
     if source_kind == 'eligibility' and kind in {'amount', 'timing', 'service'}:
         return 'eligibility'
     if kind == 'timing' and not payment_context(quote):

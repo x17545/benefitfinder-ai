@@ -138,6 +138,63 @@ def tool_payloads(messages: list[dict[str, object]]) -> list[dict[str, object]]:
 
 
 class PolicyAnalysisAgentTests(TestCase):
+    def test_read_prose_sections_survive_model_omission_and_preserve_service_qualifiers(self):
+        api = '[detailTarget]\n만 23세 이상 청년'
+        prose = ('지원대상\r\n거주 또는 거주예정 1인가구(독립가구 예정 포함)\r\n'
+                 '이용료\r\n0원(증빙서류 제출 불필요)\r\n'
+                 '이용일시\r\n월·목 상담, 야간 동행은 사전예약에 한함\r\n'
+                 '운영시간은 자치구별로 다를 수 있음\r\n'
+                 '지원방법\r\n예약 후 전화 또는 대면상담\r\n'
+                 '유의사항\r\n최소 3일 전 신청\r\n특정 매물을 추천하는 서비스는 아님')
+        scripted = ScriptedChat([
+            reply(fetch('doc-1', 1, 2)), reply(call('check_missing')),
+            reply(fetch('doc-2', 1, 12)), reply(call('check_missing')),
+            reply(extract('doc-2', 'amount', 4, 4), extract('doc-2', 'timing', 6, 6)),
+            reply(call('check_missing')), reply(call('save_candidate')),
+        ])
+        result = analyze_policy(make_input((api, prose)), chat=scripted)
+        self.assertEqual(len(result.facts[1].eligibility), 1)
+        target = result.facts[1].eligibility[0]
+        self.assertIn('거주 또는 거주예정', target.quote)
+        self.assertIn('독립가구 예정 포함', target.quote)
+        self.assertIn('\r\n', target.quote)
+        self.assertEqual(target.location, 'lines 1-2')
+        self.assertFalse(result.facts[1].amounts)
+        self.assertFalse(result.facts[1].payment_timing)
+        by_kind = {}
+        for item in result.additional:
+            if item.evidence.document_id == 'doc-2':
+                by_kind.setdefault(item.kind, []).append(item.evidence.quote)
+        self.assertTrue(any('증빙서류 제출 불필요' in q for q in by_kind['service']))
+        self.assertTrue(any('사전예약에 한함' in q and '자치구별' in q for q in by_kind['service']))
+        self.assertIn('예약 후 전화 또는 대면상담', '\n'.join(by_kind['application']))
+        self.assertIn('최소 3일 전 신청', '\n'.join(by_kind['exceptions']))
+        self.assertIn('추천하는 서비스는 아님', '\n'.join(by_kind['exceptions']))
+        self.assertEqual(result.rules, ())
+        self.assertIn('overlap', {m.field for m in result.missing if m.document_id == 'doc-2'})
+        before_prose_read = json.loads(scripted.messages[2][-1]['content'])
+        self.assertEqual(before_prose_read['counts']['facts']['doc-2']['eligibility'], 0)
+
+    def test_unread_prose_qualifier_still_requires_another_read_before_extraction(self):
+        text = '지원대상\n가상 지역 주민\n단, 입주 예정자는 별도 확인 필요'
+        scripted = ScriptedChat([
+            reply(fetch('doc-1', 1, 2)), reply(extract('doc-1', 'eligibility', 2, 2)),
+            reply(fetch('doc-1', 3, 3)), reply(call('check_missing')),
+            reply(call('save_candidate')),
+        ])
+        result = analyze_policy(make_input((text,)), chat=scripted)
+        self.assertEqual(result.trace[1].outcome, 'invalid')
+        feedback = tool_payloads(scripted.messages[2])[-1]
+        self.assertEqual(feedback['next_tool_arguments'], {
+            'doc_id': 'doc-1', 'start_line': 1, 'end_line': 3,
+        })
+        self.assertEqual(result.facts[0].eligibility[0].quote, text)
+
+    def test_oversized_prose_section_fails_instead_of_dropping_conditions(self):
+        text = '\n'.join(['지원대상', *['가상 조건' for _ in range(41)]])
+        with self.assertRaisesRegex(ValueError, '^policy_analysis_evidence_context_limit$'):
+            analyze_policy(make_input((text,)), chat=ScriptedChat([reply(fetch('doc-1', 1, 42))]))
+
     def test_unshown_expanded_api_context_can_be_read_before_retrying(self):
         text = '[addAplyQlfcCndCn]\n만 19세 이상 청년 대상\n가상 지역 거주 또는 지역 대학 재학생'
         scripted = ScriptedChat([

@@ -25,7 +25,7 @@ from backend.integration.test_policy_source_rechecks_postgres import (
 )
 from backend.tests.test_policy_analysis_pipeline import analysis_input
 from backend.tests.test_policy_analysis_agent import ScriptedChat, reply, call
-from benefitfinder.application.policy_analysis import PolicyAnalysisStoreError
+from benefitfinder.application.policy_analysis import POLICY_ANALYSIS_VERSION, PolicyAnalysisStoreError
 from benefitfinder.infrastructure.database.repositories.collected_policies import PostgresCollectedPolicies
 from benefitfinder.infrastructure.database.repositories.policy_analysis import PostgresPolicyAnalysisTasks
 from benefitfinder.infrastructure.llm_settings import LLMSettings
@@ -87,7 +87,7 @@ class PolicyAnalysisQueuePostgresTest(unittest.TestCase):
             self.tasks.register(replace(self.value, documents=(replace(self.value.documents[0], collected_at=AT-timedelta(seconds=1)),)))
         with self.assertRaisesRegex(PolicyAnalysisStoreError, 'f12_analysis_source_stale'):
             self.tasks.register(replace(self.value, collection_sources=(replace(self.value.collection_sources[0], material_sha256='b'*64),)))
-        self.assertEqual(self.tasks.status(), {'worker_analysis_version': 2, 'tasks': {}, 'source_records_awaiting_scope_or_documents': 1})
+        self.assertEqual(self.tasks.status(), {'worker_analysis_version': POLICY_ANALYSIS_VERSION, 'tasks': {}, 'source_records_awaiting_scope_or_documents': 1})
         self.assertIsNone(self.tasks.claim())
 
     def test_two_workers_do_not_claim_the_same_lease(self):
@@ -266,7 +266,7 @@ class PolicyAnalysisQueuePostgresTest(unittest.TestCase):
         with self.assertRaisesRegex(PolicyAnalysisStoreError, 'f12_analysis_version_obsolete'):
             old.register(self.value)
         current = self.tasks.claim()
-        self.assertEqual(current.analysis_version, 2)
+        self.assertEqual(current.analysis_version, POLICY_ANALYSIS_VERSION)
         self.assertEqual(current.attempt, 1)
         self.assertEqual(self.complete(current), 'needs_review')
         self.assertTrue(self.tasks.register(self.value)['replayed'])
