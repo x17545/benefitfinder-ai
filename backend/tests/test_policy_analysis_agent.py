@@ -190,7 +190,7 @@ class PolicyAnalysisAgentTests(TestCase):
                 self.assertEqual(citation.location, 'lines 2-4')
                 self.assertEqual(citation.content_sha256, input.documents[0].content_sha256)
                 self.assertIn(citation.quote, text)
-                self.assertEqual(facts.amounts[0].amounts_won, (1000, 300000))
+                self.assertEqual(facts.amounts[0].amounts_won, (300000,))
 
     def test_crlf_fact_quote_rejects_interior_newline_normalization(self):
         from dataclasses import replace
@@ -296,6 +296,8 @@ class PolicyAnalysisAgentTests(TestCase):
                 ("doc-3", "amount"),
                 ("doc-3", "application"),
                 ("doc-3", "timing"),
+                ("doc-2", "overlap"),
+                ("doc-3", "overlap"),
             ],
         )
         self.assertEqual([item.kind for item in result.additional], [
@@ -529,3 +531,74 @@ if __name__ == "__main__":
     import unittest
 
     unittest.main()
+
+
+class ApiEvidenceRegressionTests(TestCase):
+    def analyze(self, text, *selections):
+        return analyze_policy(make_input((text,)), chat=ScriptedChat([
+            reply(fetch('doc-1', 1, len(text.splitlines()))),
+            *[reply(selection) for selection in selections],
+            reply(call('check_missing')), reply(call('save_candidate')),
+        ]))
+
+    def test_application_program_and_raw_income_are_not_payment_facts(self):
+        text = ('[aplyYmd]\n20300101~20301231\n\n'
+                '[bizPrdBgngYmd]\n20300101\n\n'
+                '[earnMinAmt]\n0\n\n[sprtTrgtAgeLmtYn]\nY\n\n'
+                '[sprtTrgtMinAge]\n21\n\n[sprtTrgtMaxAge]\n37')
+        result = self.analyze(text, extract('doc-1', 'timing', 2, 2),
+                              extract('doc-1', 'amount', 8, 8))
+        facts = result.facts[0]
+        self.assertFalse(facts.amounts)
+        self.assertFalse(facts.payment_timing)
+        missing = {m.field for m in result.missing}
+        self.assertNotIn('application', missing)
+        self.assertNotIn('age', missing)
+        self.assertIn('age_interpretation', missing)
+        self.assertIn('amount', missing)
+        self.assertIn('timing', missing)
+        self.assertIn('program_period', {e.kind for e in result.additional})
+
+    def test_support_preserves_range_type_duration_condition_and_excludes_costs(self):
+        text = ('[detailSupport]\nI유형: 구직활동 이행시 월 73~117만원, 7개월 지원\n'
+                '본인부담금 2천원 제외 금액 지급\n거래금액 2억원 이하\n'
+                '신청인 중개보수 우선 지급 후 증빙서류 제출 시 지원')
+        result = self.analyze(text, extract('doc-1', 'amount', 2, 2))
+        facts = result.facts[0]
+        self.assertEqual(facts.amounts[0].amounts_won, (730000, 1170000))
+        self.assertEqual(facts.amounts[0].evidence.quote, text)
+        self.assertIn('7개월', facts.payment_timing[0].quote)
+        self.assertIn('우선 지급 후', facts.payment_timing[0].quote)
+        self.assertIsNone(facts.scheduled_monthly_day)
+
+    def test_formula_and_compound_eligibility_remain_in_exact_field_context(self):
+        text = ('[detailTarget]\r\n구직자이면서 (지역 거주 또는 대학 재학)\r\n'
+                '주택 거래금액 2억원 이하\r\n※거래금액=임차보증금+(월세액*100)\r\n'
+                '\r\n[detailMethod]\r\n온라인 또는 방문')
+        result = self.analyze(text, extract('doc-1', 'eligibility', 3, 3))
+        citation = result.facts[0].eligibility[0]
+        self.assertIn('또는 대학 재학', citation.quote)
+        self.assertIn('월세액*100', citation.quote)
+        self.assertIn('\r\n', citation.quote)
+        self.assertNotIn('[detailMethod]', citation.quote)
+        self.assertEqual(citation.content_sha256, make_input((text,)).documents[0].content_sha256)
+
+    def test_service_duration_does_not_become_eligibility_or_payment(self):
+        text = '[detailSupport]\n가상 인턴형 일경험 2~4개월 내외\n가상 프로젝트형 3개월 이내'
+        result = self.analyze(text, extract('doc-1', 'eligibility', 2, 2),
+                              extract('doc-1', 'timing', 2, 2))
+        self.assertFalse(result.facts[0].eligibility)
+        self.assertFalse(result.facts[0].payment_timing)
+        self.assertEqual(result.additional[0].kind, 'service')
+        self.assertIn('내외', result.additional[0].evidence.quote)
+
+    def test_context_must_be_read_before_model_can_extract_it(self):
+        text = '[detailTarget]\n지역 거주자 또는 대학 재학생\n단, 휴학생 포함'
+        chat = ScriptedChat([
+            reply(fetch('doc-1', 2, 2)), reply(extract('doc-1', 'eligibility', 2, 2)),
+            reply(fetch('doc-1', 1, 3)), reply(call('check_missing')),
+            reply(call('save_candidate')),
+        ])
+        result = analyze_policy(make_input((text,)), chat=chat)
+        self.assertEqual(result.trace[1].outcome, 'invalid')
+        self.assertIn('휴학생 포함', result.facts[0].eligibility[0].quote)

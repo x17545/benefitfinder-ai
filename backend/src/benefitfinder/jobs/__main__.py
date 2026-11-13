@@ -140,7 +140,7 @@ def run_f12_queue(data_dir: Path, *, limit: int = 5) -> dict[str, object]:
     settings = LLMSettings.from_env()
     if settings.provider == 'disabled':
         raise ValueError('llm_not_configured')
-    chat = CompatibleChat(settings.endpoint())
+    chat = CompatibleChat(settings.endpoint(), require_tool_calls=True)
     tasks = PostgresPolicyAnalysisTasks(os.environ.get('F12_WRITE_DATABASE_URL', ''))
 
     def analyze(claim, on_step):

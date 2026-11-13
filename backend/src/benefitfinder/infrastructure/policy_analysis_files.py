@@ -103,7 +103,7 @@ class PolicyAnalysisFiles:
             _create(directory / 'manifest.json', {
                 'format_version': 1, 'task_id': claim.task_id, 'attempt': claim.attempt,
                 'input_sha256': claim.input.fingerprint(), 'origin_recheck_id': claim.origin_recheck_id,
-                'agent_version': 'f12-tools-v1', 'model': self._model,
+                'agent_version': 'f12-tools-v2', 'model': self._model,
                 'artifact_status': 'needs_review', 'summary': summary, 'files': files,
             })
             digest = hashlib.sha256((directory / 'manifest.json').read_bytes()).hexdigest()
