@@ -602,3 +602,9 @@ class ApiEvidenceRegressionTests(TestCase):
         result = analyze_policy(make_input((text,)), chat=chat)
         self.assertEqual(result.trace[1].outcome, 'invalid')
         self.assertIn('휴학생 포함', result.facts[0].eligibility[0].quote)
+
+    def test_allowance_name_alone_is_not_a_payment_schedule(self):
+        text = '[detailSupport]\n맞춤형 프로그램 및 참여수당, 인센티브 제공\n이수 시 취업서비스 연계'
+        result = self.analyze(text, extract('doc-1', 'timing', 2, 2))
+        self.assertFalse(result.facts[0].payment_timing)
+        self.assertIn('timing', {m.field for m in result.missing})

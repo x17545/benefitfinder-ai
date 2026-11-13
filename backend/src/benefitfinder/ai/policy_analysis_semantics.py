@@ -28,7 +28,18 @@ def evidence_kind(text: str, kind: str, start: int, end: int) -> str:
 
 def payment_context(quote: str) -> bool:
     """An application date or a course duration alone is not a payment schedule."""
-    return bool(re.search(r'지급|수당|생애\s*1회|생애\s*한\s*번', quote))
+    if re.search(r'생애\s*(?:1회|한\s*번)', quote):
+        return True
+    for line in quote.splitlines():
+        if not re.search(r'지급|수당|지원금|급여', line):
+            continue
+        if re.search(r'매월|매주|월별|분기별|매년|일시금|분할\s*지급|'
+                     r'월\s*\d[\d~∼～, .]*(?:천|만)?원|\d+\s*일\s*(?:지급|이내|이후|까지)', line):
+            return True
+        if re.search(r'(?:우선|선)\s*지급|지급\s*후|'
+                     r'(?:이행|승인|신청|제출|정산|완료|확인).{0,20}(?:시|후|때).{0,20}(?:지급|지원|수령)', line):
+            return True
+    return False
 
 
 def benefit_amounts(quote: str) -> tuple[int, ...]:
