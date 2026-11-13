@@ -74,7 +74,7 @@ uv run --locked uvicorn benefitfinder.main:app --reload --reload-dir backend/src
 
 기본 실행에 `.env` 복사는 필요 없다. 서버 주소를 바꾸면 `apps/web/.env.example`을 같은 폴더의 `.env`로 복사해 `API_PROXY_TARGET`을 수정하고 Vite를 다시 실행한다. `/api/v1`·`/health`는 개발 프록시를 사용한다. `backend/.env.example`은 서버 환경 변수 양식이며 파일을 자동으로 읽지 않는다. `DATABASE_URL`을 전달하면 F13 게시 조항을 PostgreSQL에서 조회한다. 미설정 시 가상 메모리 예제를 사용하며 자동 DDL은 실행하지 않는다. 마이그레이션·실제 DB 검증은 [PostgreSQL 검증 안내](../../backend/integration/README.md)를 따른다. `/health`는 DB·데이터·LLM 준비 상태를 확인하지 않는다.
 
-F13은 기본 안내 템플릿으로 동작한다. `F13_OLLAMA_MODEL=gemma4:e4b`를 명시하고 같은 실행 환경의 `127.0.0.1:11434`에 모델이 준비된 경우에만 로컬 AI 설명을 요청한다. 모델 오류·지연 시 기본 안내로 돌아가며 계산은 유지한다. Render에 환경 변수만 넣어도 개발 PC의 Ollama에 연결되는 것은 아니다.
+F13은 기본 안내 템플릿으로 동작한다. 개발 중 AI 추출·설명은 [로컬 llama.cpp 설정](LOCAL_LLM.md)으로 이 PC의 GPU를 사용한다. `LLM_PROVIDER=llama_cpp`와 모델·주소·키 파일을 서버 프로세스에 전달한다. 운영은 `external_api`에 HTTPS 주소·모델·키를 명시한다. 모델 오류·지연 시 설명은 기본 안내로 돌아가며 계산은 유지한다. 기존 `F13_OLLAMA_MODEL`은 명시적 호환 경로로 유지한다.
 
 Vercel Preview에서 API를 쓰려면 [웹 배포 연결 안내](../../apps/web/README.md#vercel-배포-연결)의 `API_PROXY_TARGET`을 설정한다. 미설정 Preview도 화면은 빌드하지만 `/api/*`와 `/health`는 HTTP 503·`dependency_unavailable`로 응답한다. 운영 API로 자동 연결하지 않으며 잘못된 주소를 명시하면 빌드를 중단한다. 실제 배포는 별도 승인 후 수행한다.
 
