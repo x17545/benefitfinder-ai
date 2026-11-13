@@ -138,6 +138,81 @@ def tool_payloads(messages: list[dict[str, object]]) -> list[dict[str, object]]:
 
 
 class PolicyAnalysisAgentTests(TestCase):
+    def test_incomplete_check_requires_recheck_after_reading_remaining_lines(self):
+        scripted = ScriptedChat([
+            reply(fetch('doc-1', 1, 2)), reply(call('check_missing')),
+            reply(fetch('doc-1', 3, 7)), reply(call('save_candidate')),
+            reply(call('check_missing')), reply(call('save_candidate')),
+        ])
+
+        def chat(messages, tools):
+            if len(scripted.messages) == 4:
+                feedback = tool_payloads(messages)[-1]
+                self.assertEqual(feedback['error'], 'coverage_incomplete')
+                self.assertEqual(feedback['next_tool'], 'check_missing')
+                self.assertIn('again', feedback['instruction'])
+            return scripted(messages, tools)
+
+        result = analyze_policy(make_input((DOC_ONE,)), chat=chat)
+        self.assertEqual(result.trace[3].outcome, 'invalid')
+        self.assertEqual(result.trace[-1].outcome, 'needs_review')
+
+    def test_fact_review_pair_round_trips_original_line_endings(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+
+        from benefitfinder.application.policy_rules import PolicyReference, RuleReviewBatch
+        from benefitfinder.infrastructure.policy_rule_files import (
+            load_f12_review_pair, write_f12_review_pair,
+        )
+        from benefitfinder.ingestion.rule_review_workflow import prepare_snapshot
+
+        for newline in ('\n', '\r\n'):
+            with self.subTest(newline=repr(newline)), TemporaryDirectory() as directory:
+                text = newline.join(('가상 주거 지원 안내', '지원금은 최대 30만원입니다.',
+                                     '신청인 부담금 1천원을 제외합니다.', '', '신청 안내'))
+                input = make_input((text,))
+                result = analyze_policy(input, chat=ScriptedChat([
+                    reply(fetch('doc-1', 1, 5)),
+                    reply(extract('doc-1', 'amount', 2, 4)),
+                    reply(call('check_missing')), reply(call('save_candidate')),
+                ]))
+                policies = tuple(PolicyReference(p.id, 'youth', p.categories) for p in input.policies)
+                snapshot = prepare_snapshot(RuleReviewBatch(input.documents, policies, ()), at=NOW)
+                path = Path(directory) / 'review'
+                write_f12_review_pair(path, snapshot, result.facts[0])
+                stored, facts = load_f12_review_pair(path)
+                self.assertEqual(stored.batch.documents, input.documents)
+                self.assertEqual(facts, result.facts[0])
+                self.assertEqual(facts.document.text, text)
+                citation = facts.amounts[0].evidence
+                self.assertEqual(citation.quote, newline.join(text.split(newline)[1:3]))
+                self.assertEqual(citation.location, 'lines 2-4')
+                self.assertEqual(citation.content_sha256, input.documents[0].content_sha256)
+                self.assertIn(citation.quote, text)
+                self.assertEqual(facts.amounts[0].amounts_won, (1000, 300000))
+
+    def test_crlf_fact_quote_rejects_interior_newline_normalization(self):
+        from dataclasses import replace
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+
+        from benefitfinder.application.policy_facts import PolicyAmountCandidate
+        from benefitfinder.infrastructure.policy_rule_files import RuleReviewFileError, write_policy_facts
+
+        input = make_input(('가상 공고\r\n최대 30만원 지원\r\n본인 부담금 1천원 제외\r\n신청 안내',))
+        result = analyze_policy(input, chat=ScriptedChat([
+            reply(fetch('doc-1', 1, 4)), reply(extract('doc-1', 'amount', 2, 3)),
+            reply(call('check_missing')), reply(call('save_candidate')),
+        ]))
+        draft = result.facts[0]
+        citation = draft.amounts[0].evidence
+        altered = replace(citation, quote=citation.quote.replace('\r\n', '\n'))
+        with TemporaryDirectory() as directory, self.assertRaises(RuleReviewFileError):
+            write_policy_facts(Path(directory) / 'altered.json', replace(draft, amounts=(
+                PolicyAmountCandidate(altered, draft.amounts[0].amounts_won),
+            )))
+
     def test_tool_history_is_serializable_by_the_actual_compatible_transport(self):
         from benefitfinder.infrastructure.compatible_llm import _wire_messages
         scripted = ScriptedChat([

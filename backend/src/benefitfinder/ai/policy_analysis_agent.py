@@ -1062,6 +1062,10 @@ class _AnalysisRun:
                     if error.code in {'check_required', 'check_stale'}:
                         payload['instruction'] = 'Call check_missing before save_candidate; extraction changed candidates.'
                         payload['next_tool'] = 'check_missing'
+                    elif error.code == 'coverage_incomplete':
+                        payload['instruction'] = ('Call check_missing again after reading the remaining document '
+                                                  'ranges, then retry save_candidate.')
+                        payload['next_tool'] = 'check_missing'
                     elif error.code in {'target_not_confirmed', 'overlap_requires_lookup_policy_then_target_id_and_direction'}:
                         payload['instruction'] = 'Call lookup_policy using the target policy name, then extract with its target_id and direction.'
                         payload['next_tool'] = 'lookup_policy'

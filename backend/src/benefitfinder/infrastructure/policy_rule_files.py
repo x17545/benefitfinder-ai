@@ -781,9 +781,12 @@ def _check_citation(citation: RuleCitation, document: SourceDocument) -> None:
         start = int(match[1] or match[2])
         end = int(match[3]) if match[3] else start
         lines = document.text.split("\n")
-        if not 1 <= start <= end <= len(lines) or citation.quote != "\n".join(
-            lines[start - 1 : end]
-        ):
+        if not 1 <= start <= end <= len(lines):
+            _fail_invalid()
+        span = "\n".join(lines[start - 1 : end])
+        # The tool Agent omits terminal line endings, preserving interior CRLF.
+        # Retain exact legacy spans too; never normalize text inside the quote.
+        if citation.quote not in (span, span.rstrip("\r\n")):
             _fail_invalid()
     elif citation.quote not in document.text:
         _fail_invalid()
