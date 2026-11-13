@@ -20,11 +20,15 @@
 | `sse-progress.schema.json` | `sse-progress.json` | SSE 진행 이벤트 data |
 | `error.schema.json` | `error.json` | 오류 응답 |
 | `health.schema.json` | - | GET /health 생존 확인 응답 |
+| `analytics-config.schema.json` | `analytics-config.json` | GET /api/v1/analytics/config, 통계 사용 여부만 공개 |
+| `analytics-event.schema.json` | `analytics-event.json` | POST /api/v1/analytics/events, 6.6의 17개 이벤트와 허용된 값만 전달 |
 | `common.schema.json` | 위 예제에 포함 | 분야 식별자·출처·인용 근거 |
 
 모든 파일은 JSON Schema Draft 2020-12를 사용한다. `$id`의 `benefitfinder.example` 주소는 로컬 참조 식별자이며 실제 서버 주소가 아니다. 검증 시 스키마를 로컬 레지스트리에 등록하므로 원격 문서를 조회하지 않는다.
 
 ## 공통 의미
+
+통계 계약은 기존 정책·분석 요청과 독립적이다. `client_id`는 탭 메모리에서만 생성하는 UUIDv4이며 새로고침·정보 삭제 때 바뀐다. 서비스 DB·파일·브라우저 저장소에 통계 식별자를 보관하지 않는다. `session_id`는 그 세션의 시작 시각(초), `event`는 기능 명세 6.6의 이름별 정확한 필드만 허용한다. `apply_click.rank`는 조합을 알 수 없으면 `null`이며 GA로 전달할 때는 그 필드를 생략한다. 조건값·프로필·원문 URL·오류 문장·추가 필드를 거부하며 ID를 사용자 정보에서 만들지 않는다. 204 응답은 GA 보고서 도착을 보장하지 않는다. 서버 설정·검증은 [통계 연결 안내](../backend/src/benefitfinder/infrastructure/ANALYTICS.md)를 따른다.
 
 - `domain`: 적용 분야. 첫 지원값은 `youth`다. 스키마는 확장을 허용하지만 서버의 지원 여부는 별도 확인한다.
 - 초기 정책 분류: `domain: youth` 안에서 `categories`의 `employment`(취업)·`housing`(주거)만 활성화한다. 관심 선택 `interests`도 이 두 값만 받는다. 수집 출처의 분류를 검수하여 대응시키고 혼합·불명확한 분류는 확인 전 노출하지 않는다. 공통 혜택의 `categories`와 분야 식별자는 확장 가능하게 유지하며, 확장 시 청년 관심 enum·선택지·후보 필터·예제·검증을 함께 갱신한다. 현재 공식 지역·가상 추천 API가 이 계약을 사용하며, 관심 enum 축소는 MVP 회의 결정에 맞춘 초안 계약 변경이다.

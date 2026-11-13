@@ -21,7 +21,9 @@ describe('공통 페이지', () => {
     expect(html).not.toContain('바로 폐기');
     expect(html).toContain('기억하기를 꺼도 이 탭에는 남아요');
     expect(html).toContain('저장한 지 30일이 지나면 다음 접속 때 지워요');
-    expect(html).toContain('현재 구글 애널리틱스 등 이용 통계 도구는 연결하지 않았어요');
+    expect(html).toContain('이용 통계를 켠 환경에서는');
+    expect(html).toContain('통계용 쿠키나 브라우저 저장소는 사용하지 않아요');
+    expect(html).toContain('고른 조건 값은 보내지 않아요');
     for (const title of ['받는 정보', '서버로 보내는 정보와 보관', '생성형 AI로 보내는 것', '이 기기에 저장되는 것', '이용 통계', '지우는 방법']) {
       expect(html).toContain(title);
     }

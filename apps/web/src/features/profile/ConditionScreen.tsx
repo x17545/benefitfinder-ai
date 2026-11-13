@@ -1,6 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import type { JSX } from 'react';
-import { navigate, paths } from '../../app/router.ts';
+import { CONDITION_STEPS, navigate, paths } from '../../app/router.ts';
+import { trackEvent } from '../../shared/analytics/events.ts';
 import {
   EMPLOYMENT_CHOICES,
   INTEREST_CHOICES,
@@ -28,13 +29,20 @@ interface ConditionScreenProps {
 /** S2 조건 고르기 n단계. 주소 /conditions/n */
 export function ConditionScreen({ step }: ConditionScreenProps): JSX.Element {
   const { consent, answers } = useFlowState();
+  const viewedStep = useRef<number | null>(null);
 
-  // S1 필수 동의 없이 주소로 바로 들어오면 S1로 돌려보낸다
+  // 동의한 사용자가 실제로 본 단계만 한 번 기록한다. StrictMode의 effect 재실행은 ref가 막는다.
   useEffect(() => {
     if (!consent) {
       navigate(paths.start, { replace: true });
+      return;
     }
-  }, [consent]);
+    if (!Number.isSafeInteger(step) || step < 1 || step > CONDITION_STEPS || viewedStep.current === step) {
+      return;
+    }
+    viewedStep.current = step;
+    trackEvent({ name: 'step_view', step });
+  }, [consent, step]);
 
   if (!consent) {
     return <></>;

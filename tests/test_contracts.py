@@ -12,6 +12,8 @@ from referencing import Registry, Resource
 
 CONTRACTS = Path(__file__).resolve().parents[1] / "contracts"
 FIXTURE_SCHEMAS = {
+    "analytics-config.json": "analytics-config.schema.json",
+    "analytics-event.json": "analytics-event.schema.json",
     "youth-benefit.json": "benefit.schema.json",
     "youth-service-benefit.json": "benefit.schema.json",
     "recommendation-request.json": "recommendation-request.schema.json",

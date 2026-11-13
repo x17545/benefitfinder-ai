@@ -1,6 +1,7 @@
 import type { JSX } from 'react';
 import { paths } from '../../app/router.ts';
 import type { NormalizedBenefit } from '../../shared/api/benefits.ts';
+import { trackEvent } from '../../shared/analytics/events.ts';
 import { formatManWon, recruitTag } from './format.ts';
 import { policyName } from './resultModel.ts';
 import type { ResultView } from './resultModel.ts';
@@ -10,16 +11,19 @@ type FallbackItem = NonNullable<ResultView['fallback_list']>[number];
 interface FallbackListProps {
   items: readonly FallbackItem[];
   info: ReadonlyMap<string, NormalizedBenefit>;
+  virtualData: boolean;
 }
 
 /** 조합을 못 만들 때: 받을 수 있는 정책 최대 5개 목록 (기획서 4.5 예외 화면) */
-export function FallbackList({ items, info }: FallbackListProps): JSX.Element {
+export function FallbackList({ items, info, virtualData }: FallbackListProps): JSX.Element {
   return (
     <div className="s3-policies">
       {items.map((item) => {
         const benefit = info.get(item.policy_id);
         const tag = benefit !== undefined ? recruitTag(benefit.application) : null;
         const applyUrl = benefit?.application.url ?? benefit?.source.url ?? null;
+        const actualApplicationLink = !virtualData && benefit?.virtual_data !== true &&
+          benefit?.application.status === 'open' && benefit.application.url !== null;
         return (
           <article key={item.policy_id} className="s3-policy">
             <a className="s3-policy__main" href={paths.policy(item.policy_id)}>
@@ -48,7 +52,10 @@ export function FallbackList({ items, info }: FallbackListProps): JSX.Element {
                 자세히 보기
               </a>
               {applyUrl !== null ? (
-                <a className="ui-button ui-button--primary" href={applyUrl} target="_blank" rel="noopener noreferrer">
+                <a className="ui-button ui-button--primary" href={applyUrl} target="_blank" rel="noopener noreferrer"
+                  onClick={actualApplicationLink ? () => {
+                    trackEvent({ name: 'apply_click', policy_id: item.policy_id, from: 'result', rank: null });
+                  } : undefined}>
                   신청하러 가기 ↗
                 </a>
               ) : null}
