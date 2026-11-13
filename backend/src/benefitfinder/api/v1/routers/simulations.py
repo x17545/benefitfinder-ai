@@ -36,4 +36,6 @@ def create_simulation(
     except ValueError as exc:
         if str(exc) == "inconsistent_income_assumption":
             raise HTTPException(status_code=422) from None
+        if str(exc) == "unavailable_simulation_basis":
+            raise HTTPException(status_code=503) from None
         raise
