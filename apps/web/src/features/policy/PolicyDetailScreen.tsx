@@ -6,7 +6,7 @@ import { SiteFooter } from '../../shared/ui/SiteFooter.tsx';
 import { StatusChip } from '../../shared/ui/StatusChip.tsx';
 import { TopBar } from '../../shared/ui/TopBar.tsx';
 import { useAnalysis } from '../benefits/analysisStore.ts';
-import { formatManWon, isStale, monthDay, recruitTag, shortPolicyId, sourceName } from '../benefits/format.ts';
+import { formatManWon, isStale, monthDay, recruitTag, recruitmentState, shortPolicyId, sourceName } from '../benefits/format.ts';
 import { usePolicyInfo } from '../benefits/policyInfo.ts';
 import { PolicyExplanation } from '../benefits/PolicyExplanation.tsx';
 import { readResultBasis, withResultBasis } from '../benefits/resultBasis.ts';
@@ -106,9 +106,11 @@ interface PolicyDetailProps {
 function PolicyDetail({ benefit, isSample, mine, serviceDiagnosis, hasAnalysis, conditionsHref, aiGenerated }: PolicyDetailProps): JSX.Element {
   const service = benefit.service ?? null;
   const virtualData = isSample || benefit.virtual_data === true;
-  const tag = recruitTag(benefit.application);
-  const closed = benefit.application.status === 'closed';
-  const applicationUrl = benefit.application.status === 'open' ? benefit.application.url : null;
+  const now = new Date();
+  const applicationState = recruitmentState(benefit.application, now);
+  const tag = recruitTag(benefit.application, now);
+  const closed = applicationState === 'closed';
+  const applicationUrl = applicationState === 'open' ? benefit.application.url : null;
   const applyUrl = applicationUrl ?? benefit.source.url;
   const conflicts = benefit.conflicts ?? [];
   const conflictInfo = usePolicyInfo(isSample ? [] : conflicts.map((conflict) => conflict.policy_id));
