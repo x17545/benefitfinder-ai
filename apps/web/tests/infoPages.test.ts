@@ -18,7 +18,8 @@ describe('공통 페이지', () => {
   it('P2 개인정보 처리방침은 서버 무저장과 실제 브라우저 보관·삭제 범위를 안내한다', () => {
     const html = renderToStaticMarkup(createElement(PrivacyScreen));
     expect(html).toContain('고른 조건은 서버에 저장하지 않아요');
-    expect(html).not.toContain('바로 폐기');
+    expect(html).toContain('서버에서는 분석이 끝나면 바로 폐기해요');
+    expect(html).not.toContain('고른 조건은 분석에만 쓰고'); // 브라우저 자료까지 바로 폐기한다고 쓰지 않는다
     expect(html).toContain('기억하기를 꺼도 이 탭에는 남아요');
     expect(html).toContain('저장한 지 30일이 지나면 다음 접속 때 지워요');
     expect(html).toContain('현재 구글 애널리틱스 등 이용 통계 도구는 연결하지 않았어요');
