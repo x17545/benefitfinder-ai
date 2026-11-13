@@ -26,7 +26,7 @@ export function PrivacyScreen(): JSX.Element {
           <rect x="5" y="11" width="14" height="10" rx="2" />
           <path d="M8 11V8a4 4 0 0 1 8 0v3" />
         </svg>
-        고른 조건은 서버에 저장하지 않아요. 이 브라우저의 입력과 결과는 직접 지울 수 있어요.
+        고른 조건은 서버에 저장하지 않아요. 서버에서는 분석이 끝나면 바로 폐기해요. 이 브라우저의 입력과 결과는 직접 지울 수 있어요.
       </p>
 
       <div className="info-cards">
@@ -40,7 +40,7 @@ export function PrivacyScreen(): JSX.Element {
         <InfoCard title="서버로 보내는 정보와 보관">
           <ul>
             <li>[내 조합 찾기]를 누르면 고른 조건을 서버로 보내 자격 판정과 조합 계산에만 써요.</li>
-            <li>서버는 선택한 조건을 분석에 사용하고, DB · 파일 · 기록(로그)에 저장하지 않아요.</li>
+            <li>서버는 선택한 조건을 분석에만 쓰고 분석이 끝나면 바로 폐기해요. DB · 파일 · 기록(로그)에 저장하지 않아요.</li>
             <li>오류 응답에도 입력한 조건이나 소득 값, 부모님 정보를 넣지 않아요.</li>
           </ul>
         </InfoCard>
