@@ -531,6 +531,47 @@ def refresh_gov24_command(data_dir: Path, plan_path: Path) -> int:
     return 0 if complete else 1
 
 
+def ingest_official_documents_command(data_dir: Path) -> int:
+    from benefitfinder.ingestion.official_document_generations import load_official_document_generation
+    from benefitfinder.infrastructure.pdf_text import extract_pdf_pages
+
+    try:
+        batch = load_official_document_generation(
+            lambda relative,limit: read_collection_file(data_dir,relative,limit),extract_pdf_pages)
+        result = PostgresCollectedPolicies(os.environ.get('COLLECTION_WRITE_DATABASE_URL','')).save(batch)
+    except Exception:
+        print('공식 문서 DB 인계 실패: official_document_import_failed',file=sys.stderr)
+        return 1
+    print(f'공식 문서 DB 인계: 신규 {result.new}건, 변경 {result.changed}건, '
+          f'동일 {result.unchanged}건, 누락 {result.missing}건')
+    return 0
+
+
+def refresh_official_documents_command(data_dir: Path, plan_path: Path) -> int:
+    from benefitfinder.infrastructure.official_document_http import OfficialDocumentHttpFetcher
+    from benefitfinder.infrastructure.official_document_plans import load_official_document_plan
+    from benefitfinder.infrastructure.pdf_text import extract_pdf_pages
+    from benefitfinder.jobs.official_document_refresh import refresh_official_documents
+
+    try:
+        targets = load_official_document_plan(plan_path)
+        raw = data_dir/'raw/f08-official-documents'
+        raw.mkdir(parents=True,exist_ok=True,mode=0o700)
+        raw.chmod(0o700)
+        complete = refresh_official_documents(data_dir,targets,
+            fetcher=OfficialDocumentHttpFetcher(
+                allowed_urls=tuple(dict.fromkeys(target.url for target in targets))),
+            snapshots=JsonFileSnapshotStore(raw,private=True),versions_factory=JsonFileVersionStore,
+            clock=lambda:datetime.now(KST),pdf_pages=extract_pdf_pages,
+            ingest_complete=(lambda:ingest_official_documents_command(data_dir)==0)
+                if 'COLLECTION_WRITE_DATABASE_URL' in os.environ else None)
+    except Exception:
+        print('공식 문서 갱신 실패: official_document_refresh_failed',file=sys.stderr)
+        return 1
+    print('공식 문서 갱신 완료' if complete else '공식 문서 갱신 실패: 마지막 성공본 유지')
+    return 0 if complete else 1
+
+
 def refresh_youthcenter_command(data_dir: Path, *, notify_discord: bool = False) -> int:
     started_at = datetime.now(KST)
     code = _refresh_youthcenter(data_dir)
@@ -592,6 +633,9 @@ def refresh_data_command(data_dir: Path, *, notify_discord: bool = False) -> int
             refresh_gov24=(lambda: refresh_gov24_command(data_dir,
                 Path(os.environ['GOV24_PREPARATION_PLAN'])))
                 if 'GOV24_PREPARATION_PLAN' in os.environ else None,
+            refresh_documents=(lambda:refresh_official_documents_command(data_dir,
+                Path(os.environ['OFFICIAL_DOCUMENT_PLAN'])))
+                if 'OFFICIAL_DOCUMENT_PLAN' in os.environ else None,
             clock=lambda: datetime.now(KST),
             notify=notify if notify_discord else None,
             prepare_analysis=prepare_analysis if any(name in os.environ for name in
@@ -884,6 +928,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     gov24.add_argument('--data-dir', type=Path, default=Path('data'))
     gov24_ingest = commands.add_parser('ingest-gov24', help='보조금24 완전한 성공본 DB 재인계')
     gov24_ingest.add_argument('--data-dir', type=Path, default=Path('data'))
+    official = commands.add_parser('refresh-official-documents',help='확인된 공식 HTML·PDF 수집')
+    official.add_argument('--plan',type=Path,required=True)
+    official.add_argument('--data-dir',type=Path,default=Path('data'))
+    official_ingest = commands.add_parser('ingest-official-documents',help='공식 문서 성공본 DB 재인계')
+    official_ingest.add_argument('--data-dir',type=Path,default=Path('data'))
     refresh = commands.add_parser(
         "refresh-youthcenter", help="완전한 온통청년 수집만 최신본으로 전환"
     )
@@ -938,6 +987,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         return f12_catalog_command(args)
     if args.command == 'refresh-gov24':
         return refresh_gov24_command(args.data_dir, args.plan)
+    if args.command == 'refresh-official-documents':
+        return refresh_official_documents_command(args.data_dir,args.plan)
+    if args.command == 'ingest-official-documents':
+        return ingest_official_documents_command(args.data_dir)
     if args.command == 'ingest-gov24':
         return ingest_gov24_command(args.data_dir)
     if args.command == 'f12-analysis':

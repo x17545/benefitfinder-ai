@@ -57,3 +57,7 @@ psql "$DATABASE_URL" -X --set=ON_ERROR_STOP=1 --single-transaction \
 ## 보조금24 소스 확장 (0009)
 
 `versions/0009_gov24_policy_sources.sql`은 0005·0006·0007·0008 다음에 별도 마이그레이션 트랜잭션으로 적용한다. 기존 수집·카탈로그 연결·F12 테이블에 `gov24`를 허용하며 다른 소스는 계속 거부한다. 승인·원천·게시 이력을 보존하고 수집/게시/F13 쓰기의 잠금 순서를 `gov24` → `youthcenter` → 정책/행으로 통일한다. 직접 SQL 카탈로그 변경도 행 잠금 전에 같은 순서를 따른다. 운영 자동 적용은 하지 않는다. [실행·자료 영향](../src/benefitfinder/infrastructure/database/GOV24.md)을 검토한다.
+
+## 공식 첨부 문서 원천 (0012)
+
+`versions/0012_official_document_sources.sql`은 0011 이후 명시적으로 적용한다. 기존 수집·승인 연결·F12 원천에 `official_documents`를 추가한다. 승인·게시·원본 이력은 보존하며 자동 게시·DDL은 없다. 쓰기 잠금 순서를 `gov24` → `official_documents` → `youthcenter` → 정책/행으로 맞춘다. [공식 HTML·PDF 수집과 검수 연결](../src/benefitfinder/infrastructure/database/OFFICIAL_DOCUMENTS.md)을 확인하고 저장 모델 담당자의 리뷰를 받는다.

@@ -4,7 +4,7 @@
 
 ## 입력 준비
 
-크롤링하지 않는다. 수집 DB의 목록으로 분야나 본문을 추정하지 않는다. 확인된 매핑이 있으면 [API 본문 입력 자동 준비](F12_PREPARATION.md)로 저장된 필드·원천 해시를 큐에 연결한다. 담당자가 별도로 확보한 공식 공고·지침·FAQ는 텍스트, 문서 버전·시각, 정책 이름·별칭, 현재 원천 연결을 확인해 아래 JSON으로 등록한다. `official: true`는 준비자의 확인값이며 URL만으로 공식성을 인증하는 기능은 아니다.
+분야나 본문을 수집 DB의 목록으로 추정하지 않는다. 확인된 매핑이 있으면 [API 본문 입력 자동 준비](F12_PREPARATION.md)로 저장된 필드·원천 해시를 큐에 연결한다. [공식 HTML·PDF 수집](OFFICIAL_DOCUMENTS.md)은 확인된 문서의 본문·변경을 보존하며, 보충 문서까지 포함한 전체 F12 입력의 자동 조립은 후속이다. 담당자가 공식 공고·지침·FAQ의 텍스트, 문서 버전·시각, 정책 이름·별칭, 현재 원천 연결을 확인해 아래 JSON으로 등록한다. `official: true`는 준비자의 확인값이며 URL만으로 공식성을 인증하는 기능은 아니다.
 
 입력은 `format_version: 1`과 다음 필드만 받는다. 내부 작업 형식이며 공개 API 계약은 바꾸지 않는다.
 
@@ -13,7 +13,7 @@
 | `policy_id` | 분석할 `youth:` 정책 ID |
 | `documents` | 1~4개 공식 문서. `id`, `policy_id`, HTTPS `source_url`, `document_version`, 시간대 있는 `collected_at`, 정확한 `text`, `official: true` |
 | `policies` | 확인된 청년 취업·주거 정책 1~100개. `id`, `name`, `categories` (`employment`/`housing`), `aliases` 배열. 분석 대상도 포함 |
-| `collection_sources` | 1~20개 현재 원천. `source: "youthcenter"` 또는 `"gov24"`, `external_id`, 수집 DB의 `material_sha256` |
+| `collection_sources` | 1~20개 현재 원천. `source: "youthcenter"`, `"gov24"` 또는 `"official_documents"`, `external_id`, 수집 DB의 `material_sha256` |
 
 문서는 각 10만 자·합계 20만 자, 입력은 2MiB 이하로 제한한다. 분야·별칭·문서 ID의 상한과 중복 키를 검사하며 승인값·사용자 프로필·알 수 없는 필드를 거부한다. 연결한 모든 원천이 현재 활성 상태이며 해시가 일치해야 한다. 문서 확인 시각은 마지막 내용 변경·재등장 이후, DB 현재 시각 이하여야 한다. 실제 키·원문·결과는 Git 제외 `data/`에 보관한다.
 

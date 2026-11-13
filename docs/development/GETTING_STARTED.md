@@ -50,6 +50,8 @@ pnpm install --frozen-lockfile
 
 uv가 루트 `.venv/`를 만들고 백엔드 패키지·개발 도구를 설치한다. pnpm은 `node_modules/`를 만든다. 둘 다 Git에는 올라가지 않는다. 가상환경을 직접 활성화할 필요 없이 `uv run`으로 실행한다.
 
+공식 PDF 원문의 페이지 텍스트 추출용 `pypdf`도 루트 런타임 의존성과 lockfile로 설치한다. 별도 PDF 프로그램·OCR 설치는 요구하지 않는다. 제한과 실행 방법은 [공식 문서 수집](../../backend/src/benefitfinder/infrastructure/database/OFFICIAL_DOCUMENTS.md)을 따른다.
+
 새로 clone했거나 다른 팀원의 의존성 변경을 pull했을 때도 위 두 명령을 실행한다. lockfile이 선언 파일과 맞지 않으면 설치가 실패한다. lockfile을 지우지 말고 변경한 담당자와 확인한다.
 
 ## 3. 서버 실행

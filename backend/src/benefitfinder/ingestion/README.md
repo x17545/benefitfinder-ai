@@ -20,11 +20,11 @@
 
 ## 공고 원문 텍스트 변환
 
-`notice_text.py`는 공식 공고를 `SourceDocument.text`로 쓸 텍스트로 바꾼다(형식 이름 `notice-text-v1`). 텍스트의 SHA-256이 검수 기록과 연결되므로 같은 입력은 항상 같은 텍스트가 된다. 변환 규칙을 바꾸면 `NOTICE_TEXT_FORMAT`을 올리고 이전 형식의 텍스트와 섞지 않는다. 원문을 요약·수정하지 않는다.
+`notice_text.py`는 공식 공고를 `SourceDocument.text`로 쓸 텍스트로 바꾼다(형식 이름 `notice-text-v2`). 텍스트의 SHA-256이 검수 기록과 연결되므로 같은 입력은 항상 같은 텍스트가 된다. 변환 규칙을 바꾸면 `NOTICE_TEXT_FORMAT`을 올리고 이전 형식의 텍스트와 섞지 않는다. 원문을 요약·수정하지 않는다.
 
 - `decode_html(body, content_type)`: 응답 헤더 → HTML `meta` → UTF-8 → CP949 순서로 엄격하게 디코딩한다. EUC-KR은 CP949로 읽는다. 모두 실패하면 `notice_decode_failed`.
-- `html_to_text(html)`: 스크립트·스타일·`nav`·`header`·`footer`·`aside`·양식을 뺀다. `main`·`article`·`role="main"`·`id="content(s)"` 영역이 있으면 그 안만 쓴다. 블록 요소는 빈 줄로 나눈 문단, `br`·목록 항목(`- `)·표의 행은 한 줄, 표의 칸은 ` | `로 잇는다. 본문이 없으면 `notice_text_empty`.
-- `pdf_pages_to_text(pages)`: PDF에서 꺼낸 페이지 텍스트에 페이지마다 `=== PDF PAGE N ===` 표식을 붙인다. 빈 페이지도 번호를 유지한다. PDF 파일 읽기 라이브러리는 아직 정하지 않았다.
+- `html_to_text(html)`: 스크립트·스타일·`nav`·`header`·`footer`·`aside`·입력 요소를 뺀다. 본문을 감싼 `form`은 유지하고 `textarea`·버튼·선택값은 제외한다. `main`·`article`·`role="main"`·`id="content(s)"` 영역이 있으면 그 안만 쓴다. 블록 요소는 빈 줄로 나눈 문단, `br`·목록 항목(`- `)·표의 행은 한 줄, 표의 칸은 ` | `로 잇는다. 본문이 없으면 `notice_text_empty`.
+- `pdf_pages_to_text(pages)`: PDF에서 꺼낸 페이지 텍스트에 페이지마다 `=== PDF PAGE N ===` 표식을 붙인다. 빈 페이지도 번호를 유지한다. 실제 PDF 읽기는 `pypdf`를 제한된 별도 프로세스에서 실행한다. [공식 문서 수집·변경 추적](../infrastructure/database/OFFICIAL_DOCUMENTS.md)을 따른다.
 - 공통: 줄 안의 연속 공백은 한 칸, 빈 줄은 하나로 줄이고 NFC로 맞춘다. 700자를 넘는 줄은 공백에서 나눈다.
 - `fits_chunked_extraction(text)`: [긴 지침의 문맥 분할 추출](../jobs/README.md#긴-공식-지침의-문맥-분할-추출)의 단위 한도(문단·페이지와 앞뒤 문맥 220줄·6,000자)에 들어가는지 미리 확인한다. 넘으면 잘라 내지 않고 `False`만 돌려준다.
 

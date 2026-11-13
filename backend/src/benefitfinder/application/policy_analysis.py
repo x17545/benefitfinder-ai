@@ -9,6 +9,7 @@ import json
 import re
 
 from benefitfinder.application.policy_facts import PolicyFactsDraft
+from benefitfinder.application.collected_policies import COLLECTED_POLICY_SOURCES
 from benefitfinder.application.policy_rules import RuleCandidate, RuleCitation, SourceDocument
 
 
@@ -74,7 +75,7 @@ class PolicyAnalysisInput:
             bindings = set()
             for source in self.collection_sources:
                 key = (source.source, source.external_id)
-                if (source.source not in ("youthcenter", "gov24") or key in bindings
+                if (source.source not in COLLECTED_POLICY_SOURCES or key in bindings
                     or not 1 <= len(source.external_id) <= 200 or not source.external_id.strip()
                     or "\0" in source.external_id
                     or re.fullmatch(r"[0-9a-f]{64}", source.material_sha256) is None):

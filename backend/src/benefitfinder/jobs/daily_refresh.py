@@ -82,7 +82,7 @@ def _notification(attempt: dict[str, object], *, state_failed: bool) -> str:
     assert isinstance(stages, dict)
     lines = ["[F08] 정책·기준금리 갱신", f"실행 시각: {attempt['started_at']}"]
     for name, label in (("youthcenter", "온통청년"), ("gov24", "보조금24"),
-                        ("ecos", "ECOS 기준금리")):
+                        ("official_documents", "공식 첨부 문서"), ("ecos", "ECOS 기준금리")):
         if name not in stages:
             continue
         stage = stages[name]
@@ -121,6 +121,7 @@ def _run_locked(
     prepare_analysis: Callable[[], dict[str, int]] | None = None,
     analyze_pending: Callable[[], int | dict[str, int]] | None,
     refresh_gov24: Callable[[], int] | None = None,
+    refresh_documents: Callable[[], int] | None = None,
 ) -> int:
     path = root / STATUS_FILE
     previous = _last_success(path)
@@ -158,6 +159,8 @@ def _run_locked(
     sources = [("youthcenter", refresh_policies), ("ecos", refresh_rate)]
     if refresh_gov24 is not None:
         sources.append(("gov24", refresh_gov24))
+    if refresh_documents is not None:
+        sources.append(('official_documents',refresh_documents))
     with ThreadPoolExecutor(max_workers=len(sources), thread_name_prefix="f08-source") as executor:
         futures = {}
         for name, refresh in sources:
@@ -279,6 +282,7 @@ def run_daily_refresh(
     prepare_analysis: Callable[[], dict[str, int]] | None = None,
     analyze_pending: Callable[[], int | dict[str, int]] | None = None,
     refresh_gov24: Callable[[], int] | None = None,
+    refresh_documents: Callable[[], int] | None = None,
 ) -> int:
     """Attempt both sources; preserve each source's own atomic last-success state."""
     descriptor = None
@@ -300,6 +304,7 @@ def run_daily_refresh(
             prepare_analysis=prepare_analysis,
             analyze_pending=analyze_pending,
             refresh_gov24=refresh_gov24,
+            refresh_documents=refresh_documents,
         )
     except OSError:
         raise DailyRefreshError("daily_refresh_io_error") from None

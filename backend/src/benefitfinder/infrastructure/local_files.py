@@ -48,8 +48,9 @@ def _json_bytes(value: object) -> bytes:
 class JsonFileSnapshotStore:
     """원본 응답을 그대로 파일로 남기고, 상대 경로를 참조값으로 돌려준다."""
 
-    def __init__(self, raw_root: Path) -> None:
+    def __init__(self, raw_root: Path, *, private: bool = False) -> None:
         self._root = raw_root
+        self._private = private
 
     def save(self, snapshot: RawSnapshot) -> str:
         stamp = snapshot.fetched_at.strftime("%Y%m%dT%H%M%S%f%z")
@@ -77,6 +78,12 @@ class JsonFileSnapshotStore:
             "body_file": relative.name,
         }
         _write_atomic(self._root / relative.with_name(f"{stem}.meta.json"), _json_bytes(meta))
+        if self._private:
+            for directory in (self._root, self._root/relative.parts[0],
+                              (self._root/relative).parent):
+                directory.chmod(0o700)
+            (self._root/relative).chmod(0o600)
+            (self._root/relative.with_name(f'{stem}.meta.json')).chmod(0o600)
         return relative.as_posix()
 
 

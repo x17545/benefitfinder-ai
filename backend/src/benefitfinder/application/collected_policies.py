@@ -11,6 +11,8 @@ from typing import Protocol
 
 from benefitfinder.application.collection import CollectedRecord
 
+COLLECTED_POLICY_SOURCES = ('gov24', 'official_documents', 'youthcenter')
+
 
 class CollectedPolicyStoreError(RuntimeError):
     """Fixed storage error that cannot expose source contents or credentials."""
@@ -26,7 +28,7 @@ class CollectedPolicyBatch:
     def __post_init__(self) -> None:
         try:
             if (
-                self.source_name not in ("youthcenter", "gov24")
+                self.source_name not in COLLECTED_POLICY_SOURCES
                 or re.fullmatch(r"[0-9a-f]{32}", self.run_id) is None
                 or self.completed_at.utcoffset() is None
                 or not isinstance(self.records, tuple)

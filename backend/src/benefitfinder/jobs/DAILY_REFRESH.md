@@ -37,6 +37,8 @@ uv run --locked --env-file data/local/f08.env python -m benefitfinder.jobs \
 
 ## 03:00 KST 스케줄 설정
 
+`OFFICIAL_DOCUMENT_PLAN`이 있으면 확인된 공식 HTML·PDF도 독립 원천으로 수집한 뒤 F12 준비를 시작한다. 원본·본문 해시와 전체 성공본을 보존하고 `COLLECTION_WRITE_DATABASE_URL`이 있으면 같은 DB 변경·재검수 흐름에 인계한다. [대상 계획·삭제와 실패·검수 연결](../infrastructure/database/OFFICIAL_DOCUMENTS.md)을 따른다. 보충 문서의 자동 F12 입력 조립·사람 최종 검수는 후속이다.
+
 두 생성기는 설정 파일만 만든다. 작업 디렉터리는 브랜치 전환에 영향을 받지 않는 검토된 커밋의 실행 사본을 사용하고 그 사본에서 `uv sync --locked --no-dev`를 먼저 실행한다. 비밀값과 운영 데이터는 실행 코드 사본 밖에 둔다. 생성된 파일의 경로·명령·스케줄을 검토한 뒤 해당 운영 환경에서 등록한다.
 
 macOS는 [기존 launchd 준비 절차](README.md#macos에서-매일-0300-kst-실행)를 따른다. 생성기의 기본 작업은 `refresh-data`이며, 기존 단독 수집이 필요한 환경은 `--job refresh-youthcenter`를 명시한다. launchd 달력은 실제 호스트 시간대가 KST여야 한다.
