@@ -2,7 +2,7 @@ import type { JSX } from 'react';
 import { conditionLabel } from '../../domains/youth/conditionLabels.ts';
 import type { NormalizedBenefit } from '../../shared/api/benefits.ts';
 import { StatusChip } from '../../shared/ui/StatusChip.tsx';
-import { formatManWon, isStale, monthDay, recruitTag, sourceName } from './format.ts';
+import { formatManWon, isStale, monthDay, recruitTag, recruitmentState, sourceName } from './format.ts';
 import { PolicyExplanation } from './PolicyExplanation.tsx';
 import { policyName } from './resultModel.ts';
 import type { PortfolioPolicy } from './resultModel.ts';
@@ -41,12 +41,18 @@ function PolicyIcon({ categories }: { categories: readonly string[] }): JSX.Elem
 /** 지원금 행 (S3 9 ~ 12번) */
 export function PolicyCard({ policy, info, aiGenerated, detailHref, virtualData }: PolicyCardProps): JSX.Element {
   const benefit = info.get(policy.policy_id);
-  const tag = benefit !== undefined ? recruitTag(benefit.application) : null;
+  const now = new Date();
+  const applicationState = benefit !== undefined ? recruitmentState(benefit.application, now) : null;
+  const tag = benefit !== undefined ? recruitTag(benefit.application, now) : null;
   const amount = policy.amount_in_period_won;
   const original = policy.original_amount_won;
   const showOriginal =
     amount !== null && amount !== undefined && original !== null && original !== undefined && original !== amount;
-  const applyUrl = benefit?.application.url ?? policy.source.url;
+  const actionUrl = benefit === undefined || virtualData || benefit.virtual_data === true
+    ? null
+    : applicationState === 'open'
+      ? benefit.application.url ?? benefit.source.url
+      : benefit.source.url;
 
   return (
     <article className="s3-policy">
@@ -90,8 +96,8 @@ export function PolicyCard({ policy, info, aiGenerated, detailHref, virtualData 
         <a className="ui-button ui-button--secondary" href={detailHref}>
           자세히 보기
         </a>
-        {!virtualData && benefit?.virtual_data !== true ? <a className="ui-button ui-button--primary" href={applyUrl} target="_blank" rel="noopener noreferrer">
-          신청하러 가기 ↗
+        {actionUrl !== null ? <a className="ui-button ui-button--primary" href={actionUrl} target="_blank" rel="noopener noreferrer">
+          {applicationState === 'open' ? '신청하러 가기 ↗' : '공식 페이지 보기 ↗'}
         </a> : null}
       </div>
     </article>

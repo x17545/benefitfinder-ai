@@ -1,7 +1,7 @@
 import type { JSX } from 'react';
 import { paths } from '../../app/router.ts';
 import type { NormalizedBenefit } from '../../shared/api/benefits.ts';
-import { formatManWon, recruitTag } from './format.ts';
+import { formatManWon, recruitTag, recruitmentState } from './format.ts';
 import { policyName } from './resultModel.ts';
 import type { ResultView } from './resultModel.ts';
 
@@ -18,8 +18,14 @@ export function FallbackList({ items, info }: FallbackListProps): JSX.Element {
     <div className="s3-policies">
       {items.map((item) => {
         const benefit = info.get(item.policy_id);
-        const tag = benefit !== undefined ? recruitTag(benefit.application) : null;
-        const applyUrl = benefit?.application.url ?? benefit?.source.url ?? null;
+        const now = new Date();
+        const applicationState = benefit !== undefined ? recruitmentState(benefit.application, now) : null;
+        const tag = benefit !== undefined ? recruitTag(benefit.application, now) : null;
+        const actionUrl = benefit === undefined || benefit.virtual_data === true
+          ? null
+          : applicationState === 'open'
+            ? benefit.application.url ?? benefit.source.url
+            : benefit.source.url;
         return (
           <article key={item.policy_id} className="s3-policy">
             <a className="s3-policy__main" href={paths.policy(item.policy_id)}>
@@ -47,9 +53,9 @@ export function FallbackList({ items, info }: FallbackListProps): JSX.Element {
               <a className="ui-button ui-button--secondary" href={paths.policy(item.policy_id)}>
                 자세히 보기
               </a>
-              {applyUrl !== null ? (
-                <a className="ui-button ui-button--primary" href={applyUrl} target="_blank" rel="noopener noreferrer">
-                  신청하러 가기 ↗
+              {actionUrl !== null ? (
+                <a className="ui-button ui-button--primary" href={actionUrl} target="_blank" rel="noopener noreferrer">
+                  {applicationState === 'open' ? '신청하러 가기 ↗' : '공식 페이지 보기 ↗'}
                 </a>
               ) : null}
             </div>

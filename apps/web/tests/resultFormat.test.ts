@@ -5,6 +5,7 @@ import {
   josa,
   monthDay,
   recruitTag,
+  recruitmentState,
   shortPolicyId,
   withJosa,
 } from '../src/features/benefits/format.ts';
@@ -33,12 +34,42 @@ describe('S3 formatting', () => {
     expect(isStale('2026-10-26T09:00:00+09:00', new Date('2026-10-29T00:00:00+09:00'))).toBe(false);
   });
 
-  it('builds the recruiting tag', () => {
-    const now = new Date('2026-10-29T10:00:00+09:00');
+  it('recalculates recruitment state from explicit status and KST dates', () => {
+    const now = new Date('2026-11-13T12:00:00+09:00');
     const open = { status: 'open', starts_on: null, ends_on: null, url: null } as const;
-    expect(recruitTag(open, now)).toEqual({ label: '모집 중', tone: 'ok' });
-    expect(recruitTag({ ...open, ends_on: '2026-11-09' }, now)).toEqual({ label: '마감 D-11', tone: 'check' });
+    expect(recruitmentState({ ...open, ends_on: '2026-11-12' }, now)).toBe('closed');
+    expect(recruitmentState({ ...open, status: 'closed', ends_on: '2026-12-31' }, now)).toBe('closed');
+    expect(recruitmentState({ ...open, starts_on: '2026-11-14' }, now)).toBe('upcoming');
+    expect(recruitmentState({ ...open, status: 'upcoming', starts_on: '2026-11-13' }, now)).toBe('open');
+    expect(recruitmentState({ ...open, status: 'unknown' }, now)).toBe('unknown');
+    expect(recruitmentState({
+      ...open, status: 'unknown', starts_on: '2026-11-12', ends_on: '2026-11-20',
+    }, now)).toBe('unknown');
+  });
+
+  it('uses the KST calendar day for recruitment tags', () => {
+    const application = { status: 'open', starts_on: null, ends_on: '2026-11-12', url: null } as const;
+    expect(recruitTag(application, new Date('2026-11-12T14:59:59Z'))).toEqual({
+      label: '마감 D-0', tone: 'check',
+    });
+    expect(recruitTag(application, new Date('2026-11-12T15:00:00Z'))).toEqual({
+      label: '모집 끝남', tone: 'muted',
+    });
+  });
+
+  it('shows D-day only through D-14', () => {
+    const now = new Date('2026-11-13T12:00:00+09:00');
+    const open = { status: 'open', starts_on: null, ends_on: null, url: null } as const;
+    expect(recruitTag({ ...open, ends_on: '2026-11-13' }, now).label).toBe('마감 D-0');
+    expect(recruitTag({ ...open, ends_on: '2026-11-27' }, now).label).toBe('마감 D-14');
+    expect(recruitTag({ ...open, ends_on: '2026-11-28' }, now)).toEqual({ label: '모집 중', tone: 'ok' });
+  });
+
+  it('uses explicit state labels', () => {
+    const now = new Date('2026-11-13T12:00:00+09:00');
+    const open = { status: 'open', starts_on: null, ends_on: null, url: null } as const;
     expect(recruitTag({ ...open, status: 'closed' }, now).label).toBe('모집 끝남');
+    expect(recruitTag({ ...open, starts_on: '2026-11-14' }, now).label).toBe('모집 예정');
     expect(recruitTag({ ...open, status: 'unknown' }, now).label).toBe('일정 확인 필요');
   });
 });

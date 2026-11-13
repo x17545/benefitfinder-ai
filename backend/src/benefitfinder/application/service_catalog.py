@@ -9,6 +9,8 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any, Literal, Protocol
 from urllib.parse import urlsplit
 
+from benefitfinder.application.recruitment import application_on
+
 MAX_SAFE_WON = 2**53 - 1
 Verdict = Literal["met", "not_met", "needs_review"]
 
@@ -92,18 +94,7 @@ class ServiceOffer:
             raise ValueError("invalid_service_quantity")
 
     def application_on(self, today: date) -> dict[str, str | None]:
-        application = self.application.copy()
-        starts_on = application["starts_on"]
-        ends_on = application["ends_on"]
-        if ends_on is not None and date.fromisoformat(ends_on) < today:
-            application["status"] = "closed"
-        elif (
-            application["status"] != "closed"
-            and starts_on is not None
-            and date.fromisoformat(starts_on) > today
-        ):
-            application["status"] = "upcoming"
-        return application
+        return application_on(self.application, today)
 
     def public_service(self, today: date) -> dict[str, Any]:
         price = self.price

@@ -88,23 +88,61 @@ export interface RecruitTag {
   tone: 'ok' | 'check' | 'muted';
 }
 
-/** 모집 상태 태그: 모집 중 / 마감 D-n / 모집 예정 / 모집 끝남 / 일정 확인 필요 */
-export function recruitTag(application: NormalizedBenefit['application'], now: Date = new Date()): RecruitTag {
+export type RecruitmentState = NormalizedBenefit['application']['status'];
+
+const KOREA_OFFSET_MS = 9 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function koreaDate(now: Date): string {
+  const kst = new Date(now.getTime() + KOREA_OFFSET_MS);
+  const month = String(kst.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(kst.getUTCDate()).padStart(2, '0');
+  return `${String(kst.getUTCFullYear())}-${month}-${day}`;
+}
+
+function daysUntil(date: string, today: string): number {
+  return Math.round((Date.parse(`${date}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / DAY_MS);
+}
+
+/** 오늘의 KST 날짜와 명시 상태를 함께 반영한 모집 상태. */
+export function recruitmentState(
+  application: NormalizedBenefit['application'],
+  now: Date = new Date(),
+): RecruitmentState {
   if (application.status === 'closed') {
-    return { label: '모집 끝남', tone: 'muted' };
+    return 'closed';
   }
-  if (application.status === 'upcoming') {
-    return { label: '모집 예정', tone: 'muted' };
+  const today = koreaDate(now);
+  if (application.ends_on !== null && application.ends_on < today) {
+    return 'closed';
+  }
+  if (application.starts_on !== null && application.starts_on > today) {
+    return 'upcoming';
   }
   if (application.status === 'unknown') {
+    return 'unknown';
+  }
+  if (application.status === 'upcoming' && application.starts_on === null) {
+    return 'upcoming';
+  }
+  return 'open';
+}
+
+/** 모집 상태 태그: 모집 중 / 마감 D-n / 모집 예정 / 모집 끝남 / 일정 확인 필요 */
+export function recruitTag(application: NormalizedBenefit['application'], now: Date = new Date()): RecruitTag {
+  const state = recruitmentState(application, now);
+  if (state === 'closed') {
+    return { label: '모집 끝남', tone: 'muted' };
+  }
+  if (state === 'upcoming') {
+    return { label: '모집 예정', tone: 'muted' };
+  }
+  if (state === 'unknown') {
     return { label: '일정 확인 필요', tone: 'check' };
   }
   if (application.ends_on !== null) {
-    // 한국 날짜 기준으로 오늘부터 마감일까지 남은 날 수
-    const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
-    const today = Date.UTC(kst.getUTCFullYear(), kst.getUTCMonth(), kst.getUTCDate());
-    const days = Math.round((Date.parse(`${application.ends_on}T00:00:00Z`) - today) / 86_400_000);
-    if (days >= 0 && days <= 30) {
+    const days = daysUntil(application.ends_on, koreaDate(now));
+    if (days >= 0 && days <= 14) {
       return { label: `마감 D-${String(days)}`, tone: 'check' };
     }
   }

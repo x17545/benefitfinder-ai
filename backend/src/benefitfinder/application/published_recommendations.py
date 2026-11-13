@@ -11,6 +11,7 @@ from typing import Any
 from uuid import uuid4
 
 from benefitfinder.application.published_policies import PublishedPolicy, PublishedPolicyRepository
+from benefitfinder.application.recruitment import application_on
 from benefitfinder.domain.portfolio import CalculationLimitExceeded, calculate_portfolios
 from benefitfinder.domain.present_value import calculate_period_value
 
@@ -21,15 +22,7 @@ def korea_today() -> date:
 
 def policy_detail(policy: PublishedPolicy, today: date) -> dict[str, Any]:
     detail = deepcopy(policy.detail)
-    application = detail["application"]
-    if application["ends_on"] is not None and date.fromisoformat(application["ends_on"]) < today:
-        application["status"] = "closed"
-    elif (
-        application["status"] != "closed"
-        and application["starts_on"] is not None
-        and date.fromisoformat(application["starts_on"]) > today
-    ):
-        application["status"] = "upcoming"
+    detail["application"] = application_on(detail["application"], today)
     return detail
 
 
@@ -73,7 +66,8 @@ class PublishedRecommendations:
             for p in policies
             if not interests or set(interests).intersection(p.detail["categories"])
         )
-        details = {p.policy_id: policy_detail(p, self.today()) for p in policies}
+        today = self.today()
+        details = {p.policy_id: policy_detail(p, today) for p in policies}
         by_id = {p.policy_id: p for p in policies}
         eligibility: dict[str, Any] = {}
         diagnosis = {}
