@@ -80,11 +80,37 @@ class LaunchAgentTests(TestCase):
                 "python",
                 "-m",
                 "benefitfinder.jobs",
-                "refresh-youthcenter",
+                "refresh-data",
                 "--data-dir",
                 dat,
                 "--notify-discord",
             ],
+        )
+
+    def test_explicit_youthcenter_job_uses_single_collection_command(self) -> None:
+        plist = gen.build_plist(
+            FAKE_UV,
+            self.project,
+            self.env,
+            self.data,
+            job="refresh-youthcenter",
+        )
+        args = plist["ProgramArguments"]
+        self.assertEqual(args[args.index("benefitfinder.jobs") + 1], "refresh-youthcenter")
+        self.assertEqual(
+            args[-3:],
+            ["--data-dir", str(self.data), "--notify-discord"],
+        )
+
+        with patch.object(gen, "current_gmtoff", return_value=32400):
+            self.assertEqual(
+                gen.main(self._args() + ["--job", "refresh-youthcenter"]),
+                0,
+            )
+        generated = plistlib.loads(self.output.read_bytes())["ProgramArguments"]
+        self.assertEqual(
+            generated[generated.index("benefitfinder.jobs") + 1],
+            "refresh-youthcenter",
         )
 
     def test_existing_file_preserved(self) -> None:

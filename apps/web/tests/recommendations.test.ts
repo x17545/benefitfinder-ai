@@ -6,9 +6,11 @@ import {
   RecommendationError,
 } from '../src/shared/api/recommendations.ts';
 import type { RecommendationRequest } from '../src/shared/api/recommendations.ts';
+import { isAmountBreakdown } from '../src/shared/api/responseValidation.ts';
 import fixtureText from '../../../contracts/fixtures/recommendation-response.json?raw';
 import emptyText from '../../../contracts/fixtures/empty-response.json?raw';
 import fallbackText from '../../../contracts/fixtures/fallback-response.json?raw';
+import maturityText from '../../../contracts/fixtures/maturity-response.json?raw';
 import unavailableText from '../../../contracts/fixtures/pv-unknown-response.json?raw';
 
 const FIXTURE: unknown = JSON.parse(fixtureText);
@@ -19,17 +21,25 @@ function textResponse(body: string, status: number, type: string): Response {
   return new Response(body, { status, headers: { 'Content-Type': type } });
 }
 
-/** 가상 응답의 특정 필드만 손상시킨다. 실제 오류 본문·프로필은 사용하지 않는다. */
-function replaceField(path: readonly (string | number)[], value: unknown): unknown {
+/** 가상 응답의 지정 필드만 바꾼다. 실제 오류 본문·프로필은 사용하지 않는다. */
+function replaceFields(
+  changes: readonly { path: readonly (string | number)[]; value: unknown }[],
+): unknown {
   const result: unknown = JSON.parse(fixtureText);
-  let target = result;
-  for (const key of path.slice(0, -1)) {
-    if (typeof target !== 'object' || target === null) { throw new Error('missing fixture path'); }
-    target = Reflect.get(target, key);
+  for (const { path, value } of changes) {
+    let target = result;
+    for (const key of path.slice(0, -1)) {
+      if (typeof target !== 'object' || target === null) { throw new Error('missing fixture path'); }
+      target = Reflect.get(target, key);
+    }
+    if (typeof target !== 'object' || target === null) { throw new Error('missing fixture target'); }
+    Reflect.set(target, path[path.length - 1], value);
   }
-  if (typeof target !== 'object' || target === null) { throw new Error('missing fixture target'); }
-  Reflect.set(target, path[path.length - 1], value);
   return result;
+}
+
+function replaceField(path: readonly (string | number)[], value: unknown): unknown {
+  return replaceFields([{ path, value }]);
 }
 
 describe('isRecommendationResponse', () => {
@@ -39,6 +49,10 @@ describe('isRecommendationResponse', () => {
   });
   it('accepts the contract example', () => {
     expect(isRecommendationResponse(FIXTURE)).toBe(true);
+  });
+
+  it('accepts the shareable maturity fixture with a fallback breakdown', () => {
+    expect(isRecommendationResponse(JSON.parse(maturityText))).toBe(true);
   });
 
   it('rejects broken shapes', () => {
@@ -79,6 +93,74 @@ describe('isRecommendationResponse', () => {
     { name: 'non-numeric discount rate', path: ['discount_rate'], value: 'unknown' },
   ])('rejects $name before it reaches rendering', ({ path, value }) => {
     expect(isRecommendationResponse(replaceField(path, value))).toBe(false);
+  });
+});
+
+describe('optional amount breakdown', () => {
+  const valid = { cash_in_period_won: 300_000, expected_accrual_won: 700_000 };
+
+  it('accepts the exact two-key shape and legacy responses without it', () => {
+    expect(isAmountBreakdown(valid)).toBe(true);
+    expect(isAmountBreakdown({ cash_in_period_won: 0, expected_accrual_won: Number.MAX_SAFE_INTEGER })).toBe(true);
+    expect(isRecommendationResponse(FIXTURE)).toBe(true);
+  });
+
+  it.each([
+    { name: 'null', value: null },
+    { name: 'array', value: [] },
+    { name: 'missing expected accrual', value: { cash_in_period_won: 1 } },
+    { name: 'extra key', value: { ...valid, total_won: 1_000_000 } },
+    { name: 'negative amount', value: { ...valid, expected_accrual_won: -1 } },
+    { name: 'fractional amount', value: { ...valid, cash_in_period_won: 1.5 } },
+    { name: 'unsafe integer', value: { ...valid, cash_in_period_won: Number.MAX_SAFE_INTEGER + 1 } },
+    { name: 'string amount', value: { ...valid, expected_accrual_won: '700000' } },
+  ])('rejects $name', ({ value }) => {
+    expect(isAmountBreakdown(value)).toBe(false);
+  });
+
+  it('rejects a malformed optional object at every recommendation location', () => {
+    const malformed = { ...valid, total_won: 1_000_000 };
+    const view = ['results', '1y', 'pv_off'];
+    expect(isRecommendationResponse(replaceField([...view, 'portfolios', 0, 'amount_breakdown'], malformed))).toBe(false);
+    expect(isRecommendationResponse(replaceField([...view, 'portfolios', 0, 'policies', 0, 'amount_breakdown'], malformed))).toBe(false);
+    expect(isRecommendationResponse(replaceField([...view, 'portfolios', 0, 'given_up', 0, 'amount_breakdown'], malformed))).toBe(false);
+
+    const fallback = JSON.parse(fallbackText) as Record<string, unknown>;
+    const results = fallback.results as Record<string, Record<string, Record<string, unknown>>>;
+    const item = results['1y'].pv_off.fallback_list as Record<string, unknown>[];
+    item[0] = { ...item[0], amount_breakdown: malformed };
+    expect(isRecommendationResponse(fallback)).toBe(false);
+  });
+
+  it('requires a confirmed policy amount and verified status with a policy breakdown', () => {
+    const view = ['results', '1y', 'pv_off'];
+    const policy = [...view, 'portfolios', 0, 'policies', 0];
+    expect(isRecommendationResponse(replaceField([...policy, 'amount_breakdown'], valid))).toBe(true);
+    expect(isRecommendationResponse(replaceFields([
+      { path: [...policy, 'amount_breakdown'], value: valid },
+      { path: [...policy, 'amount_in_period_won'], value: null },
+    ]))).toBe(false);
+    expect(isRecommendationResponse(replaceFields([
+      { path: [...policy, 'amount_breakdown'], value: valid },
+      { path: [...policy, 'amount_status'], value: 'unknown' },
+    ]))).toBe(false);
+  });
+
+  it('requires the corresponding non-null amount for given-up and fallback breakdowns', () => {
+    const view = ['results', '1y', 'pv_off'];
+    expect(isRecommendationResponse(replaceField([...view, 'portfolios', 0, 'given_up', 0, 'amount_breakdown'], valid))).toBe(true);
+    expect(isRecommendationResponse(replaceFields([
+      { path: [...view, 'portfolios', 0, 'given_up', 0, 'amount_breakdown'], value: valid },
+      { path: [...view, 'portfolios', 0, 'given_up', 0, 'amount_won'], value: null },
+    ]))).toBe(false);
+
+    const fallback = JSON.parse(fallbackText) as Record<string, unknown>;
+    const results = fallback.results as Record<string, Record<string, Record<string, unknown>>>;
+    const item = results['1y'].pv_off.fallback_list as Record<string, unknown>[];
+    item[0] = { ...item[0], amount_breakdown: valid };
+    expect(isRecommendationResponse(fallback)).toBe(true);
+    item[0] = { ...item[0], amount_in_period_won: null };
+    expect(isRecommendationResponse(fallback)).toBe(false);
   });
 });
 

@@ -20,15 +20,18 @@ from benefitfinder.application.policy_rules import (
 
 Chat = Callable[[list[dict[str, object]], list[dict[str, object]]], dict[str, object]]
 _CONTEXT_RADIUS = 5
+_CONCURRENT_RECEIPT_BAN = r"(?:동시(?:에)?|중복(?:으로)?)\s*받을\s*수\s*없"
 _OVERLAP = re.compile(r"(?:동시|중복|순차)\s*(?:참여|신청|지원|수혜|수급|제한|불가|배제)")
 _RESTRICTION = re.compile(
     _OVERLAP.pattern
     + r"|(?:수혜|수급|참여)\s*중|(?:참여|신청|지원|수혜)\s*(?:제한|불가|금지|제외|배제)"
     + r"|(?:참여|신청|지원|수혜)할\s*수\s*없"
+    + "|" + _CONCURRENT_RECEIPT_BAN
 )
 _CONCURRENT_BAN = re.compile(
     r"(?:동시(?:에)?|중복(?:으로)?)\s*(?:참여|신청|지원|수혜|수급)\s*(?:는\s*)?"
     r"(?:불가|금지|할\s*수\s*없)"
+    + "|" + _CONCURRENT_RECEIPT_BAN
 )
 _ALLOWANCE = re.compile(
     r"(?:신청|참여|중복|지원|수혜|수급)\s*(?:이\s*)?(?:가능|허용|할\s*수\s*있)"
@@ -72,8 +75,20 @@ _TOOLS = [
         {
             "start_line": {"type": "integer", "description": "First evidence line, inclusive"},
             "end_line": {"type": "integer", "description": "Last evidence line, inclusive"},
-            "kind": {"type": "string", "enum": [kind.value for kind in RuleKind]},
-            "direction": {"type": "string", "enum": [item.value for item in RuleDirection]},
+            "kind": {
+                "type": "string",
+                "enum": [kind.value for kind in RuleKind],
+                "description": "Use an exact enum code, e.g. simultaneous_exclusion for a concurrent ban.",
+            },
+            "direction": {
+                "type": "string",
+                "enum": [item.value for item in RuleDirection],
+                "description": (
+                    "Use an exact English enum code: both for a mutual ban; target_to_source "
+                    "when the target restricts entering the notice's program; source_to_target "
+                    "for the reverse; unknown if unclear. Never put the condition text here."
+                ),
+            },
             "condition": {"type": "string", "description": "Only the restrictive condition"},
             "exceptions": {
                 "type": "array",

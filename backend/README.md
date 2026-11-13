@@ -4,11 +4,11 @@
 
 Python + FastAPI와 PostgreSQL을 사용하는 백엔드 구조다. 생존 확인·공통 오류, 공식 지역 선택과 가상 정책 추천·상황 변화·상세 API를 제공한다. F14 서비스는 같은 추천·상세 API에서 제공하며 현금 합계와 분리한다. F13 설명은 환경 변수 `DATABASE_URL`로 PostgreSQL 게시 조항을 조회하거나 미설정 시 가상 메모리 예제를 사용한다. Python 의존성은 루트 uv 프로젝트에서 관리한다. `POLICY_DATABASE_URL` 설정 시 [게시 정책 카탈로그](src/benefitfinder/infrastructure/database/POLICY_CATALOG.md)에서 후보·자격·지급 일정·중복 제한을 읽어 추천·상세·상황 변화를 계산한다. 실제 자료의 검수·운영 게시는 별도다.
 
-`src/benefitfinder/`의 모듈을 한 애플리케이션으로 통합한다. AI·데이터 수집은 담당 디렉터리를 가지며 각각 별도 서버로 배포할 필요는 없다.
+`src/benefitfinder/`의 모듈을 한 애플리케이션으로 통합한다. AI·데이터 수집은 담당 디렉터리를 가지며 각각 별도 서버로 배포할 필요는 없다. F14의 [서비스·단가 카탈로그](src/benefitfinder/infrastructure/database/SERVICE_CATALOG.md)도 `POLICY_DATABASE_URL`의 같은 게시 이력을 사용하며, 사람의 원문·단가 검수와 전체 입력 해시 승인 후 추천·상세에서 조회한다. 원천 변경·누락은 기존 승인을 풀고 게시를 내린다.
 
 F13의 저장 모델·게시/버전 조회·시간 제한·읽기 역할은 [PostgreSQL 어댑터](src/benefitfinder/infrastructure/database/README.md), 적용 절차는 [마이그레이션](migrations/README.md), 가상 취업·주거 사례의 실제 DB→E4B→화면 재현은 [PostgreSQL 통합 검증](integration/README.md)을 따른다. 원문·결과·DB 파일·덤프는 로컬 Git 제외 경로에만 둔다.
 
-기능은 [기획 명세 v2](../docs/product/REQUIREMENTS.md)의 F01~F11과 사용자가 요청한 F13 연결을 따른다. 가상 정책의 자격·조합·현재가치를 계산해 JSON으로 반환하며, S4·S5는 같은 가상 정책으로 동작한다. [API 재현 방법](src/benefitfinder/api/README.md#s4-상황-변화와-s5-정책-상세)을 참고한다. 게시 정책 계산 모드와 가상 예제를 구분한다. 실제 정책 검수·게시와 SSE 연결은 후속이다. 매일 갱신·검수 해제는 같은 패키지의 jobs/ingestion 영역이다.
+기능은 [기획 명세 v3](../docs/product/REQUIREMENTS.md)의 F01~F14를 따른다. 게시 정책 계산 모드와 가상 예제를 구분하며 JSON 또는 POST SSE로 반환한다. S4·S5는 추천과 같은 정책을 사용한다. SSE의 실제 계산·서비스·설명 진행, 연결 취소와 추천·상황 변화 전체의 최대 60초를 지원한다. [프로토콜·API 재현 방법](src/benefitfinder/api/README.md)을 참고한다. 실제 정책 검수·게시와 운영 연결은 후속이다. 매일 갱신·검수 해제는 같은 패키지의 jobs/ingestion 영역이다.
 
 ```text
 backend/

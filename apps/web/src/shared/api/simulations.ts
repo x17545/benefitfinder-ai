@@ -2,7 +2,7 @@ import type { ChangeSimulationRequest } from './generated/simulation-request.ts'
 import type { ChangeSimulationResult } from './generated/simulation-response.ts';
 import { API_PREFIX } from '../config/api.ts';
 import {
-  arrayOf, isEvidence, isMoney, isNonEmptyString, isNullableMoney, isRecord, optional,
+  arrayOf, isAmountBreakdown, isEvidence, isMoney, isNonEmptyString, isNullableMoney, isRecord, optional,
 } from './responseValidation.ts';
 
 export type { ChangeSimulationRequest, ChangeSimulationResult };
@@ -15,8 +15,11 @@ const SCENARIOS: readonly string[] = ['employed', 'income_up', 'independent', 'a
 const PERIODS: readonly string[] = ['1y', '2y', 'all'];
 
 function isChange(value: unknown): boolean {
-  return isRecord(value) && isNonEmptyString(value.policy_id) && isNonEmptyString(value.reason) &&
-    optional(value.amount_won, isNullableMoney);
+  if (!isRecord(value) || !isNonEmptyString(value.policy_id) || !isNonEmptyString(value.reason) ||
+    !optional(value.amount_won, isNullableMoney) || !optional(value.amount_breakdown, isAmountBreakdown)) {
+    return false;
+  }
+  return value.amount_breakdown === undefined || isMoney(value.amount_won);
 }
 
 function isIncomeChange(value: unknown): boolean {
@@ -33,7 +36,11 @@ export function isSimulationResult(value: unknown): value is ChangeSimulationRes
     optional(value.virtual_data, (item) => typeof item === 'boolean') &&
     isMoney(value.before_total_won) && isMoney(value.after_total_won) &&
     isRecord(value.annual) && isMoney(value.annual.before_won) && isMoney(value.annual.after_won) &&
+    optional(value.annual.before_amount_breakdown, isAmountBreakdown) &&
+    optional(value.annual.after_amount_breakdown, isAmountBreakdown) &&
     isNonEmptyString(value.calculation_note) &&
+    optional(value.before_amount_breakdown, isAmountBreakdown) &&
+    optional(value.after_amount_breakdown, isAmountBreakdown) &&
     optional(value.income_change, isIncomeChange) &&
     optional(value.effective_marginal_rate, (item) => item === null || (typeof item === 'number' && Number.isFinite(item))) &&
     optional(value.lost, (item) => arrayOf(item, isChange)) &&

@@ -1,7 +1,7 @@
 import type { RecommendationResponse, RecommendedService } from './generated/recommendation-response.ts';
 import {
-  arrayOf, isApplication, isDateTime, isEvidence, isMoney, isNonEmptyString, isNullableMoney,
-  isNullableString, isRecord, isSource, isString, optional,
+  arrayOf, isAmountBreakdown, isApplication, isDateTime, isEvidence, isMoney, isNonEmptyString,
+  isNullableMoney, isNullableString, isRecord, isSource, isString, optional,
 } from './responseValidation.ts';
 import { isService } from './serviceValidation.ts';
 
@@ -18,7 +18,12 @@ function isPolicy(value: unknown): boolean {
   if (!isRecord(value) || !isNonEmptyString(value.policy_id) || !arrayOf(value.eligibility, isCondition) ||
     !isSource(value.source) || !optional(value.amount_in_period_won, isNullableMoney) ||
     !optional(value.original_amount_won, isNullableMoney) ||
-    !optional(value.amount_status, (item) => item === 'verified' || item === 'unknown')) {
+    !optional(value.amount_status, (item) => item === 'verified' || item === 'unknown') ||
+    !optional(value.amount_breakdown, isAmountBreakdown)) {
+    return false;
+  }
+  if (value.amount_breakdown !== undefined &&
+    (!isMoney(value.amount_in_period_won) || value.amount_status !== 'verified')) {
     return false;
   }
   return isPolicyAiFields(value);
@@ -49,7 +54,11 @@ function isPolicyAiFields(value: Record<string, unknown>): boolean {
 }
 
 function isGivenUp(value: unknown): boolean {
-  return isRecord(value) && isNonEmptyString(value.policy_id) && optional(value.amount_won, isNullableMoney);
+  if (!isRecord(value) || !isNonEmptyString(value.policy_id) || !optional(value.amount_won, isNullableMoney) ||
+    !optional(value.amount_breakdown, isAmountBreakdown)) {
+    return false;
+  }
+  return value.amount_breakdown === undefined || isMoney(value.amount_won);
 }
 
 function isUnverifiedPair(value: unknown): boolean {
@@ -61,7 +70,8 @@ function isPortfolio(value: unknown): boolean {
     value.rank >= 1 && value.rank <= 3 && isMoney(value.total_won) && arrayOf(value.policies, isPolicy, 1) &&
     optional(value.present_value_applied, (item) => typeof item === 'boolean') &&
     optional(value.given_up, (item) => arrayOf(item, isGivenUp)) &&
-    optional(value.unverified_pairs, (item) => arrayOf(item, isUnverifiedPair));
+    optional(value.unverified_pairs, (item) => arrayOf(item, isUnverifiedPair)) &&
+    optional(value.amount_breakdown, isAmountBreakdown);
 }
 
 function isWhy(value: unknown): boolean {
@@ -140,8 +150,12 @@ function isClosed(value: unknown): boolean {
 }
 
 function isFallback(value: unknown): boolean {
-  return isRecord(value) && isNonEmptyString(value.policy_id) &&
-    optional(value.amount_in_period_won, isNullableMoney) && optional(value.reason, isNonEmptyString);
+  if (!isRecord(value) || !isNonEmptyString(value.policy_id) ||
+    !optional(value.amount_in_period_won, isNullableMoney) || !optional(value.reason, isNonEmptyString) ||
+    !optional(value.amount_breakdown, isAmountBreakdown)) {
+    return false;
+  }
+  return value.amount_breakdown === undefined || isMoney(value.amount_in_period_won);
 }
 
 function isResultView(value: unknown): boolean {

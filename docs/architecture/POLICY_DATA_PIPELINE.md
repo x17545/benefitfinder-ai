@@ -12,6 +12,8 @@
 
 ## 2. 데이터 준비와 사용자 요청
 
+현재 F08은 [전체 수집 성공본의 PostgreSQL 인계](../../backend/src/benefitfinder/infrastructure/database/COLLECTED_POLICIES.md)를 제공한다. 원본·해시·시각·건수 검사 후 미검수 원천과 DB 기준 변경 이력을 저장하며 게시 정책·조항·승인 상태와 분리한다. DB 장애 후에는 같은 성공본부터 재인계한다. 별도 [0006 원천 연결·재검수](../../backend/src/benefitfinder/infrastructure/database/POLICY_SOURCE_RECHECKS.md)를 적용하면 승인 해시에 포함한 원천 ID·해시를 기준으로 변경·누락 시 연결된 게시 정책·F13을 내리고 기존 승인 정보와 재검수 이력을 보존한다. 동일 내용의 재수집은 승인을 유지하며 재등장은 자동 재승인이 아니다. 별도 [F12 분석 큐](../../backend/src/benefitfinder/infrastructure/database/F12_ANALYSIS.md)는 확인된 공식 문서·분류·원천 연결을 등록받아 6개 도구 선택과 누락 재탐색을 실행하고 검수 대기 파일을 남긴다. 원천이 바뀌면 실행 중/완료 분석을 무효화하며 F08에서 준비된 작업을 소비한다. 확인된 매핑의 API·공식 보충 문서는 [입력 자동 준비](../../backend/src/benefitfinder/infrastructure/database/F12_PREPARATION.md)로 현재 원천 해시·각 문서의 본문과 수락 시각을 검증해 등록한다. 원천 연결이 없는 수동 보충 문서는 변경 이후 재확인이 필요하다. 실제 대상 확대·사람 검수·운영 게시 완료는 후속이다.
+
 ```mermaid
 flowchart TD
     API[공식 API] --> Collect[정책·원문·출처·버전 수집]

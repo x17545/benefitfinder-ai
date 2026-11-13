@@ -1,5 +1,6 @@
 import type { JSX } from 'react';
 import type { NormalizedBenefit } from '../../shared/api/benefits.ts';
+import { AmountBreakdown } from './AmountBreakdown.tsx';
 import { formatManWon } from './format.ts';
 import { policyName, portfolioLabel } from './resultModel.ts';
 import type { Portfolio } from './resultModel.ts';
@@ -32,20 +33,26 @@ export function PortfolioCard({ portfolio, topTotal, selected, onSelect, info }:
         {portfolioLabel(portfolio.rank)}
       </span>
       <span className="s3-combo__total">{formatManWon(portfolio.total_won)}</span>
+      {portfolio.amount_breakdown !== undefined ? (
+        <AmountBreakdown value={portfolio.amount_breakdown} variant="compact" />
+      ) : null}
       <span className="s3-combo__names">
         {portfolio.policies.map((policy) => policyName(policy.policy_id, info)).join(' + ')}
       </span>
       {givenUp.length > 0 ? (
         <span className="s3-combo__give">
-          포기하는 지원금 ·{' '}
-          {givenUp
-            .map(
-              (item) =>
-                `${policyName(item.policy_id, info)}${
-                  item.amount_won !== null && item.amount_won !== undefined ? ` ${formatManWon(item.amount_won)}` : ''
-                }`,
-            )
-            .join(', ')}
+          <span>포기하는 지원금</span>
+          {givenUp.map((item) => (
+            <span key={item.policy_id} className="s3-combo__give-item">
+              <span>
+                {policyName(item.policy_id, info)}
+                {item.amount_won !== null && item.amount_won !== undefined ? ` ${formatManWon(item.amount_won)}` : ''}
+              </span>
+              {item.amount_breakdown !== undefined ? (
+                <AmountBreakdown value={item.amount_breakdown} variant="compact" />
+              ) : null}
+            </span>
+          ))}
         </span>
       ) : null}
       {unverified > 0 ? <span className="s3-combo__check">? 확인 필요 {unverified}건</span> : null}

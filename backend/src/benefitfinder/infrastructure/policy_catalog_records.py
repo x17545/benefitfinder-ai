@@ -16,6 +16,7 @@ from urllib.parse import urlsplit
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from benefitfinder.application.published_policies import PublishedPolicy
+from benefitfinder.application.policy_explanations import SAFE_CONDITIONS
 
 MAX_WON = 2**53 - 1
 
@@ -47,6 +48,50 @@ class Evidence(Record):
     quote: str = Field(min_length=1, max_length=2500)
     location: str = Field(min_length=1, max_length=500)
     source: Source
+
+
+class ApplicationGuide(Record):
+    method: Evidence | None
+    office: Evidence | None
+    # None means not checked; [] is a human-confirmed absence in this source.
+    documents: list[Evidence] | None = Field(max_length=100)
+
+    def citations(self) -> list[Evidence]:
+        return [item for item in (self.method, self.office) if item is not None] + (
+            self.documents or []
+        )
+
+    @model_validator(mode="after")
+    def validate_citations(self) -> ApplicationGuide:
+        if any(not item.quote.strip() or not item.location.strip() for item in self.citations()):
+            raise ValueError("empty_application_guide_citation")
+        return self
+
+
+class ExplanationClause(Record):
+    id: str = Field(min_length=1, max_length=120)
+    title: str = Field(min_length=1, max_length=120)
+    evidence: Evidence
+    topics: list[str] = Field(min_length=1, max_length=7)
+
+    @model_validator(mode="after")
+    def validate_clause(self) -> ExplanationClause:
+        if (
+            not self.id.strip() or not self.title.strip()
+            or not self.evidence.quote.strip() or not self.evidence.location.strip()
+            or len(set(self.topics)) != len(self.topics)
+            or not set(self.topics) <= SAFE_CONDITIONS | {"amount", "application"}
+        ):
+            raise ValueError("invalid_explanation_clause")
+        return self
+
+
+def explanation_citations(clauses: list[ExplanationClause] | None) -> list[Evidence]:
+    if clauses is None:
+        return []
+    if len({clause.id for clause in clauses}) != len(clauses):
+        raise ValueError("duplicate_explanation_clause")
+    return [clause.evidence for clause in clauses]
 
 
 class Condition(Record):
@@ -103,6 +148,9 @@ class Benefit(Record):
     provider: str = Field(min_length=1)
     categories: list[Literal["employment", "housing"]] = Field(min_length=1, max_length=2)
     application: Application
+    application_guide: ApplicationGuide | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     eligibility_conditions: list[Condition] = Field(max_length=100)
     source: Source
     domain_data: dict[str, Any]
@@ -180,17 +228,64 @@ class Payment(Record):
     amount_won: int = Field(ge=0, le=MAX_WON)
 
 
+class CollectionSource(Record):
+    source: Literal["youthcenter", "gov24", "official_documents"]
+    external_id: str = Field(min_length=1, max_length=200)
+    material_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def validate_id(self) -> CollectionSource:
+        if not self.external_id.strip() or "\0" in self.external_id:
+            raise ValueError("invalid_collection_source_id")
+        return self
+
+
+class F12ReviewProvenance(Record):
+    """Canonical input digests; this records review provenance, never grants approval."""
+
+    pair_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    decisions_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    export_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    plan_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    source_document_id: str = Field(min_length=1, max_length=200)
+    latest_reviewed_at: str
+
+    @model_validator(mode="after")
+    def validate_time(self) -> F12ReviewProvenance:
+        if datetime.fromisoformat(self.latest_reviewed_at.replace("Z", "+00:00")).utcoffset() is None:
+            raise ValueError("f12_review_requires_timezone")
+        return self
+
+
 class CatalogRecord(Record):
     benefit: Benefit
     conditions: list[ExecutableCondition]
     payments: list[Payment] | None = Field(max_length=1200)
     payment_evidence: list[Evidence]
+    maturity_accruals: list[Payment] | None = Field(
+        default=None, min_length=1, max_length=1200, exclude_if=lambda value: value is None
+    )
+    maturity_accrual_evidence: list[Evidence] | None = Field(
+        default=None, min_length=1, exclude_if=lambda value: value is None
+    )
     unresolved_combination_rules: bool
     source_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    explanation_clauses: list[ExplanationClause] | None = Field(
+        default=None, min_length=1, max_length=200, exclude_if=lambda value: value is None
+    )
+    f12_review: F12ReviewProvenance | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    collection_sources: list[CollectionSource] = Field(default_factory=list, max_length=20)
 
     @model_validator(mode="after")
     def validate_record(self):
         benefit = self.benefit
+        sources = [(item.source, item.external_id) for item in self.collection_sources]
+        if len(sources) != len(set(sources)):
+            raise ValueError("duplicate_collection_source")
+        if not benefit.virtual_data and not sources:
+            raise ValueError("real_policy_requires_collection_sources")
         ids = [condition.id for condition in benefit.eligibility_conditions]
         rule_ids = [rule.condition_id for rule in self.conditions]
         if (
@@ -201,15 +296,28 @@ class CatalogRecord(Record):
             raise ValueError("condition_rule_mismatch")
         if len(set(benefit.categories)) != len(benefit.categories):
             raise ValueError("duplicate_category")
+        if len({c.policy_id for c in benefit.conflicts}) != len(benefit.conflicts):
+            raise ValueError("duplicate_conflict")
         evidence = [
             item for condition in benefit.eligibility_conditions for item in condition.evidence
         ]
         evidence += [item for conflict in benefit.conflicts for item in conflict.evidence]
         evidence += self.payment_evidence
+        evidence += self.maturity_accrual_evidence or []
+        evidence += explanation_citations(self.explanation_clauses)
+        if benefit.application_guide is not None:
+            evidence += benefit.application_guide.citations()
         if any(item.source != benefit.source for item in evidence):
             raise ValueError("evidence_source_mismatch")
         if any(c.policy_id == benefit.id for c in benefit.conflicts):
             raise ValueError("self_conflict")
+        amount = benefit.benefit_amount
+        if (self.maturity_accruals is None) != (self.maturity_accrual_evidence is None):
+            raise ValueError("maturity_requires_accrual_evidence")
+        if self.maturity_accruals is not None and (
+            amount is None or amount.type != "maturity" or amount.pay_timing != "at_maturity"
+        ):
+            raise ValueError("accruals_require_maturity_amount")
         if benefit.reviewed:
             amount = benefit.benefit_amount
             if (
@@ -224,13 +332,28 @@ class CatalogRecord(Record):
             total = sum(payment.amount_won for payment in self.payments)
             if total > MAX_WON or amount.max_total_won != total:
                 raise ValueError("payment_total_mismatch")
-            # Accrued maturity matching is not yet a supported nominal schedule.
-            if amount.type == "maturity" or amount.pay_timing == "at_maturity":
-                raise ValueError("maturity_requires_separate_accrual_review")
             schedule = sorted((p.month, p.amount_won) for p in self.payments)
             if amount.type is None or amount.amount_won is None:
                 raise ValueError("reviewed_policy_requires_amount_metadata")
-            if amount.pay_timing == "monthly_from_start":
+            if amount.type == "maturity" or amount.pay_timing == "at_maturity":
+                if (
+                    amount.type != "maturity"
+                    or amount.pay_timing != "at_maturity"
+                    or amount.period_months is None
+                    or amount.amount_won != total
+                    or schedule != [(amount.period_months, total)]
+                    or not self.maturity_accruals
+                    or not self.maturity_accrual_evidence
+                ):
+                    raise ValueError("maturity_schedule_requires_reviewed_accruals")
+                accruals = self.maturity_accruals
+                if (
+                    len({p.month for p in accruals}) != len(accruals)
+                    or any(p.month < 1 or p.month > amount.period_months for p in accruals)
+                    or sum(p.amount_won for p in accruals) != total
+                ):
+                    raise ValueError("maturity_accrual_schedule_mismatch")
+            elif amount.pay_timing == "monthly_from_start":
                 if (
                     amount.type != "monthly"
                     or amount.period_months is None
@@ -272,12 +395,19 @@ class CatalogRecord(Record):
             if self.payments is None
             else tuple((payment.month, payment.amount_won) for payment in self.payments),
             published_at=published_at.isoformat(),
+            maturity_accruals=None if self.maturity_accruals is None else tuple(
+                (payment.month, payment.amount_won) for payment in self.maturity_accruals
+            ),
         )
 
 
 def record_hash(record: CatalogRecord) -> str:
+    payload = record.model_dump(mode="json")
+    # Existing fictional releases have no bindings; preserve their approved digest.
+    if not record.collection_sources:
+        payload.pop("collection_sources")
     encoded = json.dumps(
-        record.model_dump(mode="json"), sort_keys=True, ensure_ascii=False, separators=(",", ":")
+        payload, sort_keys=True, ensure_ascii=False, separators=(",", ":")
     ).encode()
     return hashlib.sha256(encoded).hexdigest()
 
@@ -289,5 +419,9 @@ def validate_source_text(record: CatalogRecord, source_text: str) -> None:
     evidence = [e for c in record.benefit.eligibility_conditions for e in c.evidence]
     evidence += [e for c in record.benefit.conflicts for e in c.evidence]
     evidence += record.payment_evidence
+    evidence += record.maturity_accrual_evidence or []
+    evidence += explanation_citations(record.explanation_clauses)
+    if record.benefit.application_guide is not None:
+        evidence += record.benefit.application_guide.citations()
     if any(e.quote not in source_text for e in evidence):
         raise ValueError("quote_missing_from_source")

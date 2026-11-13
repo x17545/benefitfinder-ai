@@ -58,6 +58,7 @@ def refresh_notification(root: Path, code: int, started_at: datetime) -> str:
         else:
             allowed = {
                 "fetch_failed",
+                "unsafe_response",
                 "http_status",
                 "parse_failed",
                 "missing_external_id",
@@ -215,8 +216,14 @@ def run_youthcenter_refresh(
     root: Path,
     build: Callable[[Path, Path | None], CollectionResult],
     clock: Callable[[], datetime],
+    *,
+    ingest_complete: Callable[[], bool] | None = None,
 ) -> bool:
-    """Publish a complete local generation by replacing only its status pointer."""
+    """Keep collection and optional DB handoff under the same source lock.
+
+    Retry the previous complete generation before collecting another one, so a
+    failed DB handoff cannot be skipped when the local pointer moves forward.
+    """
     root.mkdir(parents=True, exist_ok=True)
     lock = root / _LOCK_FILE
     descriptor = os.open(lock, os.O_RDWR | os.O_CREAT, 0o600)
@@ -227,6 +234,13 @@ def run_youthcenter_refresh(
             if error.errno in {errno.EACCES, errno.EAGAIN}:
                 raise RefreshError("refresh_already_running") from None
             raise
-        return _run_locked(root, build, clock)
+        if ingest_complete is not None:
+            previous, _ = _last_success(root)
+            if previous is not None and not ingest_complete():
+                raise RefreshError("refresh_database_ingest_failed")
+        complete = _run_locked(root, build, clock)
+        if complete and ingest_complete is not None and not ingest_complete():
+            raise RefreshError("refresh_database_ingest_failed")
+        return complete
     finally:
         os.close(descriptor)

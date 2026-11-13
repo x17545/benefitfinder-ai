@@ -1,0 +1,132 @@
+{
+  "request_id": "00000000-0000-4000-8000-000000000036",
+  "domain": "youth",
+  "virtual_data": true,
+  "view": "fallback_list",
+  "results": {
+    "1y": {
+      "pv_off": {
+        "calculation_status": "available",
+        "unavailable_reason": null,
+        "portfolios": [],
+        "closed_now": [],
+        "not_eligible": [],
+        "not_yet_reviewed": [],
+        "fallback_list": [
+          {
+            "policy_id": "youth:catalog:M",
+            "amount_in_period_won": 300000,
+            "amount_breakdown": {
+              "cash_in_period_won": 0,
+              "expected_accrual_won": 300000
+            },
+            "reason": "함께 받을 두 정책 이상인 조합을 만들 수 없어 개별 정책을 표시해요."
+          }
+        ]
+      },
+      "pv_on": {
+        "calculation_status": "available",
+        "unavailable_reason": null,
+        "portfolios": [],
+        "closed_now": [],
+        "not_eligible": [],
+        "not_yet_reviewed": [],
+        "fallback_list": [
+          {
+            "policy_id": "youth:catalog:M",
+            "amount_in_period_won": 0,
+            "amount_breakdown": {
+              "cash_in_period_won": 0,
+              "expected_accrual_won": 300000
+            },
+            "reason": "함께 받을 두 정책 이상인 조합을 만들 수 없어 개별 정책을 표시해요."
+          }
+        ]
+      }
+    },
+    "2y": {
+      "pv_off": {
+        "calculation_status": "available",
+        "unavailable_reason": null,
+        "portfolios": [],
+        "closed_now": [],
+        "not_eligible": [],
+        "not_yet_reviewed": [],
+        "fallback_list": [
+          {
+            "policy_id": "youth:catalog:M",
+            "amount_in_period_won": 600000,
+            "amount_breakdown": {
+              "cash_in_period_won": 0,
+              "expected_accrual_won": 600000
+            },
+            "reason": "함께 받을 두 정책 이상인 조합을 만들 수 없어 개별 정책을 표시해요."
+          }
+        ]
+      },
+      "pv_on": {
+        "calculation_status": "available",
+        "unavailable_reason": null,
+        "portfolios": [],
+        "closed_now": [],
+        "not_eligible": [],
+        "not_yet_reviewed": [],
+        "fallback_list": [
+          {
+            "policy_id": "youth:catalog:M",
+            "amount_in_period_won": 0,
+            "amount_breakdown": {
+              "cash_in_period_won": 0,
+              "expected_accrual_won": 600000
+            },
+            "reason": "함께 받을 두 정책 이상인 조합을 만들 수 없어 개별 정책을 표시해요."
+          }
+        ]
+      }
+    },
+    "all": {
+      "pv_off": {
+        "calculation_status": "available",
+        "unavailable_reason": null,
+        "portfolios": [],
+        "closed_now": [],
+        "not_eligible": [],
+        "not_yet_reviewed": [],
+        "fallback_list": [
+          {
+            "policy_id": "youth:catalog:M",
+            "amount_in_period_won": 1000000,
+            "amount_breakdown": {
+              "cash_in_period_won": 1000000,
+              "expected_accrual_won": 0
+            },
+            "reason": "함께 받을 두 정책 이상인 조합을 만들 수 없어 개별 정책을 표시해요."
+          }
+        ]
+      },
+      "pv_on": {
+        "calculation_status": "available",
+        "unavailable_reason": null,
+        "portfolios": [],
+        "closed_now": [],
+        "not_eligible": [],
+        "not_yet_reviewed": [],
+        "fallback_list": [
+          {
+            "policy_id": "youth:catalog:M",
+            "amount_in_period_won": 751315,
+            "amount_breakdown": {
+              "cash_in_period_won": 1000000,
+              "expected_accrual_won": 0
+            },
+            "reason": "함께 받을 두 정책 이상인 조합을 만들 수 없어 개별 정책을 표시해요."
+          }
+        ]
+      }
+    }
+  },
+  "ai_generated": false,
+  "data_updated_at": "2026-11-02T00:00:00+00:00",
+  "discount_rate": 0.1,
+  "discount_rate_status": "verified"
+}

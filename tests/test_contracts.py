@@ -25,6 +25,7 @@ FIXTURE_SCHEMAS = {
     "options.json": "options.schema.json",
     "sse-progress.json": "sse-progress.schema.json",
     "pv-unknown-response.json": "recommendation-response.schema.json",
+    "maturity-response.json": "recommendation-response.schema.json",
     "error.json": "error.schema.json",
 }
 
@@ -95,6 +96,42 @@ class ContractTests(unittest.TestCase):
         for fixture, schema in FIXTURE_SCHEMAS.items():
             with self.subTest(fixture=fixture):
                 self.validator(schema).validate(self.fixture(fixture))
+
+    def test_maturity_breakdown_is_optional_but_requires_both_safe_won_amounts(self):
+        response = self.fixture("maturity-response.json")
+        row = response["results"]["1y"]["pv_off"]["fallback_list"][0]
+        self.assertEqual(row["amount_in_period_won"], 300_000)
+        self.assertEqual(row["amount_breakdown"], {
+            "cash_in_period_won": 0, "expected_accrual_won": 300_000,
+        })
+        self.assertEqual(response["results"]["1y"]["pv_on"]["fallback_list"][0]
+                         ["amount_in_period_won"], 0)
+        invalid = [None, {}, {"cash_in_period_won": 0},
+                   {"cash_in_period_won": -1, "expected_accrual_won": 1},
+                   {"cash_in_period_won": True, "expected_accrual_won": 1},
+                   {"cash_in_period_won": 0, "expected_accrual_won": 2**53},
+                   {"cash_in_period_won": 0, "expected_accrual_won": 1, "other": 0}]
+        for breakdown in invalid:
+            value = copy.deepcopy(response)
+            value["results"]["1y"]["pv_off"]["fallback_list"][0]["amount_breakdown"] = breakdown
+            with self.subTest(breakdown=breakdown), self.assertRaises(ValidationError):
+                self.validator("recommendation-response.schema.json").validate(value)
+
+    def test_maturity_breakdown_cannot_confirm_an_unknown_or_preview_amount(self):
+        response = self.fixture("recommendation-response.json")
+        policy = response["results"]["1y"]["pv_off"]["portfolios"][0]["policies"][0]
+        policy["amount_breakdown"] = {"cash_in_period_won": 0, "expected_accrual_won": 100_000}
+        self.validator("recommendation-response.schema.json").validate(response)
+        for key, value in (("amount_status", "unknown"), ("amount_in_period_won", None)):
+            changed = copy.deepcopy(response)
+            changed["results"]["1y"]["pv_off"]["portfolios"][0]["policies"][0][key] = value
+            with self.subTest(key=key), self.assertRaises(ValidationError):
+                self.validator("recommendation-response.schema.json").validate(changed)
+        for key in ("amount_status", "amount_in_period_won"):
+            changed = copy.deepcopy(response)
+            del changed["results"]["1y"]["pv_off"]["portfolios"][0]["policies"][0][key]
+            with self.subTest(missing=key), self.assertRaises(ValidationError):
+                self.validator("recommendation-response.schema.json").validate(changed)
 
     def test_unknown_user_information_is_allowed(self):
         request = self.fixture("recommendation-request.json")

@@ -10,9 +10,11 @@ from time import monotonic
 from typing import Any
 from uuid import uuid4
 
+from benefitfinder.application.policy_amounts import amount_metadata
 from benefitfinder.application.published_policies import PublishedPolicy, PublishedPolicyRepository
+from benefitfinder.application.recruitment import application_on
 from benefitfinder.domain.portfolio import CalculationLimitExceeded, calculate_portfolios
-from benefitfinder.domain.present_value import calculate_period_value
+from benefitfinder.domain.present_value import calculate_support_value
 
 
 def korea_today() -> date:
@@ -21,15 +23,7 @@ def korea_today() -> date:
 
 def policy_detail(policy: PublishedPolicy, today: date) -> dict[str, Any]:
     detail = deepcopy(policy.detail)
-    application = detail["application"]
-    if application["ends_on"] is not None and date.fromisoformat(application["ends_on"]) < today:
-        application["status"] = "closed"
-    elif (
-        application["status"] != "closed"
-        and application["starts_on"] is not None
-        and date.fromisoformat(application["starts_on"]) > today
-    ):
-        application["status"] = "upcoming"
+    detail["application"] = application_on(detail["application"], today)
     return detail
 
 
@@ -73,7 +67,8 @@ class PublishedRecommendations:
             for p in policies
             if not interests or set(interests).intersection(p.detail["categories"])
         )
-        details = {p.policy_id: policy_detail(p, self.today()) for p in policies}
+        today = self.today()
+        details = {p.policy_id: policy_detail(p, today) for p in policies}
         by_id = {p.policy_id: p for p in policies}
         eligibility: dict[str, Any] = {}
         diagnosis = {}
@@ -127,6 +122,10 @@ class PublishedRecommendations:
             if frozenset(pair) not in conflict_sets
         ]
         payments = {key: list(by_id[key].payments or ()) for key in candidates}
+        accruals = {
+            key: list(by_id[key].maturity_accruals)
+            for key in candidates if by_id[key].maturity_accruals is not None
+        }
         results = {}
         for period in ("1y", "2y", "all"):
             results[period] = {}
@@ -139,8 +138,9 @@ class PublishedRecommendations:
                     }
                     continue
                 amounts = {
-                    key: calculate_period_value(
-                        value, period, annual_rate if pv == "pv_on" else None
+                    key: calculate_support_value(
+                        value, period, annual_rate if pv == "pv_on" else None,
+                        maturity_accruals=accruals.get(key),
                     )
                     for key, value in payments.items()
                 }
@@ -174,6 +174,7 @@ class PublishedRecommendations:
                 "conflicts": conflicts,
                 "unverified": unverified,
                 "payments": payments,
+                "maturity_accruals": accruals,
                 "updated_at": updated_at,
             },
         }
@@ -185,6 +186,10 @@ def map_published_response(
     catalog = calculation["catalog"]
     details, diagnosis = catalog["details"], catalog["diagnosis"]
     conflicts = {frozenset(pair) for pair in catalog["conflicts"]}
+    def metadata(period: str, members: list[str]) -> dict[str, dict[str, int]]:
+        return amount_metadata(
+            catalog["payments"], catalog["maturity_accruals"], period, members,
+        )
     mapped = {}
     for period, period_results in calculation["results"].items():
         mapped[period] = {}
@@ -228,6 +233,7 @@ def map_published_response(
                     {
                         "policy_id": key,
                         "amount_in_period_won": amounts[key],
+                        **metadata(period, [key]),
                         "reason": "함께 받을 두 정책 이상인 조합을 만들 수 없어 개별 정책을 표시해요.",
                     }
                     for key in sorted(amounts, key=lambda key: (-amounts[key], key))[:5]
@@ -239,11 +245,13 @@ def map_published_response(
                     {
                         "rank": portfolio["rank"],
                         "total_won": portfolio["total_won"],
+                        **metadata(period, members),
                         "present_value_applied": pv == "pv_on",
                         "policies": [
                             {
                                 "policy_id": key,
                                 "amount_in_period_won": amounts[key],
+                                **metadata(period, [key]),
                                 "original_amount_won": sum(a for _, a in catalog["payments"][key]),
                                 "amount_status": "verified",
                                 "eligibility": deepcopy(diagnosis[key]),
@@ -253,7 +261,10 @@ def map_published_response(
                             for key in members
                         ],
                         "given_up": [
-                            {"policy_id": key, "amount_won": amounts[key]}
+                            {
+                                "policy_id": key, "amount_won": amounts[key],
+                                **metadata(period, [key]),
+                            }
                             for key in amounts
                             if key not in members
                             and any(frozenset((key, m)) in conflicts for m in members)

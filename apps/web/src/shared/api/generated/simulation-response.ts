@@ -33,6 +33,8 @@ export interface ChangeSimulationResult {
      * 연간 환산 지원금(변화 후).
      */
     after_won: number;
+    before_amount_breakdown?: AmountBreakdown;
+    after_amount_breakdown?: AmountBreakdown;
   };
   /**
    * 연간 소득 변화(annual). from/to는 불명확 구간 대표값을 포함한 가상 시나리오 가정이며 사용자 확정 소득으로 표시·저장하지 않는다.
@@ -62,6 +64,7 @@ export interface ChangeSimulationResult {
     policy_id: string;
     reason: string;
     amount_won?: number | null;
+    amount_breakdown?: AmountBreakdown;
   }[];
   /**
    * policy_id로 추천 결과의 조합 정책 및 GET /api/v1/benefits/{benefit_id} 상세의 source·evidence에 연결한다. 변동 카드 자체에 source·evidence를 중복하지 않는다.
@@ -70,6 +73,7 @@ export interface ChangeSimulationResult {
     policy_id: string;
     reason: string;
     amount_won?: number | null;
+    amount_breakdown?: AmountBreakdown;
   }[];
   next_threshold?: {
     text: string;
@@ -88,6 +92,21 @@ export interface ChangeSimulationResult {
    * 예: 선택 기간 카드합과 연간 환산, 세금/4대보험 제외, 연간 지원금 변화/연간 소득 증가 기준.
    */
   calculation_note: string;
+  before_amount_breakdown?: AmountBreakdown;
+  after_amount_breakdown?: AmountBreakdown;
+}
+/**
+ * 만기 지급이 포함된 경우의 명목 현금·미지급 예상 적립액 구분. PV off 합계는 두 값의 합, PV on 합계는 기간 내 현금의 현재가치다.
+ */
+export interface AmountBreakdown {
+  /**
+   * 선택 기간 내 실제 현금 지급 예정액. 현재가치 할인 전 명목금액이다.
+   */
+  cash_in_period_won: number;
+  /**
+   * 선택 기간까지 적립되지만 만기 전이라 아직 지급되지 않는 검수된 예상 지원금. 본인 납입금 제외. 현재가치 합계에는 넣지 않는다.
+   */
+  expected_accrual_won: number;
 }
 export interface Evidence {
   quote: string;

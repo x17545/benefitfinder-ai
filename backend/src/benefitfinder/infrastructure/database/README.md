@@ -1,5 +1,11 @@
 # PostgreSQL 어댑터
 
+[F12 검수→카탈로그·F13 게시](F12_CATALOG.md)는 원본 쌍·최신 사람 판단·승인 내보내기를 확인하고 검수자가 명시한 실행 규칙을 새 입력으로 묶는다. 별도 전체 승인 후 0010의 제한된 트리거가 정책과 같은 버전의 모든 조항을 함께 게시한다. F13 조회도 전체 승인 해시를 확인한다. 실제 사람 검수·운영 게시는 별도다.
+
+[원천 변경·재검수](POLICY_SOURCE_RECHECKS.md)는 승인 입력의 원천 ID·해시를 저장하고 수집 변경·누락 시 연결된 게시 정책과 F13을 내린다. 기존 승인·무효화 이력은 보존하며 전용 읽기 역할로 최신 원천 상태와 함께 내보낸다. 실제 정책 게시에는 0006과 명시적인 원천 연결이 필요하다.
+
+[수집 성공본 저장소](COLLECTED_POLICIES.md)는 F08의 완전한 원천 생성본·최신 레코드·변경 이력을 별도 미검수 영역에 저장한다. `COLLECTION_WRITE_DATABASE_URL`은 수집 작업에서만 사용하며 앱의 게시 자료 조회·승인·계산에 연결하지 않는다. DB 실패 후 같은 성공본 재적재와 이전 성공본 보존을 지원한다.
+
 F13 게시 조항의 조회 저장소를 `repositories/published_clauses.py`에 구현했다. psycopg 3 비동기 드라이버를 사용하며 ORM·벡터 확장은 추가하지 않았다. `DATABASE_URL`을 서버 프로세스에 전달하면 `bootstrap.create_app`이 PostgreSQL 저장소를 주입한다. URL이 없으면 기존 가상 메모리 예제를 사용한다. URL을 설정한 뒤 DB가 실패한 경우에는 메모리 조항으로 대체하지 않고 기본 안내를 반환한다. `.env` 파일은 자동으로 읽지 않는다.
 
 윤정찬·양승현이 저장 모델·마이그레이션을 함께 검토하고 탁서윤이 F13 검색·근거 품질을 검토한다. F13과 별도로 `POLICY_DATABASE_URL`을 설정하면 [검수·게시된 정책 카탈로그](POLICY_CATALOG.md)에서 후보·자격·지급 일정·중복 제한을 읽어 추천·상세·상황 변화를 계산한다. 실제 정책 검수·운영 게시와 F12 출력의 자동 변환은 별도 범위다.
@@ -10,7 +16,7 @@ F13 게시 조항의 조회 저장소를 `repositories/published_clauses.py`에 
 
 - `public.f13_policy_documents`: `(policy_id, document_version)` 키, 정책명·취업/주거 분류·출처 URL·확인 시각·문서 게시 상태. 한 정책에 게시 문서는 하나만 허용한다. 버전 전환은 한 트랜잭션에서 이전 문서를 `retired`로 바꾼 뒤 새 문서를 게시한다.
 - `public.f13_clauses`: `(policy_id, document_version, clause_id)` 키와 문서 외래 키, 제목·본문·원문 위치·토픽, 검수 상태·검수자·검수일, 별도의 게시 상태·게시일. 기본값은 `pending`·`draft`다. 승인만으로 게시되지 않는다. 승인자·승인일 없는 승인, 미승인 조항의 게시를 제약으로 거부한다.
-- 런타임은 같은 정책 ID·문서 버전·분류에서 문서와 조항 모두 `published`, 조항은 `approved`인 것만 조회한다. `pending`·`rejected`·승인 후 미게시·구버전·은퇴 문서는 설명에 들어가지 않는다. F12의 승인 내보내기를 자동 적재·승인·게시하는 명령은 없다.
+- 런타임은 같은 정책 ID·문서 버전·분류에서 문서와 조항 모두 `published`, 조항은 `approved`인 것만 조회한다. `pending`·`rejected`·승인 후 미게시·구버전·은퇴 문서는 설명에 들어가지 않는다. [F12 입력 연결](F12_CATALOG.md)은 별도 사람 실행 규칙·최종 승인을 요구한다.
 - 검색 파라미터는 정책 ID·문서 버전·분류와 안전한 일반 조건 토픽·`application`·`amount`뿐이다. 사용자 프로필·특수 조건·소득/재산·부모 정보는 DB 검색이나 LLM에 전달하지 않는다. 토픽 겹침 점수 내림차순·조항 ID 오름차순으로 최대 5개를 반환하며 요청 사이의 조회 캐시는 없다.
 - 원문 인용·위치·URL·확인일·문서 버전은 DB에서 API `ai_sources`로 전달한다. `timestamptz` 확인일은 같은 시점을 UTC로 반환한다. 기존 메모리 예제만 위치/확인일 미지정 시 종전 값으로 호환한다.
 - 정책/버전의 게시 조항 부분 인덱스를 사용한다. 정책별 소수 조항을 먼저 좁혀 토픽을 평가하므로 GIN·전체 문서 전문검색·임베딩은 추가하지 않았다. 데이터 증가 시 실제 조회 계획으로 재평가한다.
@@ -26,6 +32,10 @@ F13 게시 조항의 조회 저장소를 `repositories/published_clauses.py`에 
 ```sql
 GRANT USAGE ON SCHEMA public TO benefitfinder_reader;
 GRANT SELECT ON public.f13_policy_documents, public.f13_clauses TO benefitfinder_reader;
+-- 0010의 연결 조항은 전체 카탈로그 승인 해시를 다시 검증한다.
+GRANT SELECT ON public.policy_catalog_releases TO benefitfinder_reader;
 ```
 
 마이그레이션·게시 쓰기는 별도 관리 역할이 담당한다. [마이그레이션 절차](../../../../migrations/README.md)와 [실제 DB 검증](../../../../integration/README.md)을 따른다. PostgreSQL의 사용자 요청 저장·다른 서비스 계정·운영 DB에는 이 테스트 자료를 적용하지 않는다.
+
+[F14 서비스 카탈로그](SERVICE_CATALOG.md)는 같은 게시 이력·원천 연결을 사용한다. `kind: service`의 공식 내용과 별도 가격 문서를 전체 승인 해시에 묶고, 추천·공개 상세·메타에서 SELECT 전용 역할로 읽는다. 서비스 환산액은 현금 계산과 분리한다. 실제 서비스·단가의 사람 검수/게시는 별도다.

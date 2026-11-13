@@ -1,5 +1,5 @@
 
-"""가상 정책 지원금의 현재가치 계산."""
+"""검수된 지급·적립 일정의 기간 금액과 현재가치 계산."""
 
 from __future__ import annotations
 
@@ -70,3 +70,32 @@ def calculate_period_value(
         return sum(amount for _, amount in selected)
 
     return calculate_present_value(selected, annual_rate)
+
+
+def calculate_support_value(
+    payments: list[tuple[int, int]],
+    period: str,
+    annual_rate: float | None = None,
+    *,
+    maturity_accruals: list[tuple[int, int]] | None = None,
+) -> int:
+    """명목 합계는 검수된 적립분, PV 합계는 기간 내 실제 지급만 반영한다."""
+    if maturity_accruals is not None and annual_rate is None:
+        return calculate_period_value(maturity_accruals, period)
+    return calculate_period_value(payments, period, annual_rate)
+
+
+def maturity_breakdown(
+    payments: list[tuple[int, int]],
+    accruals: list[tuple[int, int]],
+    period: str,
+) -> dict[str, int]:
+    """현금 지급 예정액(할인 전)과 아직 지급되지 않은 예상 적립액을 분리한다.
+
+    게시 검증은 단일 만기 지급과 같은 총액의 적립 일정만 허용한다.
+    """
+    cash = calculate_period_value(payments, period)
+    accrued = calculate_period_value(accruals, period)
+    if cash > accrued:
+        raise ValueError("maturity_cash_exceeds_accrual")
+    return {"cash_in_period_won": cash, "expected_accrual_won": accrued - cash}

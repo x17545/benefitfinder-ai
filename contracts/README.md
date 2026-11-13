@@ -22,6 +22,8 @@
 | `health.schema.json` | - | GET /health 생존 확인 응답 |
 | `common.schema.json` | 위 예제에 포함 | 분야 식별자·출처·인용 근거 |
 
+`GET /api/v1/meta`의 선택 필드 `virtual_data: true`는 개발용 가상 정책·금리의 메타데이터를 뜻한다. 이때 금리 상태는 `unknown`이며 실제 자료의 갱신·검증으로 표시하지 않는다. 게시 자료가 비어 갱신 시각을 확인할 수 없으면 성공 응답 대신 공통 503을 반환한다. 잔여 횟수 조회는 차감하지 않는다.
+
 모든 파일은 JSON Schema Draft 2020-12를 사용한다. `$id`의 `benefitfinder.example` 주소는 로컬 참조 식별자이며 실제 서버 주소가 아니다. 검증 시 스키마를 로컬 레지스트리에 등록하므로 원격 문서를 조회하지 않는다.
 
 ## 공통 의미
@@ -35,6 +37,7 @@
 - `source`: 원문 URL, 마지막 확인 시점(`checked_at`), 문서 버전(`document_version`). 시각은 시간대가 있는 ISO 8601 형식이다.
 - `evidence`: 원문의 인용문과 해당 버전의 출처. 인용문은 실제 원문에서 확인해야 하며 AI가 생성한 문장을 넣지 않는다.
 - `application.status`: `open`, `closed`, `upcoming`, `unknown`. 상시 모집은 별도 `always` 값을 두지 않고 `open`+공식 상시 근거로 표현한다. 날짜만으로 확정할 수 없는 모집 상태는 `unknown`이며, 날짜 `null`을 `open`으로 추정하지 않는다.
+- `application_guide`: 현금·서비스 상세의 선택적 신청 안내다. `method`, `office`는 원문 인용(`quote`, `location`, `source`) 또는 `null`, `documents`는 같은 인용의 목록 또는 `null`이다. 객체가 있으면 세 키가 모두 필요하다. 생략/`null`·`documents: null`은 미확인이고 `documents: []`는 사람이 해당 원문을 확인했지만 서류 안내가 없는 경우다. 인용은 정책과 같은 출처 URL·문서 버전·확인일을 사용하고 게시 시 원문 해시·인용 포함 여부와 전체 승인 해시를 검사한다. 인용을 요약해 새 신청 조건을 만들거나 `provider`를 접수 기관으로 추정하지 않는다. 기존 입력에 안내가 없으면 새 필드를 직렬화하지 않아 기존 승인 해시를 유지한다. 가상 예제는 [혜택 상세](fixtures/youth-benefit.json)에 있으며 실제 서류 목록이 아니다.
 - `condition_results`/`eligibility[].status`: `met`(충족), `not_met`(미충족), `needs_review`(추가 확인 필요). `need_check` 표기는 거부된다. 충족·미충족에는 최소 하나의 근거가 필요하다.
 - `virtual_data`: 추천 응답의 선택적 boolean. `true`는 가상 정책·금액 계산이며 화면과 PNG에 실제 지원금이 아님을 표시한다. 이전 응답은 생략 가능하고, 생략·`false`를 실제 정책 검증 완료로 해석하지 않는다. 현재 MVP 추천 API는 항상 `true`다.
 - `ai_generated`: 응답 중 AI 생성 설명이 하나라도 있으면 `true`, 모두 기본 근거 템플릿이면 `false`다. 데이터 준비에서 Agent를 썼는지를 나타내는 플래그가 아니다. `ai_reason`(6장 초안 이름 유지)은 템플릿을 포함한 추천 이유 텍스트이며 이 플래그와 함께 해석한다. 최종 필드명은 회의에서 정리한다. 데이터 Agent의 활용은 이용 안내에 별도로 설명하며 사용자 검색·코드 판정/계산·템플릿 응답은 LLM 없이 동작한다.
@@ -44,7 +47,11 @@
 - 금액은 모두 원 단위 정수이며, 조합에는 검수 확정 금액만 포함한다. 만기·현재가치 지급 시점이 불명확하면 `needs_review`로 남긴다. 기준금리가 미확인(`discount_rate: null`, `discount_rate_status: unknown`)일 때 `0` 할인율로 추정하지 않고, 해당 탭의 `result_view`를 `calculation_status: unavailable`+`unavailable_reason: missing_discount_rate`(지급 시점 불명확이면 `unknown_payment_timing`)로 둔다. `unavailable` 분기는 `portfolios` 빈 배열·합계 추정 안 함이 강제되며 정상 원금액(raw) 분기만 활성이다.
 - 실효한계세율=(1년 지원금 감소분/1년 소득 증가분)×100이며 세금·4대보험을 제외한 지원금 변화만 본다.
 
-가상 응답은 현행 기획 8.3의 취업·주거 정책 P1·P3·P6로 6개 탭의 조합·합계를 채운다. 1년 최상위는 540만 원, 2년·전체는 600만 원이며, 금리 미확인 예제도 원금액 결과는 같다. 미확인 중복 쌍 경고는 별도 화면 상태 예시다. 현행 정답은 `tests/fixtures/mvp_planning_rules.json`, 이전 5개 정책의 `planning_rules.json`은 과거·확장 회귀 자료다. 현재가치는 정책별 현금흐름을 할인한 뒤 원 단위로 반올림하고, 조합 합계는 표시하는 정책 금액의 합으로 맞춘다. 만기형의 기간 누적 기대액은 그 기간의 현금 수령액과 구분하며 실제 만기 시점으로 할인한다.
+가상 응답은 현행 기획 8.3의 취업·주거 정책 P1·P3·P6로 6개 탭의 조합·합계를 채운다. 1년 최상위는 540만 원, 2년·전체는 600만 원이며, 금리 미확인 예제도 원금액 결과는 같다. 미확인 중복 쌍 경고는 별도 화면 상태 예시다. 현행 정답은 `tests/fixtures/mvp_planning_rules.json`, 이전 5개 정책의 `planning_rules.json`은 과거·확장 회귀 자료다. 현재가치는 정책별 현금흐름을 할인한 뒤 원 단위로 반올림하고, 조합 합계는 표시하는 정책 금액의 합으로 맞춘다.
+
+만기형은 검수한 적립 일정과 실제 지급 일정을 분리한다. 명목 보기의 `amount_in_period_won`·`total_won`에는 그 기간까지 적립된 지원금을 포함한다. 현재가치 보기에는 **선택 기간 안에 실제 지급되는 현금만** 포함하며, 만기 전 적립분을 현금처럼 할인하거나 순위 금액에 더하지 않는다. 만기가 기간 안에 있으면 만기 달로 할인한다. 본인 납입금은 지원금에 포함하지 않는다.
+
+선택 필드 `amount_breakdown`은 `common.schema.json`의 공통 정의를 사용한다. `cash_in_period_won`은 선택 기간의 실제 현금 지급 예정액(할인 전), `expected_accrual_won`은 아직 지급되지 않은 예상 적립액이며 둘 다 안전 범위의 원 단위 정수다. 명목 보기의 합계는 두 값의 합이다. 현재가치 합계는 할인된 현금만이므로 이 두 명목값의 합과 다를 수 있다. 만기형이 포함된 조합·정책·개별 목록·포기한 정책에 제공하고, 상황 변화는 `before_amount_breakdown`·`after_amount_breakdown`, `annual`의 같은 필드, `lost`·`gained`의 `amount_breakdown`으로 전달한다. 정책에 이 필드가 있으면 `amount_status: verified`와 확정 정수 금액이 필요하여 F12 검수 미리보기에는 사용할 수 없다. 개별·포기·상황 변화 항목에도 이 필드가 있으면 확정 정수 금액이 필요하다. 비만기 응답은 생략하여 이전 계약과 호환한다. [만기형 가상 예제](fixtures/maturity-response.json)는 불균등 적립(1년 30만·2년 60만), 36개월 만기 100만 지급을 보여 주며 실제 정책이 아니다.
 
 계약에는 최종 수급 자격 확정값을 두지 않는다. 결과 문장의 AI 생성 표시는 실제 설명 생성 여부에 맞추고, 데이터 Agent 사용 안내와 구분한다. 최종 판단은 기관 기준이라는 안내를 제공한다.
 

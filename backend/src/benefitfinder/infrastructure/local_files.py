@@ -12,8 +12,10 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import os
+import tempfile
 from collections.abc import Mapping, Sequence
 from datetime import datetime
 from pathlib import Path
@@ -40,6 +42,49 @@ def _write_atomic(path: Path, data: bytes) -> None:
     os.replace(temporary, path)
 
 
+def _ensure_private_directory(path: Path) -> None:
+    path.mkdir(parents=True, exist_ok=True, mode=0o700)
+    path.chmod(0o700)
+
+
+def _secure_existing_private_file(path: Path) -> None:
+    if path.exists():
+        path.chmod(0o600)
+
+
+def _cleanup_stale_private_temporaries(path: Path) -> None:
+    prefix = f".{path.name}."
+    for candidate in path.parent.iterdir():
+        if candidate.name.startswith(prefix) and candidate.name.endswith(".tmp"):
+            candidate.unlink()
+
+
+def _write_private_atomic(path: Path, data: bytes) -> None:
+    """Create the temporary file with private permissions before writing body data."""
+    _ensure_private_directory(path.parent)
+    _secure_existing_private_file(path)
+    _cleanup_stale_private_temporaries(path)
+    temporary: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="wb",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
+            temporary = Path(handle.name)
+            os.chmod(temporary, 0o600)
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+        temporary = None
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
 def _json_bytes(value: object) -> bytes:
     return (json.dumps(value, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
 
@@ -47,18 +92,38 @@ def _json_bytes(value: object) -> bytes:
 class JsonFileSnapshotStore:
     """원본 응답을 그대로 파일로 남기고, 상대 경로를 참조값으로 돌려준다."""
 
-    def __init__(self, raw_root: Path) -> None:
+    def __init__(self, raw_root: Path, *, private: bool = False) -> None:
         self._root = raw_root
+        self._private = private
 
     def save(self, snapshot: RawSnapshot) -> str:
-        stamp = snapshot.fetched_at.strftime("%Y%m%dT%H%M%S%z")
+        stamp = snapshot.fetched_at.strftime("%Y%m%dT%H%M%S%f%z")
         page = snapshot.request.params.get("pageNum") or snapshot.request.params.get("page")
         page_part = f"-p{page}" if page else ""
-        stem = f"{stamp}{page_part}-{snapshot.content_sha256[:12]}"
+        context = hashlib.sha256(_json_bytes({
+            'url': snapshot.request.url, 'params': dict(snapshot.request.params),
+            'status_code': snapshot.status_code, 'content_type': snapshot.content_type,
+        })).hexdigest()[:12]
+        # Preserve previous generation metadata even when identical bodies are
+        # fetched again within a second or returned by different API requests.
+        stem = f"{stamp}{page_part}-{context}-{snapshot.content_sha256[:12]}"
         is_json = (snapshot.content_type or "").split(";")[0].strip().endswith("json")
         suffix = "json" if is_json else "body"
         relative = Path(snapshot.source_name) / "snapshots" / f"{stem}.{suffix}"
-        _write_atomic(self._root / relative, snapshot.body)
+        body_path = self._root / relative
+        meta_path = body_path.with_name(f"{stem}.meta.json")
+        if self._private:
+            for directory in (
+                self._root,
+                self._root / relative.parts[0],
+                body_path.parent,
+            ):
+                _ensure_private_directory(directory)
+            for path in (body_path, meta_path):
+                _secure_existing_private_file(path)
+            _write_private_atomic(body_path, snapshot.body)
+        else:
+            _write_atomic(body_path, snapshot.body)
         meta = {
             "source_name": snapshot.source_name,
             "request_url": snapshot.request.url,
@@ -69,7 +134,10 @@ class JsonFileSnapshotStore:
             "content_sha256": snapshot.content_sha256,
             "body_file": relative.name,
         }
-        _write_atomic(self._root / relative.with_name(f"{stem}.meta.json"), _json_bytes(meta))
+        if self._private:
+            _write_private_atomic(meta_path, _json_bytes(meta))
+        else:
+            _write_atomic(meta_path, _json_bytes(meta))
         return relative.as_posix()
 
 

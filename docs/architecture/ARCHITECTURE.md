@@ -133,7 +133,7 @@ DB 스키마 변경은 `backend/migrations/versions/`에 이력으로 관리한�
 
 ## 7. API 경계와 구현 상태
 
-`GET /health`와 공식 지역 목록 `GET /api/v1/options`, 가상 MVP 정책의 `POST /api/v1/recommendations`는 구현했다. 추천은 JSON 응답이며 가상 정책임을 `virtual_data: true`로 알린다. F13 게시 조항은 PostgreSQL 조회를 지원하지만 실제 지역별 정책·계산 데이터 연결은 후속이다. 상황 변화와 상세 API는 같은 가상 MVP 정책을 사용한다. 메타와 SSE는 목표 설계다. 현재 개발용 필드·자료형과 이벤트 데이터의 원본은 `contracts/v1/`이다. 6장의 필드·형식과 11.2의 임시 기본값은 다음 회의에서 확인할 초안으로 유지한다.
+`GET /health`와 공식 지역 목록 `GET /api/v1/options`, 가상 MVP 정책의 `POST /api/v1/recommendations`는 구현했다. 추천은 JSON 또는 POST SSE로 응답하며 가상 정책임을 `virtual_data: true`로 알린다. SSE는 실제 조건·조합 계산, 서비스 조회, 근거 설명의 전후에 진행을 보내고 결과 또는 오류 한 번으로 끝난다. 추천·상황 변화 전체의 최대 60초와 스트림 연결 취소를 적용한다. F13 게시 조항은 PostgreSQL 조회를 지원하지만 실제 지역별 정책·계산 데이터 연결은 후속이다. 상황 변화와 상세 API는 같은 가상 MVP 정책을 사용한다. 메타 API와 실제 운영 연결은 후속이다. 현재 개발용 필드·자료형과 이벤트 데이터의 원본은 `contracts/v1/`이다. 6장의 필드·형식과 11.2의 임시 기본값은 다음 회의에서 확인할 초안으로 유지한다.
 
 | Method | 경로 | 용도 |
 |---|---|---|
@@ -146,9 +146,11 @@ DB 스키마 변경은 `backend/migrations/versions/`에 이력으로 관리한�
 
 지원 분야는 초기 `youth` 하나다. 계약이 다른 분야 식별자를 허용하더라도, 서버는 아직 지원하지 않는 분야에 `unsupported_domain` 오류를 반환해야 한다. 입력 오류는 `invalid_request`, 의존 서비스 장애는 `dependency_unavailable`처럼 구분한다. 상세 HTTP 상태는 `contracts/README.md`를 따른다.
 
-분석은 JSON 본문의 선택 조건과 `Accept: text/event-stream`을 받는 POST로 설계한다. 브라우저는 `fetch` 응답 스트림을 읽고 UTF-8 SSE 메시지의 `progress`·최종 `result` 또는 `error`를 처리한다. native `EventSource`의 URL에 프로필을 넣지 않는다. 마지막 이벤트 한 번 후 종료하며 청크 경계와 이벤트 경계가 같다고 가정하지 않는다. 취소·최대 60초 타임아웃·재시도에 따른 사용량 처리는 정책 API 구현 시 검증한다. [SSE 형식](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events), [Fetch 응답 스트리밍](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch#streaming_the_response_body)을 참고한다.
+분석은 JSON 본문의 선택 조건과 `Accept: text/event-stream`을 받는 POST를 제공한다. 브라우저는 `fetch` 응답 스트림을 읽고 UTF-8 SSE 메시지의 `progress`·최종 `result` 또는 `error`를 처리한다. native `EventSource`의 URL에 프로필을 넣지 않는다. 마지막 이벤트 한 번 후 종료하며 청크 경계와 이벤트 경계가 같다고 가정하지 않는다. 취소·최대 60초 타임아웃은 실제 ASGI에서 검증한다. 실행 중인 동기 스레드의 강제 종료는 지원하지 않으므로 DB·탐색 자체 제한을 함께 적용한다. 재시도에 따른 사용량 처리는 후속이다. [SSE 형식](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events), [Fetch 응답 스트리밍](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch#streaming_the_response_body)을 참고한다.
 
 상세 GET은 정책의 공개 정보만 반환한다. 서버에 프로필을 저장하지 않으므로 선택 후의 진단은 현재 분석 응답에서 연결하고, 조건 없는 직접 상세 접근에는 조건 입력 안내를 보여 준다. 사용자 조건을 URL·쿼리 문자열에 싣지 않는다.
+
+추천·상황 변화의 분석 시작은 합쳐 KST 하루 100회다. `ANALYSIS_USAGE_DATABASE_URL` 설정 시 PostgreSQL 날짜별 집계에 원자적으로 예약해 프로세스·서버 사이에 공유한다. 미설정은 재시작 시 초기화되는 단일 프로세스 개발용 메모리 카운터다. 분석 시작 후 실패·취소·재시도도 차감하며 DB 장애 시 우회하지 않는다. 집계는 날짜·횟수만 보관한다. [운영 설정](../../backend/src/benefitfinder/infrastructure/database/ANALYSIS_USAGE.md)을 따른다.
 
 로그·추적에는 요청 ID와 처리 상태를 기록하고, 사용자 조건·소득 정보·LLM 프롬프트 전체·API 키를 남기지 않는다. 특수 조건·부모님 정보는 LLM·임베딩·GA에도 전달하지 않는다. 기억하기를 끄면 프로필을 영구 저장하지 않으며, 결과 캐시와 프로필 저장·삭제 범위는 기획 명세와 공용 계약 안내를 따른다.
 
@@ -191,6 +193,7 @@ DB 스키마 변경은 `backend/migrations/versions/`에 이력으로 관리한�
 | API 검증 | Pydantic | FastAPI의 요청·응답 모델에 사용. 순수 domain 모델에는 프레임워크 의존성 없음 |
 | 기본 DB | PostgreSQL | 정책·조건·출처·버전 데이터를 관리. 프론트엔드가 직접 접속하지 않음 |
 | 실행 구조 | 모듈형 모놀리스 | 하나의 백엔드 코드베이스와 별도 수집 명령. 분야 확장은 공통 모델과 분야별 모듈로 처리 |
+| LLM 연결 | 개발은 PC GPU의 llama.cpp, 운영은 외부 API | 2026-11-12 사용자 지시. 동일한 Chat Completions·도구 호출·JSON schema 어댑터를 사용하며 운영 공급자·모델은 미정. [실행 설정](../development/LOCAL_LLM.md) |
 
 기능·화면은 기획 명세 v3.0이 기준이다. 수집 API의 승인·호출 가능 범위와 실제 검수 완료 정책 수는 실행 시 확인한다. 사용자 로그인·서버 저장은 도입하지 않는다.
 

@@ -6,7 +6,7 @@ import { SiteFooter } from '../../shared/ui/SiteFooter.tsx';
 import { StatusChip } from '../../shared/ui/StatusChip.tsx';
 import { TopBar } from '../../shared/ui/TopBar.tsx';
 import { useAnalysis } from '../benefits/analysisStore.ts';
-import { formatManWon, isStale, monthDay, recruitTag, shortPolicyId, sourceName } from '../benefits/format.ts';
+import { formatManWon, isStale, monthDay, recruitTag, recruitmentState, shortPolicyId, sourceName } from '../benefits/format.ts';
 import { usePolicyInfo } from '../benefits/policyInfo.ts';
 import { PolicyExplanation } from '../benefits/PolicyExplanation.tsx';
 import { readResultBasis, withResultBasis } from '../benefits/resultBasis.ts';
@@ -23,8 +23,10 @@ import {
   applyPeriod,
   diagnosisSummary,
   findMyPolicyResult,
+  payoutTimingSummary,
 } from './policyDetailModel.ts';
 import { usePolicyDetail } from './usePolicyDetail.ts';
+import { ApplicationGuide } from './ApplicationGuide.tsx';
 import './PolicyDetailScreen.css';
 
 interface PolicyDetailScreenProps {
@@ -104,15 +106,18 @@ interface PolicyDetailProps {
 function PolicyDetail({ benefit, isSample, mine, serviceDiagnosis, hasAnalysis, conditionsHref, aiGenerated }: PolicyDetailProps): JSX.Element {
   const service = benefit.service ?? null;
   const virtualData = isSample || benefit.virtual_data === true;
-  const tag = recruitTag(benefit.application);
-  const closed = benefit.application.status === 'closed';
-  const applicationUrl = benefit.application.status === 'open' ? benefit.application.url : null;
+  const now = new Date();
+  const applicationState = recruitmentState(benefit.application, now);
+  const tag = recruitTag(benefit.application, now);
+  const closed = applicationState === 'closed';
+  const applicationUrl = applicationState === 'open' ? benefit.application.url : null;
   const applyUrl = applicationUrl ?? benefit.source.url;
   const conflicts = benefit.conflicts ?? [];
   const conflictInfo = usePolicyInfo(isSample ? [] : conflicts.map((conflict) => conflict.policy_id));
   const diagnosis = service !== null ? serviceDiagnosis : mine?.eligibility ?? null;
   const reviewItems = diagnosis?.filter((item) => item.status === 'needs_review') ?? [];
   const serviceValue = service?.estimated_value_won ?? null;
+  const payoutTiming = payoutTimingSummary(benefit.benefit_amount);
 
   function conflictName(id: string): string {
     return (isSample ? devSampleBenefit(id)?.title : conflictInfo.get(id)?.title) ?? `정책 ${shortPolicyId(id)}`;
@@ -203,6 +208,7 @@ function PolicyDetail({ benefit, isSample, mine, serviceDiagnosis, hasAnalysis, 
             <section className="ui-card s5-card">
               <h2 className="s5-card__title">지원 내용</h2>
               <p className="s5-amount">{amountSummary(benefit.benefit_amount)}</p>
+              {payoutTiming !== null ? <p className="s5-timing">{payoutTiming}</p> : null}
               {benefit.lifetime_once === true ? <p className="s5-muted">평생 한 번만 받을 수 있어요</p> : null}
             </section>
           )}
@@ -229,24 +235,7 @@ function PolicyDetail({ benefit, isSample, mine, serviceDiagnosis, hasAnalysis, 
             </section>
           ) : null}
 
-          {/* 7 신청 방법 */}
-          <section className="ui-card s5-card">
-            <h2 className="s5-card__title">신청 방법</h2>
-            <dl className="s5-rows">
-              <dt>신청 기간</dt>
-              <dd>{virtualData ? '가상 정책에는 실제 모집 일정이 없어요.' : applyPeriod(benefit.application)}</dd>
-              <dt>접수 기관</dt>
-              <dd>{benefit.provider}</dd>
-            </dl>
-          </section>
-
-          {/* 8 준비 서류 (정책 상세에 서류 정보가 아직 없어 문구 S5-DOC) */}
-          <section className="ui-card s5-card">
-            <h2 className="s5-card__title">준비 서류</h2>
-            <p className="s5-muted">{virtualData
-              ? '가상 정책에는 실제 제출 서류가 없어요.'
-              : '공식 자료에 서류 안내가 없어요. 신청 페이지에서 확인해 주세요.'}</p>
-          </section>
+          <ApplicationGuide benefit={benefit} virtualData={virtualData} />
 
           {/* 9 확인이 필요한 것 (내 조건으로 진단했을 때만) */}
           {diagnosis !== null ? (

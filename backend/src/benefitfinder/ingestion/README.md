@@ -2,10 +2,11 @@
 
 작업 전에는 루트 지침과 이 경로의 [추가 에이전트 지침](AGENTS.md)을 함께 읽는다.
 
-현재 구현: 온통청년 정책 목록의 원천 수집·원본 보관·버전 비교(`youthcenter.py`, `versioning.py`, `collect.py`), 규칙 후보의 근거 검사·명시적 검수 기록(`policy_rule_review.py`)과 로컬 검수 자료의 준비·승인·재검수(`rule_review_workflow.py`), 공고 HTML·PDF 페이지의 텍스트 변환(`notice_text.py`). 네트워크·원본 저장·버전 저장은 `application/collection.py`의 인터페이스로 주입받는다. 공용 DB가 정해지기 전까지는 infrastructure의 HTTP 어댑터와 로컬 JSON 파일 저장소로 실행한다. 공고 원문 다운로드·PDF 파일 읽기·실제 Agent·혜택 정규화·운영 게시·PostgreSQL 저장과 매일 실행·알림은 아직 연결하지 않았다.
+현재 구현: 온통청년 정책 목록의 원천 수집·원본 보관·버전 비교(`youthcenter.py`, `versioning.py`, `collect.py`), 규칙 후보의 근거 검사·명시적 검수 기록(`policy_rule_review.py`)과 로컬 검수 자료의 준비·승인·재검수(`rule_review_workflow.py`), 공고 HTML·PDF 페이지의 텍스트 변환(`notice_text.py`). 네트워크·원본 저장·버전 저장은 `application/collection.py`의 인터페이스로 주입받는다. infrastructure의 HTTP·로컬 JSON 저장소로 실행하며 F08은 [완전한 성공본의 PostgreSQL 인계](../infrastructure/database/COLLECTED_POLICIES.md)도 제공한다. `collected_generations.py`는 주입받은 bounded 파일 읽기로 원본·내용 해시·시각·건수를 검증한다. 통합 실행·예약 파일·알림은 [jobs](../jobs/DAILY_REFRESH.md)에 있다. 공고 원문 보완 수집·혜택 정규화·F12 자동 분석 인계·운영 게시와 실제 운영 갱신 검증은 후속이다.
 
-- `collect_youthcenter()`는 모든 응답을 해석 없이 스냅숏(요청 파라미터·수집 시각·상태·SHA-256)으로 보관하고 정책 ID별 레코드 해시로 신규·변경·유지·삭제를 구분한다.
-- API 키는 요청 파라미터·스냅숏·오류에 넣지 않는다. 어댑터가 직접 추가하고, 어댑터 예외는 형식 이름만 기록한다.
+- `collect_youthcenter()`는 안전한 응답을 해석 없이 스냅숏(요청 파라미터·수집 시각·상태·SHA-256)으로 보관하고 정책 ID별 레코드 해시로 신규·변경·유지·삭제를 구분한다.
+- API 키는 저장할 요청 파라미터·스냅숏·오류에 넣지 않는다. 어댑터가 요청할 때만 추가한다. 응답 본문·Content-Type에 사용한 키의 원문·URL 인코딩·JSON 이스케이프 표현이 있으면 `unsafe_response`로 저장 전에 차단한다. 해당 응답은 재시도하거나 가공한 원본으로 저장하지 않는다. 다른 어댑터 예외는 형식 이름만 기록한다.
+- 수동 수집과 F08의 원본 폴더는 700, 본문·메타데이터·임시 파일은 생성 시점부터 600으로 제한한다. 키를 포함하지 않은 실패 응답도 원래 바이트·해시를 보존한다. 원본에 남는 담당자 등 개인정보의 보관 기간은 별도 관리 대상이다.
 - 페이지·레코드 오류(응답 상태, 형식, ID 누락, 같은 ID의 다른 내용, 페이지 상한)는 성공 데이터와 분리한다. 하나라도 실패하면 `complete=False`이며 삭제 감지를 하지 않는다.
 - 2026-10-30 실제 응답 표본으로 확인한 설정은 `YOUTHCENTER_POLICY_LIST`다. 정책 ID는 `plcyNo`, 목록은 `result.youthPolicyList`, 전체 건수는 `result.pagging.totCount`이고 `resultCode`가 200이 아니면 실패로 처리한다. 테스트는 같은 필드 이름에 가상 값을 넣는다.
 - 조회수(`inqCnt`)는 정책 내용과 무관하게 바뀌므로 변경 판정 해시에서 뺀다. 담당자 이름(`sprvsnInstPicNm`, `operInstPicNm`)은 수집 레코드에 저장하지 않는다. 원본 스냅숏에는 응답 전체가 남으므로 원본 보관 위치·기간은 개인정보 기준으로 별도 정한다.
@@ -20,11 +21,11 @@
 
 ## 공고 원문 텍스트 변환
 
-`notice_text.py`는 공식 공고를 `SourceDocument.text`로 쓸 텍스트로 바꾼다(형식 이름 `notice-text-v1`). 텍스트의 SHA-256이 검수 기록과 연결되므로 같은 입력은 항상 같은 텍스트가 된다. 변환 규칙을 바꾸면 `NOTICE_TEXT_FORMAT`을 올리고 이전 형식의 텍스트와 섞지 않는다. 원문을 요약·수정하지 않는다.
+`notice_text.py`는 공식 공고를 `SourceDocument.text`로 쓸 텍스트로 바꾼다(형식 이름 `notice-text-v2`). 텍스트의 SHA-256이 검수 기록과 연결되므로 같은 입력은 항상 같은 텍스트가 된다. 변환 규칙을 바꾸면 `NOTICE_TEXT_FORMAT`을 올리고 이전 형식의 텍스트와 섞지 않는다. 원문을 요약·수정하지 않는다.
 
 - `decode_html(body, content_type)`: 응답 헤더 → HTML `meta` → UTF-8 → CP949 순서로 엄격하게 디코딩한다. EUC-KR은 CP949로 읽는다. 모두 실패하면 `notice_decode_failed`.
-- `html_to_text(html)`: 스크립트·스타일·`nav`·`header`·`footer`·`aside`·양식을 뺀다. `main`·`article`·`role="main"`·`id="content(s)"` 영역이 있으면 그 안만 쓴다. 블록 요소는 빈 줄로 나눈 문단, `br`·목록 항목(`- `)·표의 행은 한 줄, 표의 칸은 ` | `로 잇는다. 본문이 없으면 `notice_text_empty`.
-- `pdf_pages_to_text(pages)`: PDF에서 꺼낸 페이지 텍스트에 페이지마다 `=== PDF PAGE N ===` 표식을 붙인다. 빈 페이지도 번호를 유지한다. PDF 파일 읽기 라이브러리는 아직 정하지 않았다.
+- `html_to_text(html)`: 스크립트·스타일·`nav`·`header`·`footer`·`aside`·입력 요소를 뺀다. 본문을 감싼 `form`은 유지하고 `textarea`·버튼·선택값은 제외한다. `main`·`article`·`role="main"`·`id="content(s)"` 영역이 있으면 그 안만 쓴다. 블록 요소는 빈 줄로 나눈 문단, `br`·목록 항목(`- `)·표의 행은 한 줄, 표의 칸은 ` | `로 잇는다. 본문이 없으면 `notice_text_empty`.
+- `pdf_pages_to_text(pages)`: PDF에서 꺼낸 페이지 텍스트에 페이지마다 `=== PDF PAGE N ===` 표식을 붙인다. 빈 페이지도 번호를 유지한다. 실제 PDF 읽기는 `pypdf`를 제한된 별도 프로세스에서 실행한다. [공식 문서 수집·변경 추적](../infrastructure/database/OFFICIAL_DOCUMENTS.md)을 따른다.
 - 공통: 줄 안의 연속 공백은 한 칸, 빈 줄은 하나로 줄이고 NFC로 맞춘다. 700자를 넘는 줄은 공백에서 나눈다.
 - `fits_chunked_extraction(text)`: [긴 지침의 문맥 분할 추출](../jobs/README.md#긴-공식-지침의-문맥-분할-추출)의 단위 한도(문단·페이지와 앞뒤 문맥 220줄·6,000자)에 들어가는지 미리 확인한다. 넘으면 잘라 내지 않고 `False`만 돌려준다.
 
@@ -68,3 +69,8 @@ uv run --locked python -m benefitfinder.jobs collect-youthcenter
 전체 수집에 성공하면 종료 코드 0, 일부 실패하면 성공분만 저장하고 1을 돌려준다. 요청 사이에는 0.5초 간격을 둔다. 공식 서버가 가끔 일시적인 500을 돌려주므로(2026-10-30 실행에서 확인), 같은 요청이 5xx·연결 오류면 2·4·8초 간격으로 최대 3번 다시 시도한다. 그래도 실패하면 그 페이지에서 멈추고, 다시 실행하면 받은 레코드는 `unchanged`로 이어진다. 실제 데이터 파일은 PR에 첨부하지 않고 공유 방법은 팀에서 정한다.
 
 로컬 저장은 복구 기록을 먼저 남긴 뒤 변경 이력과 최신 레코드를 반영한다. 파일 쓰기·교체에 실패하면 예외로 종료하며, 다음 저장소 읽기나 재실행 때 미완료 저장을 먼저 복구한다. 부분 기록·재실행으로 변경 이력이 빠지거나 중복되지 않도록 기존 이력의 끝 위치부터 복구한다. 같은 `--data-dir`에는 한 번에 한 수집 프로세스만 실행한다.
+
+
+## 보조금24
+
+[확인된 청년 취업·주거 ID의 API 연결](../infrastructure/database/GOV24.md)은 세 응답의 원본·해시·버전을 보존하며 부분 실패 시 이전 성공본을 유지한다. 실제 매핑과 사람 검수는 별도다. `gov24.py`가 수집·안전한 F12 투영을, `gov24_generations.py`가 DB 인계 전 보존 원본 재검증을 맡는다.
