@@ -128,8 +128,8 @@ def prepare_f12_inputs(plan_path: Path) -> dict[str, int]:
         from benefitfinder.ingestion.gov24 import analysis_fields, gov24_hashed_fields
 
         return prepare_analysis_inputs(plan, PostgresAnalysisSources(url, source='gov24'),
-            tasks.register, lambda fields: record_sha256(gov24_hashed_fields(fields)), analysis_fields)
-    return prepare_analysis_inputs(plan, PostgresAnalysisSources(url), tasks.register,
+            tasks.register_prepared, lambda fields: record_sha256(gov24_hashed_fields(fields)), analysis_fields)
+    return prepare_analysis_inputs(plan, PostgresAnalysisSources(url), tasks.register_prepared,
         lambda fields: record_sha256(hashed_fields(YOUTHCENTER_POLICY_LIST, fields)))
 
 

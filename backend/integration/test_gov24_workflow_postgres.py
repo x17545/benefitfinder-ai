@@ -1,10 +1,14 @@
 """Two official sources, pending F12 and human-approved fictional releases."""
 
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from datetime import timedelta
+import json
 import os
 from pathlib import Path
+from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import patch
 from uuid import uuid4
 
 import psycopg
@@ -24,6 +28,7 @@ from benefitfinder.infrastructure.policy_catalog_records import CatalogRecord
 from benefitfinder.infrastructure.policy_preparation_plans import preparation_plan_from_payload
 from benefitfinder.ingestion.gov24 import analysis_fields, gov24_hashed_fields
 from benefitfinder.ingestion.versioning import record_sha256
+from benefitfinder.jobs.__main__ import prepare_f12_inputs
 
 MIGRATIONS = Path(__file__).resolve().parents[1] / 'migrations/versions'
 
@@ -65,8 +70,30 @@ class Gov24WorkflowPostgresTest(unittest.TestCase):
 
     def prepare(self):
         return prepare_analysis_inputs(preparation_plan_from_payload(gov24_plan()),
-            PostgresAnalysisSources(self.url, source='gov24'), self.tasks.register,
+            PostgresAnalysisSources(self.url, source='gov24'), self.tasks.register_prepared,
             digest, analysis_fields)
+
+    def test_cli_preparation_keeps_official_supplement_and_completed_review(self) -> None:
+        self.prepare()
+        original = self.tasks.claim().input
+        supplement = replace(original.documents[0], id='supplement:fictional-gov24-notice',
+                             source_url='https://example.com/fictional-official-notice',
+                             document_version='fictional-notice-v1', text='가상 공식 추가 조건')
+        full_input = replace(original, documents=original.documents + (supplement,))
+        task = self.tasks.register(full_input)
+        claim = self.tasks.claim()
+        self.tasks.complete(claim, output_ref=f'f12-analysis/{claim.task_id}/{claim.token}',
+                            output_sha256='f' * 64, summary={'rules': 0})
+        before = self.tasks.get_task(task['task_id'])
+        with TemporaryDirectory() as temporary:
+            path = Path(temporary) / 'fictional-gov24-plan.json'
+            path.write_text(json.dumps(gov24_plan()))
+            with patch.dict(os.environ, {'F12_WRITE_DATABASE_URL': self.url}, clear=True):
+                self.assertEqual(prepare_f12_inputs(path),
+                                 {'targets': 1, 'registered': 0, 'replayed': 1, 'failed': 0})
+        self.assertEqual(self.tasks.get_task(task['task_id']), before)
+        self.assertIsNone(self.tasks.claim())
+        self.assertEqual(self.tasks.status()['tasks'], {'needs_review': 1, 'stale': 1})
 
     def test_id_namespace_projection_replay_and_source_change_are_isolated(self) -> None:
         self.store.save(batch({'A': 'fictional-youthcenter'}, AT))

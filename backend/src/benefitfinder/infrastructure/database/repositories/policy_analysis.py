@@ -1,5 +1,6 @@
 """Short PostgreSQL leases around offline F12 work, never around LLM calls."""
 
+from dataclasses import replace
 from datetime import datetime, timezone
 import json
 import re
@@ -50,14 +51,60 @@ class PostgresPolicyAnalysisTasks:
                                ('benefitfinder:collected_policy_generations:' + source,))
 
     def register(self, value: PolicyAnalysisInput, *, origin_recheck_id: int | None = None) -> dict:
+        return self._register(value, origin_recheck_id=origin_recheck_id)
+
+    def register_prepared(self, value: PolicyAnalysisInput) -> dict:
+        """Refresh API fields without dropping previously registered official documents."""
+        return self._register(value, retain_documents=True)
+
+    @staticmethod
+    def _retain_documents(connection: psycopg.Connection,
+                          value: PolicyAnalysisInput) -> PolicyAnalysisInput:
+        # The source and policy locks are already held. Include stale inputs: an
+        # API change invalidates the old task before automatic preparation runs.
+        row = connection.execute('''SELECT input_payload,input_sha256 FROM public.f12_analysis_tasks
+            WHERE policy_id=%s ORDER BY task_id DESC LIMIT 1''', (value.policy_id,)).fetchone()
+        if row is None:
+            return value
+        previous = analysis_input_from_payload(row['input_payload'])
+        if previous.fingerprint() != row['input_sha256']:
+            raise PolicyAnalysisStoreError('f12_invalid_input')
+        previous_sources = {(source.source, source.external_id) for source in previous.collection_sources}
+        incoming_sources = {(source.source, source.external_id) for source in value.collection_sources}
+        if not previous_sources <= incoming_sources:
+            # A single-source preparation plan must not silently remove another
+            # source dependency or acquire its lock after the policy lock.
+            raise PolicyAnalysisStoreError('f12_preparation_requires_full_input')
+        incoming = {document.id: document for document in value.documents}
+        previous_ids = {document.id for document in previous.documents}
+        documents = []
+        for previous_document in previous.documents:
+            document = incoming.get(previous_document.id, previous_document)
+            # Explicit registration may have fetched the same API text later.
+            # Never hide a newer API acceptance event, including reappearance.
+            if (document.collected_at <= previous_document.collected_at
+                and replace(document, collected_at=previous_document.collected_at) == previous_document):
+                document = previous_document
+            documents.append(document)
+        documents = tuple(documents)
+        documents += tuple(document for document in value.documents if document.id not in previous_ids)
+        try:
+            return replace(value, documents=documents)
+        except ValueError:
+            raise PolicyAnalysisStoreError('f12_preparation_requires_full_input') from None
+
+    def _register(self, value: PolicyAnalysisInput, *, origin_recheck_id: int | None = None,
+                  retain_documents: bool = False) -> dict:
         if origin_recheck_id is not None and (type(origin_recheck_id) is not int or origin_recheck_id < 1):
             raise ValueError('invalid_f12_recheck_id')
-        digest = value.fingerprint()
         try:
             with self._connect() as connection:
                 self._lock_sources(connection, value)
                 connection.execute('SELECT pg_advisory_xact_lock(hashtextextended(%s,0))',
                                    ('benefitfinder:f12_policy:' + value.policy_id,))
+                if retain_documents:
+                    value = self._retain_documents(connection, value)
+                digest = value.fingerprint()
                 now = connection.execute('SELECT clock_timestamp() AS now').fetchone()['now']
                 changed_at = datetime.min.replace(tzinfo=timezone.utc)
                 for source in value.collection_sources:
