@@ -36,6 +36,7 @@ class YouthcenterApiConfig:
     result_code_path: tuple[str, ...] | None = None
     success_codes: frozenset[str] = frozenset()
     hash_excluded_fields: frozenset[str] = frozenset()
+    hash_unordered_list_fields: frozenset[str] = frozenset()
     dropped_fields: frozenset[str] = frozenset()
     extra_params: Mapping[str, str] = field(default_factory=dict)
     max_pages: int = 500
@@ -47,8 +48,10 @@ class YouthcenterApiConfig:
             raise ValueError("page_size와 max_pages는 1 이상이어야 합니다.")
         if not self.record_list_path or not self.external_id_field:
             raise ValueError("record_list_path와 external_id_field가 필요합니다.")
-        if self.external_id_field in self.hash_excluded_fields | self.dropped_fields:
-            raise ValueError("정책 ID 필드는 해시 제외·삭제 대상이 될 수 없습니다.")
+        if self.external_id_field in (
+            self.hash_excluded_fields | self.hash_unordered_list_fields | self.dropped_fields
+        ):
+            raise ValueError("정책 ID 필드는 해시 제외·정렬·삭제 대상이 될 수 없습니다.")
         if (self.result_code_path is None) != (not self.success_codes):
             raise ValueError("result_code_path와 success_codes는 함께 설정하세요.")
         names = (self.page_param, self.page_size_param, *self.extra_params)
@@ -109,12 +112,27 @@ def stored_fields(
     return {key: value for key, value in record.items() if key not in config.dropped_fields}
 
 
+def _sorted_list_text(value: object) -> object:
+    """쉼표로 나열한 문자열의 항목 순서를 정렬한다. 문자열이 아니면 그대로 둔다."""
+    if not isinstance(value, str):
+        return value
+    return ",".join(sorted(item.strip() for item in value.split(",")))
+
+
 def hashed_fields(
     config: YouthcenterApiConfig, record: Mapping[str, object]
 ) -> dict[str, object]:
-    """변경 판정에 쓰는 필드. 조회수처럼 정책 내용과 무관하게 바뀌는 값을 뺀다."""
+    """변경 판정에 쓰는 필드.
+
+    조회수처럼 정책 내용과 무관하게 바뀌는 값을 빼고, 순서에 의미가 없는 쉼표 목록은
+    항목을 정렬한 값으로 비교한다. 저장 레코드(``stored_fields``)는 받은 그대로 둔다.
+    """
     excluded = config.hash_excluded_fields | config.dropped_fields
-    return {key: value for key, value in record.items() if key not in excluded}
+    return {
+        key: _sorted_list_text(value) if key in config.hash_unordered_list_fields else value
+        for key, value in record.items()
+        if key not in excluded
+    }
 
 
 def external_id_of(config: YouthcenterApiConfig, record: Mapping[str, object]) -> str | None:
@@ -143,6 +161,8 @@ YOUTHCENTER_POLICY_LIST = YouthcenterApiConfig(
     result_code_path=("resultCode",),
     success_codes=frozenset({"200"}),
     hash_excluded_fields=frozenset({"inqCnt"}),
+    # 2026-10-30·11-13 수집본 비교에서 같은 키워드의 순서만 바뀐 레코드가 511건이었다.
+    hash_unordered_list_fields=frozenset({"plcyKywdNm"}),
     dropped_fields=frozenset({"sprvsnInstPicNm", "operInstPicNm"}),
     extra_params={"rtnType": "json"},
 )
