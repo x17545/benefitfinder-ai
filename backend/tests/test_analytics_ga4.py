@@ -8,7 +8,7 @@ import json
 import time
 import unittest
 from typing import Any
-from unittest.mock import ANY, AsyncMock, patch
+from unittest.mock import ANY, AsyncMock, Mock, patch
 
 from benefitfinder.application.analytics import AnalyticsEventRecord
 from benefitfinder.infrastructure.ga4_analytics import (
@@ -64,10 +64,13 @@ class FakeReader:
 
 
 class FakeWriter:
-    def __init__(self) -> None:
+    def __init__(self, *, shutdown_waits: bool = False) -> None:
         self.data = b""
         self.closed = False
         self.drained = False
+        self.shutdown_waits = shutdown_waits
+        self.transport = Mock()
+        self.transport.abort.side_effect = self.close
 
     def write(self, data: bytes) -> None:
         self.data += data
@@ -79,7 +82,8 @@ class FakeWriter:
         self.closed = True
 
     async def wait_closed(self) -> None:
-        return None
+        if self.shutdown_waits:
+            await asyncio.Event().wait()
 
 
 def record(name: str, **parameters: Any) -> AnalyticsEventRecord:
@@ -351,6 +355,28 @@ class GA4AnalyticsTests(unittest.IsolatedAsyncioTestCase):
         release.set()
         await asyncio.gather(*tasks)
         self.assertEqual(transport.calls, 2)
+
+    async def test_tls_shutdown_cannot_extend_the_request_deadline(self) -> None:
+        readers = (
+            FakeReader(wait_forever=True),
+            FakeReader(status_line=b"HTTP/1.1 204 No Content\r\n"),
+        )
+        for reader in readers:
+            with self.subTest(reader=reader):
+                writer = FakeWriter(shutdown_waits=True)
+                adapter = GA4MeasurementProtocolAnalytics(
+                    MEASUREMENT_ID,
+                    API_SECRET,
+                    timeout_seconds=0.02,
+                    transport=_post_google_measurement_protocol,
+                )
+                with patch(
+                    "benefitfinder.infrastructure.ga4_analytics.asyncio.open_connection",
+                    AsyncMock(return_value=(reader, writer)),
+                ):
+                    await asyncio.wait_for(adapter.send(record("analyze_start")), timeout=0.2)
+                self.assertTrue(writer.closed)
+                writer.transport.abort.assert_called_once_with()
 
 
 if __name__ == "__main__":

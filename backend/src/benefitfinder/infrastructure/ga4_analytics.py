@@ -200,10 +200,14 @@ async def _post_google_measurement_protocol(
         parts = status_line.split(maxsplit=2)
         if len(parts) < 2 or parts[0] != b"HTTP/1.1" or not parts[1].isdigit():
             raise ValueError("invalid_ga4_response")
-        return int(parts[1])
-    finally:
+        status = int(parts[1])
         writer.close()
         await writer.wait_closed()
+        return status
+    except BaseException:
+        # Cancellation must not enter another unbounded TLS shutdown await.
+        writer.transport.abort()
+        raise
 
 
 class GA4MeasurementProtocolAnalytics:
