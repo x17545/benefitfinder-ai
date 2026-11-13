@@ -85,6 +85,57 @@ def bad_submit() -> dict[str, object]:
 
 
 class PolicyRuleAgentF12Tests(TestCase):
+    def test_explicit_mutual_receipt_ban_is_preserved(self) -> None:
+        quote = "가상 하늘 지원금과 달빛 수당은 동시에 받을 수 없습니다."
+        document = replace(self.batch.documents[0], text=quote)
+        submitted = {
+            **good_submit(),
+            "start_line": 1,
+            "end_line": 1,
+            "kind": "simultaneous_exclusion",
+            "direction": "both",
+            "condition": "동시 참여 불가",
+            "exceptions": [],
+            "period": "",
+        }
+        chat = Mock(
+            side_effect=[
+                reply(
+                    ("lookup_policy", {"name": TARGET_ALIAS}),
+                    ("find_clauses", {"query": TARGET_ALIAS}),
+                ),
+                reply(("submit_rule", submitted)),
+            ]
+        )
+        result, _ = extract_rule_batch(
+            replace(self.batch, documents=(document,)),
+            target_name=TARGET_NAME,
+            target_id=TARGET_ID,
+            target_aliases=(TARGET_ALIAS,),
+            chat=chat,
+        )
+        self.assertEqual(result.candidates[0].citations[0].quote, quote)
+        self.assertEqual(result.candidates[0].direction.value, "both")
+
+    def test_condition_text_cannot_replace_direction_code(self) -> None:
+        chat = Mock(
+            side_effect=[
+                reply(
+                    ("lookup_policy", {"name": TARGET_ALIAS}),
+                    ("find_clauses", {"query": TARGET_ALIAS}),
+                ),
+                reply(("submit_rule", {**good_submit(), "direction": "동시 참여 불가"})),
+            ]
+        )
+        with self.assertRaisesRegex(ValueError, "agent_invalid_rule_type"):
+            extract_rule_batch(
+                self.batch,
+                target_name=TARGET_NAME,
+                target_id=TARGET_ID,
+                target_aliases=(TARGET_ALIAS,),
+                chat=chat,
+            )
+
     def setUp(self) -> None:
         self.now = datetime(2026, 11, 6, tzinfo=timezone.utc)
         self.batch = make_batch(self.now)
