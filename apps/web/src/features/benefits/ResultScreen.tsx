@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { JSX } from 'react';
 import { CONDITION_STEPS, navigate, paths } from '../../app/router.ts';
+import { trackEvent } from '../../shared/analytics/events.ts';
 import { Button } from '../../shared/ui/Button.tsx';
 import { SiteFooter } from '../../shared/ui/SiteFooter.tsx';
 import { showToast } from '../../shared/ui/toastStore.ts';
@@ -132,12 +133,18 @@ export function ResultScreen(): JSX.Element {
 
   // 기간이나 현재가치를 바꾸면 추천 조합을 다시 선택한다 (기획서 4.5 3·4번)
   function changePeriod(next: Period): void {
+    if (next !== period) {
+      trackEvent({ name: 'period_change', period: next });
+    }
     setPeriod(next);
     setSelectedRank(1);
     navigate(withResultBasis(paths.result, { period: next, present_value: presentValue }), { replace: true });
   }
 
   function togglePresentValue(next: boolean): void {
+    if (next !== presentValue) {
+      trackEvent({ name: 'pv_toggle', on: next });
+    }
     setPresentValue(next);
     setSelectedRank(1);
     navigate(withResultBasis(paths.result, { period, present_value: next }), { replace: true });
@@ -173,6 +180,7 @@ export function ResultScreen(): JSX.Element {
       virtualData: analysis.status === 'done' && (analysis.isSample || result?.virtual_data === true),
     }).then((saved) => {
       if (saved) {
+        trackEvent({ name: 'image_save' });
         showToast('결과 이미지를 저장했어요');
       }
     });
@@ -290,6 +298,9 @@ export function ResultScreen(): JSX.Element {
                   topTotal={top?.total_won ?? portfolio.total_won}
                   selected={portfolio.rank === selected?.rank}
                   onSelect={() => {
+                    if (portfolio.rank !== selected?.rank) {
+                      trackEvent({ name: 'combo_select', rank: portfolio.rank });
+                    }
                     setSelectedRank(portfolio.rank);
                   }}
                   info={info}
@@ -331,6 +342,7 @@ export function ResultScreen(): JSX.Element {
             <div className="s3-policies">
               {selected.policies.map((policy) => (
                 <PolicyCard key={policy.policy_id} policy={policy} info={info} aiGenerated={result.ai_generated}
+                  rank={selected.rank}
                   virtualData={analysis.isSample || result.virtual_data === true}
                   detailHref={withResultBasis(paths.policy(policy.policy_id), { period, present_value: presentValue })} />
               ))}
@@ -341,7 +353,8 @@ export function ResultScreen(): JSX.Element {
         {portfolios.length === 0 && fallback.length > 0 ? (
           <section className="s3-section">
             <p className="s2-desc">함께 묶을 수 있는 정책이 없어서, 받을 수 있는 지원금을 하나씩 보여 드려요.</p>
-            <FallbackList items={fallback} info={info} />
+            <FallbackList items={fallback} info={info}
+              virtualData={analysis.isSample || result.virtual_data === true} />
           </section>
         ) : null}
 

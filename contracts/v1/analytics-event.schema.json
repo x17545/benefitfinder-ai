@@ -1,0 +1,340 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benefitfinder.example/contracts/v1/analytics-event.schema.json",
+  "title": "AnalyticsEventRequest",
+  "description": "F11 허용 이벤트만 전달한다. 조건 값, URL, 오류 원문, 사용자 프로필은 받지 않는다. ID는 탭 메모리에서만 생성하는 임시 UUID다.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "client_id": {
+      "type": "string",
+      "minLength": 36,
+      "maxLength": 36,
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "session_id": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9999999999
+    },
+    "event": {
+      "$ref": "#/$defs/AnalyticsEvent"
+    }
+  },
+  "required": [
+    "client_id",
+    "session_id",
+    "event"
+  ],
+  "$defs": {
+    "AnalyticsEvent": {
+      "title": "AnalyticsEvent",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "const": "consent_check"
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "const": "remember_on"
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "const": "step_view"
+            },
+            "step": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 13
+            }
+          },
+          "required": [
+            "name",
+            "step"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "const": "step_complete"
+            },
+            "step": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 13
+            }
+          },
+          "required": [
+            "name",
+            "step"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "const": "step_skip"
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "const": "analyze_start"
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "const": "analyze_success"
+            },
+            "duration_ms": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 120000
+            },
+            "portfolio_count": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 3
+            }
+          },
+          "required": [
+            "name",
+            "duration_ms",
+            "portfolio_count"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "const": "analyze_fail"
+            },
+            "code": {
+              "type": "string",
+              "enum": [
+                "http_error",
+                "invalid_request",
+                "unsupported_domain",
+                "not_found",
+                "method_not_allowed",
+                "daily_limit_exceeded",
+                "dependency_unavailable",
+                "internal_error",
+                "calculation_limit_exceeded",
+                "timeout",
+                "network_error",
+                "invalid_response",
+                "unknown"
+              ]
+            }
+          },
+          "required": [
+            "name",
+            "code"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "const": "period_change"
+            },
+            "period": {
+              "enum": [
+                "1y",
+                "2y",
+                "all"
+              ]
+            }
+          },
+          "required": [
+            "name",
+            "period"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "const": "pv_toggle"
+            },
+            "on": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "name",
+            "on"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "const": "combo_select"
+            },
+            "rank": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 3
+            }
+          },
+          "required": [
+            "name",
+            "rank"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "const": "detail_view"
+            },
+            "policy_id": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9:_-]{1,100}$"
+            }
+          },
+          "required": [
+            "name",
+            "policy_id"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "const": "apply_click"
+            },
+            "policy_id": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9:_-]{1,100}$"
+            },
+            "from": {
+              "enum": [
+                "result",
+                "detail"
+              ]
+            },
+            "rank": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 3
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "name",
+            "policy_id",
+            "from",
+            "rank"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "const": "whatif_open"
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "const": "whatif_select"
+            },
+            "scenario": {
+              "enum": [
+                "employed",
+                "income_up",
+                "independent",
+                "age_plus_one"
+              ]
+            }
+          },
+          "required": [
+            "name",
+            "scenario"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "const": "image_save"
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "const": "clear_mine"
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    }
+  }
+}

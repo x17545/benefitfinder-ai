@@ -1,6 +1,7 @@
 import type { JSX, ReactNode } from 'react';
 import { CONDITION_STEPS, navigate, paths } from '../../app/router.ts';
 import { STEP_CATEGORIES } from '../../domains/youth/conditionOptions.ts';
+import { trackEvent } from '../../shared/analytics/events.ts';
 import { Button } from '../../shared/ui/Button.tsx';
 import { StepProgress } from '../../shared/ui/StepProgress.tsx';
 import { TopBar } from '../../shared/ui/TopBar.tsx';
@@ -39,6 +40,10 @@ export function ConditionStepLayout({
   }
 
   function goNext(): void {
+    if (!canNext) {
+      return;
+    }
+    trackEvent({ name: 'step_complete', step });
     if (onNext !== undefined) {
       onNext();
       return;

@@ -1,6 +1,7 @@
 import type { JSX } from 'react';
 import { conditionLabel } from '../../domains/youth/conditionLabels.ts';
 import type { NormalizedBenefit } from '../../shared/api/benefits.ts';
+import { trackEvent } from '../../shared/analytics/events.ts';
 import { StatusChip } from '../../shared/ui/StatusChip.tsx';
 import { formatManWon, isStale, monthDay, recruitTag, sourceName } from './format.ts';
 import { PolicyExplanation } from './PolicyExplanation.tsx';
@@ -10,6 +11,8 @@ import type { PortfolioPolicy } from './resultModel.ts';
 interface PolicyCardProps {
   policy: PortfolioPolicy;
   info: ReadonlyMap<string, NormalizedBenefit>;
+  /** 지금 펼친 결과 조합의 서버 순위(1~3) */
+  rank: number;
   detailHref: string;
   virtualData: boolean;
   /** 결과 설명을 생성형 AI가 썼을 때만 AI 표시 */
@@ -39,7 +42,7 @@ function PolicyIcon({ categories }: { categories: readonly string[] }): JSX.Elem
 }
 
 /** 지원금 행 (S3 9 ~ 12번) */
-export function PolicyCard({ policy, info, aiGenerated, detailHref, virtualData }: PolicyCardProps): JSX.Element {
+export function PolicyCard({ policy, info, rank, aiGenerated, detailHref, virtualData }: PolicyCardProps): JSX.Element {
   const benefit = info.get(policy.policy_id);
   const tag = benefit !== undefined ? recruitTag(benefit.application) : null;
   const amount = policy.amount_in_period_won;
@@ -47,6 +50,8 @@ export function PolicyCard({ policy, info, aiGenerated, detailHref, virtualData 
   const showOriginal =
     amount !== null && amount !== undefined && original !== null && original !== undefined && original !== amount;
   const applyUrl = benefit?.application.url ?? policy.source.url;
+  const actualApplicationLink = !virtualData && benefit?.virtual_data !== true &&
+    benefit?.application.status === 'open' && benefit.application.url !== null;
 
   return (
     <article className="s3-policy">
@@ -90,7 +95,10 @@ export function PolicyCard({ policy, info, aiGenerated, detailHref, virtualData 
         <a className="ui-button ui-button--secondary" href={detailHref}>
           자세히 보기
         </a>
-        {!virtualData && benefit?.virtual_data !== true ? <a className="ui-button ui-button--primary" href={applyUrl} target="_blank" rel="noopener noreferrer">
+        {!virtualData && benefit?.virtual_data !== true ? <a className="ui-button ui-button--primary" href={applyUrl} target="_blank" rel="noopener noreferrer"
+          onClick={actualApplicationLink ? () => {
+            trackEvent({ name: 'apply_click', policy_id: policy.policy_id, from: 'result', rank });
+          } : undefined}>
           신청하러 가기 ↗
         </a> : null}
       </div>

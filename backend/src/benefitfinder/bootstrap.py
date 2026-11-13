@@ -8,6 +8,7 @@ directly; they receive already-assembled objects here.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Mapping
 from functools import partial
 from typing import Any
 from time import monotonic
@@ -18,12 +19,14 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from benefitfinder.api.schemas import ErrorCode, ErrorResponse
+from benefitfinder.api.v1.routers.analytics import router as analytics_router
 from benefitfinder.api.v1.routers.benefits import router as benefits_router
 from benefitfinder.api.v1.routers.health import router as health_router
 from benefitfinder.api.v1.routers.options import router as options_router
 from benefitfinder.api.v1.routers.recommendations import router as recommendations_router
 from benefitfinder.api.v1.routers.simulations import router as simulations_router
 from benefitfinder.ai.policy_explanation import GroundedPolicyExplainer
+from benefitfinder.application.analytics import AnalyticsService
 from benefitfinder.application.policy_explanations import (
     ExplanationGenerator,
     PublishedClauseRepository,
@@ -48,6 +51,7 @@ from benefitfinder.infrastructure.database.repositories.published_policies impor
 from benefitfinder.infrastructure.example_explanation_data import recommendation_explanation_data
 from benefitfinder.infrastructure.example_benefits import example_benefits
 from benefitfinder.infrastructure.example_services import example_services
+from benefitfinder.infrastructure.ga4_analytics import GA4MeasurementProtocolAnalytics
 from benefitfinder.infrastructure.ollama_explanations import OllamaExplanationCompletion
 from benefitfinder.infrastructure.published_clauses import InMemoryPublishedClauses
 from benefitfinder.infrastructure.region_codes import OfficialRegionCatalog
@@ -57,6 +61,7 @@ from benefitfinder.application.recommendation_service import MVP_ANNUAL_RATE
 NOT_FOUND_MESSAGE = "요청한 리소스를 찾을 수 없습니다."
 INVALID_REQUEST_MESSAGE = "요청 값이 올바르지 않습니다."
 INTERNAL_ERROR_MESSAGE = "내부 오류가 발생했습니다. 잠시 후 다시 시도해 주세요."
+INVALID_ANALYTICS_CONFIGURATION = "invalid_analytics_configuration"
 HTTP_ERROR_RESPONSES: dict[int, tuple[ErrorCode, str]] = {
     404: ("not_found", NOT_FOUND_MESSAGE),
     405: ("method_not_allowed", "지원하지 않는 HTTP 메서드입니다."),
@@ -71,6 +76,22 @@ def error_body(code: ErrorCode, message: str) -> dict[str, Any]:
     return ErrorResponse(request_id=str(uuid.uuid4()), code=code, message=message).model_dump()
 
 
+def analytics_service_from_environment(environ: Mapping[str, str]) -> AnalyticsService:
+    """Build the disabled default or a complete server-only GA4 configuration."""
+    enabled = environ.get("GA4_ENABLED", "")
+    if enabled in {"", "false"}:
+        return AnalyticsService()
+    if enabled != "true":
+        raise ValueError(INVALID_ANALYTICS_CONFIGURATION)
+    measurement_id = environ.get("GA4_MEASUREMENT_ID", "")
+    api_secret = environ.get("GA4_API_SECRET", "")
+    try:
+        sender = GA4MeasurementProtocolAnalytics(measurement_id, api_secret)
+    except ValueError:
+        raise ValueError(INVALID_ANALYTICS_CONFIGURATION) from None
+    return AnalyticsService(enabled=True, sender=sender)
+
+
 def create_app(
     *,
     region_catalog: RegionCatalog | None = None,
@@ -82,6 +103,7 @@ def create_app(
     service_catalog: ServiceCatalog | None = None,
     policy_repository: PublishedPolicyRepository | None = None,
     policy_database_url: str | None = None,
+    analytics_service: AnalyticsService | None = None,
 ) -> FastAPI:
     """Assemble and return a new FastAPI application.
 
@@ -218,8 +240,10 @@ def create_app(
         app.state.simulation_service = simulate_published
 
     app.state.region_catalog = region_catalog if region_catalog is not None else OfficialRegionCatalog()
+    app.state.analytics_service = analytics_service if analytics_service is not None else AnalyticsService()
 
     app.include_router(health_router)
+    app.include_router(analytics_router)
     app.include_router(options_router)
     app.include_router(recommendations_router)
     app.include_router(simulations_router)

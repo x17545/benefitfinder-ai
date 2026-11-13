@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import type { JSX } from 'react';
 import { navigate, paths } from '../../app/router.ts';
+import { trackEvent } from '../../shared/analytics/events.ts';
 import { Button } from '../../shared/ui/Button.tsx';
 import { SiteFooter } from '../../shared/ui/SiteFooter.tsx';
 import { clearMyData } from './clearMyData.ts';
-import { updateFlowState, useFlowState } from './flowStore.ts';
+import { getFlowState, updateFlowState, useFlowState } from './flowStore.ts';
 import { SavedConditionsCard } from './SavedConditionsCard.tsx';
 import { loadSavedConditions } from './savedConditions.ts';
 import './StartScreen.css';
@@ -74,7 +75,11 @@ export function StartScreen(): JSX.Element {
                 type="checkbox"
                 checked={consent}
                 onChange={(event) => {
-                  updateFlowState({ consent: event.target.checked });
+                  const checked = event.target.checked;
+                  if (!getFlowState().consent && checked) {
+                    trackEvent({ name: 'consent_check' });
+                  }
+                  updateFlowState({ consent: checked });
                 }}
               />
               <label htmlFor="s1-consent">
@@ -91,7 +96,11 @@ export function StartScreen(): JSX.Element {
                 type="checkbox"
                 checked={remember}
                 onChange={(event) => {
-                  updateFlowState({ remember: event.target.checked });
+                  const checked = event.target.checked;
+                  if (!getFlowState().remember && checked) {
+                    trackEvent({ name: 'remember_on' });
+                  }
+                  updateFlowState({ remember: checked });
                 }}
               />
               <label htmlFor="s1-remember">

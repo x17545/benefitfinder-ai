@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { JSX } from 'react';
 import { CONDITION_STEPS, navigate, paths } from '../../app/router.ts';
 import type { ChangeSimulationRequest, ChangeSimulationResult, SimulationScenario } from '../../shared/api/simulations.ts';
+import { trackEvent } from '../../shared/analytics/events.ts';
 import { ChoiceChip, ChoiceGroup } from '../../shared/ui/ChoiceChip.tsx';
 import { SiteFooter } from '../../shared/ui/SiteFooter.tsx';
 import { TopBar } from '../../shared/ui/TopBar.tsx';
@@ -23,10 +24,18 @@ export function WhatIfScreen(): JSX.Element {
   const { answers, consent } = useFlowState();
   const analysis = useAnalysis();
   const [scenario, setScenario] = useState<SimulationScenario>('employed');
+  const trackedOpen = useRef(false);
   const basis = readResultBasis(window.location.search);
 
   const missing = missingSteps(answers);
   const hasConditions = consent && missing.length === 0 && analysis.status === 'done';
+  useEffect(() => {
+    if (!hasConditions || trackedOpen.current) {
+      return;
+    }
+    trackedOpen.current = true;
+    trackEvent({ name: 'whatif_open' });
+  }, [hasConditions]);
   // '독립하면'인데 이미 혼자 살면 계산할 것이 없다 (기획서 4.6)
   const alreadyAlone = scenario === 'independent' && answers.living === 'alone';
   const request: ChangeSimulationRequest | null =
@@ -68,6 +77,7 @@ export function WhatIfScreen(): JSX.Element {
                   selected={scenario === chip.value}
                   onSelect={() => {
                     if (chip.value !== scenario) {
+                      trackEvent({ name: 'whatif_select', scenario: chip.value });
                       setScenario(chip.value);
                       retry();
                     }

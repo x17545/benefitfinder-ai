@@ -1,0 +1,9 @@
+{
+  "client_id": "00000000-0000-4000-8000-000000000001",
+  "session_id": 1794580000,
+  "event": {
+    "name": "analyze_success",
+    "duration_ms": 1200,
+    "portfolio_count": 3
+  }
+}
