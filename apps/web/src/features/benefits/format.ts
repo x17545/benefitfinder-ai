@@ -1,5 +1,6 @@
 // S3 화면에서 쓰는 글자 만들기. 계산은 하지 않고 서버 값을 읽기 좋게만 바꾼다.
 import type { NormalizedBenefit } from '../../shared/api/benefits.ts';
+import type { AmountBreakdown } from '../../shared/api/generated/recommendation-response.ts';
 
 export type Period = '1y' | '2y' | 'all';
 
@@ -16,6 +17,11 @@ export function formatManWon(won: number): string {
     return `${man.toLocaleString('ko-KR')}만 원`;
   }
   return `약 ${Math.round(man).toLocaleString('ko-KR')}만 원`;
+}
+
+/** PNG·보조 문구용. 서버가 준 두 금액을 더하거나 할인하지 않고 그대로 나열한다. */
+export function amountBreakdownText(value: AmountBreakdown): string {
+  return `현금 지급 예정(할인 전) ${formatManWon(value.cash_in_period_won)} · 만기 전 예상 적립 ${formatManWon(value.expected_accrual_won)}`;
 }
 
 /** "youth:example:P1" → "P1" (이름을 아직 모를 때만 쓴다) */

@@ -262,6 +262,12 @@ class CatalogRecord(Record):
     conditions: list[ExecutableCondition]
     payments: list[Payment] | None = Field(max_length=1200)
     payment_evidence: list[Evidence]
+    maturity_accruals: list[Payment] | None = Field(
+        default=None, min_length=1, max_length=1200, exclude_if=lambda value: value is None
+    )
+    maturity_accrual_evidence: list[Evidence] | None = Field(
+        default=None, min_length=1, exclude_if=lambda value: value is None
+    )
     unresolved_combination_rules: bool
     source_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     explanation_clauses: list[ExplanationClause] | None = Field(
@@ -297,6 +303,7 @@ class CatalogRecord(Record):
         ]
         evidence += [item for conflict in benefit.conflicts for item in conflict.evidence]
         evidence += self.payment_evidence
+        evidence += self.maturity_accrual_evidence or []
         evidence += explanation_citations(self.explanation_clauses)
         if benefit.application_guide is not None:
             evidence += benefit.application_guide.citations()
@@ -304,6 +311,13 @@ class CatalogRecord(Record):
             raise ValueError("evidence_source_mismatch")
         if any(c.policy_id == benefit.id for c in benefit.conflicts):
             raise ValueError("self_conflict")
+        amount = benefit.benefit_amount
+        if (self.maturity_accruals is None) != (self.maturity_accrual_evidence is None):
+            raise ValueError("maturity_requires_accrual_evidence")
+        if self.maturity_accruals is not None and (
+            amount is None or amount.type != "maturity" or amount.pay_timing != "at_maturity"
+        ):
+            raise ValueError("accruals_require_maturity_amount")
         if benefit.reviewed:
             amount = benefit.benefit_amount
             if (
@@ -318,13 +332,28 @@ class CatalogRecord(Record):
             total = sum(payment.amount_won for payment in self.payments)
             if total > MAX_WON or amount.max_total_won != total:
                 raise ValueError("payment_total_mismatch")
-            # Accrued maturity matching is not yet a supported nominal schedule.
-            if amount.type == "maturity" or amount.pay_timing == "at_maturity":
-                raise ValueError("maturity_requires_separate_accrual_review")
             schedule = sorted((p.month, p.amount_won) for p in self.payments)
             if amount.type is None or amount.amount_won is None:
                 raise ValueError("reviewed_policy_requires_amount_metadata")
-            if amount.pay_timing == "monthly_from_start":
+            if amount.type == "maturity" or amount.pay_timing == "at_maturity":
+                if (
+                    amount.type != "maturity"
+                    or amount.pay_timing != "at_maturity"
+                    or amount.period_months is None
+                    or amount.amount_won != total
+                    or schedule != [(amount.period_months, total)]
+                    or not self.maturity_accruals
+                    or not self.maturity_accrual_evidence
+                ):
+                    raise ValueError("maturity_schedule_requires_reviewed_accruals")
+                accruals = self.maturity_accruals
+                if (
+                    len({p.month for p in accruals}) != len(accruals)
+                    or any(p.month < 1 or p.month > amount.period_months for p in accruals)
+                    or sum(p.amount_won for p in accruals) != total
+                ):
+                    raise ValueError("maturity_accrual_schedule_mismatch")
+            elif amount.pay_timing == "monthly_from_start":
                 if (
                     amount.type != "monthly"
                     or amount.period_months is None
@@ -366,6 +395,9 @@ class CatalogRecord(Record):
             if self.payments is None
             else tuple((payment.month, payment.amount_won) for payment in self.payments),
             published_at=published_at.isoformat(),
+            maturity_accruals=None if self.maturity_accruals is None else tuple(
+                (payment.month, payment.amount_won) for payment in self.maturity_accruals
+            ),
         )
 
 
@@ -387,6 +419,7 @@ def validate_source_text(record: CatalogRecord, source_text: str) -> None:
     evidence = [e for c in record.benefit.eligibility_conditions for e in c.evidence]
     evidence += [e for c in record.benefit.conflicts for e in c.evidence]
     evidence += record.payment_evidence
+    evidence += record.maturity_accrual_evidence or []
     evidence += explanation_citations(record.explanation_clauses)
     if record.benefit.application_guide is not None:
         evidence += record.benefit.application_guide.citations()

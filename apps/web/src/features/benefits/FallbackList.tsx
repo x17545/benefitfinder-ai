@@ -1,6 +1,7 @@
 import type { JSX } from 'react';
 import { paths } from '../../app/router.ts';
 import type { NormalizedBenefit } from '../../shared/api/benefits.ts';
+import { AmountBreakdown } from './AmountBreakdown.tsx';
 import { formatManWon, recruitTag, recruitmentState } from './format.ts';
 import { policyName } from './resultModel.ts';
 import type { ResultView } from './resultModel.ts';
@@ -45,6 +46,9 @@ export function FallbackList({ items, info }: FallbackListProps): JSX.Element {
                   {tag !== null ? <span className={`s3-tag s3-tag--${tag.tone}`}>{tag.label}</span> : null}
                 </span>
               </span>
+              {item.amount_breakdown !== undefined ? (
+                <AmountBreakdown value={item.amount_breakdown} className="s3-policy__breakdown" />
+              ) : null}
               {item.reason !== undefined && item.reason !== '' ? (
                 <span className="s3-policy__reason">{item.reason}</span>
               ) : null}

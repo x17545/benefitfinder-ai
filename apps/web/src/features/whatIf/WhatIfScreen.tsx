@@ -6,6 +6,7 @@ import { ChoiceChip, ChoiceGroup } from '../../shared/ui/ChoiceChip.tsx';
 import { SiteFooter } from '../../shared/ui/SiteFooter.tsx';
 import { TopBar } from '../../shared/ui/TopBar.tsx';
 import { useAnalysis } from '../benefits/analysisStore.ts';
+import { AmountBreakdown } from '../benefits/AmountBreakdown.tsx';
 import { formatManWon, shortPolicyId } from '../benefits/format.ts';
 import { usePolicyInfo } from '../benefits/policyInfo.ts';
 import { readResultBasis, withResultBasis } from '../benefits/resultBasis.ts';
@@ -121,7 +122,7 @@ interface SimulationResultProps {
   presentValue: boolean;
 }
 
-function SimulationResult({ result, isSample, presentValue }: SimulationResultProps): JSX.Element {
+export function SimulationResult({ result, isSample, presentValue }: SimulationResultProps): JSX.Element {
   const lost = result.lost ?? [];
   const gained = result.gained ?? [];
   const info = usePolicyInfo(isSample ? [] : [...lost, ...gained].map((item) => item.policy_id));
@@ -143,12 +144,21 @@ function SimulationResult({ result, isSample, presentValue }: SimulationResultPr
         <p className="s4-dev-note">입력 조건을 바탕으로 가상 정책을 다시 계산했어요. 실제 받을 수 있는 지원금이 아니에요.</p>
       ) : null}
 
+      {!isSample && presentValue ? (
+        <p className="s4-note">현재가치 합계와 순위에는 만기 전 예상 적립액을 넣지 않았어요.</p>
+      ) : null}
+
       <div className="s4-grid">
         {/* 2 총액 비교 */}
         <section className="ui-card s4-card">
           <dl className="s4-rows">
             <dt>현재 추천 조합 ({periodShort(result.basis_period)}{!isSample && presentValue ? ' · 현재가치' : ''})</dt>
-            <dd>{formatManWon(result.before_total_won)}</dd>
+            <dd>
+              {formatManWon(result.before_total_won)}
+              {result.before_amount_breakdown !== undefined ? (
+                <AmountBreakdown value={result.before_amount_breakdown} variant="compact" align="end" />
+              ) : null}
+            </dd>
             <dt>바뀐 뒤 추천 조합</dt>
             <dd>
               {formatManWon(result.after_total_won)}{' '}
@@ -157,7 +167,28 @@ function SimulationResult({ result, isSample, presentValue }: SimulationResultPr
               ) : (
                 <span className="s4-muted">(변화 없음)</span>
               )}
+              {result.after_amount_breakdown !== undefined ? (
+                <AmountBreakdown value={result.after_amount_breakdown} variant="compact" align="end" />
+              ) : null}
             </dd>
+            {result.annual.before_amount_breakdown !== undefined || result.annual.after_amount_breakdown !== undefined ? (
+              <>
+                <dt>현재 연간 지원금</dt>
+                <dd>
+                  {formatManWon(result.annual.before_won)}
+                  {result.annual.before_amount_breakdown !== undefined ? (
+                    <AmountBreakdown value={result.annual.before_amount_breakdown} variant="compact" align="end" />
+                  ) : null}
+                </dd>
+                <dt>바뀐 뒤 연간 지원금</dt>
+                <dd>
+                  {formatManWon(result.annual.after_won)}
+                  {result.annual.after_amount_breakdown !== undefined ? (
+                    <AmountBreakdown value={result.annual.after_amount_breakdown} variant="compact" align="end" />
+                  ) : null}
+                </dd>
+              </>
+            ) : null}
           </dl>
         </section>
 
@@ -208,6 +239,9 @@ function SimulationResult({ result, isSample, presentValue }: SimulationResultPr
               {item.reason}
               {item.amount_won !== null && item.amount_won !== undefined ? ` · ${formatManWon(item.amount_won)}` : ''}
             </p>
+            {item.amount_breakdown !== undefined ? (
+              <AmountBreakdown value={item.amount_breakdown} variant="compact" />
+            ) : null}
           </section>
         ))}
 
@@ -222,6 +256,9 @@ function SimulationResult({ result, isSample, presentValue }: SimulationResultPr
               {item.reason}
               {item.amount_won !== null && item.amount_won !== undefined ? ` · ${formatManWon(item.amount_won)}` : ''}
             </p>
+            {item.amount_breakdown !== undefined ? (
+              <AmountBreakdown value={item.amount_breakdown} variant="compact" />
+            ) : null}
           </section>
         ))}
 

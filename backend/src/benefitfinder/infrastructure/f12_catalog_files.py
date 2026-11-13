@@ -166,6 +166,10 @@ def prepare_f12_release(
         if (set(map(_digest, payment_evidence)) != set(_digest(e.model_dump(mode="json")) for e in record.payment_evidence)
             or (record.benefit.reviewed and payment_kinds != {"amount", "timing"})):
             raise ValueError("f12_payment_mapping_mismatch")
+        if not {
+            _digest(e.model_dump(mode="json")) for e in record.maturity_accrual_evidence or []
+        } <= set(map(_digest, payment_evidence)):
+            raise ValueError("f12_maturity_accrual_mapping_mismatch")
 
     # Explanations may reuse a mapped item, but never count as resolving its rule.
     resolved = set(used)

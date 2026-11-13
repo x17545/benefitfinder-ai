@@ -2,6 +2,7 @@ import type { JSX } from 'react';
 import { conditionLabel } from '../../domains/youth/conditionLabels.ts';
 import type { NormalizedBenefit } from '../../shared/api/benefits.ts';
 import { StatusChip } from '../../shared/ui/StatusChip.tsx';
+import { AmountBreakdown } from './AmountBreakdown.tsx';
 import { formatManWon, isStale, monthDay, recruitTag, recruitmentState, sourceName } from './format.ts';
 import { PolicyExplanation } from './PolicyExplanation.tsx';
 import { policyName } from './resultModel.ts';
@@ -73,6 +74,10 @@ export function PolicyCard({ policy, info, aiGenerated, detailHref, virtualData 
             {tag !== null ? <span className={`s3-tag s3-tag--${tag.tone}`}>{tag.label}</span> : null}
           </span>
         </span>
+
+        {policy.amount_breakdown !== undefined ? (
+          <AmountBreakdown value={policy.amount_breakdown} className="s3-policy__breakdown" />
+        ) : null}
 
         {policy.eligibility.length > 0 ? (
           <span className="s3-policy__chips">

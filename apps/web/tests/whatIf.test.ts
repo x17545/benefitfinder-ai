@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import simulationText from '../../../contracts/fixtures/simulation-response.json?raw';
 import { isSimulationResult, postSimulation } from '../src/shared/api/simulations.ts';
-import type { ChangeSimulationRequest } from '../src/shared/api/simulations.ts';
+import type { ChangeSimulationRequest, ChangeSimulationResult } from '../src/shared/api/simulations.ts';
 import { manText, netChange, rateBarWidth, rateSentence, signedMan } from '../src/features/whatIf/whatIfModel.ts';
 import { toSimulationState } from '../src/features/whatIf/useSimulation.ts';
 import { readResultBasis, withResultBasis } from '../src/features/benefits/resultBasis.ts';
@@ -23,6 +23,58 @@ describe('S4 상황 변화 결과', () => {
   it('계약 예제는 올바른 상황 변화 결과다', () => {
     expect(isSimulationResult(fixture)).toBe(true);
     expect(isSimulationResult({ scenario: 'income_up' })).toBe(false);
+  });
+
+  it('선택 기간·연간·끊김/새 정책의 선택적 적립 구분을 엄격히 검사한다', () => {
+    if (!isSimulationResult(fixture)) throw new Error('invalid fixture');
+    const breakdown = { cash_in_period_won: 200_000, expected_accrual_won: 800_000 };
+    const linked = structuredClone(fixture);
+    linked.before_amount_breakdown = breakdown;
+    linked.after_amount_breakdown = breakdown;
+    linked.annual.before_amount_breakdown = breakdown;
+    linked.annual.after_amount_breakdown = breakdown;
+    if (linked.lost?.[0] !== undefined) linked.lost[0].amount_breakdown = breakdown;
+    if (linked.gained?.[0] !== undefined) linked.gained[0].amount_breakdown = breakdown;
+    expect(isSimulationResult(linked)).toBe(true);
+
+    const malformed = { ...breakdown, total_won: 1_000_000 } as unknown as NonNullable<
+      ChangeSimulationResult['before_amount_breakdown']
+    >;
+    const cases: { name: string; apply: (value: ChangeSimulationResult) => void }[] = [
+      { name: 'before total', apply: (value) => { value.before_amount_breakdown = malformed; } },
+      { name: 'after total', apply: (value) => { value.after_amount_breakdown = malformed; } },
+      { name: 'annual before', apply: (value) => { value.annual.before_amount_breakdown = malformed; } },
+      { name: 'annual after', apply: (value) => { value.annual.after_amount_breakdown = malformed; } },
+      {
+        name: 'lost',
+        apply: (value) => {
+          if (value.lost?.[0] === undefined) throw new Error('fixture lost item missing');
+          value.lost[0].amount_breakdown = malformed;
+        },
+      },
+      {
+        name: 'gained',
+        apply: (value) => {
+          if (value.gained?.[0] === undefined) throw new Error('fixture gained item missing');
+          value.gained[0].amount_breakdown = malformed;
+        },
+      },
+    ];
+    for (const item of cases) {
+      const candidate = structuredClone(linked);
+      item.apply(candidate);
+      expect(isSimulationResult(candidate), item.name).toBe(false);
+    }
+
+    const missingLostAmount = structuredClone(linked);
+    if (missingLostAmount.lost?.[0] === undefined) throw new Error('fixture lost item missing');
+    missingLostAmount.lost[0].amount_won = null;
+    expect(isSimulationResult(missingLostAmount)).toBe(false);
+
+    const missingGainedAmount = structuredClone(linked);
+    if (missingGainedAmount.gained?.[0] === undefined) throw new Error('fixture gained item missing');
+    missingGainedAmount.gained[0].amount_won = null;
+    expect(isSimulationResult(missingGainedAmount)).toBe(false);
   });
 
   it('실제 순증가는 소득 증가에서 줄어든 연간 지원금을 뺀다 (기획서 정답 F)', () => {

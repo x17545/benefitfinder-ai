@@ -23,6 +23,7 @@ import {
   applyPeriod,
   diagnosisSummary,
   findMyPolicyResult,
+  payoutTimingSummary,
 } from './policyDetailModel.ts';
 import { usePolicyDetail } from './usePolicyDetail.ts';
 import { ApplicationGuide } from './ApplicationGuide.tsx';
@@ -114,6 +115,7 @@ function PolicyDetail({ benefit, isSample, mine, serviceDiagnosis, hasAnalysis, 
   const diagnosis = service !== null ? serviceDiagnosis : mine?.eligibility ?? null;
   const reviewItems = diagnosis?.filter((item) => item.status === 'needs_review') ?? [];
   const serviceValue = service?.estimated_value_won ?? null;
+  const payoutTiming = payoutTimingSummary(benefit.benefit_amount);
 
   function conflictName(id: string): string {
     return (isSample ? devSampleBenefit(id)?.title : conflictInfo.get(id)?.title) ?? `정책 ${shortPolicyId(id)}`;
@@ -204,6 +206,7 @@ function PolicyDetail({ benefit, isSample, mine, serviceDiagnosis, hasAnalysis, 
             <section className="ui-card s5-card">
               <h2 className="s5-card__title">지원 내용</h2>
               <p className="s5-amount">{amountSummary(benefit.benefit_amount)}</p>
+              {payoutTiming !== null ? <p className="s5-timing">{payoutTiming}</p> : null}
               {benefit.lifetime_once === true ? <p className="s5-muted">평생 한 번만 받을 수 있어요</p> : null}
             </section>
           )}

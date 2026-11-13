@@ -105,6 +105,19 @@ class F12CatalogFilesTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'f12_approved_export_mismatch'):
             self.prepare()
 
+    def test_maturity_accruals_require_approved_payment_citations(self):
+        self.data['benefit']['benefit_amount'].update(type='maturity', pay_timing='at_maturity')
+        self.data['maturity_accruals'] = deepcopy(self.data['payments'])
+        self.data['maturity_accrual_evidence'] = deepcopy(self.data['payment_evidence'])
+        self.save('record', self.data)
+        self.assertEqual(self.prepare().maturity_accruals[0].amount_won, 1_000_000)
+        self.data['maturity_accrual_evidence'] = deepcopy(
+            self.data['benefit']['eligibility_conditions'][0]['evidence'],
+        )
+        self.save('record', self.data)
+        with self.assertRaisesRegex(ValueError, 'f12_maturity_accrual_mapping_mismatch'):
+            self.prepare()
+
     def test_source_cannot_be_substituted(self):
         self.data['benefit']['source']['url'] = 'https://other.example/'
         for evidence in self.data['payment_evidence'] + self.data['benefit']['eligibility_conditions'][0]['evidence']:

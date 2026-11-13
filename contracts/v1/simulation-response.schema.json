@@ -61,6 +61,12 @@
           "type": "integer",
           "minimum": 0,
           "description": "연간 환산 지원금(변화 후)."
+        },
+        "before_amount_breakdown": {
+          "$ref": "common.schema.json#/$defs/amount_breakdown"
+        },
+        "after_amount_breakdown": {
+          "$ref": "common.schema.json#/$defs/amount_breakdown"
         }
       },
       "description": "연간 비율 계산용 지원금(annual). 실효비율 분자는 annual 감소분이다."
@@ -107,6 +113,12 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
+        "dependentSchemas": {
+          "amount_breakdown": {
+            "required": ["amount_won"],
+            "properties": {"amount_won": {"type": "integer"}}
+          }
+        },
         "required": [
           "policy_id",
           "reason"
@@ -126,6 +138,9 @@
               "null"
             ],
             "minimum": 0
+          },
+          "amount_breakdown": {
+            "$ref": "common.schema.json#/$defs/amount_breakdown"
           }
         }
       },
@@ -136,6 +151,12 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
+        "dependentSchemas": {
+          "amount_breakdown": {
+            "required": ["amount_won"],
+            "properties": {"amount_won": {"type": "integer"}}
+          }
+        },
         "required": [
           "policy_id",
           "reason"
@@ -155,6 +176,9 @@
               "null"
             ],
             "minimum": 0
+          },
+          "amount_breakdown": {
+            "$ref": "common.schema.json#/$defs/amount_breakdown"
           }
         }
       },
@@ -205,6 +229,12 @@
       "type": "string",
       "minLength": 1,
       "description": "예: 선택 기간 카드합과 연간 환산, 세금/4대보험 제외, 연간 지원금 변화/연간 소득 증가 기준."
+    },
+    "before_amount_breakdown": {
+      "$ref": "common.schema.json#/$defs/amount_breakdown"
+    },
+    "after_amount_breakdown": {
+      "$ref": "common.schema.json#/$defs/amount_breakdown"
     }
   }
 }

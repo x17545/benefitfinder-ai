@@ -76,9 +76,13 @@
 }
 
 .s4-rows dd {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   margin: 0;
   text-align: right;
   font-weight: 700;
+  min-width: 0;
 }
 
 .s4-up {
