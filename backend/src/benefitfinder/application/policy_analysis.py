@@ -128,7 +128,7 @@ class PolicyAnalysisResult:
 
 # Increment when extraction semantics change and completed inputs need fresh analysis.
 # This is execution identity, not a change to the official source fingerprint.
-POLICY_ANALYSIS_VERSION = 3
+POLICY_ANALYSIS_VERSION = 4
 
 
 @dataclass(frozen=True)

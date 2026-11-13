@@ -9,11 +9,11 @@ from benefitfinder.ai.policy_evidence_context import field_kind
 def evidence_kind(text: str, kind: str, start: int, end: int) -> str:
     source_kind = field_kind(text, start, end)
     quote = ''.join(text.splitlines(keepends=True)[start - 1:end])
-    if source_kind in {'application', 'program_period'}:
+    if source_kind in {'application', 'program_period', 'exceptions'}:
         return source_kind
     if source_kind == 'service':
         return 'service'
-    if source_kind == 'eligibility' and kind in {'amount', 'timing', 'service'}:
+    if source_kind == 'eligibility' and kind != 'source_context':
         return 'eligibility'
     if kind == 'timing' and not payment_context(quote):
         if re.search(r'신청|접수|예약', quote):

@@ -1047,7 +1047,7 @@ class _AnalysisRun:
             typed_api = bool(api_field_ranges(document.text))
             for source_field in source_field_ranges(document.text):
                 start, end = source_field.start_line, source_field.end_line
-                if start == end:
+                if start == end and not source_field.has_inline_content:
                     continue
                 if not set(range(start, end + 1)) <= prior.shown[document.id]:
                     continue

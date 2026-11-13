@@ -12,6 +12,7 @@ class EvidenceFieldRange:
     start_line: int
     end_line: int
     kind: str
+    has_inline_content: bool = False
 
 
 _FIELD_HEADER = re.compile(r"^\s*\[([A-Za-z][A-Za-z0-9_]*)\]\s*$")
@@ -71,10 +72,12 @@ _FIELD_KINDS = {
 _PROSE_FIELD_KINDS = {
     **dict.fromkeys(('지원대상', '신청대상', '신청자격', '지원기준', '소득요건', '재산요건'), 'eligibility'),
     **dict.fromkeys(('신청방법', '접수방법', '신청기간', '접수기간', '신청절차',
+                     '지원절차', '이용절차', '신청및접수', '선정', '선정방법',
                      '지원방법', '상담방법', '제출서류', '구비서류'), 'application'),
-    **dict.fromkeys(('사업기간', '운영기간'), 'program_period'),
+    **dict.fromkeys(('사업기간', '운영기간', '지원기간'), 'program_period'),
     **dict.fromkeys(('지원내용', '지원금액', '지급방법', '지급시기', '지급기간'), 'support'),
-    **dict.fromkeys(('이용료', '이용일시', '이용시간', '운영시간', '서비스내용'), 'service'),
+    **dict.fromkeys(('이용료', '이용일시', '이용시간', '운영시간',
+                     '서비스내용', '서비스상세내용'), 'service'),
     **dict.fromkeys(('유의사항', '지원제외', '지원제외대상', '제외대상'), 'exceptions'),
 }
 _EVIDENCE_KINDS = frozenset(
@@ -153,6 +156,15 @@ _SECTION_HEADINGS = frozenset(
         "비고",
     }
 )
+_INLINE_LABEL = re.compile(
+    r'(?<!\w)(?:' + '|'.join(
+        r'\s*'.join(re.escape(char) for char in label)
+        for label in sorted(_PROSE_FIELD_KINDS, key=len, reverse=True)
+    ) + r')(?!\w)'
+)
+_INLINE_PREFIX = re.compile(r'[\s:：\-–—•·※*＊❍○□■◆◇▶▷()\[\].,~∼～/0-9①-⑳ⅠⅡⅢⅣⅤⅥⅦⅧⅨⅩ#]*')
+_INLINE_MARKER = re.compile(r'[❍○□■◆◇▶▷]|^\s*(?:\d{1,2}[.)]|[①-⑳]|#{1,6}\s)')
+_FOLLOWING_INLINE_MARKER = re.compile(r'(?:[❍○□■◆◇▶▷]|\d{1,2}[.)]|[①-⑳])\s*$')
 
 
 def _source_lines(text: str) -> list[str]:
@@ -198,14 +210,44 @@ def api_field_ranges(text: str) -> tuple[EvidenceFieldRange, ...]:
 def _prose_label(body: str) -> str:
     label = re.sub(r'^#{1,6}\s+', '', body.strip())
     label = _SECTION_LABEL_PREFIX.sub('', label).strip().rstrip(':：').strip()
+    label = re.sub(r'^\d{1,2}\s+', '', label)
     return ''.join(label.split())
 
 
+def _prose_section(body: str) -> tuple[str, str | None, bool] | None:
+    label = _prose_label(body)
+    if label in _PROSE_FIELD_KINDS:
+        return label, _PROSE_FIELD_KINDS[label], False
+    matches = list(_INLINE_LABEL.finditer(body))
+    if not matches:
+        return None
+    first = matches[0]
+    prefix, suffix = body[:first.start()], body[first.end():].strip()
+    if _INLINE_PREFIX.fullmatch(prefix) is None or not (
+        ':' in prefix or '：' in prefix or suffix.startswith((':', '：'))
+        or _INLINE_MARKER.search(prefix)
+    ):
+        return None
+    # Mixed roles on one line stop the preceding section; the model must select
+    # their context explicitly rather than assigning the whole line one role.
+    roles = {_PROSE_FIELD_KINDS[''.join(first.group().split())]}
+    for match in matches[1:]:
+        if (body[match.end():].lstrip().startswith((':', '：'))
+            or _FOLLOWING_INLINE_MARKER.search(body[:match.start()])):
+            roles.add(_PROSE_FIELD_KINDS[''.join(match.group().split())])
+    if len(roles) != 1:
+        return 'ambiguous', None, True
+    label = ''.join(first.group().split())
+    has_content = re.search(r'[A-Za-z0-9가-힣]', prefix + suffix) is not None
+    return label, _PROSE_FIELD_KINDS[label], has_content
+
+
 def source_field_ranges(text: str) -> tuple[EvidenceFieldRange, ...]:
-    """Use API fields, or explicit standalone prose headings and their bodies.
+    """Use API fields, or explicit prose labels and their unchanged source bodies.
 
     Unknown Markdown/chapter/standard section headings still stop a known section.
-    Inline labels and unlabeled prose are left for the model and human review.
+    Inline labels require structural markers/colons, including PDF date prefixes.
+    Unlabeled or ambiguous prose is left for the model and human review.
     """
     fields = api_field_ranges(text)
     if fields:
@@ -214,18 +256,24 @@ def source_field_ranges(text: str) -> tuple[EvidenceFieldRange, ...]:
     boundaries = []
     for number, line in enumerate(lines, 1):
         body = _line_body(line)
-        label = _prose_label(body)
-        kind = _PROSE_FIELD_KINDS.get(label)
-        if kind is not None or _is_section_heading(body):
-            boundaries.append((number, label, kind))
+        section = _prose_section(body)
+        if section is not None:
+            if (boundaries and section[2]
+                and section[:2] == boundaries[-1][1:3]):
+                # A numbered step repeating its enclosing title is still part
+                # of that section, including the preceding conditions.
+                continue
+            boundaries.append((number, *section))
+        elif _is_section_heading(body):
+            boundaries.append((number, '', None, False))
     result = []
-    for index, (start, label, kind) in enumerate(boundaries):
+    for index, (start, label, kind, has_inline_content) in enumerate(boundaries):
         if kind is None:
             continue
         end = boundaries[index + 1][0] - 1 if index + 1 < len(boundaries) else len(lines)
         while end > start and not _line_body(lines[end - 1]).strip():
             end -= 1
-        result.append(EvidenceFieldRange(label, start, end, kind))
+        result.append(EvidenceFieldRange(label, start, end, kind, has_inline_content))
     return tuple(result)
 
 
@@ -254,6 +302,8 @@ def field_kind(text: str, start: int, end: int) -> str | None:
 
 def _is_section_heading(body: str) -> bool:
     stripped = body.strip()
+    if _prose_section(stripped) is not None:
+        return True
     if (
         _MARKDOWN_HEADING.match(stripped)
         or _CHAPTER_HEADING.match(stripped)
