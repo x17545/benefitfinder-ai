@@ -29,16 +29,24 @@ class AnalysisSource:
 
 
 @dataclass(frozen=True)
+class AnalysisDocumentSource:
+    document_id: str
+    source: str
+    external_id: str
+
+
+@dataclass(frozen=True)
 class PolicyAnalysisInput:
     policy_id: str
     documents: tuple[SourceDocument, ...]
     policies: tuple[AnalysisPolicy, ...]
     collection_sources: tuple[AnalysisSource, ...]
+    document_sources: tuple[AnalysisDocumentSource, ...] = ()
 
     def __post_init__(self) -> None:
         try:
             if not all(isinstance(items, tuple) for items in (
-                self.documents, self.policies, self.collection_sources
+                self.documents, self.policies, self.collection_sources, self.document_sources
             )):
                 raise ValueError
             if not 1 <= len(self.documents) <= 4 or not 1 <= len(self.policies) <= 100:
@@ -81,12 +89,32 @@ class PolicyAnalysisInput:
                     or re.fullmatch(r"[0-9a-f]{64}", source.material_sha256) is None):
                     raise ValueError
                 bindings.add(key)
+            if len(self.document_sources) > len(self.documents):
+                raise ValueError
+            bound_documents = set()
+            for binding in self.document_sources:
+                if (not isinstance(binding, AnalysisDocumentSource)
+                    or any(type(value) is not str for value in (
+                        binding.document_id, binding.source, binding.external_id
+                    ))
+                    or not 1 <= len(binding.document_id) <= 120
+                    or not binding.document_id.strip() or not binding.document_id.isprintable()
+                    or binding.document_id in bound_documents
+                    or binding.document_id not in document_ids
+                    or binding.source not in COLLECTED_POLICY_SOURCES
+                    or not 1 <= len(binding.external_id) <= 200
+                    or not binding.external_id.strip() or not binding.external_id.isprintable()
+                    or (binding.source, binding.external_id) not in bindings):
+                    raise ValueError
+                bound_documents.add(binding.document_id)
             self.fingerprint()
         except (AttributeError, TypeError, ValueError, RecursionError, OverflowError):
             raise ValueError("invalid_policy_analysis_input") from None
 
     def payload(self) -> dict[str, object]:
         result = asdict(self)
+        if not self.document_sources:
+            del result["document_sources"]
         for document, original in zip(result["documents"], self.documents, strict=True):
             document["collected_at"] = original.collected_at.isoformat()
         return result

@@ -5,11 +5,12 @@ from psycopg.conninfo import conninfo_to_dict
 from psycopg.rows import dict_row
 
 from benefitfinder.application.prepare_policy_analysis import PreparationSource
+from benefitfinder.application.collected_policies import COLLECTED_POLICY_SOURCES
 
 
 class PostgresAnalysisSources:
     def __init__(self, database_url: str, *, source: str = 'youthcenter') -> None:
-        if source not in ('youthcenter', 'gov24'):
+        if source not in COLLECTED_POLICY_SOURCES:
             raise ValueError('invalid_f12_preparation_source')
         self._source = source
         try:

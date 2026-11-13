@@ -184,6 +184,10 @@ version, or hash: code creates them from the selected source range.
 All documents and every source line must be shown before saving. Then call check_missing on the
 latest candidates. If fields are missing, search or fetch again and recheck. There are three
 rechecks after the initial check. A value that remains absent stays missing; never estimate it.
+The current state lists bounded pending_reads with exact document IDs and line ranges. Read
+these windows across EVERY document before repeating extraction or missing checks. A duplicate
+extraction means that citation is already preserved; move to an unread window instead. Follow
+next_tool_arguments exactly when a tool rejects an invalid window or incomplete coverage.
 
 Fact kinds eligibility, amount, and timing become pending policy facts. application, service,
 and exceptions become pending evidence. RuleKind values describe overlap rules and require an
@@ -585,6 +589,25 @@ def _coverage(input: PolicyAnalysisInput, prior: _PriorState) -> tuple[dict[str,
     return payload, complete
 
 
+def _pending_reads(input: PolicyAnalysisInput, shown: dict[str, set[int] | frozenset[int]]) -> list[dict[str, object]]:
+    """One bounded unread window per source; hints never mark source lines as read."""
+    result = []
+    for document in input.documents:
+        lines = _source_lines(document)
+        start = next((number for number in range(1, len(lines) + 1)
+                      if number not in shown[document.id]), None)
+        if start is None:
+            continue
+        end, size = start - 1, 0
+        for number in range(start, min(len(lines), start + _MAX_WINDOW_LINES - 1) + 1):
+            cost = len(_line_text(lines[number - 1]))
+            if number in shown[document.id] or size + cost > _MAX_WINDOW_CHARS:
+                break
+            end, size = number, size + cost
+        result.append({'doc_id': document.id, 'start_line': start, 'end_line': end})
+    return result
+
+
 class _AnalysisRun:
     def __init__(
         self,
@@ -623,6 +646,7 @@ class _AnalysisRun:
             for doc_id, value in self.state.facts.items()
         }
         return {
+            "pending_reads": _pending_reads(self.input, self.state.shown),
             "coverage": {
                 document.id: _ranges(self.state.shown[document.id])
                 for document in self.input.documents
@@ -798,6 +822,7 @@ class _AnalysisRun:
             return _ToolReply(
                 {
                     "coverage": coverage,
+                    "pending_reads": _pending_reads(self.input, prior.shown),
                     "missing": [
                         {"document_id": item.document_id, "field": item.field}
                         for item in missing
@@ -1130,7 +1155,16 @@ class _AnalysisRun:
                     elif error.code == 'coverage_incomplete':
                         payload['instruction'] = ('Call check_missing again after reading the remaining document '
                                                   'ranges, then retry save_candidate.')
-                        payload['next_tool'] = 'check_missing'
+                        pending = _pending_reads(self.input, prior.shown)
+                        payload['next_tool'] = 'fetch_document' if pending else 'check_missing'
+                        if pending:
+                            payload['next_tool_arguments'] = pending[0]
+                    elif error.code in {'window_too_large', 'line_range_invalid', 'unknown_document'}:
+                        pending = _pending_reads(self.input, prior.shown)
+                        if pending:
+                            payload['instruction'] = 'Read this bounded registered document window in a separate turn.'
+                            payload['next_tool'] = 'fetch_document'
+                            payload['next_tool_arguments'] = pending[0]
                     elif error.code in {'target_not_confirmed', 'overlap_requires_lookup_policy_then_target_id_and_direction'}:
                         payload['instruction'] = 'Call lookup_policy using the target policy name, then extract with its target_id and direction.'
                         payload['next_tool'] = 'lookup_policy'

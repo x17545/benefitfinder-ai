@@ -2,8 +2,10 @@
 
 from dataclasses import replace
 from datetime import datetime, timezone
+import hashlib
 import json
 import re
+from urllib.parse import urlencode
 from uuid import uuid4
 
 import psycopg
@@ -12,8 +14,9 @@ from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
 from benefitfinder.application.policy_analysis import (
-    AnalysisClaim, PolicyAnalysisInput, PolicyAnalysisStoreError, POLICY_ANALYSIS_VERSION,
+    AnalysisClaim, AnalysisDocumentSource, PolicyAnalysisInput, PolicyAnalysisStoreError, POLICY_ANALYSIS_VERSION,
 )
+from benefitfinder.application.policy_rules import SourceDocument
 from benefitfinder.infrastructure.policy_analysis_inputs import analysis_input_from_payload
 
 _OPTIONS = '-c statement_timeout=8000 -c lock_timeout=500 -c timezone=UTC'
@@ -88,8 +91,12 @@ class PostgresPolicyAnalysisTasks:
             documents.append(document)
         documents = tuple(documents)
         documents += tuple(document for document in value.documents if document.id not in previous_ids)
+        incoming_references = {item.document_id: item for item in value.document_sources}
+        for item in previous.document_sources:
+            incoming_references.setdefault(item.document_id, item)
         try:
-            return replace(value, documents=documents)
+            return replace(value, documents=documents,
+                           document_sources=tuple(incoming_references.values()))
         except ValueError:
             raise PolicyAnalysisStoreError('f12_preparation_requires_full_input') from None
 
@@ -107,8 +114,9 @@ class PostgresPolicyAnalysisTasks:
                 digest = value.fingerprint()
                 now = connection.execute('SELECT clock_timestamp() AS now').fetchone()['now']
                 changed_at = datetime.min.replace(tzinfo=timezone.utc)
+                observed_sources = {}
                 for source in value.collection_sources:
-                    row = connection.execute("""SELECT p.material_sha256,p.missing_detected_at,
+                    row = connection.execute("""SELECT p.material_sha256,p.missing_detected_at,p.fields,
                         (SELECT max(r.completed_at) FROM public.collected_policy_changes c
                          JOIN public.collected_policy_runs r ON r.source=c.source AND r.run_id=c.run_id
                          WHERE c.source=p.source AND c.external_id=p.external_id
@@ -119,8 +127,17 @@ class PostgresPolicyAnalysisTasks:
                         or row['material_sha256'] != source.material_sha256 or row['changed_at'] is None):
                         raise PolicyAnalysisStoreError('f12_analysis_source_stale')
                     changed_at = max(changed_at, row['changed_at'])
-                if any(not changed_at <= doc.collected_at <= now for doc in value.documents):
-                    raise PolicyAnalysisStoreError('f12_documents_require_refresh')
+                    observed_sources[(source.source, source.external_id)] = row
+                references = {item.document_id: item for item in value.document_sources}
+                for document in value.documents:
+                    reference = references.get(document.id)
+                    required_at = changed_at
+                    if reference is not None:
+                        observed = observed_sources[(reference.source, reference.external_id)]
+                        required_at = observed['changed_at']
+                        self._verify_document_source(document, reference, observed, value.policy_id)
+                    if not required_at <= document.collected_at <= now:
+                        raise PolicyAnalysisStoreError('f12_documents_require_refresh')
                 if origin_recheck_id is not None:
                     origin = connection.execute('SELECT policy_id,source,external_id FROM public.policy_recheck_queue WHERE task_id=%s', (origin_recheck_id,)).fetchone()
                     if origin is None or origin['policy_id'] != value.policy_id or (
@@ -156,6 +173,30 @@ class PostgresPolicyAnalysisTasks:
             raise
         except (psycopg.Error, OSError, ValueError, TypeError):
             raise _store_error() from None
+
+    @staticmethod
+    def _verify_document_source(document: SourceDocument, reference: AnalysisDocumentSource,
+                                observed: dict, policy_id: str) -> None:
+        if reference.source == 'official_documents':
+            fields = observed['fields']
+            valid = (fields.get('text_status') == 'ready'
+                     and fields.get('policy_id') == policy_id
+                     and document.source_url == fields.get('source_url')
+                     and document.text == fields.get('text')
+                     and hashlib.sha256(document.text.encode()).hexdigest() == fields.get('text_sha256')
+                     and document.document_version == 'official-v1:' + observed['material_sha256'])
+        else:
+            url = ('https://api.odcloud.kr/api/gov24/v3/serviceDetail?' + urlencode({
+                'cond[서비스ID::EQ]': reference.external_id, 'returnType': 'JSON',
+            }) if reference.source == 'gov24' else
+            'https://www.youthcenter.go.kr/go/ythip/getPlcy?' + urlencode({
+                'plcyNo': reference.external_id, 'rtnType': 'json',
+            }))
+            version = hashlib.sha256((observed['material_sha256'] + '\0' + document.text).encode()).hexdigest()
+            valid = (document.id == reference.source + ':' + hashlib.sha256(reference.external_id.encode()).hexdigest()
+                     and document.source_url == url and document.document_version == 'api-v1:' + version)
+        if not valid:
+            raise PolicyAnalysisStoreError('f12_document_source_mismatch')
 
     def claim(self) -> AnalysisClaim | None:
         invalid = False

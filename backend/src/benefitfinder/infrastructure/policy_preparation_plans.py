@@ -6,6 +6,7 @@ from pathlib import Path
 from benefitfinder.application.policy_analysis import AnalysisPolicy
 from benefitfinder.application.prepare_policy_analysis import (
     AnalysisPreparationPlan, AnalysisPreparationTarget, ApiDocumentMapping, ApiScopeMapping,
+    OfficialDocumentMapping,
 )
 
 
@@ -41,8 +42,9 @@ def preparation_plan_from_payload(raw: object) -> AnalysisPreparationPlan:
             policies.append(AnalysisPolicy(row['id'], row['name'], tuple(row['categories']), tuple(row['aliases'])))
         targets = []
         for row in raw['targets']:
-            if (not isinstance(row, dict) or set(row) != {'policy_id', 'documents'}
-                or not isinstance(row['documents'], list)):
+            if (not isinstance(row, dict) or set(row) - {'official_documents'} != {'policy_id', 'documents'}
+                or not isinstance(row['documents'], list)
+                or not isinstance(row.get('official_documents', []), list)):
                 raise ValueError
             documents = []
             for item in row['documents']:
@@ -52,7 +54,12 @@ def preparation_plan_from_payload(raw: object) -> AnalysisPreparationPlan:
                     raise ValueError
                 documents.append(ApiDocumentMapping(item['external_id'], item['name_field'],
                     tuple(item['body_fields']), tuple(sorted(item['scope_guards'].items()))))
-            targets.append(AnalysisPreparationTarget(row['policy_id'], tuple(documents)))
+            official = []
+            for item in row.get('official_documents', []):
+                if not isinstance(item, dict) or set(item) != {'external_id', 'document_id'}:
+                    raise ValueError
+                official.append(OfficialDocumentMapping(**item))
+            targets.append(AnalysisPreparationTarget(row['policy_id'], tuple(documents), tuple(official)))
         return AnalysisPreparationPlan(scope_mapping, tuple(policies), tuple(targets),
                                        raw.get('source', 'youthcenter'))
     except (ValueError, TypeError, KeyError, AttributeError, RecursionError, OverflowError):

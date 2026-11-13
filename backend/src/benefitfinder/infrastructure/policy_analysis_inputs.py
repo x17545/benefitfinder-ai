@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 from benefitfinder.application.policy_analysis import (
-    AnalysisPolicy, AnalysisSource, PolicyAnalysisInput,
+    AnalysisDocumentSource, AnalysisPolicy, AnalysisSource, PolicyAnalysisInput,
 )
 from benefitfinder.application.policy_rules import SourceDocument
 
@@ -18,9 +18,10 @@ def _strings(value: object) -> tuple[str, ...]:
 
 def analysis_input_from_payload(raw: object) -> PolicyAnalysisInput:
     try:
-        if not isinstance(raw, dict) or set(raw) != {
-            'policy_id', 'documents', 'policies', 'collection_sources'
-        } or type(raw['policy_id']) is not str:
+        required = {'policy_id', 'documents', 'policies', 'collection_sources'}
+        allowed = required | {'document_sources'}
+        if (not isinstance(raw, dict) or not required <= set(raw) or not set(raw) <= allowed
+                or type(raw['policy_id']) is not str):
             raise ValueError
         for key in ('documents', 'policies', 'collection_sources'):
             if not isinstance(raw[key], (list, tuple)):
@@ -47,7 +48,18 @@ def analysis_input_from_payload(raw: object) -> PolicyAnalysisInput:
                 or any(type(value) is not str for value in row.values())):
                 raise ValueError
             sources.append(AnalysisSource(**row))
-        return PolicyAnalysisInput(raw['policy_id'], tuple(documents), tuple(policies), tuple(sources))
+        document_sources = []
+        if 'document_sources' in raw:
+            if not isinstance(raw['document_sources'], (list, tuple)):
+                raise ValueError
+            for row in raw['document_sources']:
+                if (not isinstance(row, dict)
+                        or set(row) != {'document_id', 'source', 'external_id'}
+                        or any(type(value) is not str for value in row.values())):
+                    raise ValueError
+                document_sources.append(AnalysisDocumentSource(**row))
+        return PolicyAnalysisInput(raw['policy_id'], tuple(documents), tuple(policies),
+                                   tuple(sources), tuple(document_sources))
     except (KeyError, TypeError, ValueError, AttributeError, RecursionError, OverflowError):
         raise ValueError('invalid_policy_analysis_input') from None
 

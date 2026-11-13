@@ -9,8 +9,9 @@ from typing import Any, Protocol
 from urllib.parse import urlencode
 
 from benefitfinder.application.policy_analysis import (
-    AnalysisPolicy, AnalysisSource, PolicyAnalysisInput,
+    AnalysisDocumentSource, AnalysisPolicy, AnalysisSource, PolicyAnalysisInput,
 )
+from benefitfinder.application.official_documents import public_document_url
 from benefitfinder.application.policy_rules import SourceDocument
 
 
@@ -83,16 +84,35 @@ class ApiDocumentMapping:
 
 
 @dataclass(frozen=True)
+class OfficialDocumentMapping:
+    external_id: str
+    document_id: str
+
+    def __post_init__(self) -> None:
+        if (type(self.external_id) is not str
+            or re.fullmatch(r'[A-Za-z0-9:_-]{1,120}', self.external_id) is None
+            or type(self.document_id) is not str or not 1 <= len(self.document_id) <= 120
+            or not self.document_id.strip() or not self.document_id.isprintable()):
+            raise ValueError('invalid_f12_preparation_plan')
+
+
+@dataclass(frozen=True)
 class AnalysisPreparationTarget:
     policy_id: str
     documents: tuple[ApiDocumentMapping, ...]
+    official_documents: tuple[OfficialDocumentMapping, ...] = ()
 
     def __post_init__(self) -> None:
         if (type(self.policy_id) is not str
             or re.fullmatch(r'youth:[A-Za-z0-9:_-]{1,100}', self.policy_id) is None
             or not isinstance(self.documents, tuple) or not 1 <= len(self.documents) <= 4
             or any(not isinstance(item, ApiDocumentMapping) for item in self.documents)
-            or len({item.external_id for item in self.documents}) != len(self.documents)):
+            or len({item.external_id for item in self.documents}) != len(self.documents)
+            or not isinstance(self.official_documents, tuple)
+            or len(self.documents) + len(self.official_documents) > 4
+            or any(not isinstance(item, OfficialDocumentMapping) for item in self.official_documents)
+            or len({item.external_id for item in self.official_documents}) != len(self.official_documents)
+            or len({item.document_id for item in self.official_documents}) != len(self.official_documents)):
             raise ValueError('invalid_f12_preparation_plan')
 
 
@@ -153,10 +173,13 @@ def _build_input(
     plan: AnalysisPreparationPlan, target: AnalysisPreparationTarget,
     sources: dict[str, PreparationSource], material_hash: Callable[[dict[str, Any]], str],
     project_fields: Callable[[dict[str, Any]], dict[str, Any]],
+    official_sources: dict[str, PreparationSource],
+    official_material_hash: Callable[[dict[str, Any]], str] | None,
 ) -> PolicyAnalysisInput:
     policy = next(item for item in plan.policies if item.id == target.policy_id)
     documents = []
     bindings = []
+    document_sources = []
     categories = set()
     for mapping in target.documents:
         source = sources[mapping.external_id]
@@ -202,9 +225,31 @@ def _build_input(
             'api-v1:' + version, source.accepted_at, text, True,
         ))
         bindings.append(AnalysisSource(plan.source, source.external_id, source.material_sha256))
+        if target.official_documents:
+            document_sources.append(AnalysisDocumentSource(documents[-1].id, plan.source, source.external_id))
     if categories != set(policy.categories):
         raise ValueError('f12_preparation_scope_changed')
-    return PolicyAnalysisInput(target.policy_id, tuple(documents), plan.policies, tuple(bindings))
+    for mapping in target.official_documents:
+        source = official_sources[mapping.external_id]
+        fields = source.fields
+        text = fields.get('text')
+        if (official_material_hash is None or source.external_id != mapping.external_id
+            or source.accepted_at.utcoffset() is None
+            or official_material_hash(fields) != source.material_sha256
+            or fields.get('policy_id') != target.policy_id
+            or not isinstance(fields.get('categories'), list) or not fields['categories']
+            or not set(fields['categories']) <= set(policy.categories)
+            or fields.get('text_status') != 'ready' or fields.get('format') not in ('html', 'pdf')
+            or type(text) is not str or not text.strip()
+            or fields.get('text_sha256') != hashlib.sha256(text.encode()).hexdigest()
+            or not public_document_url(fields.get('source_url'))):
+            raise ValueError('f12_preparation_official_document_invalid')
+        documents.append(SourceDocument(mapping.document_id, target.policy_id, fields['source_url'],
+            'official-v1:' + source.material_sha256, source.accepted_at, text, True))
+        bindings.append(AnalysisSource('official_documents', source.external_id, source.material_sha256))
+        document_sources.append(AnalysisDocumentSource(mapping.document_id, 'official_documents', source.external_id))
+    return PolicyAnalysisInput(target.policy_id, tuple(documents), plan.policies, tuple(bindings),
+                               tuple(document_sources))
 
 
 def prepare_analysis_inputs(
@@ -212,14 +257,20 @@ def prepare_analysis_inputs(
     register: Callable[[PolicyAnalysisInput], dict[str, Any]],
     material_hash: Callable[[dict[str, Any]], str],
     project_fields: Callable[[dict[str, Any]], dict[str, Any]] = lambda fields: fields,
+    *, official_sources: PreparationSources | None = None,
+    official_material_hash: Callable[[dict[str, Any]], str] | None = None,
 ) -> dict[str, int]:
     """Read one consistent source snapshot; failures never approve or publish data."""
     counts = {'targets': len(plan.targets), 'registered': 0, 'replayed': 0, 'failed': 0}
     ids = tuple(sorted({doc.external_id for target in plan.targets for doc in target.documents}))
     current = sources.load(ids)
+    official_ids = tuple(sorted({doc.external_id for target in plan.targets
+                                 for doc in target.official_documents}))
+    official = official_sources.load(official_ids) if official_ids and official_sources is not None else {}
     for target in plan.targets:
         try:
-            result = register(_build_input(plan, target, current, material_hash, project_fields))
+            result = register(_build_input(plan, target, current, material_hash, project_fields,
+                                           official, official_material_hash))
             if type(result.get('replayed')) is not bool:
                 raise ValueError('f12_preparation_registration_invalid')
             counts['replayed' if result['replayed'] else 'registered'] += 1

@@ -124,13 +124,20 @@ def prepare_f12_inputs(plan_path: Path) -> dict[str, int]:
     plan = load_preparation_plan(plan_path)
     url = os.environ.get('F12_WRITE_DATABASE_URL', '')
     tasks = PostgresPolicyAnalysisTasks(url)
+    official = {}
+    if any(target.official_documents for target in plan.targets):
+        from benefitfinder.ingestion.official_documents import official_document_material_hash
+
+        official = {'official_sources': PostgresAnalysisSources(url, source='official_documents'),
+                    'official_material_hash': official_document_material_hash}
     if plan.source == 'gov24':
         from benefitfinder.ingestion.gov24 import analysis_fields, gov24_hashed_fields
 
         return prepare_analysis_inputs(plan, PostgresAnalysisSources(url, source='gov24'),
-            tasks.register_prepared, lambda fields: record_sha256(gov24_hashed_fields(fields)), analysis_fields)
+            tasks.register_prepared, lambda fields: record_sha256(gov24_hashed_fields(fields)), analysis_fields,
+            **official)
     return prepare_analysis_inputs(plan, PostgresAnalysisSources(url), tasks.register_prepared,
-        lambda fields: record_sha256(hashed_fields(YOUTHCENTER_POLICY_LIST, fields)))
+        lambda fields: record_sha256(hashed_fields(YOUTHCENTER_POLICY_LIST, fields)), **official)
 
 
 def run_f12_queue(data_dir: Path, *, limit: int = 5) -> dict[str, object]:
