@@ -11,7 +11,7 @@ from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
 from benefitfinder.application.policy_analysis import (
-    AnalysisClaim, PolicyAnalysisInput, PolicyAnalysisStoreError,
+    AnalysisClaim, PolicyAnalysisInput, PolicyAnalysisStoreError, POLICY_ANALYSIS_VERSION,
 )
 from benefitfinder.infrastructure.policy_analysis_inputs import analysis_input_from_payload
 
@@ -28,13 +28,16 @@ def _store_error() -> PolicyAnalysisStoreError:
 
 
 class PostgresPolicyAnalysisTasks:
-    def __init__(self, database_url: str) -> None:
+    def __init__(self, database_url: str, *, analysis_version: int = POLICY_ANALYSIS_VERSION) -> None:
+        if type(analysis_version) is not int or not 1 <= analysis_version <= 1000:
+            raise ValueError('invalid_f12_analysis_version')
         try:
             if not database_url.strip() or not conninfo_to_dict(database_url).get('dbname'):
                 raise ValueError
         except (psycopg.Error, ValueError, AttributeError):
             raise ValueError('invalid_f12_analysis_database_url') from None
         self._url = database_url
+        self._version = analysis_version
 
     def _connect(self) -> psycopg.Connection:
         return psycopg.connect(self._url, connect_timeout=2, options=_OPTIONS,
@@ -78,17 +81,26 @@ class PostgresPolicyAnalysisTasks:
                         {(item.source, item.external_id) for item in value.collection_sources}
                     ):
                         raise PolicyAnalysisStoreError('f12_recheck_mismatch')
-                existing = connection.execute('SELECT task_id,status FROM public.f12_analysis_tasks WHERE policy_id=%s AND input_sha256=%s', (value.policy_id, digest)).fetchone()
+                newer = connection.execute('SELECT 1 FROM public.f12_analysis_tasks WHERE policy_id=%s AND analysis_version>%s LIMIT 1',
+                    (value.policy_id, self._version)).fetchone()
+                if newer:
+                    raise PolicyAnalysisStoreError('f12_analysis_version_obsolete')
+                existing = connection.execute('SELECT task_id,status,analysis_version FROM public.f12_analysis_tasks WHERE policy_id=%s AND input_sha256=%s AND analysis_version=%s',
+                    (value.policy_id, digest, self._version)).fetchone()
                 if existing:
                     return dict(existing, replayed=True)
-                # A new official input supersedes old drafts, including in-flight work.
+                # A new source or analyzer supersedes drafts, never their immutable files.
                 connection.execute("""UPDATE public.f12_analysis_tasks SET status='stale',
-                    claim_token=NULL,lease_until=NULL,last_error='f12_source_changed',
-                    updated_at=clock_timestamp() WHERE policy_id=%s AND status<>'stale'""", (value.policy_id,))
+                    claim_token=NULL,lease_until=NULL,
+                    last_error=CASE WHEN input_sha256=%s THEN 'f12_analysis_version_changed'
+                                    ELSE 'f12_source_changed' END,
+                    updated_at=clock_timestamp() WHERE policy_id=%s AND status<>'stale'""",
+                    (digest, value.policy_id))
                 task = connection.execute("""INSERT INTO public.f12_analysis_tasks
-                    (policy_id,input_sha256,input_payload,origin_recheck_id)
-                    VALUES (%s,%s,%s,%s) RETURNING task_id,status""",
-                    (value.policy_id, digest, Jsonb(value.payload()), origin_recheck_id)).fetchone()
+                    (policy_id,input_sha256,input_payload,origin_recheck_id,analysis_version)
+                    VALUES (%s,%s,%s,%s,%s) RETURNING task_id,status,analysis_version""",
+                    (value.policy_id, digest, Jsonb(value.payload()), origin_recheck_id,
+                     self._version)).fetchone()
                 for source in value.collection_sources:
                     connection.execute('INSERT INTO public.f12_analysis_sources (task_id,source,external_id,material_sha256) VALUES (%s,%s,%s,%s)',
                         (task['task_id'], source.source, source.external_id, source.material_sha256))
@@ -105,12 +117,13 @@ class PostgresPolicyAnalysisTasks:
             with self._connect() as connection:
                 connection.execute("""UPDATE public.f12_analysis_tasks SET status='failed',
                     claim_token=NULL,lease_until=NULL,last_error='f12_lease_expired',updated_at=clock_timestamp()
-                    WHERE status='running' AND attempts=3 AND lease_until<=clock_timestamp()""")
+                    WHERE status='running' AND attempts=3 AND lease_until<=clock_timestamp()
+                      AND analysis_version=%s""", (self._version,))
                 row = connection.execute("""SELECT t.* FROM public.f12_analysis_tasks t
                     WHERE ((t.status='pending' AND t.next_attempt_at<=clock_timestamp())
                            OR (t.status='running' AND t.lease_until<=clock_timestamp()))
-                      AND t.attempts<3 AND NOT """ + _CHANGED + """
-                    ORDER BY t.task_id LIMIT 1 FOR UPDATE OF t SKIP LOCKED""").fetchone()
+                      AND t.analysis_version=%s AND t.attempts<3 AND NOT """ + _CHANGED + """
+                    ORDER BY t.task_id LIMIT 1 FOR UPDATE OF t SKIP LOCKED""", (self._version,)).fetchone()
                 if row is None:
                     return None
                 try:
@@ -129,7 +142,8 @@ class PostgresPolicyAnalysisTasks:
                         updated_at=clock_timestamp(),last_error=NULL WHERE task_id=%s
                         RETURNING attempts,lease_until""", (token, row['task_id'])).fetchone()
                     result = AnalysisClaim(row['task_id'], token, state['attempts'], value,
-                                           state['lease_until'], row['origin_recheck_id'])
+                                           state['lease_until'], row['origin_recheck_id'],
+                                           row['analysis_version'])
             if invalid:
                 raise PolicyAnalysisStoreError('f12_invalid_input')
             return result
@@ -139,18 +153,22 @@ class PostgresPolicyAnalysisTasks:
             raise _store_error() from None
 
     def is_current(self, claim: AnalysisClaim) -> bool:
+        if type(claim.analysis_version) is not int or claim.analysis_version != self._version:
+            return False
         try:
             with self._connect() as connection:
                 connection.execute('SET TRANSACTION READ ONLY')
                 return connection.execute("""SELECT 1 FROM public.f12_analysis_tasks t
                     WHERE t.task_id=%s AND t.status='running' AND t.claim_token=%s
-                      AND t.lease_until>clock_timestamp() AND NOT """ + _CHANGED,
-                    (claim.task_id, claim.token)).fetchone() is not None
+                      AND t.analysis_version=%s AND t.lease_until>clock_timestamp() AND NOT """ + _CHANGED,
+                    (claim.task_id, claim.token, self._version)).fetchone() is not None
         except (psycopg.Error, OSError, ValueError):
             raise _store_error() from None
 
     def complete(self, claim: AnalysisClaim, *, output_ref: str, output_sha256: str,
                  summary: dict[str, object]) -> str:
+        if type(claim.analysis_version) is not int or claim.analysis_version != self._version:
+            raise PolicyAnalysisStoreError('f12_analysis_claim_lost')
         if (output_ref != f'f12-analysis/{claim.task_id}/{claim.token}'
             or re.fullmatch(r'[0-9a-f]{64}', output_sha256) is None):
             raise ValueError('invalid_f12_analysis_output')
@@ -164,6 +182,8 @@ class PostgresPolicyAnalysisTasks:
                 self._lock_sources(connection, claim.input)
                 row = connection.execute('SELECT *,lease_until>clock_timestamp() AS live FROM public.f12_analysis_tasks WHERE task_id=%s FOR UPDATE', (claim.task_id,)).fetchone()
                 if row is None:
+                    raise PolicyAnalysisStoreError('f12_analysis_claim_lost')
+                if row['analysis_version'] != self._version:
                     raise PolicyAnalysisStoreError('f12_analysis_claim_lost')
                 if row['status'] == 'stale':
                     return 'stale'
@@ -184,6 +204,8 @@ class PostgresPolicyAnalysisTasks:
             raise _store_error() from None
 
     def fail(self, claim: AnalysisClaim, code: str = 'f12_analysis_failed') -> str:
+        if type(claim.analysis_version) is not int or claim.analysis_version != self._version:
+            return 'claim_lost'
         if code not in {'f12_analysis_failed', 'f12_analysis_timeout', 'f12_artifact_failed'}:
             code = 'f12_analysis_failed'
         try:
@@ -192,11 +214,12 @@ class PostgresPolicyAnalysisTasks:
                     status=CASE WHEN attempts>=3 THEN 'failed' ELSE 'pending' END,
                     next_attempt_at=clock_timestamp()+interval '1 minute',claim_token=NULL,
                     lease_until=NULL,last_error=%s,updated_at=clock_timestamp()
-                    WHERE task_id=%s AND status='running' AND claim_token=%s RETURNING status""",
-                    (code, claim.task_id, claim.token)).fetchone()
+                    WHERE task_id=%s AND status='running' AND claim_token=%s
+                      AND analysis_version=%s RETURNING status""",
+                    (code, claim.task_id, claim.token, self._version)).fetchone()
                 if row:
                     return row['status']
-                row = connection.execute('SELECT status FROM public.f12_analysis_tasks WHERE task_id=%s', (claim.task_id,)).fetchone()
+                row = connection.execute('SELECT status FROM public.f12_analysis_tasks WHERE task_id=%s AND analysis_version=%s', (claim.task_id, self._version)).fetchone()
                 return 'stale' if row and row['status'] == 'stale' else 'claim_lost'
         except (psycopg.Error, OSError, ValueError):
             raise _store_error() from None
@@ -211,8 +234,10 @@ class PostgresPolicyAnalysisTasks:
                         SELECT 1 FROM public.f12_analysis_sources s JOIN public.f12_analysis_tasks t
                           ON t.task_id=s.task_id WHERE s.source=p.source AND s.external_id=p.external_id
                           AND t.status IN ('pending','running','needs_review')
-                          AND s.material_sha256=p.material_sha256)""").fetchone()['count']
-                return {'tasks': {row['status']: row['count'] for row in counts},
+                          AND t.analysis_version=%s
+                          AND s.material_sha256=p.material_sha256)""", (self._version,)).fetchone()['count']
+                return {'worker_analysis_version': self._version,
+                        'tasks': {row['status']: row['count'] for row in counts},
                         'source_records_awaiting_scope_or_documents': awaiting}
         except (psycopg.Error, OSError, ValueError):
             raise _store_error() from None
@@ -223,7 +248,7 @@ class PostgresPolicyAnalysisTasks:
         try:
             with self._connect() as connection:
                 connection.execute('SET TRANSACTION READ ONLY')
-                row = connection.execute('''SELECT t.task_id,t.policy_id,t.status,t.attempts,
+                row = connection.execute('''SELECT t.task_id,t.policy_id,t.status,t.attempts,t.analysis_version,
                     t.origin_recheck_id,t.input_sha256,t.output_ref,t.output_sha256,
                     t.last_error,t.result_summary, NOT ''' + _CHANGED + ''' AS source_current
                     FROM public.f12_analysis_tasks t WHERE t.task_id=%s''', (task_id,)).fetchone()

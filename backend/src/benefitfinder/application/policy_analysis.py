@@ -126,6 +126,11 @@ class PolicyAnalysisResult:
     trace: tuple[AnalysisStep, ...]
 
 
+# Increment when extraction semantics change and completed inputs need fresh analysis.
+# This is execution identity, not a change to the official source fingerprint.
+POLICY_ANALYSIS_VERSION = 2
+
+
 @dataclass(frozen=True)
 class AnalysisClaim:
     task_id: int
@@ -134,6 +139,7 @@ class AnalysisClaim:
     input: PolicyAnalysisInput
     lease_until: datetime
     origin_recheck_id: int | None = None
+    analysis_version: int = POLICY_ANALYSIS_VERSION
 
 
 class PolicyAnalysisStoreError(RuntimeError):

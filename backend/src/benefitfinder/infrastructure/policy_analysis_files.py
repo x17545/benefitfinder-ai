@@ -39,6 +39,7 @@ class PolicyAnalysisFiles:
 
     def _directory(self, claim: AnalysisClaim) -> Path:
         if (type(claim.task_id) is not int or claim.task_id < 1
+            or type(claim.analysis_version) is not int or not 1 <= claim.analysis_version <= 1000
             or re.fullmatch(r'[0-9a-f]{32}', claim.token) is None):
             raise ValueError('f12_artifact_failed')
         path = self._root / 'f12-analysis' / str(claim.task_id) / claim.token
@@ -103,7 +104,8 @@ class PolicyAnalysisFiles:
             _create(directory / 'manifest.json', {
                 'format_version': 1, 'task_id': claim.task_id, 'attempt': claim.attempt,
                 'input_sha256': claim.input.fingerprint(), 'origin_recheck_id': claim.origin_recheck_id,
-                'agent_version': 'f12-tools-v2', 'model': self._model,
+                'analysis_version': claim.analysis_version,
+                'agent_version': f'f12-tools-v{claim.analysis_version}', 'model': self._model,
                 'artifact_status': 'needs_review', 'summary': summary, 'files': files,
             })
             digest = hashlib.sha256((directory / 'manifest.json').read_bytes()).hexdigest()

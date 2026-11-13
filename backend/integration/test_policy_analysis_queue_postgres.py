@@ -18,6 +18,7 @@ import psycopg
 from psycopg import sql
 from psycopg.conninfo import conninfo_to_dict
 from psycopg.rows import dict_row
+from psycopg.types.json import Jsonb
 
 from backend.integration.test_policy_source_rechecks_postgres import (
     AT, batch, dedicated_database, publish, record,
@@ -44,6 +45,7 @@ class PolicyAnalysisQueuePostgresTest(unittest.TestCase):
         cls.url = cls.database.__enter__()
         with psycopg.connect(cls.url) as connection:
             connection.execute(MIGRATION.read_text())
+            connection.execute((MIGRATION.parent / '0011_f12_analysis_versions.sql').read_text())
 
     @classmethod
     def tearDownClass(cls):
@@ -85,7 +87,7 @@ class PolicyAnalysisQueuePostgresTest(unittest.TestCase):
             self.tasks.register(replace(self.value, documents=(replace(self.value.documents[0], collected_at=AT-timedelta(seconds=1)),)))
         with self.assertRaisesRegex(PolicyAnalysisStoreError, 'f12_analysis_source_stale'):
             self.tasks.register(replace(self.value, collection_sources=(replace(self.value.collection_sources[0], material_sha256='b'*64),)))
-        self.assertEqual(self.tasks.status(), {'tasks': {}, 'source_records_awaiting_scope_or_documents': 1})
+        self.assertEqual(self.tasks.status(), {'worker_analysis_version': 2, 'tasks': {}, 'source_records_awaiting_scope_or_documents': 1})
         self.assertIsNone(self.tasks.claim())
 
     def test_two_workers_do_not_claim_the_same_lease(self):
@@ -244,3 +246,97 @@ class PolicyAnalysisQueuePostgresTest(unittest.TestCase):
             self.assertEqual(facts.eligibility[0].quote, self.value.documents[0].text)
             self.assertEqual(snapshot.reviews, ())
             self.assertNotIn('가상 정책', output.getvalue())
+
+
+    def test_analyzer_upgrade_supersedes_inflight_work_without_changing_source_hash(self):
+        old = PostgresPolicyAnalysisTasks(self.url, analysis_version=1)
+        registered = old.register(self.value)
+        old_claim = old.claim()
+        new = self.tasks.register(self.value)
+        self.assertNotEqual(new['task_id'], registered['task_id'])
+        previous = old.get_task(old_claim.task_id)
+        self.assertEqual(previous['analysis_version'], 1)
+        self.assertEqual(previous['status'], 'stale')
+        self.assertEqual(previous['last_error'], 'f12_analysis_version_changed')
+        self.assertEqual(previous['input_sha256'], self.value.fingerprint())
+        self.assertFalse(old.is_current(old_claim))
+        self.assertEqual(old.complete(old_claim,
+            output_ref=f'f12-analysis/{old_claim.task_id}/{old_claim.token}',
+            output_sha256='f' * 64, summary={'rules': 0}), 'stale')
+        with self.assertRaisesRegex(PolicyAnalysisStoreError, 'f12_analysis_version_obsolete'):
+            old.register(self.value)
+        current = self.tasks.claim()
+        self.assertEqual(current.analysis_version, 2)
+        self.assertEqual(current.attempt, 1)
+        self.assertEqual(self.complete(current), 'needs_review')
+        self.assertTrue(self.tasks.register(self.value)['replayed'])
+        self.assertIsNone(self.tasks.claim())
+
+    def test_analyzer_upgrade_preserves_finished_output_and_retry_history(self):
+        old = PostgresPolicyAnalysisTasks(self.url, analysis_version=1)
+        old.register(self.value)
+        item = old.claim()
+        reference = f'f12-analysis/{item.task_id}/{item.token}'
+        old.complete(item, output_ref=reference, output_sha256='c' * 64, summary={'rules': 0})
+        self.tasks.register(self.value)
+        previous = self.tasks.get_task(item.task_id)
+        self.assertEqual(previous['status'], 'stale')
+        self.assertEqual(previous['output_ref'], reference)
+        self.assertEqual(previous['output_sha256'], 'c' * 64)
+        self.assertEqual(previous['attempts'], 1)
+        self.assertEqual(previous['input_sha256'], self.value.fingerprint())
+        self.assertEqual(self.tasks.status()['tasks'], {'stale': 1, 'pending': 1})
+
+    def test_worker_cannot_claim_or_complete_another_analysis_version(self):
+        old = PostgresPolicyAnalysisTasks(self.url, analysis_version=1)
+        old.register(self.value)
+        self.assertIsNone(self.tasks.claim())
+        item = old.claim()
+        self.assertFalse(self.tasks.is_current(item))
+        with self.assertRaisesRegex(PolicyAnalysisStoreError, 'f12_analysis_claim_lost'):
+            self.complete(item)
+        self.assertEqual(self.tasks.fail(item), 'claim_lost')
+        self.assertTrue(old.is_current(item))
+        self.assertEqual(self.tasks.status()['source_records_awaiting_scope_or_documents'], 1)
+
+    def test_concurrent_version_registration_has_one_fresh_task(self):
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            registrations = list(pool.map(lambda _: self.tasks.register(self.value), range(2)))
+        self.assertEqual(len({r['task_id'] for r in registrations}), 1)
+        self.assertEqual(sum(not r['replayed'] for r in registrations), 1)
+        self.assertEqual(self.tasks.status()['tasks'], {'pending': 1})
+
+
+    def test_migration_labels_legacy_output_without_rewriting_or_republishing(self):
+        with dedicated_database(self.base) as url:
+            with psycopg.connect(url) as connection:
+                connection.execute(MIGRATION.read_text())
+            PostgresCollectedPolicies(url).save(batch({'A': 'fictional v1'}, AT))
+            with psycopg.connect(url) as connection:
+                item = connection.execute("""INSERT INTO public.f12_analysis_tasks
+                    (policy_id,input_sha256,input_payload,status,attempts,
+                     output_ref,output_sha256,result_summary)
+                    VALUES (%s,%s,%s,'needs_review',2,%s,%s,%s) RETURNING task_id""",
+                    (self.value.policy_id,self.value.fingerprint(),Jsonb(self.value.payload()),
+                     'f12-analysis/1/'+'a'*32,'b'*64,Jsonb({'rules':0}))).fetchone()[0]
+                connection.execute("""INSERT INTO public.f12_analysis_sources
+                    (task_id,source,external_id,material_sha256) VALUES (%s,'youthcenter','A',%s)""",
+                    (item,self.value.collection_sources[0].material_sha256))
+                connection.execute((MIGRATION.parent/'0011_f12_analysis_versions.sql').read_text())
+            current = PostgresPolicyAnalysisTasks(url)
+            previous = current.get_task(item)
+            self.assertEqual(previous['analysis_version'],1)
+            self.assertEqual(previous['status'],'needs_review')
+            self.assertEqual(previous['attempts'],2)
+            self.assertEqual(previous['output_sha256'],'b'*64)
+            self.assertTrue(previous['source_current'])
+            self.assertIsNone(current.claim())
+            fresh=current.register(self.value)
+            self.assertNotEqual(fresh['task_id'],item)
+            previous=current.get_task(item)
+            self.assertEqual(previous['status'],'stale')
+            self.assertEqual(previous['output_sha256'],'b'*64)
+            self.assertEqual(previous['last_error'],'f12_analysis_version_changed')
+            with psycopg.connect(url) as connection:
+                count=connection.execute('SELECT count(*) FROM public.policy_catalog_releases').fetchone()[0]
+                self.assertEqual(count,0)

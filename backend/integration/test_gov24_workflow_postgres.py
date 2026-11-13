@@ -39,7 +39,7 @@ class Gov24WorkflowPostgresTest(unittest.TestCase):
         cls.url = cls.database.__enter__()
         with psycopg.connect(cls.url) as connection:
             for name in ('0007_f12_analysis_tasks.sql', '0008_service_catalog.sql',
-                         '0009_gov24_policy_sources.sql'):
+                         '0009_gov24_policy_sources.sql', '0011_f12_analysis_versions.sql'):
                 connection.execute((MIGRATIONS / name).read_text())
 
     @classmethod

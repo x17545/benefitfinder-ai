@@ -1,5 +1,7 @@
 # PostgreSQL 마이그레이션
 
+`versions/0011_f12_analysis_versions.sql`은 0007 이후 별도 트랜잭션으로 명시적으로 적용한다. 기존 분석 행을 버전 1로 표시하고, 원문 해시와 별개인 분석 버전을 등록·임대·완료·manifest에 연결한다. 기존 원문·초안 파일·사람 판단·게시 상태는 바꾸지 않는다. 적용 전 F12 작업자를 모두 중지하고 같은 새 코드로 교체한 뒤 재개한다. 구 코드와 혼합 실행하지 않는다. 새 버전에서 같은 공식 입력을 준비하면 별도 작업을 만들고 이전 초안을 `f12_analysis_version_changed` 사유로 `stale` 처리한다. 재시도 횟수 초기화·이전 파일 덮어쓰기·자동 승인·자동 게시가 아니다. [분석 큐의 버전 전환 절차](../src/benefitfinder/infrastructure/database/F12_ANALYSIS.md)를 따른다. 운영·공유 DB 적용은 별도 승인 범위다.
+
 `versions/0010_catalog_explanation_publication.sql`은 0009 이후 명시적으로 적용한다. 승인 카탈로그의 `explanation_clauses` 전체를 같은 트랜잭션에서 F13 문서·조항으로 만들고 승인 해시·검수 정보에 연결한다. 기존 게시 역할에 F13 쓰기 권한을 추가하지 않는다. 카탈로그 은퇴·원천 변경 시 함께 내리며 연결 없는 기존 F13은 유지한다. [입력·검수·권한·같은 버전 제약](../src/benefitfinder/infrastructure/database/F12_CATALOG.md)을 확인한다. 운영 적용은 별도 승인 범위다.
 
 `versions/0006_policy_source_rechecks.sql`은 0001·0002·0005 다음에 명시적으로 적용한다. 승인 해시에 포함한 원천 ID·내용 해시를 연결하고 수집 변경·누락 시 게시 정책·F13을 내리며 재검수 이력을 같은 트랜잭션으로 기록한다. **기존 실제 게시 정책은 검증된 연결이 없어 검수 대기/은퇴로 전환하며 기존 가상 정책은 유지한다.** 운영 적용 전 [데이터 영향·재게시·권한](../src/benefitfinder/infrastructure/database/POLICY_SOURCE_RECHECKS.md)을 확인한다. 새 실제 정책 게시에는 이 마이그레이션과 원천 연결이 필요하다.

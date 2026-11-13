@@ -46,6 +46,7 @@ class PolicyPreparationPostgresTest(unittest.TestCase):
         cls.url = cls.database.__enter__()
         with psycopg.connect(cls.url) as connection:
             connection.execute(MIGRATION.read_text())
+            connection.execute((MIGRATION.parent / '0011_f12_analysis_versions.sql').read_text())
 
     @classmethod
     def tearDownClass(cls) -> None:
