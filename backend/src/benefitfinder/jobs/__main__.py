@@ -347,7 +347,7 @@ def collect_youthcenter_command(data_dir: Path) -> int:
     result = collect_youthcenter(
         YOUTHCENTER_POLICY_LIST,
         YouthcenterHttpFetcher(api_key),
-        JsonFileSnapshotStore(raw_root),
+        JsonFileSnapshotStore(raw_root, private=True),
         versions,
         lambda: datetime.now(KST),
     )
@@ -384,7 +384,7 @@ def _refresh_youthcenter(data_dir: Path) -> int:
 
     root = data_dir / "processed" / "f08-youthcenter"
     fetcher = YouthcenterHttpFetcher(api_key)
-    snapshots = JsonFileSnapshotStore(data_dir / "raw" / "f08-youthcenter")
+    snapshots = JsonFileSnapshotStore(data_dir / "raw" / "f08-youthcenter", private=True)
 
     def clock() -> datetime:
         return datetime.now(KST)

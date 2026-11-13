@@ -271,6 +271,8 @@ uv run --locked python -m benefitfinder.jobs extract-chunked-facts \
 
 ### F08 온통청년 갱신 한 번 실행
 
+온통청년 원본은 수동 수집과 F08 모두 비공개 권한(폴더 700, 파일·임시 파일 600)으로 생성한다. 사용한 인증키가 본문이나 Content-Type에 반사되면 `unsafe_response`로 실패하고 그 응답의 저장·자동 재시도를 차단한다. 기존 성공본은 유지한다.
+
 저장소 루트에서 `YOUTHCENTER_API_KEY`를 환경 변수로 설정한 뒤 실행한다. `--data-dir`로 다른 로컬 디렉터리를 지정할 수 있다.
 
 ```bash

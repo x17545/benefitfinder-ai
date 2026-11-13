@@ -36,11 +36,18 @@ class SourceResponse:
     content_type: str | None
 
 
+class UnsafeSourceResponse(ValueError):
+    """The response contains a credential and must not be stored or retried."""
+
+    def __init__(self) -> None:
+        super().__init__("source_response_contains_credential")
+
+
 class SourceFetcher(Protocol):
     """Network adapter for official sources (implemented in infrastructure)."""
 
     def fetch(self, request: SourceRequest) -> SourceResponse:
-        """Fetch one request. Raise on transport failure; return non-2xx as-is."""
+        """Fetch one request; raise on transport failure or unsafe response content."""
         ...
 
 

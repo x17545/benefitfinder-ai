@@ -58,6 +58,7 @@ def refresh_notification(root: Path, code: int, started_at: datetime) -> str:
         else:
             allowed = {
                 "fetch_failed",
+                "unsafe_response",
                 "http_status",
                 "parse_failed",
                 "missing_external_id",

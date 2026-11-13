@@ -4,8 +4,9 @@
 
 현재 구현: 온통청년 정책 목록의 원천 수집·원본 보관·버전 비교(`youthcenter.py`, `versioning.py`, `collect.py`), 규칙 후보의 근거 검사·명시적 검수 기록(`policy_rule_review.py`)과 로컬 검수 자료의 준비·승인·재검수(`rule_review_workflow.py`), 공고 HTML·PDF 페이지의 텍스트 변환(`notice_text.py`). 네트워크·원본 저장·버전 저장은 `application/collection.py`의 인터페이스로 주입받는다. infrastructure의 HTTP·로컬 JSON 저장소로 실행하며 F08은 [완전한 성공본의 PostgreSQL 인계](../infrastructure/database/COLLECTED_POLICIES.md)도 제공한다. `collected_generations.py`는 주입받은 bounded 파일 읽기로 원본·내용 해시·시각·건수를 검증한다. 통합 실행·예약 파일·알림은 [jobs](../jobs/DAILY_REFRESH.md)에 있다. 공고 원문 보완 수집·혜택 정규화·F12 자동 분석 인계·운영 게시와 실제 운영 갱신 검증은 후속이다.
 
-- `collect_youthcenter()`는 모든 응답을 해석 없이 스냅숏(요청 파라미터·수집 시각·상태·SHA-256)으로 보관하고 정책 ID별 레코드 해시로 신규·변경·유지·삭제를 구분한다.
-- API 키는 요청 파라미터·스냅숏·오류에 넣지 않는다. 어댑터가 직접 추가하고, 어댑터 예외는 형식 이름만 기록한다.
+- `collect_youthcenter()`는 안전한 응답을 해석 없이 스냅숏(요청 파라미터·수집 시각·상태·SHA-256)으로 보관하고 정책 ID별 레코드 해시로 신규·변경·유지·삭제를 구분한다.
+- API 키는 저장할 요청 파라미터·스냅숏·오류에 넣지 않는다. 어댑터가 요청할 때만 추가한다. 응답 본문·Content-Type에 사용한 키의 원문·URL 인코딩·JSON 이스케이프 표현이 있으면 `unsafe_response`로 저장 전에 차단한다. 해당 응답은 재시도하거나 가공한 원본으로 저장하지 않는다. 다른 어댑터 예외는 형식 이름만 기록한다.
+- 수동 수집과 F08의 원본 폴더는 700, 본문·메타데이터·임시 파일은 생성 시점부터 600으로 제한한다. 키를 포함하지 않은 실패 응답도 원래 바이트·해시를 보존한다. 원본에 남는 담당자 등 개인정보의 보관 기간은 별도 관리 대상이다.
 - 페이지·레코드 오류(응답 상태, 형식, ID 누락, 같은 ID의 다른 내용, 페이지 상한)는 성공 데이터와 분리한다. 하나라도 실패하면 `complete=False`이며 삭제 감지를 하지 않는다.
 - 2026-10-30 실제 응답 표본으로 확인한 설정은 `YOUTHCENTER_POLICY_LIST`다. 정책 ID는 `plcyNo`, 목록은 `result.youthPolicyList`, 전체 건수는 `result.pagging.totCount`이고 `resultCode`가 200이 아니면 실패로 처리한다. 테스트는 같은 필드 이름에 가상 값을 넣는다.
 - 조회수(`inqCnt`)는 정책 내용과 무관하게 바뀌므로 변경 판정 해시에서 뺀다. 담당자 이름(`sprvsnInstPicNm`, `operInstPicNm`)은 수집 레코드에 저장하지 않는다. 원본 스냅숏에는 응답 전체가 남으므로 원본 보관 위치·기간은 개인정보 기준으로 별도 정한다.
