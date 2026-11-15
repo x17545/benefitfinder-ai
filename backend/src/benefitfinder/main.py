@@ -26,13 +26,14 @@ explanation_generator = (
     else None
 )
 
+
 app = create_app(
     explanation_model=(
         os.environ.get("F13_OLLAMA_MODEL") or None
     ) if explanation_generator is None else None,
     explanation_database_url=os.environ.get("DATABASE_URL") or None,
     analysis_usage_database_url=os.environ.get("ANALYSIS_USAGE_DATABASE_URL") or None,
-
     policy_database_url=os.environ.get("POLICY_DATABASE_URL") or None,
     explanation_generator=explanation_generator,
+    base_rate_database_url=os.environ.get("BASE_RATE_DATABASE_URL") or None,
 )

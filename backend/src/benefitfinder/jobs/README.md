@@ -1,5 +1,7 @@
 # 작업 실행
 
+`refresh-ecos-rate`는 ECOS 기준금리를 받아 PostgreSQL의 마지막 성공값을 갱신한다. `ECOS_API_KEY`, `BASE_RATE_WRITE_DATABASE_URL`과 명시적인 0004 마이그레이션이 필요하다. 실패 시 이전값을 보존하며 자동 스케줄·Discord 보고는 아직 연결하지 않았다. [실행·읽기/쓰기 권한·검증](../infrastructure/database/ECOS_RATES.md)을 따른다.
+
 현재 구현: `collect-youthcenter`는 [수동 수집](../ingestion/README.md#로컬-수집-실행)을, `refresh-youthcenter`는 [이전 성공본을 보존하는 F08 갱신](#f08-온통청년-갱신-한-번-실행)을 실행한다. F08은 선택적으로 디스코드 결과 알림을 보내고 macOS의 `launchd`로 매일 실행할 수 있다. `rule-review`는 로컬 검수 자료의 준비·명시적 승인·재검수·상태 조회를 실행한다.
 
 ## 한 번에 F12 검수 자료 만들기
