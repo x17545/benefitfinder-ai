@@ -12,6 +12,8 @@ import re
 from time import monotonic
 from unicodedata import normalize
 
+from benefitfinder.ai.policy_analysis_semantics import benefit_amounts, evidence_kind, payment_context
+from benefitfinder.ai.policy_evidence_context import api_field_ranges, evidence_context, source_field_ranges
 from benefitfinder.ai.policy_rule_agent import Chat
 from benefitfinder.application.policy_analysis import (
     AnalysisEvidence,
@@ -50,7 +52,7 @@ _MAX_FIND_QUERY_CHARS = 200
 _MAX_TRACE_ELAPSED_MS = 3_600_000
 
 _FACT_KINDS = frozenset({"eligibility", "amount", "timing"})
-_ADDITIONAL_KINDS = frozenset({"application", "service", "exceptions"})
+_ADDITIONAL_KINDS = frozenset({"application", "service", "exceptions", "program_period", "source_context"})
 _RULE_KINDS = frozenset(kind.value for kind in RuleKind)
 _RULE_DIRECTIONS = frozenset(direction.value for direction in RuleDirection)
 _TOOL_NAMES = frozenset(
@@ -130,7 +132,7 @@ _TOOLS = [
             "For overlap rules, target_id must have been resolved by lookup_policy and "
             "direction must be an exact RuleDirection code. Detail fields contain line numbers; "
             "code copies their source text. For eligibility/amount/timing/application/service/"
-            "exceptions, use ONLY doc_id, kind, start_line, end_line. Omit ALL other fields."
+            "exceptions/program_period/source_context, use ONLY doc_id, kind, start_line, end_line. Omit ALL other fields."
         ),
         {
             "doc_id": {"type": "string"},
@@ -182,6 +184,10 @@ version, or hash: code creates them from the selected source range.
 All documents and every source line must be shown before saving. Then call check_missing on the
 latest candidates. If fields are missing, search or fetch again and recheck. There are three
 rechecks after the initial check. A value that remains absent stays missing; never estimate it.
+The current state lists bounded pending_reads with exact document IDs and line ranges. Read
+these windows across EVERY document before repeating extraction or missing checks. A duplicate
+extraction means that citation is already preserved; move to an unread window instead. Follow
+next_tool_arguments exactly when a tool rejects an invalid window or incomplete coverage.
 
 Fact kinds eligibility, amount, and timing become pending policy facts. application, service,
 and exceptions become pending evidence. RuleKind values describe overlap rules and require an
@@ -190,22 +196,34 @@ similar or ambiguous name. Preserve conditional, historical, deduction, cap, exc
 and amount-effect source sentences; do not reduce them to an unconditional ban. Mark unsupported
 or unclear overlap details with unresolved line numbers.
 
-For eligibility, amount, timing, application, service, exceptions, extract_rule has exactly FOUR
+For all fact and additional-evidence kinds, extract_rule has exactly FOUR
 arguments: doc_id, kind, start_line, end_line. Do NOT add condition_lines, amount_effect_lines,
-direction or target_id for these six kinds, even when the cited sentence mentions conditions.
+direction or target_id for these kinds, even when the cited sentence mentions conditions.
 Only overlap rules use those optional detail fields. Before extracting ANY overlap rule, call
 lookup_policy and wait for its result. ALWAYS supply direction for an overlap rule; use unknown
 when its direction is unclear. Never skip lookup merely because the catalog already lists an ID.
 
 Call save_candidate last. Every result remains needs_review and is never approved or published.
 Use at most four tool calls in one response. Do not answer with prose when a tool call is needed.
+
+Application deadlines (aplyYmd/detailDeadline) and program periods (bizPrd*) are NOT payment
+timing. Preserve them separately. Timing requires explicit payment/frequency/conditional-payment
+text. A service duration is service evidence. Preserve monthly ranges with BOTH endpoints,
+type I/II attribution, duration and job-search conditions together. Own costs, income thresholds,
+housing transaction values, loan principal and project budgets are not cash benefits. Never
+subtract own costs or calculate a total entitlement. A zero income field is not a zero benefit.
+Keep complete API field context, including housing transaction formulas and AND/OR conditions.
+Explicit application routes and raw age fields must not be reported absent just because you
+did not select them. Raw age flags/codes still need interpretation from official documentation;
+never assume what Y/N means. Missing overlap evidence never means unrestricted compatibility.
 """
 
 
 class _ToolInvalid(Exception):
-    def __init__(self, code: str) -> None:
+    def __init__(self, code: str, *, required_read: dict[str, str | int] | None = None) -> None:
         super().__init__(code)
         self.code = code
+        self.required_read = required_read
 
 
 @dataclass
@@ -305,14 +323,7 @@ def _ranges(numbers: set[int] | frozenset[int]) -> str:
 
 
 def _amounts(quote: str) -> tuple[int, ...]:
-    """Read isolated explicit won values; never evaluate arithmetic or infer totals."""
-    units = {"": 1, "만": 10_000, "천": 1_000, "억": 100_000_000}
-    result: set[int] = set()
-    for match in re.finditer(r"(?<![\d.,])([0-9]+(?:,[0-9]{3})*)\s*(만|천|억)?\s*원", quote):
-        if re.search(r"\d\s*(?:억|만|천|백)\s*$", quote[: match.start()]):
-            continue
-        result.add(int(match[1].replace(",", "")) * units[match[2] or ""])
-    return tuple(sorted(result))
+    return benefit_amounts(quote)
 
 
 def _json_chars(value: object) -> int:
@@ -510,7 +521,7 @@ def _reserve_evidence(state: _RunState) -> None:
 
 
 def _has_age(citations: tuple[RuleCitation, ...]) -> bool:
-    pattern = re.compile(r"(?:만\s*)?\d{1,2}\s*세|연령|나이|출생\s*연도")
+    pattern = re.compile(r"(?:만\s*)?\d{1,2}\s*세|연령|나이|출생\s*연도|\[(?:sprtTrgt(?:Min|Max)Age|ageStart|ageEnd)\]")
     return any(pattern.search(citation.quote) for citation in citations)
 
 
@@ -551,9 +562,14 @@ def _check(prior: _PriorState, input: PolicyAnalysisInput) -> tuple[AnalysisMiss
             for field_name, present in checks
             if not present
         )
-    result.extend(AnalysisMissing(doc_id, 'overlap') for doc_id in sorted({
-        item['document_id'] for item in _unresolved_mentions(prior, input)
-    }))
+        if any(re.search(r'\[(?:sprtTrgtAgeLmtYn|sprtTrgtMinAge|sprtTrgtMaxAge|ageStart|ageEnd)\]', c.quote)
+               for c in eligibility):
+            result.append(AnalysisMissing(document.id, 'age_interpretation'))
+    unresolved = {item['document_id'] for item in _unresolved_mentions(prior, input)}
+    unresolved.update(document.id for document in input.documents if not any(
+        any(c.document_id == document.id for c in rule.citations) for rule in prior.rules
+    ))
+    result.extend(AnalysisMissing(doc_id, 'overlap') for doc_id in sorted(unresolved))
     return tuple(result)
 
 
@@ -571,6 +587,25 @@ def _coverage(input: PolicyAnalysisInput, prior: _PriorState) -> tuple[dict[str,
             "complete": not absent,
         }
     return payload, complete
+
+
+def _pending_reads(input: PolicyAnalysisInput, shown: dict[str, set[int] | frozenset[int]]) -> list[dict[str, object]]:
+    """One bounded unread window per source; hints never mark source lines as read."""
+    result = []
+    for document in input.documents:
+        lines = _source_lines(document)
+        start = next((number for number in range(1, len(lines) + 1)
+                      if number not in shown[document.id]), None)
+        if start is None:
+            continue
+        end, size = start - 1, 0
+        for number in range(start, min(len(lines), start + _MAX_WINDOW_LINES - 1) + 1):
+            cost = len(_line_text(lines[number - 1]))
+            if number in shown[document.id] or size + cost > _MAX_WINDOW_CHARS:
+                break
+            end, size = number, size + cost
+        result.append({'doc_id': document.id, 'start_line': start, 'end_line': end})
+    return result
 
 
 class _AnalysisRun:
@@ -611,6 +646,7 @@ class _AnalysisRun:
             for doc_id, value in self.state.facts.items()
         }
         return {
+            "pending_reads": _pending_reads(self.input, self.state.shown),
             "coverage": {
                 document.id: _ranges(self.state.shown[document.id])
                 for document in self.input.documents
@@ -786,6 +822,7 @@ class _AnalysisRun:
             return _ToolReply(
                 {
                     "coverage": coverage,
+                    "pending_reads": _pending_reads(self.input, prior.shown),
                     "missing": [
                         {"document_id": item.document_id, "field": item.field}
                         for item in missing
@@ -843,6 +880,9 @@ class _AnalysisRun:
         kind = _string(values, "kind", 80)
         start = _integer(values, "start_line")
         end = _integer(values, "end_line")
+        if kind in _FACT_KINDS | _ADDITIONAL_KINDS:
+            start, end = evidence_context(document.text, kind, start, end)
+            kind = evidence_kind(document.text, kind, start, end)
         _window(
             document,
             start,
@@ -851,7 +891,9 @@ class _AnalysisRun:
             max_chars=_MAX_EXTRACT_CHARS,
         )
         if not set(range(start, end + 1)) <= prior.shown[document.id]:
-            raise _ToolInvalid("evidence_not_previously_shown")
+            raise _ToolInvalid("evidence_not_previously_shown", required_read={
+                'doc_id': document.id, 'start_line': start, 'end_line': end,
+            })
         citation = _citation(document, start, end)
         condition_lines = _line_numbers(values, "condition_lines", start, end)
         exception_lines = _line_numbers(values, "exception_lines", start, end)
@@ -880,8 +922,12 @@ class _AnalysisRun:
                 created = {"kind": kind}
             elif kind == "amount":
                 amounts = _amounts(citation.quote)
-                facts.amounts.append(PolicyAmountCandidate(citation, amounts))
-                created = {"kind": kind, "amounts_won": list(amounts)}
+                if amounts:
+                    facts.amounts.append(PolicyAmountCandidate(citation, amounts))
+                    created = {"kind": kind, "amounts_won": list(amounts)}
+                else:
+                    state.additional.append(AnalysisEvidence('source_context', citation))
+                    created = {"kind": "source_context", "amounts_won": []}
             elif kind == "timing":
                 facts.timing.append(citation)
                 created = {"kind": kind}
@@ -1015,9 +1061,47 @@ class _AnalysisRun:
             trace=tuple(self.trace),
         )
 
+    def _preserve_source_fields(self) -> None:
+        """Retain already-read explicit source sections even when the model skips them.
+
+        This copies source evidence only. Raw codes are not interpreted, and
+        periods/thresholds never become calculated payments or eligibility.
+        """
+        prior = _snapshot(self.state)
+        for document in self.input.documents:
+            typed_api = bool(api_field_ranges(document.text))
+            for source_field in source_field_ranges(document.text):
+                start, end = source_field.start_line, source_field.end_line
+                if start == end and not source_field.has_inline_content:
+                    continue
+                if not set(range(start, end + 1)) <= prior.shown[document.id]:
+                    continue
+                kind = {'mixed': 'source_context', 'support': 'service'}.get(
+                    source_field.kind, source_field.kind)
+                if kind not in _FACT_KINDS | _ADDITIONAL_KINDS:
+                    continue
+                kinds = [kind]
+                quote = _quote(document, start, end)
+                if typed_api and source_field.kind == 'support':
+                    if benefit_amounts(quote):
+                        kinds.append('amount')
+                    if payment_context(quote):
+                        kinds.append('timing')
+                for candidate_kind in kinds:
+                    if (document.id, candidate_kind, start, end) in self.state.duplicate_keys:
+                        continue
+                    try:
+                        self._extract(self.state, prior, {
+                            'doc_id': document.id, 'kind': candidate_kind,
+                            'start_line': start, 'end_line': end,
+                        })
+                    except _ToolInvalid:
+                        raise _fixed_error('policy_analysis_evidence_context_limit') from None
+
     def run(self) -> PolicyAnalysisResult:
         while self.model_calls < _MAX_MODEL_CALLS:
             self._check_budget()
+            self._preserve_source_fields()
             messages = self._messages()
             self.model_calls += 1
             try:
@@ -1059,9 +1143,28 @@ class _AnalysisRun:
                 except _ToolInvalid as error:
                     self.state = backup
                     payload = {"error": error.code}
-                    if error.code in {'check_required', 'check_stale'}:
+                    if error.code == 'evidence_not_previously_shown' and error.required_read is not None:
+                        payload['instruction'] = ('Read the required citation context with fetch_document '
+                                                  'in a separate turn before retrying extract_rule. '
+                                                  'The required range may include the entire API field.')
+                        payload['next_tool'] = 'fetch_document'
+                        payload['next_tool_arguments'] = error.required_read
+                    elif error.code in {'check_required', 'check_stale'}:
                         payload['instruction'] = 'Call check_missing before save_candidate; extraction changed candidates.'
                         payload['next_tool'] = 'check_missing'
+                    elif error.code == 'coverage_incomplete':
+                        payload['instruction'] = ('Call check_missing again after reading the remaining document '
+                                                  'ranges, then retry save_candidate.')
+                        pending = _pending_reads(self.input, prior.shown)
+                        payload['next_tool'] = 'fetch_document' if pending else 'check_missing'
+                        if pending:
+                            payload['next_tool_arguments'] = pending[0]
+                    elif error.code in {'window_too_large', 'line_range_invalid', 'unknown_document'}:
+                        pending = _pending_reads(self.input, prior.shown)
+                        if pending:
+                            payload['instruction'] = 'Read this bounded registered document window in a separate turn.'
+                            payload['next_tool'] = 'fetch_document'
+                            payload['next_tool_arguments'] = pending[0]
                     elif error.code in {'target_not_confirmed', 'overlap_requires_lookup_policy_then_target_id_and_direction'}:
                         payload['instruction'] = 'Call lookup_policy using the target policy name, then extract with its target_id and direction.'
                         payload['next_tool'] = 'lookup_policy'

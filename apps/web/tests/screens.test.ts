@@ -7,6 +7,7 @@ import { isRecommendationResponse } from '../src/shared/api/recommendations.ts';
 import fixtureText from '../../../contracts/fixtures/recommendation-response.json?raw';
 import emptyText from '../../../contracts/fixtures/empty-response.json?raw';
 import fallbackText from '../../../contracts/fixtures/fallback-response.json?raw';
+import maturityText from '../../../contracts/fixtures/maturity-response.json?raw';
 import unavailableText from '../../../contracts/fixtures/pv-unknown-response.json?raw';
 import servicesText from '../../../contracts/fixtures/service-recommendation-response.json?raw';
 
@@ -262,5 +263,45 @@ describe('period-specific empty results', () => {
     expect(html).toContain('지금 다루는 정책 중엔 맞는 게 없어요');
     expect(html).toContain('온통청년에서 더 찾아보기');
     expect(html).not.toContain('role="tablist"');
+  });
+
+  it('shows the maturity fallback breakdown and explains the PV exclusion', async () => {
+    screen.result = fixture(maturityText);
+    const nominal = await renderResult();
+    expect(nominal).toContain('받을 수 있는 지원금 1개를 찾았어요');
+    expect(nominal).toContain('현금 지급 예정');
+    expect(nominal).toContain('만기 전 예상 적립');
+    expect(nominal).toContain('30만 원');
+
+    screen.location.search = '?period=all&pv=1';
+    const presentValue = await renderResult();
+    expect(presentValue).toContain('약 75만 원');
+    expect(presentValue).toContain('100만 원');
+    expect(presentValue).toContain('현재가치 합계와 순위에는 만기 전 예상 적립액을 넣지 않았어요.');
+  });
+
+  it('shows the portfolio hero breakdown next to the existing total', async () => {
+    const result = fixture(fixtureText);
+    const portfolio = result.results['1y'].pv_off.portfolios[0];
+    if (portfolio === undefined) throw new Error('fixture portfolio missing');
+    portfolio.amount_breakdown = { cash_in_period_won: 2_400_000, expected_accrual_won: 3_000_000 };
+    const pvPortfolio = result.results['1y'].pv_on.portfolios[0];
+    if (pvPortfolio === undefined) throw new Error('fixture PV portfolio missing');
+    pvPortfolio.amount_breakdown = { cash_in_period_won: 6_000_000, expected_accrual_won: 1_000_000 };
+    screen.result = result;
+    const html = await renderResult();
+    const hero = html.match(/aria-label="추천 조합 요약"[\s\S]*?<\/section>/)?.[0] ?? '';
+    expect(hero).toContain('540만 원');
+    expect(hero).toContain('1년 동안 예상 지원금 합계');
+    expect(hero).toContain('현금 지급 예정');
+    expect(hero).toContain('240만 원');
+    expect(hero).toContain('만기 전 예상 적립');
+    expect(hero).toContain('300만 원');
+
+    screen.location.search = '?pv=1';
+    const presentValue = await renderResult();
+    const pvHero = presentValue.match(/aria-label="추천 조합 요약"[\s\S]*?<\/section>/)?.[0] ?? '';
+    expect(pvHero).toContain('1년 동안 지급 예정 현금의 현재가치');
+    expect(pvHero).not.toContain('함께 받을 수 있는 최대 금액');
   });
 });

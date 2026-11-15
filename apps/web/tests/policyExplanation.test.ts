@@ -181,7 +181,7 @@ describe('PolicyCard evidence placement', () => {
       ai_sources: [aiSource('가상 공고: 지원 대상', '[가상 예제] 가상 대상 원문입니다.', evidenceUrl)],
     });
     const html = renderToStaticMarkup(
-      createElement(PolicyCard, { policy: grounded, info: new Map(), aiGenerated: false, detailHref: '/policy/sample', virtualData: false }),
+      createElement(PolicyCard, { policy: grounded, info: new Map(), rank: 1, aiGenerated: false, detailHref: '/policy/sample', virtualData: false }),
     );
 
     expect(html).toContain('[가상] 가상 조건에 맞는 지원금입니다.');

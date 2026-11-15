@@ -3,6 +3,7 @@ import { paths } from '../../app/router.ts';
 import { conditionLabel } from '../../domains/youth/conditionLabels.ts';
 import type { NormalizedBenefit } from '../../shared/api/benefits.ts';
 import { StatusChip } from '../../shared/ui/StatusChip.tsx';
+import { AmountBreakdown } from './AmountBreakdown.tsx';
 import { formatManWon } from './format.ts';
 import { PolicyExplanation } from './PolicyExplanation.tsx';
 import { policyName, portfolioExclusions } from './resultModel.ts';
@@ -65,6 +66,9 @@ export function ResultLists({ view, selected, info, aiGenerated = false }: Resul
                 {item.evidence.length > 0 ? ' (공고 원문 근거)' : ''}
                 {item.amount_won !== null ? `. 이 조합의 기회비용 ${formatManWon(item.amount_won)}` : ''}
               </span>
+              {item.amount_breakdown !== undefined ? (
+                <AmountBreakdown value={item.amount_breakdown} variant="compact" />
+              ) : null}
             </li>
           ))}
         </Fold>
@@ -109,7 +113,7 @@ export function ResultLists({ view, selected, info, aiGenerated = false }: Resul
           title={`아직 조합 계산 전인 정책 ${String(notReviewed.length)}개`}
           note={notReviewed.some((item) => item.verification_only === true)
             ? '승인한 근거와 확인 범위를 볼 수 있어요. 자격·금액·조합은 확인 전이에요.'
-            : '금액·중복 여부를 검수 중이예요. 정책별 자격 진단은 볼 수 있어요.'}
+            : '금액·중복 여부를 검수 중이에요. 정책별 자격 진단은 볼 수 있어요.'}
         >
           {notReviewed.map((item) => {
             if (item.review_explanation === undefined) {

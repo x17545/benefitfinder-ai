@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import type { JSX } from 'react';
 import { navigate, paths } from '../../app/router.ts';
+import { trackEvent } from '../../shared/analytics/events.ts';
 import { Button } from '../../shared/ui/Button.tsx';
 import { SiteFooter } from '../../shared/ui/SiteFooter.tsx';
+import { useServiceMeta } from '../../shared/api/serviceMetaStore.ts';
 import { clearMyData } from './clearMyData.ts';
-import { updateFlowState, useFlowState } from './flowStore.ts';
+import { getFlowState, updateFlowState, useFlowState } from './flowStore.ts';
 import { SavedConditionsCard } from './SavedConditionsCard.tsx';
 import { loadSavedConditions } from './savedConditions.ts';
 import './StartScreen.css';
@@ -13,6 +15,7 @@ import './StartScreen.css';
 export function StartScreen(): JSX.Element {
   const { consent, remember } = useFlowState();
   const [saved, setSaved] = useState(() => loadSavedConditions());
+  const service = useServiceMeta();
 
   function clear(): void {
     clearMyData();
@@ -62,55 +65,70 @@ export function StartScreen(): JSX.Element {
         </ol>
 
         <p className="s1-notice">
-          현재는 가상 정책으로 조합 계산을 시험해요. 실제 받을 수 있는 지원금이 아니에요.{' '}
+          {service.status === 'ok' && service.meta.virtual_data === true
+            ? '현재는 가상 정책으로 조합 계산을 시험해요. 실제 받을 수 있는 지원금이 아니에요.'
+            : '계산 결과는 참고용이에요. 최종 자격과 최신 조건은 신청 기관에서 확인해 주세요.'}{' '}
           <a href={paths.about}>자세히</a>
         </p>
 
         <div className="s1-actions">
-          <div className="s1-consents">
-            <div className="s1-consent">
+          {/* 휴대폰에서는 아래 .s1-start(필수 동의 + 시작하기)만 화면 아래에 붙고, 기억하기와 보관 안내는 본문에 남는다 */}
+          <p id="s1-consent-note" className="s1-consent-note">
+            입력과 결과는 새로고침을 위해 이 탭에 임시 보관해요
+          </p>
+          <div className="s1-consent s1-remember">
+            <input
+              id="s1-remember"
+              type="checkbox"
+              checked={remember}
+              onChange={(event) => {
+                const checked = event.target.checked;
+                if (!getFlowState().remember && checked) {
+                  trackEvent({ name: 'remember_on' });
+                }
+                updateFlowState({ remember: checked });
+              }}
+            />
+            <label htmlFor="s1-remember">
+              (선택) 이 기기에 내 조건 기억하기
+              <span className="s1-consent__hint">30일 동안, 언제든 지울 수 있어요</span>
+            </label>
+          </div>
+
+          <div className="s1-start">
+            <div className="s1-consent s1-required">
               <input
                 id="s1-consent"
                 type="checkbox"
                 checked={consent}
+                aria-describedby="s1-consent-note"
                 onChange={(event) => {
-                  updateFlowState({ consent: event.target.checked });
+                  const checked = event.target.checked;
+                  if (!getFlowState().consent && checked) {
+                    trackEvent({ name: 'consent_check' });
+                  }
+                  updateFlowState({ consent: checked });
                 }}
               />
               <label htmlFor="s1-consent">
                 <b>(필수)</b> 선택한 조건은 정책 분석에만 사용돼요
-                <span className="s1-consent__hint">입력과 결과는 새로고침을 위해 이 탭에 임시 보관해요</span>
               </label>
               <a className="s1-consent__link" href={paths.privacy}>
                 개인정보 처리방침
               </a>
             </div>
-            <div className="s1-consent">
-              <input
-                id="s1-remember"
-                type="checkbox"
-                checked={remember}
-                onChange={(event) => {
-                  updateFlowState({ remember: event.target.checked });
-                }}
-              />
-              <label htmlFor="s1-remember">
-                (선택) 이 기기에 내 조건 기억하기
-                <span className="s1-consent__hint">30일 동안, 언제든 지울 수 있어요</span>
-              </label>
-            </div>
-          </div>
 
-          <Button
-            size="large"
-            block
-            disabled={!consent}
-            onClick={() => {
-              navigate(paths.conditions(1));
-            }}
-          >
-            시작하기
-          </Button>
+            <Button
+              size="large"
+              block
+              disabled={!consent}
+              onClick={() => {
+                navigate(paths.conditions(1));
+              }}
+            >
+              시작하기
+            </Button>
+          </div>
         </div>
       </main>
 

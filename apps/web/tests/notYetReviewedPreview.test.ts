@@ -116,6 +116,15 @@ describe('not_yet_reviewed preview validation', () => {
     expect(isRecommendationResponse(responseWithNotReviewed(verified))).toBe(false);
   });
 
+  it('미확정 금액 preview에는 amount_breakdown을 붙일 수 없다', () => {
+    const withBreakdown = previewItem({
+      review_explanation: previewExplanation({
+        amount_breakdown: { cash_in_period_won: 0, expected_accrual_won: 1000000 },
+      }),
+    });
+    expect(isRecommendationResponse(responseWithNotReviewed(withBreakdown))).toBe(false);
+  });
+
   it('설명에 확정 판정(met/not_met)이 있으면 거부한다', () => {
     const confirmed = previewExplanation({
       eligibility: [

@@ -8,6 +8,7 @@ import {
   applyPeriod,
   diagnosisSummary,
   findMyPolicyResult,
+  payoutTimingSummary,
 } from '../src/features/policy/policyDetailModel.ts';
 import type { ConditionResult } from '../src/features/policy/policyDetailModel.ts';
 import { loadPolicyDetail, toDetailState } from '../src/features/policy/usePolicyDetail.ts';
@@ -39,6 +40,13 @@ describe('S5 정책 상세 글자', () => {
     expect(amountSummary(benefit.benefit_amount)).toBe('[가상] 월 최대 20만 원, 최장 12개월');
     expect(amountSummary(null)).toContain('공식 페이지');
     expect(amountSummary({ max_total_won: 100_000, amount_status: 'unknown' })).toBe('금액 확인 필요');
+  });
+
+  it('검수된 만기형·만기 지급 시점만 만기 시 지급으로 표시한다', () => {
+    expect(payoutTimingSummary({ type: 'maturity' })).toBe('만기 시 지급');
+    expect(payoutTimingSummary({ pay_timing: 'at_maturity' })).toBe('만기 시 지급');
+    expect(payoutTimingSummary({ type: 'monthly', pay_timing: 'monthly_from_start' })).toBeNull();
+    expect(payoutTimingSummary(null)).toBeNull();
   });
 
   it('같은 선택 기준과 정책 버전의 진단·설명만 연결한다', () => {

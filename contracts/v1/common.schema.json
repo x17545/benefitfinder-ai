@@ -25,6 +25,29 @@
         "location": {"type": "string", "minLength": 1},
         "source": {"$ref": "#/$defs/source"}
       }
+    },
+    "amount_breakdown": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cash_in_period_won",
+        "expected_accrual_won"
+      ],
+      "properties": {
+        "cash_in_period_won": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "선택 기간 내 실제 현금 지급 예정액. 현재가치 할인 전 명목금액이다."
+        },
+        "expected_accrual_won": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "선택 기간까지 적립되지만 만기 전이라 아직 지급되지 않는 검수된 예상 지원금. 본인 납입금 제외. 현재가치 합계에는 넣지 않는다."
+        }
+      },
+      "description": "만기 지급이 포함된 경우의 명목 현금·미지급 예상 적립액 구분. PV off 합계는 두 값의 합, PV on 합계는 기간 내 현금의 현재가치다."
     }
   }
 }
