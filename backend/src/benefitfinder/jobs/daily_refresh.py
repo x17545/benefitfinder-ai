@@ -6,12 +6,13 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 import errno
-import fcntl
 import json
 import os
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from uuid import uuid4
+
+from benefitfinder.jobs.refresh_lock import acquire_refresh_lock
 
 STATUS_FILE = "status.json"
 _MAX_STATE_BYTES = 65_536
@@ -227,7 +228,7 @@ def run_daily_refresh(
         root.mkdir(parents=True, exist_ok=True)
         descriptor = os.open(root / ".refresh-lock", os.O_RDWR | os.O_CREAT, 0o600)
         try:
-            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            acquire_refresh_lock(descriptor)
         except OSError as error:
             if error.errno in {errno.EACCES, errno.EAGAIN}:
                 raise DailyRefreshError("daily_refresh_already_running") from None

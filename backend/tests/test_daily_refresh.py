@@ -2,7 +2,6 @@
 
 from contextlib import redirect_stderr, redirect_stdout
 from datetime import datetime, timezone
-import fcntl
 from io import StringIO
 import json
 import multiprocessing
@@ -15,6 +14,7 @@ from unittest.mock import Mock, patch
 
 from benefitfinder.jobs.__main__ import main
 from benefitfinder.jobs.daily_refresh import DailyRefreshError, run_daily_refresh
+from benefitfinder.jobs.refresh_lock import acquire_refresh_lock
 
 AT = datetime(2026, 11, 12, tzinfo=timezone.utc)
 
@@ -61,7 +61,8 @@ class DailyRefreshTest(unittest.TestCase):
         self.assertEqual(len(sent), 1)
         self.assertIn("온통청년: 성공", sent[0])
         self.assertIn("ECOS 기준금리: 성공", sent[0])
-        self.assertEqual((self.root / "status.json").stat().st_mode & 0o777, 0o600)
+        if os.name != "nt":
+            self.assertEqual((self.root / "status.json").stat().st_mode & 0o777, 0o600)
 
     def test_each_failure_preserves_last_full_success_and_still_attempts_the_other_source(
         self,
@@ -136,8 +137,8 @@ class DailyRefreshTest(unittest.TestCase):
     def test_lock_rejects_duplicate_execution_without_overwriting_journal(self) -> None:
         self.assertEqual(self.run_sources(), 0)
         before = (self.root / "status.json").read_bytes()
-        with (self.root / ".refresh-lock").open("rb") as lock:
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        with (self.root / ".refresh-lock").open("r+b") as lock:
+            acquire_refresh_lock(lock.fileno())
             policy = Mock()
             with self.assertRaisesRegex(DailyRefreshError, "^daily_refresh_already_running$"):
                 run_daily_refresh(

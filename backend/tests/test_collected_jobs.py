@@ -1,7 +1,7 @@
 """Offline collection/DB handoff, recovery and source-lock boundaries."""
 
 from contextlib import redirect_stderr, redirect_stdout
-import fcntl
+import errno
 from io import StringIO
 import json
 from pathlib import Path
@@ -18,6 +18,7 @@ from benefitfinder.application.collection import SourceFetcher, SourceResponse
 from benefitfinder.infrastructure.collection_files import read_collection_file
 from benefitfinder.ingestion.collected_generations import load_youthcenter_generation
 from benefitfinder.jobs.__main__ import main
+from benefitfinder.jobs.refresh_lock import acquire_refresh_lock
 
 
 class CollectedJobsTests(unittest.TestCase):
@@ -101,9 +102,10 @@ class CollectedJobsTests(unittest.TestCase):
     def test_source_lock_is_held_during_both_previous_and_new_generation_handoffs(self) -> None:
         def save(batch: CollectedPolicyBatch) -> CollectionImportResult:
             lock_path = self.data / "processed/f08-youthcenter/.refresh-lock"
-            with lock_path.open("rb") as handle:
-                with self.assertRaises(BlockingIOError):
-                    fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            with lock_path.open("r+b") as handle:
+                with self.assertRaises(OSError) as locked:
+                    acquire_refresh_lock(handle.fileno())
+                self.assertIn(locked.exception.errno, {errno.EACCES, errno.EAGAIN})
             return CollectionImportResult(1, 0, 0, 0)
 
         self.store.return_value.save.side_effect = save
