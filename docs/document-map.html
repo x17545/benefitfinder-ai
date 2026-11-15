@@ -160,11 +160,37 @@
     .story-position { margin-inline-start: auto; color: var(--color-muted); font-size: var(--text-sub); }
     .story[data-ready] .story-panel:not([hidden]) .story-visual > * { animation: reveal 380ms ease-out both; }
     .story[data-ready] .story-panel:not([hidden]) .story-bar span { animation: grow 650ms ease-out both; }
+    .refresh { margin-block: 24px 16px; }
+    .refresh-intro { margin-bottom: 12px; }
+    .refresh-nav { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .refresh-panel { padding-block: 16px; }
+    .refresh-panel + .refresh-panel { border-top: 1px solid var(--color-line); }
+    .refresh[data-ready] .refresh-panel { border-top: 0; }
+    .refresh-panel > h3 { margin-bottom: 8px; }
+    .refresh-cases { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .refresh-case { display: grid; grid-template-rows: auto 1fr auto; gap: 8px; padding: 14px; border-radius: var(--radius-card); background: var(--color-icon-bg); }
+    .refresh-case h4 { margin: 0; font-size: var(--text-body); }
+    .refresh-event { color: var(--color-muted); }
+    .refresh-event strong { color: var(--color-accent-ink); }
+    .refresh-event--failed strong { color: var(--color-no); }
+    .refresh-current { padding: 10px 12px; border-radius: var(--radius-chip); background: var(--color-card); }
+    .refresh-current span { display: block; color: var(--color-muted); font-size: var(--text-sub); }
+    .refresh-current--new { background: var(--color-primary); color: var(--color-on-primary); }
+    .refresh-current--new span { color: var(--color-hero-muted); }
+    .refresh-current--new strong { color: var(--color-accent); }
+    .refresh-note { margin-top: 10px; color: var(--color-muted); font-size: var(--text-sub); }
+    .refresh[data-ready] .refresh-panel:not([hidden]) .refresh-event--checked,
+    .refresh[data-ready] .refresh-panel:not([hidden]) .refresh-event--failed { animation: reveal 380ms ease-out both; }
+    .refresh[data-ready] .refresh-panel:not([hidden]) .refresh-current--new { animation: adopt 620ms ease-out both; }
     @keyframes reveal { from { opacity: .4; transform: translateY(5px); } }
     @keyframes grow { from { transform: scaleX(0); } }
+    @keyframes adopt { from { opacity: .4; transform: translateY(-10px); } }
     @media (prefers-reduced-motion: reduce) {
       .story[data-ready] .story-panel:not([hidden]) .story-visual > *,
-      .story[data-ready] .story-panel:not([hidden]) .story-bar span { animation: none; }
+      .story[data-ready] .story-panel:not([hidden]) .story-bar span,
+      .refresh[data-ready] .refresh-panel:not([hidden]) .refresh-event--checked,
+      .refresh[data-ready] .refresh-panel:not([hidden]) .refresh-event--failed,
+      .refresh[data-ready] .refresh-panel:not([hidden]) .refresh-current--new { animation: none; }
     }
     @media (max-width: 767px) {
       .steps, .groups { grid-template-columns: minmax(0, 1fr); }
@@ -173,7 +199,8 @@
       .story-panel { grid-template-columns: minmax(0, 1fr); gap: 12px; }
       .story-visual { min-height: 0; }
     }
-    @media (max-width: 380px) { .story-nav { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 560px) { .refresh-cases { grid-template-columns: minmax(0, 1fr); } }
+    @media (max-width: 380px) { .story-nav:not(.refresh-nav) { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   </style>
 </head>
 <body>
@@ -197,7 +224,7 @@
       </nav>
     </div>
 
-    <section id="story" class="story" aria-labelledby="story-title">
+    <section id="story" class="story" aria-labelledby="story-title" data-playback>
       <div class="lane-head">
         <h2 id="story-title">공고 세 건이 추천 조합이 되기까지</h2>
         <p>가상 예시 · 세 지원금 모두 자격 충족 · 1년 명목금액</p>
@@ -210,7 +237,7 @@
           <button class="button" type="button" aria-pressed="false" aria-controls="story-result">4. 결과</button>
         </nav>
 
-        <article id="story-collect" class="story-panel" aria-labelledby="collect-title">
+        <article id="story-collect" class="story-panel" aria-labelledby="collect-title" data-scene>
           <div>
             <p class="eyebrow">01 · 수집</p>
             <h3 id="collect-title">공고와 기준을 모아요</h3>
@@ -227,7 +254,7 @@
           </div>
         </article>
 
-        <article id="story-review" class="story-panel" aria-labelledby="review-title">
+        <article id="story-review" class="story-panel" aria-labelledby="review-title" data-scene>
           <div>
             <p class="eyebrow">02 · 검수</p>
             <h3 id="review-title">함께 받을 수 없는 조건을 찾아요</h3>
@@ -240,7 +267,7 @@
           </div>
         </article>
 
-        <article id="story-calculate" class="story-panel" aria-labelledby="calculate-title">
+        <article id="story-calculate" class="story-panel" aria-labelledby="calculate-title" data-scene>
           <div>
             <p class="eyebrow">03 · 계산</p>
             <h3 id="calculate-title">함께 받을 수 있는 조합만 계산해요</h3>
@@ -254,7 +281,7 @@
           </div>
         </article>
 
-        <article id="story-result" class="story-panel" aria-labelledby="result-title">
+        <article id="story-result" class="story-panel" aria-labelledby="result-title" data-scene>
           <div>
             <p class="eyebrow">04 · 결과</p>
             <h3 id="result-title">묶어서 받으면 130만 원 더 커져요</h3>
@@ -286,6 +313,7 @@
           <h3>공식 자료 수집</h3>
           <p>공식 API와 공고·지침을 읽고 원문과 버전을 보존합니다.</p>
           <ul class="links">
+            <li><a href="#f08-compare">F08 정상·실패 비교 보기 ↓</a></li>
             <li><a href="https://github.com/x17545/benefitfinder-ai/blob/main/docs/architecture/POLICY_DATA_PIPELINE.md">정책 데이터 준비 설계</a></li>
             <li><a href="https://github.com/x17545/benefitfinder-ai/blob/main/backend/src/benefitfinder/jobs/DAILY_REFRESH.md">F08 갱신 실행과 운영 확인</a></li>
           </ul>
@@ -307,6 +335,79 @@
           </ul>
         </li>
       </ol>
+    </section>
+
+    <section id="f08-compare" class="refresh" aria-labelledby="f08-title" data-playback>
+      <div class="lane-head">
+        <h2 id="f08-title">F08 · 수집에 실패하면 무엇이 남을까요?</h2>
+        <p>온통청년 목록 갱신 예시</p>
+      </div>
+      <p class="refresh-intro">F08은 새벽 3시(KST) 실행을 예약할 수 있고, 정책 목록과 기준금리를 각각 갱신해요. 여기서는 온통청년 목록이 <strong>완전히 수집됐을 때</strong>와 <strong>중간에 실패했을 때</strong>를 같은 시작점에서 비교해요.</p>
+
+      <div class="story-card">
+        <nav class="story-nav refresh-nav" aria-label="F08 비교 단계 선택" hidden>
+          <button class="button" type="button" aria-pressed="false" aria-controls="f08-start">1. 갱신 시작</button>
+          <button class="button" type="button" aria-pressed="false" aria-controls="f08-collect">2. 수집·검사</button>
+          <button class="button" type="button" aria-pressed="false" aria-controls="f08-result">3. 결과 비교</button>
+        </nav>
+
+        <article id="f08-start" class="refresh-panel" aria-labelledby="f08-start-title" data-scene>
+          <h3 id="f08-start-title">같은 성공본에서 시작해요</h3>
+          <div class="refresh-cases">
+            <div class="refresh-case">
+              <h4>정상 갱신</h4>
+              <p class="refresh-event">온통청년 목록을 새로 요청해요.</p>
+              <p class="refresh-current"><span>현재 수집본</span><strong>지난 성공본 · v1</strong><span>마지막 성공 시각: 지난 완료 시각</span></p>
+            </div>
+            <div class="refresh-case">
+              <h4>수집 실패</h4>
+              <p class="refresh-event">이쪽도 같은 목록을 새로 요청해요.</p>
+              <p class="refresh-current"><span>현재 수집본</span><strong>지난 성공본 · v1</strong><span>마지막 성공 시각: 지난 완료 시각</span></p>
+            </div>
+          </div>
+        </article>
+
+        <article id="f08-collect" class="refresh-panel" aria-labelledby="f08-collect-title" data-scene>
+          <h3 id="f08-collect-title">일부만 받았을 때는 바꾸지 않아요</h3>
+          <div class="refresh-cases">
+            <div class="refresh-case">
+              <h4>정상 갱신</h4>
+              <p class="refresh-event refresh-event--checked"><strong>✓ 전부 수집</strong> · 전체 건수와 중복 ID를 검사하고 JSON·CSV를 만들어요.</p>
+              <p class="refresh-current"><span>교체 전 수집본</span><strong>지난 성공본 · v1</strong><span>마지막 성공 시각: 지난 완료 시각</span></p>
+            </div>
+            <div class="refresh-case">
+              <h4>수집 실패</h4>
+              <p class="refresh-event refresh-event--failed"><strong>× 일부 페이지에서 실패</strong> · 도중에 받은 목록은 성공본으로 선택하지 않아요.</p>
+              <p class="refresh-current"><span>현재 수집본</span><strong>지난 성공본 · v1</strong><span>마지막 성공 시각: 지난 완료 시각</span></p>
+            </div>
+          </div>
+        </article>
+
+        <article id="f08-result" class="refresh-panel" aria-labelledby="f08-result-title" data-scene>
+          <h3 id="f08-result-title">수집본과 성공 시각을 비교해요</h3>
+          <div class="refresh-cases">
+            <div class="refresh-case">
+              <h4>정상 갱신</h4>
+              <p class="refresh-event"><strong>✓ 새 성공본으로 교체</strong> · 파일 생성까지 마치면 수집본과 마지막 성공 시각을 함께 갱신해요.</p>
+              <p class="refresh-current refresh-current--new"><span>갱신된 수집본</span><strong>새 성공본 · v2</strong><span>마지막 성공 시각: 이번 완료 시각</span></p>
+            </div>
+            <div class="refresh-case">
+              <h4>수집 실패</h4>
+              <p class="refresh-event refresh-event--failed"><strong>× 이번 시도는 실패로 기록</strong> · 수집본도 마지막 성공 시각도 그대로예요.</p>
+              <p class="refresh-current"><span>유지한 수집본</span><strong>지난 성공본 · v1</strong><span>마지막 성공 시각: 지난 완료 시각</span></p>
+            </div>
+          </div>
+        </article>
+
+        <div class="story-actions" hidden>
+          <button class="button button--primary" type="button" data-play>재생</button>
+          <button class="button" type="button" data-move="-1">이전</button>
+          <button class="button" type="button" data-move="1">다음</button>
+          <output class="story-position" aria-live="polite"></output>
+        </div>
+      </div>
+
+      <p class="refresh-note">목록 수집이 실패해도 독립적으로 성공한 금리 갱신은 되돌리지 않아요. 수집본을 교체하는 일과 사람이 정책을 검수해 추천에 게시하는 일도 별개예요.</p>
     </section>
 
     <p class="bridge"><span aria-hidden="true">↓</span><strong>게시된 정책·규칙·근거</strong> 실제 정책 모드에서 계산과 설명의 입력으로 사용합니다.</p>
@@ -386,69 +487,77 @@
     <div class="wrap">그림은 서비스와 데이터 준비의 전체 흐름입니다. 문서 링크는 GitHub의 main을 열며, 실제 운영·검증 범위는 현재 구현 상태에서 확인하세요.</div>
   </footer>
   <script>
-    const story = document.getElementById("story");
-    const panels = [...story.querySelectorAll(".story-panel")];
-    const nav = story.querySelector(".story-nav");
-    const steps = [...nav.querySelectorAll("button")];
-    const actions = story.querySelector(".story-actions");
-    const play = actions.querySelector("[data-play]");
-    const prev = actions.querySelector('[data-move="-1"]');
-    const next = actions.querySelector('[data-move="1"]');
-    const position = actions.querySelector("output");
-    const last = panels.length - 1;
-    let current = 0;
-    let timer = null;
+    let stopActivePlayback = null;
 
-    function showStep(index) {
-      current = index;
-      panels.forEach((panel, i) => {
-        panel.hidden = i !== current;
-        steps[i].setAttribute("aria-pressed", String(i === current));
-      });
-      prev.setAttribute("aria-disabled", String(current === 0));
-      next.setAttribute("aria-disabled", String(current === last));
-      position.textContent = "단계 " + (current + 1) + " / " + panels.length;
-    }
+    document.querySelectorAll("[data-playback]").forEach((section) => {
+      const panels = [...section.querySelectorAll("[data-scene]")];
+      const nav = section.querySelector(".story-nav");
+      const steps = [...nav.querySelectorAll("button")];
+      const actions = section.querySelector(".story-actions");
+      const play = actions.querySelector("[data-play]");
+      const prev = actions.querySelector('[data-move="-1"]');
+      const next = actions.querySelector('[data-move="1"]');
+      const position = actions.querySelector("output");
+      const last = panels.length - 1;
+      let current = 0;
+      let timer = null;
 
-    function pause() {
-      clearTimeout(timer);
-      timer = null;
-      play.textContent = current === last ? "처음부터 재생" : "재생";
-    }
-
-    function scheduleAdvance() {
-      timer = setTimeout(() => {
-        showStep(current + 1);
-        if (current === last) pause();
-        else scheduleAdvance();
-      }, 6000);
-    }
-
-    function navigate(index) {
-      if (index < 0 || index > last) return;
-      showStep(index);
-      pause();
-    }
-
-    steps.forEach((step, i) => step.addEventListener("click", () => navigate(i)));
-    prev.addEventListener("click", () => navigate(current - 1));
-    next.addEventListener("click", () => navigate(current + 1));
-    play.addEventListener("click", () => {
-      if (timer !== null) {
-        pause();
-        return;
+      function showStep(index) {
+        current = index;
+        panels.forEach((panel, i) => {
+          panel.hidden = i !== current;
+          steps[i].setAttribute("aria-pressed", String(i === current));
+        });
+        prev.setAttribute("aria-disabled", String(current === 0));
+        next.setAttribute("aria-disabled", String(current === last));
+        position.textContent = "단계 " + (current + 1) + " / " + panels.length;
       }
-      if (current === last) showStep(0);
-      play.textContent = "멈춤";
-      scheduleAdvance();
+
+      function pause() {
+        clearTimeout(timer);
+        timer = null;
+        if (stopActivePlayback === pause) stopActivePlayback = null;
+        play.textContent = current === last ? "처음부터 재생" : "재생";
+      }
+
+      function scheduleAdvance() {
+        timer = setTimeout(() => {
+          showStep(current + 1);
+          if (current === last) pause();
+          else scheduleAdvance();
+        }, 6000);
+      }
+
+      function navigate(index) {
+        if (index < 0 || index > last) return;
+        stopActivePlayback?.();
+        showStep(index);
+        pause();
+      }
+
+      steps.forEach((step, i) => step.addEventListener("click", () => navigate(i)));
+      prev.addEventListener("click", () => navigate(current - 1));
+      next.addEventListener("click", () => navigate(current + 1));
+      play.addEventListener("click", () => {
+        if (timer !== null) {
+          pause();
+          return;
+        }
+        stopActivePlayback?.();
+        stopActivePlayback = pause;
+        if (current === last) showStep(0);
+        play.textContent = "멈춤";
+        scheduleAdvance();
+      });
+      showStep(0);
+      nav.hidden = false;
+      actions.hidden = false;
+      section.dataset.ready = "true";
     });
+
     document.addEventListener("visibilitychange", () => {
-      if (document.hidden) pause();
+      if (document.hidden) stopActivePlayback?.();
     });
-    showStep(0);
-    nav.hidden = false;
-    actions.hidden = false;
-    story.dataset.ready = "true";
   </script>
 </body>
 </html>
