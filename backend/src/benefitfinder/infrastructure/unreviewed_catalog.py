@@ -81,6 +81,22 @@ def publish_unreviewed(database_url: str, entries: list[tuple[CatalogRecord | Se
                 raise ValueError('unreviewed_existing_release')
             provenance = {'document_version': record.benefit.source.document_version,
                           'source_sha256': record.source_sha256, 'record_sha256': digest}
+            existing = connection.execute(
+                'SELECT review_type,review_status,publication_status,approved_sha256,payload,unreviewed_source '
+                'FROM public.policy_catalog_releases WHERE policy_id=%s AND document_version=%s',
+                (record.benefit.id, record.benefit.source.document_version),
+            ).fetchone()
+            if existing is not None:
+                expected = ('unreviewed', 'unreviewed', 'retired', digest,
+                            record.model_dump(mode='json'), provenance)
+                if existing != expected:
+                    raise ValueError('unreviewed_retired_release_mismatch')
+                connection.execute(
+                    "UPDATE public.policy_catalog_releases SET publication_status='published',published_at=%s "
+                    "WHERE policy_id=%s AND document_version=%s",
+                    (now, record.benefit.id, record.benefit.source.document_version),
+                )
+                continue
             connection.execute("""INSERT INTO public.policy_catalog_releases
                 (policy_id, document_version, payload, approved_sha256, review_status, reviewed_by,
                  reviewed_at, publication_status, published_at, review_type, unreviewed_source)

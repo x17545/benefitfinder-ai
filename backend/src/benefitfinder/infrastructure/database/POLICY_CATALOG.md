@@ -99,6 +99,7 @@ uv run --locked python -m benefitfinder.jobs ai-catalog retire --manifest data/l
 미검수 게시 경로는 검수 판정을 만들지 않는다. `review_type`과 `review_status`는 `unreviewed`, 검수자와 검수 시각은 NULL이며, 원천 버전과 본문·레코드 해시를 별도로 기록한다. 현금 정책은 `reviewed=false`, 지급 일정 미확정, 중복 규칙 미확정인 경우만 허용하여 조합 계산에서 제외한다. 단가가 있는 서비스, F12 검수 연결, 가상 정책은 이 경로에서 게시하지 않는다. 기존 원천 연결·해시 및 수집 변경 시 철회 검사는 유지한다. 이 경로의 설명 조항은 검수된 F13 조항으로 게시하지 않는다.
 
 각 manifest 항목은 `input`과 `source` 경로만 가진다. 게시 및 철회는 최대 50건씩 트랜잭션으로 처리하며 기존 게시 정책을 교체하지 않는다.
+수동 철회한 미검수 버전은 원천·전체 레코드·해시가 정확히 일치하고 현재 원천 검사도 통과한 경우에만 같은 배치 명령으로 재게시할 수 있다. 원천 변경으로 보류된 버전은 재게시하지 않는다.
 
 ```sh
 uv run --locked python -m benefitfinder.jobs unreviewed-catalog validate --manifest data/local/catalog/unreviewed.json

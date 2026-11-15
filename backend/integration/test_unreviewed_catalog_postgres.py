@@ -84,6 +84,12 @@ class UnreviewedCatalogPostgresTest(unittest.TestCase):
                 connection.execute("UPDATE public.policy_catalog_releases SET unreviewed_source='{}'::jsonb")
         retire_unreviewed(self.url, [entry])
         self.assertIsNone(self.reader.get_published(entry[0].benefit.id))
+        altered = entry[0].model_dump(mode='json')
+        altered['benefit']['summary'] += ' changed'
+        with self.assertRaisesRegex(ValueError, 'unreviewed_retired_release_mismatch'):
+            publish_unreviewed(self.url, [(CatalogRecord.model_validate(altered), entry[1])])
+        publish_unreviewed(self.url, [entry])
+        self.assertIsNotNone(self.reader.get_published(entry[0].benefit.id))
 
     def test_forged_source_and_batch_collision_roll_back(self):
         first, second = self.entry('1'), self.entry('2')
@@ -116,6 +122,8 @@ class UnreviewedCatalogPostgresTest(unittest.TestCase):
                                   old.snapshot_ref, AT, old.fields)
         self.store.save(CollectedPolicyBatch('youthcenter', uuid4().hex, AT + timedelta(days=1), (changed,)))
         self.assertIsNone(self.reader.get_published(entry[0].benefit.id))
+        with self.assertRaises(ValueError):
+            publish_unreviewed(self.url, [entry])
         with psycopg.connect(self.url) as connection:
             self.assertEqual(connection.execute('SELECT review_status,publication_status FROM public.policy_catalog_releases').fetchone(),
                              ('pending', 'retired'))
