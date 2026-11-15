@@ -4,7 +4,34 @@
 
 > 코디세이 AI 네이티브 Final Project · 5인 팀
 
-[서비스 소개](#해결하려는-문제) · [로컬 실행](#로컬-실행) · [문서 지도](docs/README.md) · [평가자 안내](#평가자-안내)
+[프로젝트 흐름](#프로젝트-흐름-한눈에-보기) · [로컬 실행](#로컬-실행) · [팀 역할](#팀원-역할과-기여) · [결과](#결과) · [평가자 안내](#평가자-안내) · [문서 지도](docs/README.md)
+
+## 프로젝트 흐름 한눈에 보기
+
+```mermaid
+flowchart TB
+    accTitle: 정책 준비에서 사용자 결과까지
+    accDescr: 공식 자료를 수집해 AI로 후보를 추출하고 사람이 검수한 뒤 게시한다. 사용자 조건과 게시 자료를 코드가 판정하고 계산해 비교 결과를 보여 준다.
+    Source["공식 API·정책 원문"] --> Review["수집 → AI 후보 추출 → 사람 검수"]
+    Review -->|"승인 후 게시"| Catalog[("정책·규칙·근거")]
+    Catalog --> Compute["코드 · 자격 판정과 조합 계산"]
+    Profile["사용자 · 조건 13단계 선택"] --> Compute
+    Compute --> Result["조합 비교 · 상황 변화 · 상세"]
+
+    classDef data fill:#F2E9FF,stroke:#7251A3,color:#3E2869;
+    classDef published fill:#DDF7ED,stroke:#137A60,color:#073F33;
+    classDef app fill:#E8F1FF,stroke:#3863A3,color:#152F56;
+    class Review data;
+    class Catalog published;
+    class Compute,Result app;
+```
+
+- **정책 준비:** 공식 자료에서 AI가 규칙 후보와 근거를 찾고, 사람이 검수한 정책·규칙·근거만 게시한다. [데이터 준비 흐름](docs/architecture/POLICY_DATA_PIPELINE.md)
+- **사용자 요청:** 코드는 13단계 선택값과 정책을 비교해 자격·중복 제한·총액을 계산한다. 사용자는 조합과 상황 변화를 비교하고, 상세에서 근거와 공식 신청 안내를 확인한다. AI 설명은 선택 사항이다. [화면 흐름](docs/product/REQUIREMENTS.md#41-화면-목록과-흐름)
+
+**지금 체험할 수 있는 범위:** 기본 로컬 실행은 공식 지역 목록과 가상 정책을 사용한다. 실제 정책의 검수·운영 게시와 제출 성과는 [현재 개발 상태](#현재-개발-상태)와 [결과](#결과)에서 구분한다.
+
+단계별 문서는 [Markdown 문서 지도](docs/README.md)에서 찾을 수 있다. [HTML 문서 지도](docs/document-map.html)는 공고 세 건이 추천 조합으로 이어지는 예시를 장면별로 보여 준다. 파일을 내려받아 브라우저에서 열면 되고, 각 문서 링크는 GitHub로 연결된다.
 
 ## 해결하려는 문제
 
@@ -162,7 +189,9 @@ DB·LLM 키 없이 실행한다. `pip`·`npm`·`npx` 대신 uv·pnpm을 사용�
 
 ## 결과
 
-배포 후 채운다.
+기본 로컬 환경에서는 **공식 지역 선택 → 13단계 조건 입력 → 가상 조합 결과 → 상황 변화·상세·서비스 확인**을 시험할 수 있다. 검수한 규칙과 설명 근거를 같은 버전으로 게시하는 경로는 가상 자료로 검증했다. 실제 원문의 분석 결과는 검수 대기이며 운영 정책 게시와는 구분한다. [검증과 운영 현황](docs/README.md#구현-상태)
+
+다음 제출 결과는 확인한 뒤 기입한다.
 
 - 구현 결과: [구현 현황 표](docs/product/REQUIREMENTS.md#14-구현-현황-표) 기준 Must 기능 (기입)개 중 (기입)개 동작
 - 사용자 테스트: 실사용자 (기입)명, 주요 지표와 개선 내용은 [사용자 테스트 결과](docs/product/USER_TEST.md#6-피드백과-반영-기록-제출용)
@@ -188,6 +217,7 @@ backend/        FastAPI, 공통 판정·분야별 규칙·데이터 준비 경�
 contracts/      공용 JSON Schema와 가상 예제
 docs/
   README.md     문서 지도와 구현 상태
+  document-map.html  흐름별 문서 탐색 (브라우저)
   product/      기획 개요·기능 명세·사용자 테스트
   architecture/ 기술 설계·정책 데이터 준비
   development/  설치·컨벤션·Git·저장소 운영
