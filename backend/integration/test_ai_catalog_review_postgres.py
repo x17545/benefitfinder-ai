@@ -2,26 +2,32 @@
 
 import unittest
 import json
+import hashlib
+from uuid import uuid4
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 from datetime import timedelta
 from pathlib import Path
 
 import psycopg
+from psycopg import sql
+from psycopg.conninfo import make_conninfo
 from fastapi.testclient import TestClient
 
 from backend.integration.postgres_fixture import test_database_url
 from backend.integration.test_policy_source_rechecks_postgres import AT, batch, dedicated_database, record
-from backend.tests.catalog_fixtures import source_text
+from backend.tests.catalog_fixtures import source_text, release_data
 from backend.tests.service_catalog_fixtures import service_release_data, service_source_text, price_source_text
-from benefitfinder.infrastructure.ai_catalog_review import AIReview, publish_ai_batch, retire_ai_batch
+from benefitfinder.infrastructure.ai_catalog_review import AIReview, publish_ai_batch, retire_ai_batch, project_youthcenter_source
 from benefitfinder.infrastructure.database.repositories.collected_policies import PostgresCollectedPolicies
 from benefitfinder.infrastructure.database.repositories.published_policies import PostgresPublishedPolicies, publish_policy
-from benefitfinder.infrastructure.policy_catalog_records import record_hash
+from benefitfinder.infrastructure.policy_catalog_records import CatalogRecord, record_hash
 from benefitfinder.infrastructure.service_catalog_records import ServiceCatalogRecord, service_record_hash
 from benefitfinder.infrastructure.database.repositories.published_services import PostgresPublishedServices
 from benefitfinder.jobs.__main__ import main
 from benefitfinder.bootstrap import create_app
+from benefitfinder.application.collection import CollectedRecord
+from benefitfinder.application.collected_policies import CollectedPolicyBatch
 
 MIGRATIONS = Path(__file__).resolve().parents[1] / "migrations/versions"
 
@@ -89,6 +95,46 @@ class AICatalogPostgresTest(unittest.TestCase):
             detail = client.get("/api/v1/benefits/" + self.a.benefit.id)
             self.assertEqual(detail.status_code, 200)
             self.assertEqual(detail.json()["source"]["url"], self.a.benefit.source.url)
+
+    def test_real_policy_source_must_equal_locked_official_fields(self):
+        fields = {"plcyNo": "20260101000000000001", "plcyNm": "[가상] 정책 C", "plcySprtCn": source_text()}
+        material = hashlib.sha256(b"fictional-original-C").hexdigest()
+        item = CollectedRecord("youthcenter", "20260101000000000001", material, "fictional-snapshot/C", AT, fields)
+        self.store.save(CollectedPolicyBatch("youthcenter", uuid4().hex, AT + timedelta(seconds=2), (item,)))
+        official = project_youthcenter_source(fields)
+        data = release_data("C")
+        data["benefit"]["id"] = "youth:20260101000000000001"
+        data["benefit"]["virtual_data"] = False
+        data["collection_sources"] = [{"source": "youthcenter", "external_id": "20260101000000000001", "material_sha256": material}]
+        data["source_sha256"] = hashlib.sha256(official.encode()).hexdigest()
+        old = data["benefit"]["source"]
+        new = {"url": "https://www.youthcenter.go.kr/youthPolicy/ythPlcyTotalSearch/ythPlcyDetail/20260101000000000001",
+               "document_version": "sha256:" + material, "checked_at": old["checked_at"]}
+        data = json.loads(json.dumps(data).replace(json.dumps(old), json.dumps(new)))
+        policy = CatalogRecord.model_validate(data)
+        checked_at = AT + timedelta(seconds=3)
+        review = self.review(policy, reviewed_at=checked_at)
+        forged = official + "\n[가상] 존재하지 않는 지원 조건"
+        data["source_sha256"] = hashlib.sha256(forged.encode()).hexdigest()
+        forged_policy = CatalogRecord.model_validate(data)
+        forged_review = self.review(forged_policy, reviewed_at=checked_at)
+        with self.assertRaisesRegex(ValueError, "ai_catalog_source_projection_mismatch"):
+            publish_ai_batch(self.url, [(forged_policy, forged_review, forged, None)])
+        role = "bf_ai_publisher_" + uuid4().hex
+        with psycopg.connect(self.url) as connection:
+            connection.execute(sql.SQL("CREATE ROLE {} LOGIN").format(sql.Identifier(role)))
+            connection.execute(sql.SQL("GRANT USAGE ON SCHEMA public TO {}").format(sql.Identifier(role)))
+            connection.execute(sql.SQL("GRANT SELECT, INSERT ON public.policy_catalog_releases TO {}").format(sql.Identifier(role)))
+            connection.execute(sql.SQL("GRANT UPDATE (publication_status) ON public.policy_catalog_releases TO {}").format(sql.Identifier(role)))
+            connection.execute(sql.SQL("GRANT SELECT (version) ON public.benefitfinder_schema_migrations TO {}").format(sql.Identifier(role)))
+            connection.execute(sql.SQL("GRANT SELECT (source,external_id,fields,material_sha256,missing_detected_at) ON public.collected_policies TO {}").format(sql.Identifier(role)))
+        try:
+            publish_ai_batch(make_conninfo(self.url, user=role), [(policy, review, official, None)])
+            self.assertIsNotNone(self.reader.get_published(policy.benefit.id))
+        finally:
+            with psycopg.connect(self.url) as connection:
+                connection.execute(sql.SQL("DROP OWNED BY {}").format(sql.Identifier(role)))
+                connection.execute(sql.SQL("DROP ROLE {}").format(sql.Identifier(role)))
 
     def test_service_source_and_price_are_verified(self):
         service = ServiceCatalogRecord.model_validate(service_release_data())

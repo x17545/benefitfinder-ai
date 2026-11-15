@@ -73,6 +73,60 @@ def validate_ai_review(
         raise ValueError("ai_review_record_mismatch")
 
 
+# Exact, reproducible projection of the saved youthcenter response. Never add
+# guessed values; the source link and the projected text are checked under lock.
+YOUTHCENTER_SOURCE_FIELDS = (
+    "plcyNo", "plcyNm", "lclsfNm", "mclsfNm", "plcyExplnCn", "plcySprtCn", "aplyYmd",
+    "aplyPrdSeCd", "plcyAplyMthdCn", "addAplyQlfcCndCn", "ptcpPrpTrgtCn", "etcMttrCn",
+    "srngMthdCn", "sbmsnDcmntCn", "earnEtcCn", "earnMinAmt", "earnMaxAmt", "schoolCd",
+    "jobCd", "sprtTrgtAgeLmtYn", "sprtTrgtMinAge", "sprtTrgtMaxAge", "zipCd",
+    "aplyUrlAddr", "refUrlAddr1", "refUrlAddr2", "rgtrInstCdNm", "sprvsnInstCdNm",
+    "bizPrdBgngYmd", "bizPrdEndYmd", "bizPrdEtcCn",
+)
+
+
+def project_youthcenter_source(fields: dict) -> str:
+    fragments = []
+    for key in YOUTHCENTER_SOURCE_FIELDS:
+        value = fields.get(key)
+        if value is None or value == "":
+            continue
+        if type(value) not in (str, int) or "\0" in str(value):
+            raise ValueError("invalid_youthcenter_source_field")
+        if str(value).strip():
+            fragments.append(f"[{key}]\n{value}")
+    if not fragments:
+        raise ValueError("empty_youthcenter_source")
+    return "\n\n".join(fragments)
+
+
+def _verify_real_source(connection, record, source_text: str) -> None:
+    """Keep AI publication tied to the exact locked youthcenter fields."""
+    if record.benefit.virtual_data:
+        return
+    if len(record.collection_sources) != 1 or record.collection_sources[0].source != "youthcenter":
+        raise ValueError("ai_catalog_youthcenter_source_required")
+    if isinstance(record, ServiceCatalogRecord) and record.price is not None:
+        raise ValueError("ai_catalog_separate_price_source_unsupported")
+    binding = record.collection_sources[0]
+    if not binding.external_id.isascii() or not binding.external_id.isdigit():
+        raise ValueError("invalid_youthcenter_policy_id")
+    observed = connection.execute(
+        "SELECT fields,material_sha256,missing_detected_at FROM public.collected_policies "
+        "WHERE source=%s AND external_id=%s", (binding.source, binding.external_id),
+    ).fetchone()
+    if observed is None or observed[2] is not None or observed[1] != binding.material_sha256:
+        raise ValueError("ai_catalog_source_stale")
+    fields = observed[0]
+    expected_url = "https://www.youthcenter.go.kr/youthPolicy/ythPlcyTotalSearch/ythPlcyDetail/" + binding.external_id
+    if (fields.get("plcyNo") != binding.external_id or fields.get("plcyNm") != record.benefit.title
+        or record.benefit.id != "youth:" + binding.external_id
+        or record.benefit.source.url != expected_url
+        or record.benefit.source.document_version != "sha256:" + binding.material_sha256
+        or source_text != project_youthcenter_source(fields)):
+        raise ValueError("ai_catalog_source_projection_mismatch")
+
+
 def publish_ai_batch(database_url: str, entries: list[tuple[
     CatalogRecord | ServiceCatalogRecord, AIReview, str, str | None
 ]]) -> None:
@@ -111,7 +165,8 @@ def publish_ai_batch(database_url: str, entries: list[tuple[
         for policy_id in sorted(ids):
             connection.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", (policy_id,))
         published_at = datetime.now(timezone.utc)
-        for record, review, _, _ in entries:
+        for record, review, source_text, _ in entries:
+            _verify_real_source(connection, record, source_text)
             if connection.execute(
                 "SELECT 1 FROM public.policy_catalog_releases WHERE policy_id=%s AND publication_status='published'",
                 (record.benefit.id,),
