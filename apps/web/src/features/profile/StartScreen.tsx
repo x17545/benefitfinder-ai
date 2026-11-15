@@ -3,6 +3,7 @@ import type { JSX } from 'react';
 import { navigate, paths } from '../../app/router.ts';
 import { Button } from '../../shared/ui/Button.tsx';
 import { SiteFooter } from '../../shared/ui/SiteFooter.tsx';
+import { useServiceMeta } from '../../shared/api/serviceMetaStore.ts';
 import { clearMyData } from './clearMyData.ts';
 import { updateFlowState, useFlowState } from './flowStore.ts';
 import { SavedConditionsCard } from './SavedConditionsCard.tsx';
@@ -13,6 +14,7 @@ import './StartScreen.css';
 export function StartScreen(): JSX.Element {
   const { consent, remember } = useFlowState();
   const [saved, setSaved] = useState(() => loadSavedConditions());
+  const service = useServiceMeta();
 
   function clear(): void {
     clearMyData();
@@ -62,7 +64,9 @@ export function StartScreen(): JSX.Element {
         </ol>
 
         <p className="s1-notice">
-          현재는 가상 정책으로 조합 계산을 시험해요. 실제 받을 수 있는 지원금이 아니에요.{' '}
+          {service.status === 'ok' && service.meta.virtual_data === true
+            ? '현재는 가상 정책으로 조합 계산을 시험해요. 실제 받을 수 있는 지원금이 아니에요.'
+            : '계산 결과는 참고용이에요. 최종 자격과 최신 조건은 신청 기관에서 확인해 주세요.'}{' '}
           <a href={paths.about}>자세히</a>
         </p>
 

@@ -144,9 +144,25 @@
   cursor: pointer;
 }
 
+.s3-pv__copy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
 .s3-pv label span {
   font-size: var(--text-sub);
   color: var(--color-muted);
+}
+
+.s3-pv__note {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: var(--text-tiny);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 /* 구역 */
@@ -212,8 +228,19 @@
 }
 
 .s3-combo__give {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
   font-size: 12px;
   color: var(--color-no);
+  overflow-wrap: anywhere;
+}
+
+.s3-combo__give-item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
 }
 
 .s3-combo__check {
@@ -342,6 +369,10 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+.s3-policy__breakdown {
+  align-self: stretch;
 }
 
 .s3-policy__reason {

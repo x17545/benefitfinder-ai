@@ -1,4 +1,4 @@
-"""공고 HTML·PDF 텍스트 변환(notice-text-v1) 테스트. 모든 HTML·문장은 가상이다."""
+"""공고 HTML·PDF 텍스트 변환(notice-text-v2) 테스트. 모든 HTML·문장은 가상이다."""
 
 from __future__ import annotations
 
@@ -68,6 +68,16 @@ class HtmlToTextTests(unittest.TestCase):
         self.assertEqual(html_to_text(PAGE), html_to_text(PAGE))
         reordered_whitespace = PAGE.replace("\n", "\r\n").replace("  ", "\t")
         self.assertEqual(html_to_text(reordered_whitespace), EXPECTED)
+
+    def test_form_wrapped_official_content_preserves_body_without_input_values(self) -> None:
+        for html in (
+            '<form><main><p>가상 공고 지원대상</p><input value="PRIVATE">'
+            '<textarea>PRIVATE</textarea><button>검색</button></main></form>',
+            '<main><form><p>가상 공고 지원대상</p><select><option>PRIVATE</option></select>'
+            '<script>PRIVATE</script></form></main>',
+        ):
+            with self.subTest(html=html):
+                self.assertEqual(html_to_text(html),'가상 공고 지원대상\n')
 
     def test_without_main_region_uses_body_minus_chrome(self) -> None:
         html = "<body><nav>메뉴</nav><div><p>가상 본문 1</p><p>가상 본문 2</p></div></body>"

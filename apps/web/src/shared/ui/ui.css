@@ -197,6 +197,13 @@
   gap: 4px 14px;
 }
 
+.ui-footer__status {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-wrap: anywhere;
+}
+
 .ui-footer__link {
   padding: 0;
   border: 0;

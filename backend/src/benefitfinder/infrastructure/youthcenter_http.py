@@ -7,19 +7,25 @@
 
 from __future__ import annotations
 
+import json
+import re
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Callable
 
-from benefitfinder.application.collection import SourceRequest, SourceResponse
+from benefitfinder.application.collection import (
+    SourceRequest,
+    SourceResponse,
+    UnsafeSourceResponse,
+)
 
 DEFAULT_USER_AGENT = "benefitfinder-ai/0.1 (youth policy data collection)"
 
 
 class YouthcenterHttpFetcher:
-    """요청 파라미터에 인증키를 붙여 호출하고, HTTP 오류 응답도 그대로 돌려준다."""
+    """인증키를 붙여 호출하고, 키를 포함하지 않은 응답만 원본 그대로 돌려준다."""
 
     def __init__(
         self,
@@ -38,6 +44,16 @@ class YouthcenterHttpFetcher:
         if not api_key.strip():
             raise ValueError("인증키가 비어 있습니다.")
         self._api_key = api_key.strip()
+        encoded_keys = {
+            self._api_key,
+            urllib.parse.quote(self._api_key, safe=""),
+            urllib.parse.quote_plus(self._api_key, safe=""),
+            json.dumps(self._api_key, ensure_ascii=True)[1:-1],
+            json.dumps(self._api_key, ensure_ascii=False)[1:-1],
+        }
+        # Providers may echo a request URL or a JSON-escaped credential in errors.
+        encoded_keys |= {value.replace("/", r"\/") for value in tuple(encoded_keys)}
+        self._credential_patterns = tuple(value.encode("utf-8") for value in encoded_keys)
         self._key_param = key_param
         self._timeout = timeout_seconds
         self._min_interval = min_interval_seconds
@@ -80,6 +96,11 @@ class YouthcenterHttpFetcher:
                 if attempt == self._max_retries:
                     raise
                 continue
+            for raw in (response.body, (response.content_type or "").encode("utf-8")):
+                normalized = re.sub(rb"%[0-9a-fA-F]{2}", lambda match: match[0].upper(), raw)
+                if any(pattern in raw or pattern in normalized
+                       for pattern in self._credential_patterns):
+                    raise UnsafeSourceResponse()
             if response.status_code < 500 or attempt == self._max_retries:
                 return response
         raise AssertionError("도달하지 않는 경로")

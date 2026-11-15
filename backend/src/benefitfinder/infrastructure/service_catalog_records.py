@@ -19,13 +19,17 @@ from benefitfinder.application.service_catalog import ServicePrice
 from benefitfinder.infrastructure.policy_catalog_records import (
     MAX_WON,
     Application,
+    ApplicationGuide,
     CollectionSource,
     Condition,
     Conflict,
     Evidence,
+    ExplanationClause,
     ExecutableCondition,
+    F12ReviewProvenance,
     Record,
     Source,
+    explanation_citations,
 )
 
 
@@ -66,6 +70,9 @@ class ServiceBenefit(Record):
     provider: str = Field(min_length=1)
     categories: list[Literal["employment", "housing"]] = Field(min_length=1, max_length=2)
     application: Application
+    application_guide: ApplicationGuide | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     eligibility_conditions: list[Condition] = Field(max_length=100)
     source: Source
     domain_data: dict[str, Any]
@@ -91,11 +98,19 @@ class ServiceCatalogRecord(Record):
     service_evidence: list[Evidence] = Field(min_length=1)
     price: ServiceUnitPrice | None
     source_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    explanation_clauses: list[ExplanationClause] | None = Field(
+        default=None, min_length=1, max_length=200, exclude_if=lambda value: value is None
+    )
+    f12_review: F12ReviewProvenance | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     collection_sources: list[CollectionSource] = Field(default_factory=list, max_length=20)
 
     @model_validator(mode="after")
     def validate_record(self) -> ServiceCatalogRecord:
         benefit = self.benefit
+        if len({c.policy_id for c in benefit.conflicts}) != len(benefit.conflicts):
+            raise ValueError("duplicate_conflict")
         origin_keys = [(item.source, item.external_id) for item in self.collection_sources]
         if len(origin_keys) != len(set(origin_keys)):
             raise ValueError("duplicate_collection_source")
@@ -112,10 +127,13 @@ class ServiceCatalogRecord(Record):
             raise ValueError("condition_rule_mismatch")
 
         evidence = list(self.service_evidence)
+        evidence += explanation_citations(self.explanation_clauses)
         evidence += [
             item for condition in benefit.eligibility_conditions for item in condition.evidence
         ]
         evidence += [item for conflict in benefit.conflicts for item in conflict.evidence]
+        if benefit.application_guide is not None:
+            evidence += benefit.application_guide.citations()
         if any(item.source != benefit.source for item in evidence):
             raise ValueError("evidence_source_mismatch")
         if any(conflict.policy_id == benefit.id for conflict in benefit.conflicts):
@@ -165,12 +183,15 @@ def validate_service_sources(
     if hashlib.sha256(source_text.encode("utf-8")).hexdigest() != record.source_sha256:
         raise ValueError("source_hash_mismatch")
     evidence = list(record.service_evidence)
+    evidence += explanation_citations(record.explanation_clauses)
     evidence += [
         item
         for condition in record.benefit.eligibility_conditions
         for item in condition.evidence
     ]
     evidence += [item for conflict in record.benefit.conflicts for item in conflict.evidence]
+    if record.benefit.application_guide is not None:
+        evidence += record.benefit.application_guide.citations()
     if any(item.quote not in source_text for item in evidence):
         raise ValueError("quote_missing_from_source")
 

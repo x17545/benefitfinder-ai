@@ -1,10 +1,10 @@
-"""공식 공고 HTML·PDF 페이지를 Agent 입력용 텍스트로 바꾼다 (notice-text-v1).
+"""공식 공고 HTML·PDF 페이지를 Agent 입력용 텍스트로 바꾼다 (notice-text-v2).
 
 결과 텍스트는 ``SourceDocument.text``가 되고, 그 SHA-256이 검수 기록과 연결된다. 그래서 같은
 입력은 항상 같은 텍스트가 되도록 규칙을 고정한다. 규칙을 바꾸면 ``NOTICE_TEXT_FORMAT``을
 올리고, 이전 형식으로 만든 텍스트와 섞지 않는다.
 
-- HTML: 스크립트·스타일·메뉴·머리말·꼬리말·양식을 빼고 본문만 남긴다. ``main``·``article``·
+- HTML: 스크립트·스타일·메뉴·머리말·꼬리말·입력 요소를 빼고 본문만 남긴다. ``main``·``article``·
   ``role="main"``·``id="content(s)"`` 영역이 있으면 그 안만 쓴다. 블록 요소는 빈 줄로 나눈
   문단, ``br``·목록 항목·표의 행은 한 줄, 표의 칸은 `` | ``로 잇는다.
 - PDF: 페이지 텍스트를 받아 페이지마다 ``=== PDF PAGE N ===`` 표식을 붙인다. PDF 파일에서
@@ -22,7 +22,7 @@ from html.parser import HTMLParser
 
 from benefitfinder.application.source_chunks import plan_source_chunks
 
-NOTICE_TEXT_FORMAT = "notice-text-v1"
+NOTICE_TEXT_FORMAT = "notice-text-v2"
 MAX_LINE_CHARS = 700
 PDF_PAGE_MARKER = "=== PDF PAGE {number} ==="
 
@@ -32,7 +32,7 @@ NOTICE_TEXT_EMPTY = "notice_text_empty"
 _SKIP_TAGS = frozenset(
     {
         "script", "style", "noscript", "template", "svg", "iframe", "head", "nav",
-        "header", "footer", "aside", "form", "button", "select", "option", "object",
+        "header", "footer", "aside", "textarea", "button", "select", "option", "object",
     }
 )
 _VOID_TAGS = frozenset(
@@ -194,7 +194,7 @@ def _tidy(text: str) -> str:
 
 
 def html_to_text(html: str) -> str:
-    """HTML 문서를 notice-text-v1 텍스트로 바꾼다. 본문이 없으면 ``notice_text_empty``."""
+    """HTML 문서를 notice-text-v2 텍스트로 바꾼다. 본문이 없으면 ``notice_text_empty``."""
     collector = _Collector()
     collector.feed(html)
     collector.close()
@@ -203,6 +203,48 @@ def html_to_text(html: str) -> str:
     if not text:
         raise NoticeTextError(NOTICE_TEXT_EMPTY)
     return text + "\n"
+
+
+def select_html_region(html: str, content_id: str) -> str:
+    """Return one exact original element, including images/attributes, or fail closed."""
+    offsets = [0]
+    for match in re.finditer('\n',html):
+        offsets.append(match.end())
+
+    class Region(HTMLParser):
+        def __init__(self) -> None:
+            super().__init__(convert_charrefs=False)
+            self.stack: list[tuple[str,int | None]] = []
+            self.regions: list[tuple[int,int]] = []
+
+        def position(self) -> int:
+            line,column = self.getpos()
+            return offsets[line-1]+column
+
+        def handle_starttag(self, tag: str, attrs: list[tuple[str,str | None]]) -> None:
+            if tag not in _VOID_TAGS:
+                start = self.position() if dict(attrs).get('id') == content_id else None
+                self.stack.append((tag,start))
+
+        def handle_endtag(self, tag: str) -> None:
+            if any(open_tag == tag for open_tag,_ in self.stack):
+                while self.stack:
+                    open_tag,start = self.stack.pop()
+                    if start is not None:
+                        end = html.find('>',self.position())
+                        if end < 0 or open_tag != tag:
+                            raise NoticeTextError('notice_region_invalid')
+                        self.regions.append((start,end+1))
+                    if open_tag == tag:
+                        break
+
+    parser = Region()
+    parser.feed(html)
+    parser.close()
+    if len(parser.regions) != 1 or any(start is not None for _,start in parser.stack):
+        raise NoticeTextError('notice_region_invalid')
+    start,end = parser.regions[0]
+    return html[start:end]
 
 
 def pdf_pages_to_text(pages: Sequence[str]) -> str:

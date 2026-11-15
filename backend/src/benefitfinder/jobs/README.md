@@ -1,5 +1,7 @@
 # 작업 실행
 
+확인된 정책 ID·취업/주거 분류와 수집 API 본문 필드가 있으면 [F12 입력 자동 준비](../infrastructure/database/F12_PREPARATION.md)의 `f12-analysis prepare --plan`으로 대기 작업을 등록한다. `F12_PREPARATION_PLAN` 설정 시 일일 수집 뒤 준비·분석 순서로 실행하며, 동일 자료는 재분석하지 않는다. 첨부 원문 확보·실제 매핑·사람 검수는 별도다.
+
 수집 원천에 명시적으로 연결된 게시 정책은 [0006 변경·재검수](../infrastructure/database/POLICY_SOURCE_RECHECKS.md)를 통해 변경·누락 시 게시에서 내린다. `policy-catalog rechecks --output <새 파일>`로 권한 600의 읽기 전용 목록을 내보내며 승인·완료 처리는 하지 않는다. 준비된 공식 문서의 자동 분석은 별도 [F12 분석 큐](../infrastructure/database/F12_ANALYSIS.md)의 `f12-analysis register/run/status`로 실행한다.
 
 `refresh-data`는 온통청년 목록과 ECOS 금리를 함께 갱신하고 소스별 결과를 한 번 보고한다. 소스 한쪽이 실패해도 다른 쪽은 시도하며 성공본은 각 저장기가 보존한다. [통합 명령·실행 기록·Linux/macOS 스케줄·남은 범위](DAILY_REFRESH.md)를 따른다.
@@ -101,6 +103,8 @@ uv run --locked python -m benefitfinder.jobs rule-review extract-facts \
 규칙 후보가 없는 공식 보충 지침도 `facts`만으로 검수할 수 있다. 중복 제한 근거가 없어 `rules-pending.json`의 `reviews`가 비어도 자격·금액·지급 시점 중 하나라도 `extracted`면 두 파일을 함께 저장·조회하고 항목별 판단·승인 내보내기를 진행한다. 모두 `not_found`면 저장·조회 모두 실패한다. 같은 정책의 다른 공식 문서는 기존 공고의 근거에 덧붙이지 않는다. 원문 URL·버전·해시를 별도 파일로 보존하고 해당 문서의 인용으로만 검수한다.
 
 ## 로컬 규칙 검수 실행
+
+사람 판단 이후에는 [F12 검수→카탈로그·F13 게시](../infrastructure/database/F12_CATALOG.md)의 `catalog-from-f12`를 사용할 수 있다. 원본 쌍·최신 판단·승인 내보내기에 검수자가 작성한 실행 규칙·대응표를 연결하고, 별도 전체 승인 후 같은 버전의 정책과 근거를 원자적으로 게시한다. 실행 규칙·지급 일정·승인을 자동 추정하지 않는다.
 
 다음 예제는 실제 정책과 무관한 가상 자료이며 DB·LLM·네트워크 없이 실행한다. 저장소 루트에서 실행하고, 기존 파일이 있으면 새 경로를 사용한다.
 
@@ -267,6 +271,8 @@ uv run --locked python -m benefitfinder.jobs extract-chunked-facts \
 
 ### F08 온통청년 갱신 한 번 실행
 
+온통청년 원본은 수동 수집과 F08 모두 비공개 권한(폴더 700, 파일·임시 파일 600)으로 생성한다. 사용한 인증키가 본문이나 Content-Type에 반사되면 `unsafe_response`로 실패하고 그 응답의 저장·자동 재시도를 차단한다. 기존 성공본은 유지한다.
+
 저장소 루트에서 `YOUTHCENTER_API_KEY`를 환경 변수로 설정한 뒤 실행한다. `--data-dir`로 다른 로컬 디렉터리를 지정할 수 있다.
 
 ```bash
@@ -320,7 +326,7 @@ launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/dev.benefitfinder
 
 생성기는 파일만 만들며 스케줄 등록은 마지막 명령이 수행한다. 설치 시 즉시 수집하지 않고 다음 03:00에 실행한다. 로그는 서비스 데이터 폴더의 `data/logs/f08.stdout.log`와 `f08.stderr.log`에 남는다. 키·웹훅을 변경하면 설치된 서비스의 `f08.env`도 갱신한다. 중지하려면 `launchctl bootout "gui/$(id -u)/dev.benefitfinder.f08"`을 실행한다. 갱신할 때에는 기존 작업을 먼저 중지하고 새 커밋의 실행 사본과 설정 파일을 만든다.
 
-이 설정은 로그인한 Mac에서 동작한다. [Apple 문서](https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/ScheduledJobs.html)에 따라 예정 시각에 잠자기 상태였다면 깨어날 때 실행되며, 전원이 꺼져 있으면 실행하지 못한다. 기준금리와 설정한 경우 수집 성공본 DB 인계는 통합 작업에 연결했다. 보조금24·공고 원문 재분석은 아직 연결하지 않았다.
+이 설정은 로그인한 Mac에서 동작한다. [Apple 문서](https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/ScheduledJobs.html)에 따라 예정 시각에 잠자기 상태였다면 깨어날 때 실행되며, 전원이 꺼져 있으면 실행하지 못한다. 기준금리와 설정한 경우 수집 성공본 DB 인계는 통합 작업에 연결했다. 보조금24는 [확인된 ID의 API·DB·F12 연동](../infrastructure/database/GOV24.md)을 제공한다. API 밖 공고 확보·변경 탐지는 후속이다.
 
 자동화 주 담당은 탁서윤이다(2026-10-29). 실행·스케줄·재시도·실패 알림을 맡고, 윤정찬의 수집·원본 관리·PostgreSQL 적재와 Agent 분석·정제 흐름을 연결한다. 양승현은 API·계산 연동과 배포 환경의 통합 테스트를 맡는다. Agent 초안과 검수·게시 결과를 구분하고 미지원·상충·불명확은 검수 대기로 남긴다. 기존 모듈 의존 방향을 유지하며 jobs가 ai 내부를 직접 import하지 않고 조립 지점과 application 인터페이스로 연결한다.
 

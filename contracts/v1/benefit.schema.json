@@ -27,6 +27,21 @@
         "url": {"type": ["string", "null"], "format": "uri", "pattern": "^https?://"}
       }
     },
+    "application_guide": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["method", "office", "documents"],
+      "description": "사람이 해당 버전 원문을 검수한 신청 안내 인용. 생략/null은 미확인. documents:null은 서류 미확인, []는 검수한 원문에 서류 안내가 없음을 뜻한다. provider를 접수 기관으로 추정하지 않는다.",
+      "properties": {
+        "method": {"oneOf": [{"$ref": "#/$defs/application_guide_excerpt"}, {"type": "null"}]},
+        "office": {"oneOf": [{"$ref": "#/$defs/application_guide_excerpt"}, {"type": "null"}]},
+        "documents": {
+          "type": ["array", "null"],
+          "maxItems": 100,
+          "items": {"$ref": "#/$defs/application_guide_excerpt"}
+        }
+      }
+    },
     "eligibility_conditions": {
       "type": "array",
       "items": {
@@ -70,5 +85,20 @@
     "lifetime_once": {"type": ["boolean", "null"]},
     "source": {"$ref": "common.schema.json#/$defs/source"},
     "domain_data": {"type": "object"}
+  },
+  "$defs": {
+    "application_guide_excerpt": {
+      "allOf": [
+        {"$ref": "common.schema.json#/$defs/evidence"},
+        {
+          "type": "object",
+          "required": ["location"],
+          "properties": {
+            "quote": {"type": "string", "maxLength": 2500, "pattern": "\\S"},
+            "location": {"type": "string", "maxLength": 500, "pattern": "\\S"}
+          }
+        }
+      ]
+    }
   }
 }

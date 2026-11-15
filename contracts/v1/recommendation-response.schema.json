@@ -434,6 +434,12 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
+            "dependentSchemas": {
+              "amount_breakdown": {
+                "required": ["amount_won"],
+                "properties": {"amount_won": {"type": "integer"}}
+              }
+            },
             "required": [
               "policy_id"
             ],
@@ -448,6 +454,9 @@
                   "null"
                 ],
                 "minimum": 0
+              },
+              "amount_breakdown": {
+                "$ref": "common.schema.json#/$defs/amount_breakdown"
               }
             }
           }
@@ -477,12 +486,24 @@
               }
             }
           }
+        },
+        "amount_breakdown": {
+          "$ref": "common.schema.json#/$defs/amount_breakdown"
         }
       }
     },
     "portfolio_policy": {
       "type": "object",
       "additionalProperties": false,
+      "dependentSchemas": {
+        "amount_breakdown": {
+          "required": ["amount_in_period_won", "amount_status"],
+          "properties": {
+            "amount_in_period_won": {"type": "integer"},
+            "amount_status": {"const": "verified"}
+          }
+        }
+      },
       "required": [
         "policy_id",
         "eligibility",
@@ -556,6 +577,9 @@
         },
         "source": {
           "$ref": "common.schema.json#/$defs/source"
+        },
+        "amount_breakdown": {
+          "$ref": "common.schema.json#/$defs/amount_breakdown"
         }
       },
       "allOf": [
@@ -711,6 +735,12 @@
     "fallback_item": {
       "type": "object",
       "additionalProperties": false,
+      "dependentSchemas": {
+        "amount_breakdown": {
+          "required": ["amount_in_period_won"],
+          "properties": {"amount_in_period_won": {"type": "integer"}}
+        }
+      },
       "required": [
         "policy_id"
       ],
@@ -729,6 +759,9 @@
         "reason": {
           "type": "string",
           "minLength": 1
+        },
+        "amount_breakdown": {
+          "$ref": "common.schema.json#/$defs/amount_breakdown"
         }
       }
     }

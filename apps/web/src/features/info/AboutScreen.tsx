@@ -1,19 +1,24 @@
 import type { JSX } from 'react';
 import { paths } from '../../app/router.ts';
 import { InfoCard, InfoLayout } from './InfoLayout.tsx';
+import { useServiceMeta } from '../../shared/api/serviceMetaStore.ts';
 
 /** P1 이용 안내 (기획서 4.8의 주제를 현재 구현 범위로 안내) */
 export function AboutScreen(): JSX.Element {
+  const service = useServiceMeta();
+  const virtual = service.status === 'ok' && service.meta.virtual_data === true;
   return (
     <InfoLayout
       title="이용 안내"
       heading="청년 정책 매니저는 이렇게 계산해요"
-      lead="현재는 가상 정책으로 입력과 계산 흐름을 보여 드려요. 실제 정책 추천은 준비 중이에요."
+      lead={virtual
+        ? '현재는 가상 정책으로 입력과 계산 흐름을 보여 드려요. 실제 받을 수 있는 지원금이 아니에요.'
+        : '고른 조건으로 청년 취업·주거 지원을 비교해요. 최종 자격과 최신 조건은 신청 기관에서 확인해 주세요.'}
     >
       <div className="info-cards">
         <InfoCard title="어떻게 찾고 계산하나요">
           <p>
-            고른 조건을 가상 정책의 규칙과 비교해 조건마다 충족 · 미충족 · 확인 필요를 판정해요. 함께 받을 수
+            고른 조건을 계산에 사용하는 정책의 규칙과 비교해 조건마다 충족 · 미충족 · 확인 필요를 판정해요. 함께 받을 수
             없는 정책은 빼고, 총액이 큰 조합을 최대 3개까지 보여 드려요.
           </p>
           <p>자격 판정, 금액, 조합, 현재가치는 모두 정해진 규칙(코드)으로 계산해요.</p>
@@ -29,8 +34,8 @@ export function AboutScreen(): JSX.Element {
 
         <InfoCard title="데이터 출처와 갱신">
           <p>
-            지역 선택은 공식 행정표준코드를 사용해요. 추천 결과의 정책과 금액은 가상 예제이며 실제 정책
-            자료 연결과 매일 자동 갱신은 준비 중이에요. 정책마다 표시된 출처와 확인일을 확인해 주세요.
+            지역 선택은 공식 행정표준코드를 사용해요. 현재 자료 상태와 갱신 시각은 화면 아래에서 확인할 수 있어요.
+            정책마다 표시된 출처와 확인일을 확인해 주세요. 갱신 시각만으로 정책의 모든 조건이 최신이라고 보장하지 않아요.
           </p>
         </InfoCard>
 
