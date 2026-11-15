@@ -40,6 +40,8 @@ flowchart LR
 
 개별 금액은 A가 가장 크지만, B와 C를 함께 받으면 **1년 총액이 130만 원 더 커진다.**
 
+[HTML 조합 실험실](docs/benefit-combination-lab.html)에서 A·B·C를 직접 골라 보세요. 파일을 내려받아 브라우저에서 열면 서버 없이 동작합니다.
+
 ## 목표하는 사용 경험
 
 1. **내 조건 입력:** 주거지·소득·연령 등을 13단계 선택지로 고른다.
@@ -134,7 +136,7 @@ flowchart LR
 | 화면 | React, TypeScript, Vite |
 | 서버 | Python 3.12, FastAPI, Pydantic |
 | DB | PostgreSQL. F13 게시 조항·검수 정책 카탈로그 조회와 계산 연결 구현. 실제 정책 게시·벡터/임베딩 검색은 후속 |
-| AI | 로컬 Ollama `gemma4:e4b` 추출·설명 검증, 기본 문구로 복귀. 운영 모델·예산은 확정 전 |
+| AI | [로컬 llama.cpp](docs/development/LOCAL_LLM.md)로 추출·설명 검증. 실패 시 기본 문구로 복귀. Ollama는 호환 경로이며 운영 모델·예산은 확정 전 |
 | 자동화 | F08 로컬 갱신·재시도·웹훅과 03:00 KST macOS launchd 설정 생성. 운영 등록·실제 API/알림 도착은 후속 |
 | 데이터 | 온통청년 수집·ECOS 기준금리 수동 갱신/DB 조회 구현. 보조금24와 운영 통합 자동 갱신은 후속 |
 | 개발 도구 | uv, pnpm, GitHub Actions CI |

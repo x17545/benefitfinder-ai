@@ -92,6 +92,7 @@
 
 ## 화면 시안과 과거 기록
 
+- [지원금 조합 실험실](benefit-combination-lab.html)은 README의 가상 예시를 직접 고르는 HTML 자료다. 파일을 내려받아 브라우저로 연다.
 - [클릭 시안](prototype/index.html)은 화면 참고용이다. PNG·HTML의 과거 수치보다 현행 기능 명세가 우선하며 제품 앱은 `apps/web/`에서 구현한다.
 - [과거 기록 목록](archive/README.md)은 이전 기획·ID 대응표·계산 예시를 보존한다. 에이전트의 기본 읽기 대상이나 현행 수락 기준으로 사용하지 않는다.
 - 실제 경로·책임은 [웹 README](../apps/web/README.md)와 [백엔드 README](../backend/README.md)를 따른다. 모듈 README에는 해당 모듈의 책임과 인계만 적고 공통 규칙을 복제하지 않는다.
