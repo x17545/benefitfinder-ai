@@ -8,11 +8,6 @@ import os
 import re
 import shutil
 
-if os.name == "nt":
-    import msvcrt
-else:
-    import fcntl
-
 from collections import Counter
 from collections.abc import Callable
 from datetime import datetime
@@ -22,6 +17,7 @@ from time import sleep
 from uuid import uuid4
 
 from benefitfinder.ingestion.collect import CollectionResult
+from benefitfinder.jobs.refresh_lock import acquire_refresh_lock
 
 STATUS_FILE = "status.json"
 _RUNS_DIR = "runs"
@@ -220,25 +216,31 @@ def run_youthcenter_refresh(
     root: Path,
     build: Callable[[Path, Path | None], CollectionResult],
     clock: Callable[[], datetime],
+    *,
+    ingest_complete: Callable[[], bool] | None = None,
 ) -> bool:
-    """Publish a complete local generation by replacing only its status pointer."""
+    """Keep collection and optional DB handoff under the same source lock.
+
+    Retry the previous complete generation before collecting another one, so a
+    failed DB handoff cannot be skipped when the local pointer moves forward.
+    """
     root.mkdir(parents=True, exist_ok=True)
     lock = root / _LOCK_FILE
     descriptor = os.open(lock, os.O_RDWR | os.O_CREAT, 0o600)
     try:
         try:
-            if os.name == "nt":
-                # Windows locks a byte range from the current file position.
-                if os.fstat(descriptor).st_size == 0:
-                    os.write(descriptor, b"\0")
-                os.lseek(descriptor, 0, os.SEEK_SET)
-                msvcrt.locking(descriptor, msvcrt.LK_NBLCK, 1)
-            else:
-                fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            acquire_refresh_lock(descriptor)
         except OSError as error:
             if error.errno in {errno.EACCES, errno.EAGAIN}:
                 raise RefreshError("refresh_already_running") from None
             raise
-        return _run_locked(root, build, clock)
+        if ingest_complete is not None:
+            previous, _ = _last_success(root)
+            if previous is not None and not ingest_complete():
+                raise RefreshError("refresh_database_ingest_failed")
+        complete = _run_locked(root, build, clock)
+        if complete and ingest_complete is not None and not ingest_complete():
+            raise RefreshError("refresh_database_ingest_failed")
+        return complete
     finally:
         os.close(descriptor)

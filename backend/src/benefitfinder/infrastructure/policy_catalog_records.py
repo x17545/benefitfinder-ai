@@ -180,6 +180,18 @@ class Payment(Record):
     amount_won: int = Field(ge=0, le=MAX_WON)
 
 
+class CollectionSource(Record):
+    source: Literal["youthcenter"]
+    external_id: str = Field(min_length=1, max_length=200)
+    material_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def validate_id(self) -> CollectionSource:
+        if not self.external_id.strip() or "\0" in self.external_id:
+            raise ValueError("invalid_collection_source_id")
+        return self
+
+
 class CatalogRecord(Record):
     benefit: Benefit
     conditions: list[ExecutableCondition]
@@ -187,10 +199,16 @@ class CatalogRecord(Record):
     payment_evidence: list[Evidence]
     unresolved_combination_rules: bool
     source_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    collection_sources: list[CollectionSource] = Field(default_factory=list, max_length=20)
 
     @model_validator(mode="after")
     def validate_record(self):
         benefit = self.benefit
+        sources = [(item.source, item.external_id) for item in self.collection_sources]
+        if len(sources) != len(set(sources)):
+            raise ValueError("duplicate_collection_source")
+        if not benefit.virtual_data and not sources:
+            raise ValueError("real_policy_requires_collection_sources")
         ids = [condition.id for condition in benefit.eligibility_conditions]
         rule_ids = [rule.condition_id for rule in self.conditions]
         if (
@@ -276,8 +294,12 @@ class CatalogRecord(Record):
 
 
 def record_hash(record: CatalogRecord) -> str:
+    payload = record.model_dump(mode="json")
+    # Existing fictional releases have no bindings; preserve their approved digest.
+    if not record.collection_sources:
+        payload.pop("collection_sources")
     encoded = json.dumps(
-        record.model_dump(mode="json"), sort_keys=True, ensure_ascii=False, separators=(",", ":")
+        payload, sort_keys=True, ensure_ascii=False, separators=(",", ":")
     ).encode()
     return hashlib.sha256(encoded).hexdigest()
 

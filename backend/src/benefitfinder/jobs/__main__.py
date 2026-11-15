@@ -27,6 +27,11 @@ from benefitfinder.ai.chunked_evidence import extract_chunked_evidence
 from benefitfinder.ai.policy_facts_agent import extract_policy_facts
 from benefitfinder.ai.policy_rule_agent import extract_rule_batch
 from benefitfinder.application.f12_review import F12ReviewDecision
+from benefitfinder.infrastructure.collection_files import read_collection_file
+from benefitfinder.infrastructure.database.repositories.collected_policies import (
+    PostgresCollectedPolicies,
+)
+from benefitfinder.ingestion.collected_generations import load_youthcenter_generation
 from benefitfinder.infrastructure.ecos_base_rate import EcosBaseRate
 from benefitfinder.infrastructure.database.repositories.base_rates import PostgresBaseRates
 from benefitfinder.application.policy_rules import RuleReviewSnapshot
@@ -76,6 +81,7 @@ from benefitfinder.ingestion.rule_review_workflow import (
 )
 from benefitfinder.ingestion.youthcenter import SOURCE_NAME, YOUTHCENTER_POLICY_LIST
 from benefitfinder.jobs.f12_review_display import format_f12_review
+from benefitfinder.jobs.daily_refresh import DailyRefreshError, run_daily_refresh
 from benefitfinder.jobs.rule_review_example import example_rule_batch
 from benefitfinder.jobs.youthcenter_refresh import (
     STATUS_FILE,
@@ -89,11 +95,81 @@ from benefitfinder.application.policy_explanations import explain_policy
 from benefitfinder.infrastructure.ollama_explanations import OllamaExplanationCompletion
 from benefitfinder.infrastructure.published_clauses import InMemoryPublishedClauses
 from benefitfinder.jobs.explanation_example import explanation_example
+from benefitfinder.application.policy_analysis import PolicyAnalysisStoreError
+from benefitfinder.application.policy_rules import PolicyReference, RuleReviewBatch
+from benefitfinder.application.run_policy_analysis import run_pending_analysis
+from benefitfinder.infrastructure.database.repositories.policy_analysis import PostgresPolicyAnalysisTasks
+from benefitfinder.infrastructure.policy_analysis_files import PolicyAnalysisFiles
+from benefitfinder.infrastructure.policy_analysis_inputs import load_policy_analysis_input
 from benefitfinder.infrastructure.policy_catalog_records import CatalogRecord, record_hash, validate_source_text
 from benefitfinder.infrastructure.database.repositories.published_policies import publish_policy
+from benefitfinder.infrastructure.database.repositories.policy_rechecks import list_policy_rechecks
+from benefitfinder.infrastructure.policy_recheck_files import write_recheck_page
+from benefitfinder.infrastructure.service_catalog_records import (
+    ServiceCatalogRecord, service_record_hash, validate_service_sources,
+)
+from benefitfinder.infrastructure.database.repositories.published_services import publish_service
 
 API_KEY_ENV = "YOUTHCENTER_API_KEY"
 KST = ZoneInfo("Asia/Seoul")
+
+
+def run_f12_queue(data_dir: Path, *, limit: int = 5) -> dict[str, object]:
+    # Lazy import keeps non-LLM CLI commands independent of model initialization.
+    from benefitfinder.ai.policy_analysis_agent import analyze_policy
+
+    settings = LLMSettings.from_env()
+    if settings.provider == 'disabled':
+        raise ValueError('llm_not_configured')
+    chat = CompatibleChat(settings.endpoint())
+    tasks = PostgresPolicyAnalysisTasks(os.environ.get('F12_WRITE_DATABASE_URL', ''))
+
+    def analyze(claim, on_step):
+        deadline = monotonic() + 300
+
+        def guarded_chat(messages, tools):
+            if not tasks.is_current(claim):
+                raise PolicyAnalysisStoreError('f12_source_changed')
+            remaining = deadline - monotonic()
+            if remaining <= 0:
+                raise ValueError('f12_analysis_timeout')
+            return chat(messages, tools, timeout_seconds=min(45, remaining))
+
+        return analyze_policy(claim.input, chat=guarded_chat, budget_seconds=300, on_step=on_step)
+
+    def write_reviews(directory, claim, result):
+        policies = tuple(PolicyReference(policy.id, 'youth', policy.categories)
+                         for policy in claim.input.policies)
+        for index, facts in enumerate(result.facts, 1):
+            rules = tuple(rule for rule in result.rules
+                          if {cite.document_id for cite in rule.citations} == {facts.document.id})
+            if rules or facts.eligibility or facts.amounts or facts.payment_timing:
+                snapshot = prepare_snapshot(RuleReviewBatch((facts.document,), policies, rules),
+                                            at=datetime.now(KST))
+                write_f12_review_pair(directory / f'd{index:02}', snapshot, facts)
+
+    counts = run_pending_analysis(tasks, PolicyAnalysisFiles(data_dir, write_reviews, model={
+        'provider': settings.provider, 'name': settings.model,
+    }),
+                                  analyze, limit=limit)
+    return {**counts, **tasks.status()}
+
+
+def f12_analysis_command(args: argparse.Namespace) -> int:
+    try:
+        tasks = PostgresPolicyAnalysisTasks(os.environ.get('F12_WRITE_DATABASE_URL', ''))
+        if args.analysis_action == 'register':
+            result = tasks.register(load_policy_analysis_input(args.input),
+                                    origin_recheck_id=args.recheck_id)
+        elif args.analysis_action == 'status':
+            result = tasks.get_task(args.task_id) if args.task_id is not None else tasks.status()
+        else:
+            result = run_f12_queue(args.data_dir, limit=args.limit)
+        print(json.dumps(result, ensure_ascii=False, sort_keys=True))
+        return 1 if isinstance(result, dict) and result.get('failed', 0) else 0
+    except Exception:
+        print('F12 처리 실패: 입력·DB·LLM 설정과 로컬 실행 기록을 확인하세요.', file=sys.stderr)
+        return 2
 
 
 def policy_catalog_command(args: argparse.Namespace) -> int:
@@ -123,6 +199,50 @@ def policy_catalog_command(args: argparse.Namespace) -> int:
         print("정책 카탈로그 처리 실패: 입력·근거·승인 파일과 DB 설정을 확인해 주세요.", file=sys.stderr)
         return 2
     print("승인된 정책 버전을 게시했습니다.")
+    return 0
+
+
+def service_catalog_command(args: argparse.Namespace) -> int:
+    """Validate service/price sources; publish only a separately supplied approval digest."""
+    try:
+        record = ServiceCatalogRecord.model_validate_json(args.input.read_text(encoding='utf-8'))
+        source = args.source.read_text(encoding='utf-8')
+        price_source = args.price_source.read_text(encoding='utf-8') if args.price_source is not None else None
+        validate_service_sources(record, source, price_source)
+        digest = service_record_hash(record)
+        if args.catalog_action == 'validate':
+            print(json.dumps({'record_sha256': digest, 'policy_id': record.benefit.id,
+                              'document_version': record.benefit.source.document_version}))
+            return 0
+        approval = json.loads(args.approval.read_text(encoding='utf-8'))
+        if set(approval) != {'record_sha256', 'reviewed_by', 'reviewed_at'}:
+            raise ValueError('invalid_approval_fields')
+        database_url = os.environ.get('POLICY_PUBLISH_DATABASE_URL', '')
+        if not database_url:
+            raise ValueError('missing_publish_database_url')
+        publish_service(database_url, record, source_text=source, price_source_text=price_source,
+                        approved_sha256=approval['record_sha256'], reviewer=approval['reviewed_by'],
+                        reviewed_at=datetime.fromisoformat(approval['reviewed_at']))
+    except Exception:
+        print('서비스 카탈로그 처리 실패: 공고·단가 근거·승인 파일과 DB 설정을 확인하세요.', file=sys.stderr)
+        return 2
+    print('승인된 서비스 버전을 게시했습니다.')
+    return 0
+
+
+def policy_rechecks_command(args: argparse.Namespace) -> int:
+    """Export an immutable pending handoff with a dedicated read-only role."""
+    try:
+        page = list_policy_rechecks(
+            os.environ.get("POLICY_RECHECK_DATABASE_URL", ""),
+            after_id=args.after_id, limit=args.limit,
+        )
+        write_recheck_page(args.output, page)
+    except Exception:
+        print("재검수 목록 처리 실패: DB 설정·커서·새 출력 경로를 확인해 주세요.", file=sys.stderr)
+        return 2
+    print(json.dumps({"exported_count": len(page["items"]),
+                      "next_after_id": page["next_after_id"]}))
     return 0
 
 
@@ -211,6 +331,11 @@ def _refresh_youthcenter(data_dir: Path) -> int:
         print(f"환경 변수 {API_KEY_ENV}에 인증키를 설정하세요.", file=sys.stderr)
         return 2
 
+    database_enabled = "COLLECTION_WRITE_DATABASE_URL" in os.environ
+    if database_enabled and not os.environ.get("COLLECTION_WRITE_DATABASE_URL", "").strip():
+        print("수집 DB 인계 실패: collection_database_url_missing", file=sys.stderr)
+        return 2
+
     root = data_dir / "processed" / "f08-youthcenter"
     fetcher = YouthcenterHttpFetcher(api_key)
     snapshots = JsonFileSnapshotStore(data_dir / "raw" / "f08-youthcenter")
@@ -236,7 +361,14 @@ def _refresh_youthcenter(data_dir: Path) -> int:
         return result
 
     try:
-        complete = run_youthcenter_refresh(root, build, clock)
+        complete = run_youthcenter_refresh(
+            root,
+            build,
+            clock,
+            ingest_complete=(
+                (lambda: ingest_youthcenter_command(data_dir) == 0) if database_enabled else None
+            ),
+        )
     except RefreshError as exc:
         print(f"온통청년 갱신 실패: {exc}", file=sys.stderr)
         return 1
@@ -247,6 +379,32 @@ def _refresh_youthcenter(data_dir: Path) -> int:
         print(f"온통청년 갱신 실패. 마지막 성공본 유지: {root / STATUS_FILE}", file=sys.stderr)
         return 1
     print(f"온통청년 갱신 완료: {root / STATUS_FILE}")
+    if not database_enabled:
+        print("수집 DB 미설정: 완전한 파일 성공본만 보존했습니다.")
+    return 0
+
+
+def ingest_youthcenter_command(data_dir: Path) -> int:
+    """Replay the last complete local generation without fetching or approving."""
+    database_url = os.environ.get("COLLECTION_WRITE_DATABASE_URL", "").strip()
+    if not database_url:
+        print("수집 DB 인계 실패: collection_database_url_missing", file=sys.stderr)
+        return 2
+    try:
+        batch = load_youthcenter_generation(
+            lambda relative, limit: read_collection_file(data_dir, relative, limit)
+        )
+        result = PostgresCollectedPolicies(database_url).save(batch)
+    except Exception:
+        # Driver/validation exceptions can include DSNs, source fields or paths.
+        print("수집 DB 인계 실패: 성공본·원본·DB 설정을 확인하세요.", file=sys.stderr)
+        return 1
+    print(
+        f"수집 DB 인계 완료: 신규 {result.new}건, 변경 {result.changed}건, "
+        f"동일 {result.unchanged}건, 누락 {result.missing}건"
+    )
+    if result.replayed:
+        print("이미 인계한 같은 생성본입니다. DB 성공본과 변경 이력은 유지했습니다.")
     return 0
 
 
@@ -267,6 +425,44 @@ def refresh_youthcenter_command(data_dir: Path, *, notify_discord: bool = False)
             print(f"F08 알림 실패: {exc}", file=sys.stderr)
             return code or 1
         print("F08 디스코드 결과 알림 전송 완료")
+    return code
+
+
+def refresh_data_command(data_dir: Path, *, notify_discord: bool = False) -> int:
+    """Run configured F08 sources without publishing unreviewed policies."""
+
+    def notify(message: str) -> None:
+        webhook = os.environ.get("DISCORD_WEBHOOK_URL", "").strip()
+        if not webhook:
+            raise DiscordWebhookError("discord_webhook_missing")
+        DiscordWebhook(webhook).send(message)
+
+    def analyze_pending():
+        result = run_f12_queue(data_dir, limit=5)
+        return {key: result[key] for key in ('attempted', 'needs_review', 'stale', 'failed',
+                                            'source_records_awaiting_scope_or_documents')}
+
+    try:
+        code = run_daily_refresh(
+            data_dir / "processed" / "f08",
+            refresh_policies=lambda: _refresh_youthcenter(data_dir),
+            refresh_rate=refresh_ecos_rate_command,
+            clock=lambda: datetime.now(KST),
+            notify=notify if notify_discord else None,
+            analyze_pending=analyze_pending if 'F12_WRITE_DATABASE_URL' in os.environ else None,
+        )
+    except DailyRefreshError as error:
+        print(f"F08 통합 갱신 실패: {error}", file=sys.stderr)
+        if notify_discord:
+            try:
+                notify(f"[F08] 정책·기준금리 갱신 준비 실패: {error}")
+            except DiscordWebhookError:
+                print("F08 알림 실패: discord_notification_failed", file=sys.stderr)
+        return 1
+    if code:
+        print("F08 통합 갱신 실패: 소스별 상태·실행 기록·알림 설정을 확인하세요.", file=sys.stderr)
+    else:
+        print("F08 정책·기준금리 갱신 완료")
     return code
 
 
@@ -517,8 +713,23 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m benefitfinder.jobs")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("refresh-ecos-rate", help="ECOS 기준금리의 마지막 성공값을 DB에 갱신")
+    daily = commands.add_parser("refresh-data", help="정책·기준금리 통합 갱신과 단일 결과 보고")
+    daily.add_argument("--data-dir", type=Path, default=Path("data"))
+    daily.add_argument("--notify-discord", action="store_true", help="디스코드로 소스별 결과 보고")
+    analysis = commands.add_parser('f12-analysis', help='공식 문서 등록·오프라인 분석·검수 대기 조회')
+    analysis_actions = analysis.add_subparsers(dest='analysis_action', required=True)
+    register = analysis_actions.add_parser('register')
+    register.add_argument('--input', type=Path, required=True)
+    register.add_argument('--recheck-id', type=int)
+    run = analysis_actions.add_parser('run')
+    run.add_argument('--data-dir', type=Path, default=Path('data'))
+    run.add_argument('--limit', type=int, default=5)
+    status = analysis_actions.add_parser('status')
+    status.add_argument('--task-id', type=int)
     collect = commands.add_parser("collect-youthcenter", help="온통청년 정책 목록 전체 수집")
     collect.add_argument("--data-dir", type=Path, default=Path("data"))
+    ingest = commands.add_parser("ingest-youthcenter", help="완전한 수집 성공본만 DB에 재적재")
+    ingest.add_argument("--data-dir", type=Path, default=Path("data"))
     refresh = commands.add_parser(
         "refresh-youthcenter", help="완전한 온통청년 수집만 최신본으로 전환"
     )
@@ -545,6 +756,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         command.add_argument("--source", type=Path, required=True)
         if action == "publish":
             command.add_argument("--approval", type=Path, required=True)
+    rechecks = catalog_actions.add_parser("rechecks", help="재검수 대기 기록을 새 로컬 파일로 내보내기")
+    rechecks.add_argument("--output", type=Path, required=True)
+    rechecks.add_argument("--after-id", type=int, default=0)
+    rechecks.add_argument("--limit", type=int, default=100)
+    service_catalog = commands.add_parser('service-catalog', help='검수한 서비스·단가 근거 검증과 명시적 게시')
+    service_actions = service_catalog.add_subparsers(dest='catalog_action', required=True)
+    for action in ('validate', 'publish'):
+        command = service_actions.add_parser(action)
+        command.add_argument('--input', type=Path, required=True)
+        command.add_argument('--source', type=Path, required=True)
+        command.add_argument('--price-source', type=Path)
+        if action == 'publish':
+            command.add_argument('--approval', type=Path, required=True)
     _add_rule_review_commands(commands)
     explain = commands.add_parser(
         "explain-example", help="F13 가상 게시 조항으로 설명 생성·폴백 확인"
@@ -552,9 +776,19 @@ def main(argv: Sequence[str] | None = None) -> int:
     explain.add_argument("--category", choices=("employment", "housing"), default="employment")
     explain.add_argument("--model", help="설정한 제공자 모델. 제공자 미설정 시 명시적 Ollama 호환")
     args = parser.parse_args(argv)
+    if args.command == 'f12-analysis':
+        return f12_analysis_command(args)
+    if args.command == 'service-catalog':
+        return service_catalog_command(args)
+    if args.command == "refresh-data":
+        return refresh_data_command(args.data_dir, notify_discord=args.notify_discord)
+    if args.command == "ingest-youthcenter":
+        return ingest_youthcenter_command(args.data_dir)
     if args.command == "refresh-ecos-rate":
         return refresh_ecos_rate_command()
     if args.command == "policy-catalog":
+        if args.catalog_action == "rechecks":
+            return policy_rechecks_command(args)
         return policy_catalog_command(args)
     if args.command == "collect-youthcenter":
         return collect_youthcenter_command(args.data_dir)
