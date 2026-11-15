@@ -41,16 +41,21 @@ class LocalCashRecommendations:
         application = detail["application"]
         if application["status"] in {"closed", "unknown"}:
             return detail
-        starts = policy.rule.get("application_starts_at")
-        start = (
-            datetime.fromisoformat(starts)
-            if starts
-            else datetime.combine(
-                datetime.fromisoformat(application["starts_on"]).date(), time.min, KST
-            )
-        )
         end = datetime.fromisoformat(policy.rule["application_ends_at"])
-        application["status"] = "upcoming" if now < start else "closed" if now > end else "open"
+        if now > end:
+            application["status"] = "closed"
+            return detail
+
+        starts_at = policy.rule.get("application_starts_at")
+        starts_on = application["starts_on"]
+        if starts_at is not None:
+            start = datetime.fromisoformat(starts_at)
+        elif starts_on is not None:
+            start = datetime.combine(datetime.fromisoformat(starts_on).date(), time.min, KST)
+        else:
+            # No date to compare: retain the explicitly stored open/upcoming status.
+            return detail
+        application["status"] = "upcoming" if now < start else "open"
         return detail
 
     def __call__(self, request, annual_rate: float | None = None) -> dict[str, Any]:

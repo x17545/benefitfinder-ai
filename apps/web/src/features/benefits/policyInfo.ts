@@ -4,18 +4,17 @@ import type { NormalizedBenefit } from '../../shared/api/benefits.ts';
 
 /**
  * 추천 결과에는 policy_id만 있어서, 이름·기관·모집 상태는 정책 상세(GET /api/v1/benefits/{id})에서 받는다.
- * 한 번 받은 정책은 다시 묻지 않는다.
+ * 겹치는 요청만 공유하고, 다시 진입하면 현재 게시 상태를 조회한다.
  */
-const cache = new Map<string, Promise<NormalizedBenefit | null>>();
+const inFlight = new Map<string, Promise<NormalizedBenefit | null>>();
 
 function load(id: string): Promise<NormalizedBenefit | null> {
-  let pending = cache.get(id);
+  let pending = inFlight.get(id);
   if (pending === undefined) {
-    pending = fetchBenefit(id).catch(() => {
-      cache.delete(id); // 실패하면 다음에 다시 시도한다
-      return null;
+    pending = fetchBenefit(id).catch(() => null).finally(() => {
+      inFlight.delete(id);
     });
-    cache.set(id, pending);
+    inFlight.set(id, pending);
   }
   return pending;
 }

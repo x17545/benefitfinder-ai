@@ -45,20 +45,22 @@ function PolicyIcon({ categories }: { categories: readonly string[] }): JSX.Elem
 /** 지원금 행 (S3 9 ~ 12번) */
 export function PolicyCard({ policy, info, rank, aiGenerated, detailHref, virtualData }: PolicyCardProps): JSX.Element {
   const benefit = info.get(policy.policy_id);
+  const matchingBenefit = benefit?.source.url === policy.source.url &&
+    benefit.source.document_version === policy.source.document_version ? benefit : undefined;
   const now = new Date();
-  const applicationState = benefit !== undefined ? recruitmentState(benefit.application, now) : null;
-  const tag = benefit !== undefined ? recruitTag(benefit.application, now) : null;
+  const applicationState = matchingBenefit !== undefined ? recruitmentState(matchingBenefit.application, now) : null;
+  const tag = matchingBenefit !== undefined ? recruitTag(matchingBenefit.application, now) : null;
   const amount = policy.amount_in_period_won;
   const original = policy.original_amount_won;
   const showOriginal =
     amount !== null && amount !== undefined && original !== null && original !== undefined && original !== amount;
-  const actionUrl = benefit === undefined || virtualData || benefit.virtual_data === true
+  const actionUrl = matchingBenefit === undefined || virtualData || matchingBenefit.virtual_data === true
     ? null
     : applicationState === 'open'
-      ? benefit.application.url ?? benefit.source.url
-      : benefit.source.url;
+      ? matchingBenefit.application.url ?? matchingBenefit.source.url
+      : matchingBenefit.source.url;
   const actualApplicationLink = actionUrl !== null && applicationState === 'open' &&
-    benefit?.application.url != null;
+    matchingBenefit?.application.url != null;
 
   return (
     <article className="s3-policy">
@@ -69,8 +71,8 @@ export function PolicyCard({ policy, info, rank, aiGenerated, detailHref, virtua
             <span className="s3-policy__name">
               {policyName(policy.policy_id, info)}&nbsp;<span aria-hidden="true">›</span>
             </span>
-            {benefit?.benefit_amount?.amount_text ? (
-              <span className="s3-policy__summary">{benefit.benefit_amount.amount_text}</span>
+            {matchingBenefit?.benefit_amount?.amount_text ? (
+              <span className="s3-policy__summary">{matchingBenefit.benefit_amount.amount_text}</span>
             ) : null}
           </span>
           <span className="s3-policy__amount">
@@ -99,7 +101,9 @@ export function PolicyCard({ policy, info, rank, aiGenerated, detailHref, virtua
 
       <span className="s3-policy__source">
         출처 {sourceName(policy.source.url)} · {monthDay(policy.source.checked_at)} 확인
-        {isStale(policy.source.checked_at) ? ' · ⚠ 최신 내용은 공식 페이지에서 확인' : ''}
+        {benefit !== undefined && matchingBenefit === undefined
+          ? ' · 공고가 바뀌었어요. 상세에서 최신 내용을 확인해 주세요.'
+          : isStale(policy.source.checked_at) ? ' · ⚠ 최신 내용은 공식 페이지에서 확인' : ''}
       </span>
 
       <div className="s3-policy__actions">

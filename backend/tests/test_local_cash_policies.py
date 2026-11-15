@@ -181,6 +181,31 @@ class LocalCashPoliciesTest(unittest.TestCase):
             self.check(api, facts, **housing)["not_eligible"][0]["failed"], ["중복 수급"]
         )
 
+    def test_missing_application_start_does_not_break_detail_or_recommendation(self):
+        for status in ("open", "upcoming"):
+            with self.subTest(status=status):
+                policy = example_policy()
+                application = policy["benefit"]["application"]
+                application.update(status=status, starts_on=None)
+                with self.setup_client(policy) as client:
+                    policy_id = policy["benefit"]["id"]
+                    detail = client.get(f"/api/v1/benefits/{policy_id}")
+                    self.assertEqual(detail.status_code, 200, detail.text)
+                    self.assertEqual(detail.headers["cache-control"], "no-store")
+                    self.assertEqual(detail.json()["application"]["status"], status)
+                    self.assertIsNone(detail.json()["application"]["starts_on"])
+                    self.check(client, {})
+                original = self.at
+                try:
+                    self.at = datetime.fromisoformat("2026-11-30T18:00:01+09:00")
+                    with self.setup_client(policy) as client:
+                        self.assertEqual(
+                            client.get(f"/api/v1/benefits/{policy_id}").json()["application"]["status"],
+                            "closed",
+                        )
+                finally:
+                    self.at = original
+
     def test_local_catalog_rejects_approval_and_mixed_db_mode(self):
         policy = example_policy()
         with self.assertRaisesRegex(ValueError, "local_cash_requires_isolated_catalog"):
