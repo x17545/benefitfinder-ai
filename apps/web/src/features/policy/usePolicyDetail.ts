@@ -52,13 +52,22 @@ export function usePolicyDetail(id: string): { state: PolicyDetailState; retry: 
 
   useEffect(() => {
     const controller = new AbortController();
-    const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(60_000)]);
-    void loadPolicyDetail(id, fetch, signal).then((result) => {
-      if (!controller.signal.aborted) {
-        setLoaded({ key, state: toDetailState(id, result) });
-      }
-    });
+    function finish(state: PolicyDetailState): void {
+      if (controller.signal.aborted) return;
+      window.clearTimeout(deadline);
+      setLoaded({ key, state });
+    }
+
+    const deadline = window.setTimeout(() => {
+      finish({ status: 'error' });
+      controller.abort();
+    }, 60_000);
+    void loadPolicyDetail(id, fetch, controller.signal).then(
+      (result) => finish(toDetailState(id, result)),
+      () => finish({ status: 'error' }),
+    );
     return () => {
+      window.clearTimeout(deadline);
       controller.abort();
     };
   }, [id, key]);

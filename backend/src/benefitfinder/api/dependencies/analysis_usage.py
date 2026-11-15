@@ -1,11 +1,13 @@
 """Reserve once after HTTP input validation and before analysis/stream startup."""
 
 import asyncio
-import time
 
 from fastapi import Request
 
+from benefitfinder.api.analysis_response import within_analysis_budget
+
 
 async def reserve_analysis(request: Request) -> None:
-    request.state.analysis_started_at = getattr(request.state, "analysis_started_at", time.monotonic())
-    await asyncio.to_thread(request.app.state.analysis_usage.reserve)
+    await within_analysis_budget(
+        request, lambda: asyncio.to_thread(request.app.state.analysis_usage.reserve),
+    )

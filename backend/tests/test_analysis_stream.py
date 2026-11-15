@@ -97,7 +97,13 @@ class AnalysisStreamTests(TestCase):
         ).validate(received[-1][1])
 
     def test_pre_stream_validation_and_domain_errors_remain_json(self):
-        with TestClient(create_app()) as client:
+        app = create_app()
+
+        def unexpected_rate_read():
+            self.fail("rejected requests must not read the rate")
+
+        app.state.read_discount_rate = unexpected_rate_read
+        with TestClient(app) as client:
             for payload, status, code in (
                 ({}, 422, "invalid_request"),
                 ({**PAYLOAD, "domain": "unsupported"}, 400, "unsupported_domain"),
@@ -111,6 +117,7 @@ class AnalysisStreamTests(TestCase):
                     self.assertEqual(response.status_code, status)
                     self.assertEqual(response.headers["content-type"], "application/json")
                     self.assertEqual(response.json()["code"], code)
+        self.assertEqual(app.state.analysis_usage.remaining(), 100)
 
     def test_stream_failure_ends_once_and_does_not_expose_exception(self):
         app = create_app()
@@ -193,10 +200,10 @@ class AnalysisStreamTests(TestCase):
             response = client.post(
                 "/api/v1/recommendations", json=PAYLOAD, headers={"Accept": "text/event-stream"}
             )
-            received = events(response.text)
-            self.assertEqual(received[-1][0], "error")
-            self.assertEqual(received[-1][1]["code"], "calculation_limit_exceeded")
-            self.assertFalse(any(kind == "result" for kind, _ in received))
+            self.assertEqual(response.status_code, 503)
+            self.assertEqual(response.headers["content-type"], "application/json")
+            self.assertEqual(response.json()["code"], "calculation_limit_exceeded")
+        self.assertEqual(app.state.analysis_usage.remaining(), 100)
 
     def test_deadline_budget_is_positive_and_cannot_exceed_sixty_seconds(self):
         for invalid in (True, 0, -1, 60.1, float("nan"), float("inf"), "60"):
@@ -219,10 +226,10 @@ class AnalysisStreamTests(TestCase):
 
 
 class LiveStreamTests(IsolatedAsyncioTestCase):
-    async def start_request(self, app):
+    async def start_request(self, app, *, endpoint="recommendations", payload=PAYLOAD):
         incoming = asyncio.Queue()
         incoming.put_nowait(
-            {"type": "http.request", "body": json.dumps(PAYLOAD).encode(), "more_body": False}
+            {"type": "http.request", "body": json.dumps(payload).encode(), "more_body": False}
         )
         sent = []
         progress_seen = asyncio.Event()
@@ -242,8 +249,8 @@ class LiveStreamTests(IsolatedAsyncioTestCase):
             "asgi": {"version": "3.0", "spec_version": "2.3"},
             "method": "POST",
             "scheme": "http",
-            "path": "/api/v1/recommendations",
-            "raw_path": b"/api/v1/recommendations",
+            "path": f"/api/v1/{endpoint}",
+            "raw_path": f"/api/v1/{endpoint}".encode(),
             "query_string": b"",
             "root_path": "",
             "headers": [(b"content-type", b"application/json"), (b"accept", b"text/event-stream")],
@@ -253,6 +260,51 @@ class LiveStreamTests(IsolatedAsyncioTestCase):
         }
         task = asyncio.create_task(app(scope, incoming.get, send))
         return task, incoming, sent, progress_seen, terminal_seen
+
+    async def test_slow_admission_returns_503_without_waiting_for_worker(self):
+        for endpoint, payload in (("recommendations", PAYLOAD), ("simulations", SIMULATION)):
+            with self.subTest(endpoint=endpoint):
+                entered, release = threading.Event(), threading.Event()
+
+                class BlockedUsage:
+                    def reserve(self):
+                        entered.set()
+                        release.wait(3)
+
+                app = create_app(analysis_usage=BlockedUsage(), analysis_timeout_seconds=0.1)
+                task, _, sent, _, _ = await self.start_request(app, endpoint=endpoint, payload=payload)
+                try:
+                    await asyncio.wait_for(asyncio.shield(task), 1)
+                    self.assertTrue(entered.is_set())
+                    self.assertFalse(release.is_set())
+                    self.assertEqual(sent[0]["status"], 503)
+                    response = b"".join(message.get("body", b"") for message in sent)
+                    self.assertEqual(json.loads(response)["code"], "calculation_limit_exceeded")
+                finally:
+                    release.set()
+                    await task
+
+    async def test_slow_discount_rate_ends_sse_without_waiting_for_worker(self):
+        entered, release = threading.Event(), threading.Event()
+        app = create_app(analysis_timeout_seconds=0.1)
+
+        def blocked():
+            entered.set()
+            release.wait(3)
+            return None
+
+        app.state.read_discount_rate = blocked
+        task, _, sent, _, _ = await self.start_request(app)
+        try:
+            await asyncio.wait_for(asyncio.shield(task), 1)
+            self.assertTrue(entered.is_set())
+            self.assertFalse(release.is_set())
+            received = events(b"".join(message.get("body", b"") for message in sent).decode())
+            self.assertEqual([kind for kind, _ in received], ["error"])
+            self.assertEqual(received[0][1]["code"], "calculation_limit_exceeded")
+        finally:
+            release.set()
+            await task
 
     async def test_first_progress_is_sent_while_calculation_is_still_blocked(self):
         app = create_app()

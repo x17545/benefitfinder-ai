@@ -5,11 +5,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChangeSimulationRequest, SimulationOutcome } from '../src/shared/api/simulations.ts';
 import request from '../../../contracts/fixtures/simulation-request.json';
 
-const screen = vi.hoisted(() => ({ effects: [] as EffectCallback[], post: vi.fn(), refresh: vi.fn() }));
-vi.mock('react', async (load) => ({
-  ...await load<typeof import('react')>(),
-  useEffect: (effect: EffectCallback) => { screen.effects.push(effect); },
-}));
+const screen = vi.hoisted(() => ({ effects: [] as EffectCallback[], post: vi.fn(), refresh: vi.fn(), updates: vi.fn() }));
+vi.mock('react', async (load) => {
+  const actual = await load<typeof import('react')>();
+  return {
+    ...actual,
+    useEffect: (effect: EffectCallback) => { screen.effects.push(effect); },
+    useState: <T,>(initial: T | (() => T)) => {
+      const [value, setValue] = actual.useState(initial);
+      return [value, (next: T | ((current: T) => T)) => {
+        screen.updates(next);
+        setValue(next);
+      }];
+    },
+  };
+});
 vi.mock('../src/shared/api/simulations.ts', async (load) => ({
   ...await load<typeof import('../src/shared/api/simulations.ts')>(), postSimulation: screen.post,
 }));
@@ -23,6 +33,7 @@ beforeEach(() => {
   screen.effects = [];
   screen.post.mockReset().mockImplementation(() => new Promise<SimulationOutcome>(() => {}));
   screen.refresh.mockReset();
+  screen.updates.mockReset();
   vi.stubGlobal('window', { setTimeout, clearTimeout });
 });
 afterEach(() => {
@@ -97,9 +108,69 @@ describe('simulation request lifetime', () => {
     expect(screen.refresh).toHaveBeenCalledTimes(1);
   });
 
+  it('starts without newer AbortSignal APIs and ends a stalled request with an error', async () => {
+    vi.stubGlobal('AbortSignal', {});
+    let finish: ((outcome: SimulationOutcome) => void) | undefined;
+    screen.post.mockImplementationOnce(() => new Promise<SimulationOutcome>((resolve) => { finish = resolve; }));
+    setup(await effect('employed'));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(screen.post).toHaveBeenCalledTimes(1);
+    const signal = screen.post.mock.calls[0][2] as AbortSignal;
+    expect(signal.aborted).toBe(false);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(signal.aborted).toBe(true);
+    expect(screen.updates).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ state: { status: 'error' } }),
+    );
+    finish?.({ status: 'limit' });
+    await Promise.resolve();
+    expect(screen.updates).toHaveBeenCalledTimes(1);
+  });
+
+  it('enters the retryable error state when the request rejects', async () => {
+    screen.post.mockRejectedValueOnce(new Error('fixture network error'));
+    setup(await effect('employed'));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(screen.updates).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ state: { status: 'error' } }),
+    );
+  });
+
   it('does not start a request without complete input', async () => {
     setup(await effect());
     await vi.runOnlyPendingTimersAsync();
     expect(screen.post).not.toHaveBeenCalled();
+  });
+});
+
+describe('policy detail request lifetime', () => {
+  it('starts without newer AbortSignal APIs and makes an unresponsive detail retryable', async () => {
+    vi.stubGlobal('AbortSignal', {});
+    let finish: ((response: Response) => void) | undefined;
+    const fetchDetail = vi.fn(() => new Promise<Response>((resolve) => { finish = resolve; }));
+    vi.stubGlobal('fetch', fetchDetail);
+    const { usePolicyDetail } = await import('../src/features/policy/usePolicyDetail.ts');
+    function Probe(): null {
+      usePolicyDetail('youth:fictional:detail');
+      return null;
+    }
+    renderToStaticMarkup(createElement(Probe));
+    const captured = screen.effects.pop();
+    if (captured === undefined) throw new Error('effect was not captured');
+    setup(captured);
+    expect(fetchDetail).toHaveBeenCalledWith(
+      '/api/v1/benefits/youth%3Afictional%3Adetail', { signal: expect.any(Object) },
+    );
+    const signal = vi.mocked(fetch).mock.calls[0][1]?.signal;
+    expect(signal?.aborted).toBe(false);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(signal?.aborted).toBe(true);
+    expect(screen.updates).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ state: { status: 'error' } }),
+    );
+    finish?.(new Response(null, { status: 404 }));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(screen.updates).toHaveBeenCalledTimes(1);
   });
 });
