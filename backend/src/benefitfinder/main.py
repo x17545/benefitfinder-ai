@@ -13,7 +13,7 @@ import os
 from datetime import datetime
 
 from benefitfinder.ai.policy_explanation import GroundedPolicyExplainer
-from benefitfinder.bootstrap import create_app
+from benefitfinder.bootstrap import analytics_service_from_environment, create_app
 from benefitfinder.infrastructure.compatible_llm import CompatibleExplanationCompletion
 from benefitfinder.infrastructure.llm_settings import LLMSettings
 
@@ -42,4 +42,5 @@ app = create_app(
     base_rate_database_url=os.environ.get("BASE_RATE_DATABASE_URL") or None,
     local_cash_policy_file=local_cash_file,
     local_cash_reference_at=datetime.fromisoformat(reference_at) if reference_at else None,
+    analytics_service=analytics_service_from_environment(os.environ) if local_cash_file is None else None,
 )

@@ -1,12 +1,14 @@
+import { useEffect, useRef } from 'react';
 import type { JSX } from 'react';
 import { CONDITION_STEPS, navigate, paths } from '../../app/router.ts';
 import { conditionLabel } from '../../domains/youth/conditionLabels.ts';
 import type { NormalizedBenefit } from '../../shared/api/benefits.ts';
+import { trackEvent } from '../../shared/analytics/events.ts';
 import { SiteFooter } from '../../shared/ui/SiteFooter.tsx';
 import { StatusChip } from '../../shared/ui/StatusChip.tsx';
 import { TopBar } from '../../shared/ui/TopBar.tsx';
 import { useAnalysis } from '../benefits/analysisStore.ts';
-import { formatManWon, isStale, monthDay, recruitTag, shortPolicyId, sourceName } from '../benefits/format.ts';
+import { formatManWon, isStale, monthDay, recruitTag, recruitmentState, shortPolicyId, sourceName } from '../benefits/format.ts';
 import { usePolicyInfo } from '../benefits/policyInfo.ts';
 import { PolicyExplanation } from '../benefits/PolicyExplanation.tsx';
 import { readResultBasis, withResultBasis } from '../benefits/resultBasis.ts';
@@ -23,8 +25,10 @@ import {
   applyPeriod,
   diagnosisSummary,
   findMyPolicyResult,
+  payoutTimingSummary,
 } from './policyDetailModel.ts';
 import { usePolicyDetail } from './usePolicyDetail.ts';
+import { ApplicationGuide } from './ApplicationGuide.tsx';
 import './PolicyDetailScreen.css';
 
 interface PolicyDetailScreenProps {
@@ -33,6 +37,7 @@ interface PolicyDetailScreenProps {
 
 /** S5 정책 상세 (기획서 4.7). 주소 /policy/{정책ID} */
 export function PolicyDetailScreen({ policyId }: PolicyDetailScreenProps): JSX.Element {
+  const viewedPolicyId = useRef<string | null>(null);
   const { state, retry } = usePolicyDetail(policyId);
   const analysis = useAnalysis();
   const { consent } = useFlowState();
@@ -47,6 +52,14 @@ export function PolicyDetailScreen({ policyId }: PolicyDetailScreenProps): JSX.E
   const conditionsHref = consent ? paths.conditions(result !== null ? CONDITION_STEPS : 1) : paths.start;
 
   const title = state.status === 'ok' ? state.benefit.title : '정책 상세';
+
+  useEffect(() => {
+    if (viewedPolicyId.current === policyId) {
+      return;
+    }
+    viewedPolicyId.current = policyId;
+    trackEvent({ name: 'detail_view', policy_id: policyId });
+  }, [policyId]);
 
   return (
     <div className="page-width screen">
@@ -104,15 +117,19 @@ interface PolicyDetailProps {
 function PolicyDetail({ benefit, isSample, mine, serviceDiagnosis, hasAnalysis, conditionsHref, aiGenerated }: PolicyDetailProps): JSX.Element {
   const service = benefit.service ?? null;
   const virtualData = isSample || benefit.virtual_data === true;
-  const tag = recruitTag(benefit.application);
-  const closed = benefit.application.status === 'closed';
-  const applicationUrl = benefit.application.status === 'open' ? benefit.application.url : null;
+  const now = new Date();
+  const applicationState = recruitmentState(benefit.application, now);
+  const tag = recruitTag(benefit.application, now);
+  const closed = applicationState === 'closed';
+  const applicationUrl = applicationState === 'open' ? benefit.application.url : null;
   const applyUrl = applicationUrl ?? benefit.source.url;
+  const actualApplicationLink = !virtualData && benefit.virtual_data !== true && applicationUrl !== null;
   const conflicts = benefit.conflicts ?? [];
   const conflictInfo = usePolicyInfo(isSample ? [] : conflicts.map((conflict) => conflict.policy_id));
   const diagnosis = service !== null ? serviceDiagnosis : mine?.eligibility ?? null;
   const reviewItems = diagnosis?.filter((item) => item.status === 'needs_review') ?? [];
   const serviceValue = service?.estimated_value_won ?? null;
+  const payoutTiming = payoutTimingSummary(benefit.benefit_amount);
 
   function conflictName(id: string): string {
     return (isSample ? devSampleBenefit(id)?.title : conflictInfo.get(id)?.title) ?? `정책 ${shortPolicyId(id)}`;
@@ -203,6 +220,7 @@ function PolicyDetail({ benefit, isSample, mine, serviceDiagnosis, hasAnalysis, 
             <section className="ui-card s5-card">
               <h2 className="s5-card__title">지원 내용</h2>
               <p className="s5-amount">{amountSummary(benefit.benefit_amount)}</p>
+              {payoutTiming !== null ? <p className="s5-timing">{payoutTiming}</p> : null}
               {benefit.lifetime_once === true ? <p className="s5-muted">평생 한 번만 받을 수 있어요</p> : null}
             </section>
           )}
@@ -229,24 +247,7 @@ function PolicyDetail({ benefit, isSample, mine, serviceDiagnosis, hasAnalysis, 
             </section>
           ) : null}
 
-          {/* 7 신청 방법 */}
-          <section className="ui-card s5-card">
-            <h2 className="s5-card__title">신청 방법</h2>
-            <dl className="s5-rows">
-              <dt>신청 기간</dt>
-              <dd>{virtualData ? '가상 정책에는 실제 모집 일정이 없어요.' : applyPeriod(benefit.application)}</dd>
-              <dt>접수 기관</dt>
-              <dd>{benefit.provider}</dd>
-            </dl>
-          </section>
-
-          {/* 8 준비 서류 (정책 상세에 서류 정보가 아직 없어 문구 S5-DOC) */}
-          <section className="ui-card s5-card">
-            <h2 className="s5-card__title">준비 서류</h2>
-            <p className="s5-muted">{virtualData
-              ? '가상 정책에는 실제 제출 서류가 없어요.'
-              : '공식 자료에 서류 안내가 없어요. 신청 페이지에서 확인해 주세요.'}</p>
-          </section>
+          <ApplicationGuide benefit={benefit} virtualData={virtualData} />
 
           {/* 9 확인이 필요한 것 (내 조건으로 진단했을 때만) */}
           {diagnosis !== null ? (
@@ -256,7 +257,7 @@ function PolicyDetail({ benefit, isSample, mine, serviceDiagnosis, hasAnalysis, 
                 <ul className="s5-review">
                   {reviewItems.map((item) => (
                     <li key={item.condition_id}>
-                      <b>? {conditionLabel(item.condition_id)}</b>:{' '}
+                      <b>{conditionLabel(item.condition_id)}</b>:{' '}
                       {item.reason !== '' ? item.reason : '입력하지 않았거나 공식 기준이 불명확해요'}
                     </li>
                   ))}
@@ -304,6 +305,9 @@ function PolicyDetail({ benefit, isSample, mine, serviceDiagnosis, hasAnalysis, 
           href={applyUrl}
           target="_blank"
           rel="noopener noreferrer"
+          onClick={actualApplicationLink ? () => {
+            trackEvent({ name: 'apply_click', policy_id: benefit.id, from: 'detail', rank: null });
+          } : undefined}
         >
           {applicationUrl !== null ? '신청하러 가기 ↗' : '공식 페이지 보기 ↗'}
         </a>}

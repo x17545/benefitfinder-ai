@@ -8,6 +8,7 @@ import unittest
 
 from fastapi.testclient import TestClient
 
+from benefitfinder.application.analytics import AnalyticsService
 from benefitfinder.bootstrap import create_app
 
 
@@ -121,7 +122,10 @@ class LocalCashPoliciesTest(unittest.TestCase):
                 "other_exclusions": False,
             },
         }
-        self.assertEqual(self.check(api, facts)["fallback_list"][0]["amount_in_period_won"], 15_000)
+        entry = self.check(api, facts)["fallback_list"][0]
+        self.assertEqual(entry["amount_in_period_won"], 15_000)
+        self.assertIn("개별 추정액", entry["reason"])
+        self.assertNotIn("amount_breakdown", entry)
         facts["program_periods"] = [
             {"program_id": "fictional_support", "starts_on": "2026-11-03", "ends_on": None}
         ]
@@ -184,3 +188,13 @@ class LocalCashPoliciesTest(unittest.TestCase):
         policy["benefit"]["reviewed"] = True
         with self.assertRaisesRegex(ValueError, "reviewed must be false"):
             self.setup_client(policy)
+
+    def test_local_catalog_disables_analytics(self):
+        self.path.write_text(json.dumps({"policies": [example_policy()]}))
+        service = AnalyticsService(enabled=True)
+        with TestClient(create_app(analytics_service=service)) as client:
+            self.assertEqual(client.get("/api/v1/analytics/config").json(), {"enabled": True})
+        with TestClient(
+            create_app(local_cash_policy_file=str(self.path), analytics_service=service)
+        ) as client:
+            self.assertEqual(client.get("/api/v1/analytics/config").json(), {"enabled": False})

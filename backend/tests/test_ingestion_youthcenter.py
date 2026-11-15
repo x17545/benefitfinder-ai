@@ -25,6 +25,7 @@ from benefitfinder.ingestion.youthcenter import (
     YOUTHCENTER_POLICY_LIST,
     PageParseError,
     YouthcenterApiConfig,
+    hashed_fields,
     page_request,
     parse_page,
 )
@@ -130,6 +131,12 @@ class ConfigAndParseTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             YouthcenterApiConfig(
                 endpoint="https://api.example.invalid", extra_params={"apiKey": "x"}, **base
+            )
+        with self.assertRaises(ValueError):
+            YouthcenterApiConfig(
+                endpoint="https://api.example.invalid",
+                hash_unordered_list_fields=frozenset({"id"}),
+                **base,
             )
 
     def test_page_request_has_paging_and_no_secret(self) -> None:
@@ -316,11 +323,14 @@ class SourceSettingTests(unittest.TestCase):
         }
         return json.dumps(document, ensure_ascii=False).encode("utf-8")
 
-    def policy(self, number: str, views: str = "1", manager: str = "") -> dict[str, object]:
+    def policy(
+        self, number: str, views: str = "1", manager: str = "", keywords: str = "보조금,인턴"
+    ) -> dict[str, object]:
         return {
             "plcyNo": number,
             "plcyNm": "가상 청년 정책",
             "lclsfNm": "일자리",
+            "plcyKywdNm": keywords,
             "inqCnt": views,
             "sprvsnInstPicNm": manager,
             "operInstPicNm": manager,
@@ -354,6 +364,34 @@ class SourceSettingTests(unittest.TestCase):
         previous = {"V-1": first.records[0].record_sha256}
         second, _ = self.collect(self.body([self.policy("V-1", views="999")], 1), previous)
         self.assertEqual(second.changes[0].kind, ChangeKind.UNCHANGED)
+
+    def test_keyword_order_change_is_not_a_policy_change(self) -> None:
+        first, _ = self.collect(self.body([self.policy("V-1", keywords="보조금,인턴")], 1))
+        previous = {"V-1": first.records[0].record_sha256}
+        second, _ = self.collect(
+            self.body([self.policy("V-1", keywords="인턴,보조금")], 1), previous
+        )
+        self.assertEqual(second.changes[0].kind, ChangeKind.UNCHANGED)
+        # 저장 레코드는 받은 순서를 그대로 보존한다.
+        self.assertEqual(second.records[0].fields["plcyKywdNm"], "인턴,보조금")
+
+    def test_keyword_set_change_is_a_policy_change(self) -> None:
+        first, _ = self.collect(self.body([self.policy("V-1", keywords="보조금,인턴")], 1))
+        previous = {"V-1": first.records[0].record_sha256}
+        second, _ = self.collect(
+            self.body([self.policy("V-1", keywords="보조금,인턴,바우처")], 1), previous
+        )
+        self.assertEqual(second.changes[0].kind, ChangeKind.CHANGED)
+
+    def test_already_sorted_keywords_keep_the_previous_hash(self) -> None:
+        record = self.policy("V-1", keywords="보조금,인턴")
+        unsorted = dict(record, plcyKywdNm="인턴,보조금")
+        expected = record_sha256({k: v for k, v in record.items() if k not in {
+            "inqCnt", "sprvsnInstPicNm", "operInstPicNm"}})
+        self.assertEqual(record_sha256(hashed_fields(YOUTHCENTER_POLICY_LIST, record)), expected)
+        self.assertEqual(
+            record_sha256(hashed_fields(YOUTHCENTER_POLICY_LIST, unsorted)), expected
+        )
 
     def test_failed_result_code_is_an_error(self) -> None:
         result, _ = self.collect(self.body([], 0, code=500))

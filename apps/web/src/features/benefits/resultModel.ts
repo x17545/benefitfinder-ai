@@ -12,6 +12,7 @@ type ExcludedItem = NonNullable<ResultView['excluded']>[number];
 export interface PortfolioExclusion {
   policy_id: ExcludedItem['policy_id'];
   amount_won: number | null;
+  amount_breakdown?: NonNullable<Portfolio['given_up']>[number]['amount_breakdown'];
   reason: string | null;
   evidence: ExcludedItem['evidence'][number][];
 }
@@ -33,6 +34,7 @@ export function portfolioExclusions(
     view.excluded?.forEach((item) => ids.add(item.policy_id));
   }
   return [...ids].filter((id) => !selectedIds.has(id)).map((id) => {
+    const givenUpItem = givenUp.find((item) => item.policy_id === id);
     const detail = selected.rank === 1 ? view.excluded?.find((item) => item.policy_id === id) : undefined;
     const evidence = detail?.evidence ?? [
       ...(info.get(id)?.conflicts ?? [])
@@ -46,7 +48,8 @@ export function portfolioExclusions(
     ];
     return {
       policy_id: id,
-      amount_won: givenUp.find((item) => item.policy_id === id)?.amount_won ?? null,
+      amount_won: givenUpItem?.amount_won ?? null,
+      ...(givenUpItem?.amount_breakdown === undefined ? {} : { amount_breakdown: givenUpItem.amount_breakdown }),
       reason: detail?.reason ?? null,
       evidence,
     };

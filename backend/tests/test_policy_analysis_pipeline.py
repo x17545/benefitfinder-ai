@@ -189,3 +189,31 @@ class PolicyAnalysisPipelineTest(unittest.TestCase):
         ), 1)
         self.assertNotIn('PRIVATE', messages[0])
         self.assertNotIn('PRIVATE', (self.root / 'status.json').read_text())
+
+
+    def test_manifest_version_tracks_claim_and_keeps_original_source_fingerprint(self):
+        original = claim()
+        result = PolicyAnalysisResult((), (PolicyFactsDraft(original.input.documents[0], (), (), ()),), (), (), ())
+        files = PolicyAnalysisFiles(self.root, lambda *_: None)
+        old = replace(original, analysis_version=1)
+        files.start(old)
+        old_ref, old_digest, _ = files.finish(old, result)
+        new = replace(original, task_id=2, token='b'*32, analysis_version=2)
+        files.start(new)
+        new_ref, _, _ = files.finish(new, result)
+        a=json.loads((self.root/old_ref/'manifest.json').read_text())
+        b=json.loads((self.root/new_ref/'manifest.json').read_text())
+        self.assertEqual(a['analysis_version'],1)
+        self.assertEqual(b['analysis_version'],2)
+        self.assertEqual(a['agent_version'],'f12-tools-v1')
+        self.assertEqual(b['agent_version'],'f12-tools-v2')
+        self.assertEqual(a['input_sha256'],b['input_sha256'])
+        import hashlib
+        self.assertEqual(hashlib.sha256((self.root/old_ref/'manifest.json').read_bytes()).hexdigest(),old_digest)
+
+    def test_invalid_claim_version_cannot_create_artifacts(self):
+        for version in (True,0,-1,1001,'2'):
+            with self.subTest(version=version):
+                with self.assertRaisesRegex(ValueError,'f12_artifact_failed'):
+                    PolicyAnalysisFiles(self.root,lambda *_:None).start(replace(claim(),analysis_version=version))
+        self.assertEqual(list(self.root.iterdir()),[])

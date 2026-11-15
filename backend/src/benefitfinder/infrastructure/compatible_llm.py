@@ -225,10 +225,11 @@ class LLMEndpoint:
 class CompatibleChat:
     """Synchronous chat callable conforming to the internal tool-call protocol."""
 
-    def __init__(self, endpoint: LLMEndpoint) -> None:
-        if not isinstance(endpoint, LLMEndpoint):
+    def __init__(self, endpoint: LLMEndpoint, *, require_tool_calls: bool = False) -> None:
+        if not isinstance(endpoint, LLMEndpoint) or type(require_tool_calls) is not bool:
             raise ValueError(INVALID_ENDPOINT)
         self._endpoint = endpoint
+        self._require_tool_calls = require_tool_calls
 
     def __call__(
         self,
@@ -247,6 +248,11 @@ class CompatibleChat:
             wire_tools = _wire_tools(tools)
             if wire_tools:
                 payload["tools"] = wire_tools
+                if self._require_tool_calls:
+                    payload['tool_choice'] = 'required'
+                    payload['parallel_tool_calls'] = False
+            elif self._require_tool_calls:
+                raise _InvalidResponse
             data = self._endpoint._post(payload, timeout_seconds)
             return _chat_message(data)
         except Exception:

@@ -4,14 +4,18 @@ import {
   postRecommendations,
   RecommendationError,
 } from '../../shared/api/recommendations.ts';
+import { analyticsErrorCode, trackEvent } from '../../shared/analytics/events.ts';
 import type {
   RecommendationRequest,
   RecommendationResponse,
   SSEProgressEventData,
 } from '../../shared/api/recommendations.ts';
+import { failureReason } from './analysisFailure.ts';
+import type { AnalysisFailureReason } from './analysisFailure.ts';
 
 /** 15초 안 완료가 목표, 60초가 넘으면 실패 (기획서 4.4) */
 const TIMEOUT_MS = 60_000;
+const MAX_ANALYTICS_DURATION_MS = 120_000;
 /** 마지막 분석 결과. 탭을 닫으면 사라진다 (기획서 F09-6) */
 const LAST_RESULT_KEY = 'ypm.lastResult';
 
@@ -20,8 +24,8 @@ export type AnalysisState =
   | { status: 'running'; progress: SSEProgressEventData[] }
   /** isSample: 개발용 예제 결과(contracts/fixtures)로 본 것 */
   | { status: 'done'; result: RecommendationResponse; isSample: boolean }
-  /** error: 분석 실패(L-E1), limit: 하루 상한(L-E2) */
-  | { status: 'failed'; reason: 'error' | 'limit' };
+  /** 실패 이유는 analysisFailure.ts. limit: 하루 상한(L-E2), 나머지는 분석 실패(L-E1) */
+  | { status: 'failed'; reason: AnalysisFailureReason };
 
 function readLastResult(): AnalysisState {
   try {
@@ -73,17 +77,44 @@ function mergeProgress(list: SSEProgressEventData[], item: SSEProgressEventData)
   return list.map((entry, i) => (i === index ? item : entry));
 }
 
+function elapsedMilliseconds(startedAt: number): number {
+  const elapsed = performance.now() - startedAt;
+  if (!Number.isFinite(elapsed) || elapsed <= 0) {
+    return 0;
+  }
+  return Math.min(MAX_ANALYTICS_DURATION_MS, Math.round(elapsed));
+}
+
+function defaultPortfolioCount(result: RecommendationResponse): number {
+  // 계약의 기본 화면 기준은 1년·현재가치 꺼짐이다 (result.view와 같은 기준).
+  return Math.min(3, result.results['1y'].pv_off.portfolios.length);
+}
+
 /** 분석을 시작한다. 이미 하고 있던 분석은 취소한다 */
 export function startAnalysis(request: RecommendationRequest): void {
   clearAnalysis();
   const current = new AbortController();
   controller = current;
+  const startedAt = performance.now();
   let timedOut = false;
+  let terminal = false;
+
+  function fail(code: ReturnType<typeof analyticsErrorCode>, reason: AnalysisFailureReason = 'error'): void {
+    if (terminal || controller !== current) {
+      return;
+    }
+    terminal = true;
+    trackEvent({ name: 'analyze_fail', code });
+    setState({ status: 'failed', reason });
+  }
+
   const timer = window.setTimeout(() => {
     timedOut = true;
     current.abort();
+    fail('timeout');
   }, TIMEOUT_MS);
 
+  trackEvent({ name: 'analyze_start' });
   setState({ status: 'running', progress: [] });
 
   postRecommendations(request, {
@@ -95,18 +126,23 @@ export function startAnalysis(request: RecommendationRequest): void {
     },
   })
     .then((result) => {
-      if (controller !== current) {
+      if (terminal || controller !== current || current.signal.aborted) {
         return;
       }
+      terminal = true;
+      trackEvent({
+        name: 'analyze_success',
+        duration_ms: elapsedMilliseconds(startedAt),
+        portfolio_count: defaultPortfolioCount(result),
+      });
       saveLastResult(result, false);
       setState({ status: 'done', result, isSample: false });
     })
     .catch((error: unknown) => {
-      if (controller !== current || (current.signal.aborted && !timedOut)) {
+      if (terminal || controller !== current || (current.signal.aborted && !timedOut)) {
         return;
       }
-      const limit = error instanceof RecommendationError && error.code === 'daily_limit_exceeded';
-      setState({ status: 'failed', reason: limit ? 'limit' : 'error' });
+      fail(timedOut ? 'timeout' : analyticsErrorCode(error instanceof RecommendationError ? error.code : error), failureReason(error, timedOut));
     })
     .finally(() => {
       window.clearTimeout(timer);

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import uuid
 import math
+from collections.abc import Mapping
 from datetime import datetime
 from functools import partial
 from typing import Any
@@ -20,6 +21,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from benefitfinder.api.schemas import ErrorCode, ErrorResponse
+from benefitfinder.api.v1.routers.analytics import router as analytics_router
 from benefitfinder.api.v1.routers.benefits import router as benefits_router
 from benefitfinder.api.v1.routers.health import router as health_router
 from benefitfinder.api.v1.routers.meta import router as meta_router
@@ -27,6 +29,7 @@ from benefitfinder.api.v1.routers.options import router as options_router
 from benefitfinder.api.v1.routers.recommendations import router as recommendations_router
 from benefitfinder.api.v1.routers.simulations import router as simulations_router
 from benefitfinder.ai.policy_explanation import GroundedPolicyExplainer
+from benefitfinder.application.analytics import AnalyticsService
 from benefitfinder.application.local_cash_recommendations import LocalCashRecommendations
 from benefitfinder.application.policy_explanations import (
     ExplanationGenerator,
@@ -63,6 +66,7 @@ from benefitfinder.infrastructure.example_explanation_data import recommendation
 from benefitfinder.infrastructure.example_benefits import example_benefits
 from benefitfinder.infrastructure.example_services import example_services
 from benefitfinder.infrastructure.database.repositories.published_services import PostgresPublishedServices
+from benefitfinder.infrastructure.ga4_analytics import GA4MeasurementProtocolAnalytics
 from benefitfinder.infrastructure.ollama_explanations import OllamaExplanationCompletion
 from benefitfinder.infrastructure.published_clauses import InMemoryPublishedClauses
 from benefitfinder.infrastructure.region_codes import OfficialRegionCatalog
@@ -77,6 +81,7 @@ from benefitfinder.application.recommendation_service import MVP_ANNUAL_RATE
 NOT_FOUND_MESSAGE = "요청한 리소스를 찾을 수 없습니다."
 INVALID_REQUEST_MESSAGE = "요청 값이 올바르지 않습니다."
 INTERNAL_ERROR_MESSAGE = "내부 오류가 발생했습니다. 잠시 후 다시 시도해 주세요."
+INVALID_ANALYTICS_CONFIGURATION = "invalid_analytics_configuration"
 HTTP_ERROR_RESPONSES: dict[int, tuple[ErrorCode, str]] = {
     404: ("not_found", NOT_FOUND_MESSAGE),
     405: ("method_not_allowed", "지원하지 않는 HTTP 메서드입니다."),
@@ -89,6 +94,22 @@ HTTP_ERROR_RESPONSES: dict[int, tuple[ErrorCode, str]] = {
 def error_body(code: ErrorCode, message: str) -> dict[str, Any]:
     """Build a common-format error payload with a fresh UUID request id."""
     return ErrorResponse(request_id=str(uuid.uuid4()), code=code, message=message).model_dump()
+
+
+def analytics_service_from_environment(environ: Mapping[str, str]) -> AnalyticsService:
+    """Build the disabled default or a complete server-only GA4 configuration."""
+    enabled = environ.get("GA4_ENABLED", "")
+    if enabled in {"", "false"}:
+        return AnalyticsService()
+    if enabled != "true":
+        raise ValueError(INVALID_ANALYTICS_CONFIGURATION)
+    measurement_id = environ.get("GA4_MEASUREMENT_ID", "")
+    api_secret = environ.get("GA4_API_SECRET", "")
+    try:
+        sender = GA4MeasurementProtocolAnalytics(measurement_id, api_secret)
+    except ValueError:
+        raise ValueError(INVALID_ANALYTICS_CONFIGURATION) from None
+    return AnalyticsService(enabled=True, sender=sender)
 
 
 def create_app(
@@ -111,6 +132,7 @@ def create_app(
     base_rate_database_url: str | None = None,
     local_cash_policy_file: str | None = None,
     local_cash_reference_at: datetime | None = None,
+    analytics_service: AnalyticsService | None = None,
 ) -> FastAPI:
     """Assemble and return a new FastAPI application.
 
@@ -352,7 +374,14 @@ def create_app(
 
     app.state.analysis_timeout_seconds = analysis_timeout_seconds
 
+    app.state.analytics_service = (
+        analytics_service
+        if local_cash is None and analytics_service is not None
+        else AnalyticsService()
+    )
+
     app.include_router(health_router)
+    app.include_router(analytics_router)
     app.include_router(meta_router)
     app.include_router(options_router)
     app.include_router(recommendations_router)

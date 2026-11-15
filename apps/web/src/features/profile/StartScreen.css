@@ -105,12 +105,6 @@
   gap: 14px;
 }
 
-.s1-consents {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
 .s1-consent {
   display: flex;
   align-items: center;
@@ -144,11 +138,52 @@
   color: var(--color-muted);
 }
 
+/* (필수) 동의의 보관 안내. 체크 칸 설명(aria-describedby)으로도 연결된다 */
+.s1-consent-note {
+  margin: 0;
+  padding-left: 36px;
+  font-size: var(--text-sub);
+  color: var(--color-muted);
+  word-break: keep-all;
+}
+
+.s1-start {
+  display: grid;
+  gap: 14px;
+}
+
+/* 넓은 화면: 왼쪽에 필수 동의 · 보관 안내 · 기억하기, 오른쪽에 시작하기 (이전과 같은 배치) */
 @media (min-width: 768px) {
   .s1-actions {
     grid-template-columns: 1fr minmax(280px, 360px);
+    grid-template-areas:
+      'required start'
+      'note start'
+      'remember start';
     align-items: end;
     column-gap: 40px;
+    row-gap: 0;
+  }
+
+  .s1-start {
+    display: contents;
+  }
+
+  .s1-required {
+    grid-area: required;
+  }
+
+  .s1-consent-note {
+    grid-area: note;
+  }
+
+  .s1-remember {
+    grid-area: remember;
+    margin-top: 4px;
+  }
+
+  .s1-start > .ui-button {
+    grid-area: start;
   }
 }
 
@@ -186,4 +221,46 @@
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 6px;
+}
+
+/*
+ * 휴대폰: (필수) 동의와 [시작하기]만 화면 아래에 붙인다. 기억하기와 보관 안내는 본문 끝에 둔다.
+ * 조건 단계와 같이 화면 상자 안에서 스크롤해 iOS Safari 주소창이 접혀도 가려지지 않는다.
+ */
+@media (max-width: 767px) {
+  .screen:has(.s1-actions) {
+    /* 숨김 글자(ui-sr-only) 같은 absolute 요소도 이 상자 안에 두어 문서가 스크롤되지 않게 */
+    position: relative;
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+  }
+
+  /* 상자를 풀어 .s1-start가 본문(main) 전체 높이 안에서 아래에 붙을 수 있게 한다 */
+  .s1-actions {
+    display: contents;
+  }
+
+  /* 휴대폰에서는 보관 안내를 들여쓰지 않고 본문 안내문처럼 둔다 */
+  .s1-consent-note {
+    margin-top: auto;
+    padding: 24px 0 0;
+  }
+
+  .s1-remember {
+    margin-top: 8px;
+  }
+
+  .s1-start {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+    gap: 8px;
+    margin: 16px calc(var(--gutter) * -1) 0;
+    padding: 8px var(--gutter) calc(16px + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid var(--color-line);
+    background: var(--color-bg);
+  }
 }

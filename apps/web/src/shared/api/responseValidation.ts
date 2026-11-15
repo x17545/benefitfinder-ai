@@ -15,6 +15,21 @@ export function isMoney(value: unknown): boolean {
   return typeof value === 'number' && Number.isInteger(value) && value >= 0;
 }
 
+export function isSafeMoney(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+}
+
+/** 만기 지급이 포함된 응답의 선택 기간 현금·만기 전 예상 적립액. 생략은 허용하되, 있으면 두 키만 허용한다. */
+export function isAmountBreakdown(value: unknown): boolean {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const keys = Object.keys(value);
+  return keys.length === 2 && Object.hasOwn(value, 'cash_in_period_won') &&
+    Object.hasOwn(value, 'expected_accrual_won') &&
+    isSafeMoney(value.cash_in_period_won) && isSafeMoney(value.expected_accrual_won);
+}
+
 export function isNullableMoney(value: unknown): boolean {
   return value === null || isMoney(value);
 }

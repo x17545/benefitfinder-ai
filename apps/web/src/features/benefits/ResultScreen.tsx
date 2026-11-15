@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { JSX } from 'react';
 import { CONDITION_STEPS, navigate, paths } from '../../app/router.ts';
+import { trackEvent } from '../../shared/analytics/events.ts';
 import { Button } from '../../shared/ui/Button.tsx';
 import { SiteFooter } from '../../shared/ui/SiteFooter.tsx';
 import { showToast } from '../../shared/ui/toastStore.ts';
@@ -9,13 +10,14 @@ import { clearMyData } from '../profile/clearMyData.ts';
 import { conditionSummary } from '../profile/conditionSummary.ts';
 import { useFlowState } from '../profile/flowStore.ts';
 import { useAnalysis } from './analysisStore.ts';
+import { AmountBreakdown } from './AmountBreakdown.tsx';
 import { FallbackList } from './FallbackList.tsx';
-import { formatManWon, josa, PERIOD_TABS, withJosa } from './format.ts';
+import { amountBreakdownText, formatManWon, josa, PERIOD_TABS, withJosa } from './format.ts';
 import type { Period } from './format.ts';
 import { PolicyCard } from './PolicyCard.tsx';
 import { PortfolioCard } from './PortfolioCard.tsx';
 import { usePolicyInfo } from './policyInfo.ts';
-import { saveResultImage } from './resultImage.ts';
+import { resultImageAmountBasisNote, saveResultImage } from './resultImage.ts';
 import { ResultLists } from './ResultLists.tsx';
 import { readResultBasis, withResultBasis } from './resultBasis.ts';
 import { hasExpiredServices } from '../services/serviceModel.ts';
@@ -129,15 +131,25 @@ export function ResultScreen(): JSX.Element {
   const periodShort = PERIOD_TABS.find((tab) => tab.value === period)?.short ?? '';
   const summary = conditionSummary(answers);
   const rate = result.discount_rate !== null ? (result.discount_rate * 100).toFixed(1) : null;
+  const hasAmountBreakdown = portfolios.some((portfolio) =>
+    portfolio.amount_breakdown !== undefined ||
+    portfolio.policies.some((policy) => policy.amount_breakdown !== undefined),
+  );
 
   // 기간이나 현재가치를 바꾸면 추천 조합을 다시 선택한다 (기획서 4.5 3·4번)
   function changePeriod(next: Period): void {
+    if (next !== period) {
+      trackEvent({ name: 'period_change', period: next });
+    }
     setPeriod(next);
     setSelectedRank(1);
     navigate(withResultBasis(paths.result, { period: next, present_value: presentValue }), { replace: true });
   }
 
   function togglePresentValue(next: boolean): void {
+    if (next !== presentValue) {
+      trackEvent({ name: 'pv_toggle', on: next });
+    }
     setPresentValue(next);
     setSelectedRank(1);
     navigate(withResultBasis(paths.result, { period, present_value: next }), { replace: true });
@@ -145,6 +157,11 @@ export function ResultScreen(): JSX.Element {
 
   const conflict = view.why?.deciding_conflict ?? [];
   const pvSuffix = presentValue ? ' (현재가치 기준)' : '';
+  const heroLabel = top?.amount_breakdown !== undefined
+    ? presentValue
+      ? `${periodShort} 동안 지급 예정 현금의 현재가치`
+      : `${periodShort} 동안 예상 지원금 합계`
+    : `${periodShort} 동안 함께 받을 수 있는 최대 금액${pvSuffix}`;
   const fallback = view.fallback_list ?? [];
   const hasPendingReview = (view.not_yet_reviewed?.length ?? 0) > 0;
 
@@ -155,9 +172,13 @@ export function ResultScreen(): JSX.Element {
     }
     void saveResultImage({
       periodLabel: `${PERIOD_TABS.find((tab) => tab.value === period)?.label ?? ''}${presentValue ? ' · 현재가치' : ''}`,
+      amountBasisNote: resultImageAmountBasisNote(presentValue, hasAmountBreakdown),
       combos: portfolios.map((portfolio) => ({
         label: portfolioLabel(portfolio.rank),
         total: formatManWon(portfolio.total_won),
+        breakdown: portfolio.amount_breakdown !== undefined
+          ? amountBreakdownText(portfolio.amount_breakdown)
+          : undefined,
         names: portfolio.policies.map((policy) => policyName(policy.policy_id, info)).join(' + '),
         selected: portfolio.rank === selected.rank,
       })),
@@ -168,11 +189,15 @@ export function ResultScreen(): JSX.Element {
           policy.amount_in_period_won !== null && policy.amount_in_period_won !== undefined
             ? formatManWon(policy.amount_in_period_won)
             : '금액 확인 필요',
+        breakdown: policy.amount_breakdown !== undefined
+          ? amountBreakdownText(policy.amount_breakdown)
+          : undefined,
       })),
       createdAt: new Date(),
       virtualData: analysis.status === 'done' && (analysis.isSample || result?.virtual_data === true),
     }).then((saved) => {
       if (saved) {
+        trackEvent({ name: 'image_save' });
         showToast('결과 이미지를 저장했어요');
       }
     });
@@ -206,8 +231,11 @@ export function ResultScreen(): JSX.Element {
 
         {top !== undefined ? (
           <section className="s3-hero" aria-label="추천 조합 요약">
-            <p className="s3-hero__label">{periodShort} 동안 함께 받을 수 있는 최대 금액{pvSuffix}</p>
+            <p className="s3-hero__label">{heroLabel}</p>
             <p className="s3-hero__total">{formatManWon(top.total_won)}</p>
+            {top.amount_breakdown !== undefined ? (
+              <AmountBreakdown value={top.amount_breakdown} variant="hero" />
+            ) : null}
             <p className="s3-hero__names">
               추천 조합 · {top.policies.map((policy) => policyName(policy.policy_id, info)).join(' + ')}
             </p>
@@ -259,12 +287,19 @@ export function ResultScreen(): JSX.Element {
                 togglePresentValue(event.target.checked);
               }}
             />
-            <label htmlFor="s3-pv">
-              <b>현재가치로 보기</b>{' '}
-              <span>
-                나중에 받는 돈을 지금 가치로 바꿔 비교해요{rate !== null ? ` (할인율 연 ${rate}%)` : ''}
-              </span>
-            </label>
+            <div className="s3-pv__copy">
+              <label htmlFor="s3-pv">
+                <b>현재가치로 보기</b>{' '}
+                <span>
+                  나중에 받는 돈을 지금 가치로 바꿔 비교해요{rate !== null ? ` (할인율 연 ${rate}%)` : ''}
+                </span>
+              </label>
+              {presentValue ? (
+                <p className="s3-pv__note">
+                  현재가치 합계와 순위에는 만기 전 예상 적립액을 넣지 않았어요.
+                </p>
+              ) : null}
+            </div>
           </div>
         </div> : null}
 
@@ -290,6 +325,9 @@ export function ResultScreen(): JSX.Element {
                   topTotal={top?.total_won ?? portfolio.total_won}
                   selected={portfolio.rank === selected?.rank}
                   onSelect={() => {
+                    if (portfolio.rank !== selected?.rank) {
+                      trackEvent({ name: 'combo_select', rank: portfolio.rank });
+                    }
                     setSelectedRank(portfolio.rank);
                   }}
                   info={info}
@@ -331,6 +369,7 @@ export function ResultScreen(): JSX.Element {
             <div className="s3-policies">
               {selected.policies.map((policy) => (
                 <PolicyCard key={policy.policy_id} policy={policy} info={info} aiGenerated={result.ai_generated}
+                  rank={selected.rank}
                   virtualData={analysis.isSample || result.virtual_data === true}
                   detailHref={withResultBasis(paths.policy(policy.policy_id), { period, present_value: presentValue })} />
               ))}
@@ -341,7 +380,8 @@ export function ResultScreen(): JSX.Element {
         {portfolios.length === 0 && fallback.length > 0 ? (
           <section className="s3-section">
             <p className="s2-desc">함께 묶을 수 있는 정책이 없어서, 받을 수 있는 지원금을 하나씩 보여 드려요.</p>
-            <FallbackList items={fallback} info={info} />
+            <FallbackList items={fallback} info={info}
+              virtualData={analysis.isSample || result.virtual_data === true} />
           </section>
         ) : null}
 

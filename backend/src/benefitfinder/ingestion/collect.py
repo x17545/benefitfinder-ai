@@ -1,6 +1,7 @@
 """온통청년 정책 목록 수집 실행 함수 (jobs가 호출하는 진입점).
 
-모든 응답을 원본 그대로 스냅숏으로 보관하고, 정책 ID별 레코드 버전을 비교한다.
+안전한 응답을 원본 그대로 스냅숏으로 보관하고, 정책 ID별 레코드 버전을 비교한다.
+어댑터가 인증정보 포함 응답을 거부하면 본문과 스냅숏 참조 없이 실패를 기록한다.
 페이지·레코드 오류는 성공 데이터와 분리해 돌려주며, 일부라도 실패하면
 ``complete=False``로 표시하고 삭제 감지를 하지 않는다.
 """
@@ -18,6 +19,7 @@ from benefitfinder.application.collection import (
     RecordChange,
     RecordVersionStore,
     SourceFetcher,
+    UnsafeSourceResponse,
 )
 from benefitfinder.ingestion.versioning import diff_records, record_sha256, sha256_hex
 from benefitfinder.ingestion.youthcenter import (
@@ -81,6 +83,9 @@ def collect_youthcenter(
         request = page_request(config, page)
         try:
             response = fetcher.fetch(request)
+        except UnsafeSourceResponse:
+            errors.append(CollectionError(page, "unsafe_response", "인증정보 포함 응답 저장 차단"))
+            break
         except Exception as exc:  # 어댑터 오류 원문에는 키·주소가 섞일 수 있다.
             errors.append(CollectionError(page, "fetch_failed", type(exc).__name__))
             break
