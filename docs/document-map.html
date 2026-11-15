@@ -158,8 +158,8 @@
     .story-bar-row:last-child .story-bar span { background: var(--color-accent); }
     .story-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-top: 12px; border-top: 1px solid var(--color-line); }
     .story-position { margin-inline-start: auto; color: var(--color-muted); font-size: var(--text-sub); }
-    .story[data-ready] .story-panel:not([hidden]) .story-visual > * { animation: reveal 380ms ease-out both; }
-    .story[data-ready] .story-panel:not([hidden]) .story-bar span { animation: grow 650ms ease-out both; }
+    .story[data-moved] .story-panel:not([hidden]) .story-visual > * { animation: reveal 380ms ease-out both; }
+    .story[data-moved] .story-panel:not([hidden]) .story-bar span { animation: grow 650ms ease-out both; }
     .refresh { margin-block: 24px 16px; }
     .refresh-intro { margin-bottom: 12px; }
     .refresh-nav { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -179,18 +179,18 @@
     .refresh-current--new span { color: var(--color-hero-muted); }
     .refresh-current--new strong { color: var(--color-accent); }
     .refresh-note { margin-top: 10px; color: var(--color-muted); font-size: var(--text-sub); }
-    .refresh[data-ready] .refresh-panel:not([hidden]) .refresh-event--checked,
-    .refresh[data-ready] .refresh-panel:not([hidden]) .refresh-event--failed { animation: reveal 380ms ease-out both; }
-    .refresh[data-ready] .refresh-panel:not([hidden]) .refresh-current--new { animation: adopt 620ms ease-out both; }
+    .refresh[data-moved] .refresh-panel:not([hidden]) .refresh-event--checked,
+    .refresh[data-moved] .refresh-panel:not([hidden]) .refresh-event--failed { animation: reveal 380ms ease-out both; }
+    .refresh[data-moved] .refresh-panel:not([hidden]) .refresh-current--new { animation: adopt 620ms ease-out both; }
     @keyframes reveal { from { opacity: .4; transform: translateY(5px); } }
     @keyframes grow { from { transform: scaleX(0); } }
     @keyframes adopt { from { opacity: .4; transform: translateY(-10px); } }
     @media (prefers-reduced-motion: reduce) {
-      .story[data-ready] .story-panel:not([hidden]) .story-visual > *,
-      .story[data-ready] .story-panel:not([hidden]) .story-bar span,
-      .refresh[data-ready] .refresh-panel:not([hidden]) .refresh-event--checked,
-      .refresh[data-ready] .refresh-panel:not([hidden]) .refresh-event--failed,
-      .refresh[data-ready] .refresh-panel:not([hidden]) .refresh-current--new { animation: none; }
+      .story[data-moved] .story-panel:not([hidden]) .story-visual > *,
+      .story[data-moved] .story-panel:not([hidden]) .story-bar span,
+      .refresh[data-moved] .refresh-panel:not([hidden]) .refresh-event--checked,
+      .refresh[data-moved] .refresh-panel:not([hidden]) .refresh-event--failed,
+      .refresh[data-moved] .refresh-panel:not([hidden]) .refresh-current--new { animation: none; }
     }
     @media (max-width: 767px) {
       .steps, .groups { grid-template-columns: minmax(0, 1fr); }
@@ -224,7 +224,7 @@
       </nav>
     </div>
 
-    <section id="story" class="story" aria-labelledby="story-title" data-playback>
+    <section id="story" class="story" aria-labelledby="story-title" data-step-guide>
       <div class="lane-head">
         <h2 id="story-title">공고 세 건이 추천 조합이 되기까지</h2>
         <p>가상 예시 · 세 지원금 모두 자격 충족 · 1년 명목금액</p>
@@ -295,7 +295,6 @@
         </article>
 
         <div class="story-actions" hidden>
-          <button class="button button--primary" type="button" data-play>재생</button>
           <button class="button" type="button" data-move="-1">이전</button>
           <button class="button" type="button" data-move="1">다음</button>
           <output class="story-position" aria-live="polite"></output>
@@ -337,7 +336,7 @@
       </ol>
     </section>
 
-    <section id="f08-compare" class="refresh" aria-labelledby="f08-title" data-playback>
+    <section id="f08-compare" class="refresh" aria-labelledby="f08-title" data-step-guide>
       <div class="lane-head">
         <h2 id="f08-title">F08 · 수집에 실패하면 무엇이 남을까요?</h2>
         <p>온통청년 목록 갱신 예시</p>
@@ -400,7 +399,6 @@
         </article>
 
         <div class="story-actions" hidden>
-          <button class="button button--primary" type="button" data-play>재생</button>
           <button class="button" type="button" data-move="-1">이전</button>
           <button class="button" type="button" data-move="1">다음</button>
           <output class="story-position" aria-live="polite"></output>
@@ -487,22 +485,20 @@
     <div class="wrap">그림은 서비스와 데이터 준비의 전체 흐름입니다. 문서 링크는 GitHub의 main을 열며, 실제 운영·검증 범위는 현재 구현 상태에서 확인하세요.</div>
   </footer>
   <script>
-    let stopActivePlayback = null;
-
-    document.querySelectorAll("[data-playback]").forEach((section) => {
+    document.querySelectorAll("[data-step-guide]").forEach((section) => {
       const panels = [...section.querySelectorAll("[data-scene]")];
       const nav = section.querySelector(".story-nav");
       const steps = [...nav.querySelectorAll("button")];
       const actions = section.querySelector(".story-actions");
-      const play = actions.querySelector("[data-play]");
       const prev = actions.querySelector('[data-move="-1"]');
       const next = actions.querySelector('[data-move="1"]');
       const position = actions.querySelector("output");
       const last = panels.length - 1;
-      let current = 0;
-      let timer = null;
+      let current = -1;
 
       function showStep(index) {
+        if (index < 0 || index > last || index === current) return;
+        if (current !== -1) section.dataset.moved = "true";
         current = index;
         panels.forEach((panel, i) => {
           panel.hidden = i !== current;
@@ -513,51 +509,15 @@
         position.textContent = "단계 " + (current + 1) + " / " + panels.length;
       }
 
-      function pause() {
-        clearTimeout(timer);
-        timer = null;
-        if (stopActivePlayback === pause) stopActivePlayback = null;
-        play.textContent = current === last ? "처음부터 재생" : "재생";
-      }
-
-      function scheduleAdvance() {
-        timer = setTimeout(() => {
-          showStep(current + 1);
-          if (current === last) pause();
-          else scheduleAdvance();
-        }, 6000);
-      }
-
-      function navigate(index) {
-        if (index < 0 || index > last) return;
-        stopActivePlayback?.();
-        showStep(index);
-        pause();
-      }
-
-      steps.forEach((step, i) => step.addEventListener("click", () => navigate(i)));
-      prev.addEventListener("click", () => navigate(current - 1));
-      next.addEventListener("click", () => navigate(current + 1));
-      play.addEventListener("click", () => {
-        if (timer !== null) {
-          pause();
-          return;
-        }
-        stopActivePlayback?.();
-        stopActivePlayback = pause;
-        if (current === last) showStep(0);
-        play.textContent = "멈춤";
-        scheduleAdvance();
-      });
+      steps.forEach((step, i) => step.addEventListener("click", () => showStep(i)));
+      prev.addEventListener("click", () => showStep(current - 1));
+      next.addEventListener("click", () => showStep(current + 1));
       showStep(0);
       nav.hidden = false;
       actions.hidden = false;
       section.dataset.ready = "true";
     });
 
-    document.addEventListener("visibilitychange", () => {
-      if (document.hidden) stopActivePlayback?.();
-    });
   </script>
 </body>
 </html>
