@@ -53,6 +53,7 @@ function renderPolicyCard(current: NormalizedBenefit | undefined, virtualData = 
     detailHref: '/policy/youth:test:P1',
     virtualData,
     aiGenerated: false,
+    rank: 1,
   }));
 }
 
@@ -60,6 +61,7 @@ function renderFallback(current: NormalizedBenefit | undefined): string {
   return renderToStaticMarkup(createElement(FallbackList, {
     items: [{ policy_id: policy.policy_id, amount_in_period_won: policy.amount_in_period_won }],
     info: current === undefined ? new Map() : new Map([[current.id, current]]),
+    virtualData: false,
   }));
 }
 

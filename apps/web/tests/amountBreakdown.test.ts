@@ -63,6 +63,7 @@ describe('F05 amount breakdown display', () => {
       detailHref: '/policy/test',
       virtualData: true,
       aiGenerated: false,
+      rank: 1,
     }));
     expectSeparated(policy);
   });
@@ -72,6 +73,7 @@ describe('F05 amount breakdown display', () => {
     const html = renderToStaticMarkup(createElement(FallbackList, {
       items: view.fallback_list ?? [],
       info: new Map(),
+      virtualData: true,
     }));
     expectSeparated(html, '0만 원', '30만 원');
   });
