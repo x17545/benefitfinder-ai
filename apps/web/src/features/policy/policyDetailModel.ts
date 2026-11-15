@@ -68,3 +68,11 @@ export function amountSummary(amount: NormalizedBenefit['benefit_amount']): stri
   }
   return '금액 확인 필요';
 }
+
+/** 원문이 만기 일시 지급으로 검수된 경우에만 표시한다. 금액의 현금·적립 구성을 추정하지 않는다. */
+export function payoutTimingSummary(amount: NormalizedBenefit['benefit_amount']): string | null {
+  if (amount === null || amount === undefined) {
+    return null;
+  }
+  return amount.type === 'maturity' || amount.pay_timing === 'at_maturity' ? '만기 시 지급' : null;
+}

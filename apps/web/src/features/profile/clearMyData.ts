@@ -1,3 +1,4 @@
+import { resetAnalyticsSession, trackEvent } from '../../shared/analytics/events.ts';
 import { showToast } from '../../shared/ui/toastStore.ts';
 import { clearFlowState } from './flowStore.ts';
 import { removeSavedConditions } from './savedConditions.ts';
@@ -6,5 +7,7 @@ import { removeSavedConditions } from './savedConditions.ts';
 export function clearMyData(): void {
   removeSavedConditions();
   clearFlowState();
+  trackEvent({ name: 'clear_mine' });
+  resetAnalyticsSession();
   showToast('이 기기에 저장된 내 정보를 지웠어요');
 }

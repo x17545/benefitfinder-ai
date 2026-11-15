@@ -158,6 +158,7 @@ export type PortfolioPolicy = {
         }
       ];
   source: Source;
+  amount_breakdown?: AmountBreakdown;
 } & {
   policy_id: string;
   amount_in_period_won?: number | null;
@@ -250,6 +251,7 @@ export type PortfolioPolicy = {
         }
       ];
   source: Source;
+  amount_breakdown?: AmountBreakdown;
 };
 /**
  * F12 승인 preview 설명. portfolio_policy를 재사용하며 금액 미확정(null)·자격 미확정(needs_review 또는 빈 배열)으로만 둔다. 있을 때 policy_name/review_scope/verification_only가 필수이며 policy_id 동일성은 애플리케이션 검증으로 확인한다.
@@ -346,6 +348,7 @@ export type PortfolioPolicy1 = {
         }
       ];
   source: Source;
+  amount_breakdown?: AmountBreakdown;
 };
 
 /**
@@ -449,12 +452,27 @@ export interface Portfolio {
   given_up?: {
     policy_id: string;
     amount_won?: number | null;
+    amount_breakdown?: AmountBreakdown;
   }[];
   unverified_pairs?: {
     a: string;
     b: string;
     note: string;
   }[];
+  amount_breakdown?: AmountBreakdown;
+}
+/**
+ * 만기 지급이 포함된 경우의 명목 현금·미지급 예상 적립액 구분. PV off 합계는 두 값의 합, PV on 합계는 기간 내 현금의 현재가치다.
+ */
+export interface AmountBreakdown {
+  /**
+   * 선택 기간 내 실제 현금 지급 예정액. 현재가치 할인 전 명목금액이다.
+   */
+  cash_in_period_won: number;
+  /**
+   * 선택 기간까지 적립되지만 만기 전이라 아직 지급되지 않는 검수된 예상 지원금. 본인 납입금 제외. 현재가치 합계에는 넣지 않는다.
+   */
+  expected_accrual_won: number;
 }
 export interface ExcludedItem {
   policy_id: string;
@@ -468,4 +486,5 @@ export interface FallbackItem {
   policy_id: string;
   amount_in_period_won?: number | null;
   reason?: string;
+  amount_breakdown?: AmountBreakdown;
 }

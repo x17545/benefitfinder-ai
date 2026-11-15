@@ -31,6 +31,21 @@ function isNullableBoolean(value: unknown): boolean {
   return value === null || typeof value === 'boolean';
 }
 
+function isGuideExcerpt(value: unknown, source: unknown): boolean {
+  return isRecord(value) && isEvidence(value) && isRecord(value.source) && isRecord(source) &&
+    value.source.url === source.url && value.source.document_version === source.document_version &&
+    value.source.checked_at === source.checked_at &&
+    typeof value.quote === 'string' && value.quote.trim().length > 0 && [...value.quote].length <= 2500 &&
+    typeof value.location === 'string' && value.location.trim().length > 0 && [...value.location].length <= 500;
+}
+
+function isApplicationGuide(value: unknown, source: unknown): boolean {
+  return value === null || (isRecord(value) &&
+    (value.method === null || isGuideExcerpt(value.method, source)) &&
+    (value.office === null || isGuideExcerpt(value.office, source)) &&
+    (value.documents === null || arrayOf(value.documents, (item) => isGuideExcerpt(item, source), 0, 100)));
+}
+
 /** 정책 상세의 필수 값과 화면이 읽는 금액·모집·중복 제한의 중첩 구조를 확인한다. */
 export function isNormalizedBenefit(value: unknown): value is NormalizedBenefit {
   return (
@@ -39,7 +54,8 @@ export function isNormalizedBenefit(value: unknown): value is NormalizedBenefit 
     isNonEmptyString(value.title) && isNonEmptyString(value.summary) && isNonEmptyString(value.provider) &&
     arrayOf(value.categories, isNonEmptyString) && new Set(value.categories).size === value.categories.length &&
     optional(value.virtual_data, (item) => typeof item === 'boolean') &&
-    isApplication(value.application) && arrayOf(value.eligibility_conditions, isCondition) && isSource(value.source) &&
+    isApplication(value.application) && optional(value.application_guide, (item) => isApplicationGuide(item, value.source)) &&
+    arrayOf(value.eligibility_conditions, isCondition) && isSource(value.source) &&
     isRecord(value.domain_data) && optional(value.benefit_amount, isBenefitAmount) &&
     (value.service === undefined || (value.benefit_amount == null && isService(value.service))) &&
     optional(value.reviewed, isNullableBoolean) && optional(value.lifetime_once, isNullableBoolean) &&

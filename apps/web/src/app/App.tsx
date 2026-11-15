@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import type { JSX } from 'react';
 import { LoadingScreen } from '../features/benefits/LoadingScreen.tsx';
+import { useAnalysis } from '../features/benefits/analysisStore.ts';
 import { ResultScreen } from '../features/benefits/ResultScreen.tsx';
 import { AboutScreen } from '../features/info/AboutScreen.tsx';
 import { PrivacyScreen } from '../features/info/PrivacyScreen.tsx';
@@ -11,6 +12,7 @@ import { StartScreen } from '../features/profile/StartScreen.tsx';
 import { ServicesScreen } from '../features/services/ServicesScreen.tsx';
 import { WhatIfScreen } from '../features/whatIf/WhatIfScreen.tsx';
 import { ToastHost } from '../shared/ui/Toast.tsx';
+import { refreshServiceMeta, startServiceMeta } from '../shared/api/serviceMetaStore.ts';
 import { PlaceholderScreen } from './PlaceholderScreen.tsx';
 import { parseRoute, paths, startLinkInterception } from './router.ts';
 import type { Route } from './router.ts';
@@ -19,6 +21,12 @@ import { usePathname } from './usePathname.ts';
 export function App(): JSX.Element {
   const pathname = usePathname();
   const route = parseRoute(pathname);
+  const analysis = useAnalysis();
+
+  useEffect(() => startServiceMeta(), []);
+  useEffect(() => {
+    void refreshServiceMeta();
+  }, [pathname, analysis.status]);
 
   // 같은 사이트 링크는 새로 고침 없이 이동
   useEffect(() => startLinkInterception(), []);

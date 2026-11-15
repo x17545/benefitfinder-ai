@@ -16,6 +16,8 @@ class PublishedPolicy:
     conditions: tuple[dict[str, Any], ...]
     payments: tuple[tuple[int, int], ...] | None
     published_at: str
+    # Reviewed support increments; distinct from the actual maturity cash payment.
+    maturity_accruals: tuple[tuple[int, int], ...] | None = None
 
     @property
     def policy_id(self) -> str:
