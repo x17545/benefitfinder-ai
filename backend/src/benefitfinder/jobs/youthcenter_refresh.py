@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 import errno
-import fcntl
 import json
 import os
 import re
 import shutil
+
+if os.name == "nt":
+    import msvcrt
+else:
+    import fcntl
+
 from collections import Counter
 from collections.abc import Callable
 from datetime import datetime
@@ -228,7 +233,14 @@ def run_youthcenter_refresh(
     descriptor = os.open(lock, os.O_RDWR | os.O_CREAT, 0o600)
     try:
         try:
-            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            if os.name == "nt":
+                # Windows locks a byte range from the current file position.
+                if os.fstat(descriptor).st_size == 0:
+                    os.write(descriptor, b"\0")
+                os.lseek(descriptor, 0, os.SEEK_SET)
+                msvcrt.locking(descriptor, msvcrt.LK_NBLCK, 1)
+            else:
+                fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError as error:
             if error.errno in {errno.EACCES, errno.EAGAIN}:
                 raise RefreshError("refresh_already_running") from None

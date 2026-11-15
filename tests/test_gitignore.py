@@ -176,7 +176,7 @@ class GitignoreTests(unittest.TestCase):
         result = run_git(repo, "config", "core.excludesFile", str(global_excludes))
         self.assertEqual(result.returncode, 0, msg=result.stderr)
         target = repo / "README.md"
-        target.write_text("# dummy\n", encoding="utf-8")
+        target.write_bytes(b"# dummy\n")
         result = run_git(repo, "add", "-f", "--", "README.md")
         self.assertEqual(result.returncode, 0, msg=result.stderr)
         joined = "\n".join(file_errors(repo))
