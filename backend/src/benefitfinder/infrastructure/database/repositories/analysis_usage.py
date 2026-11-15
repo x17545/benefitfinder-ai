@@ -44,8 +44,11 @@ class PostgresAnalysisUsage:
     def reserve(self) -> int:
         """Atomically consume one shared daily admission and return what remains."""
         try:
+            # The UPSERT is one transaction: release the row lock on the server
+            # without waiting for the client to receive the result and send COMMIT.
             with psycopg.connect(
                 self._database_url,
+                autocommit=True,
                 connect_timeout=2,
                 options=_CONNECTION_OPTIONS,
                 application_name=_APPLICATION_NAME,
