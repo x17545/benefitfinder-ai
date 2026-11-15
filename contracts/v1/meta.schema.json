@@ -10,6 +10,7 @@
     "data_updated_at": {"type": "string", "format": "date-time"},
     "base_rate": {"type": ["number", "null"], "minimum": 0},
     "base_rate_status": {"enum": ["verified", "unknown"]},
-    "daily_remaining": {"type": "integer", "minimum": 0}
+    "daily_remaining": {"type": "integer", "minimum": 0},
+    "virtual_data": {"type": "boolean", "default": false, "description": "true는 DB 미설정의 개발용 가상 정책·금리 메타데이터다. 실제 데이터의 갱신·금리 검증으로 표시하지 않는다."}
   }
 }
