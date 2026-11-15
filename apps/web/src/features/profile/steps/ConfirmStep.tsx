@@ -27,8 +27,10 @@ import { useRegionOptions } from '../regionOptions.ts';
 import { isValidRegionSelection, normalizeRegionAnswers } from '../regionSelection.ts';
 import { Button } from '../../../shared/ui/Button.tsx';
 import { ConditionStepLayout } from '../ConditionStepLayout.tsx';
+import { isLocalCashPolicyInputEnabled } from '../cashFactsMemory.ts';
 import { updateAnswers, useFlowState } from '../flowStore.ts';
 import type { ConditionAnswers } from '../flowStore.ts';
+import { CashFactsPanel } from './CashFactsPanel.tsx';
 
 interface SummaryRow {
   label: string;
@@ -120,6 +122,8 @@ export function ConfirmStep(): JSX.Element {
     row.step === 2 && !regionOk ? { ...row, value: null } : row,
   );
   const complete = missingSteps(answers).length === 0 && regionOk;
+  const showCashFacts =
+    isLocalCashPolicyInputEnabled();
 
   return (
     <ConditionStepLayout
@@ -163,6 +167,9 @@ export function ConfirmStep(): JSX.Element {
           </li>
         ))}
       </ul>
+      {showCashFacts && answers.regionCode !== null ? (
+        <CashFactsPanel key={answers.regionCode} regionCode={answers.regionCode} />
+      ) : null}
     </ConditionStepLayout>
   );
 }

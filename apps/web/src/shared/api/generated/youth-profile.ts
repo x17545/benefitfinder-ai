@@ -1,6 +1,7 @@
 /* Generated from contracts/v1. Run pnpm types:generate; do not edit. */
 
 export type YouthDomainData = {
+  cash_facts?: CashFacts;
   /**
    * 군 복무 개월 구간. 정확한 개월은 min==max, 미상은 전체 null, 열린 상한은 max:null. UI 매핑: 해당없음 0..0, 1년6개월이하 0..18, 1년6개월초과~2년 19..24, 2년초과 25..null. min<=max는 스키마가 강제하지 않고 문서/테스트에서 검증한다. 정책별 최대 6년 연장은 해당 공고 근거가 있을 때만 적용하고 근거 없으면 사용하지 않는다.
    */
@@ -68,6 +69,51 @@ export type YouthDomainData = {
     parent_asset_band?: 'under_300m' | 'between_300m_500m' | 'over_500m' | null;
   } | null;
 } | null;
+/**
+ * 로컬 현금 정책 모드에서만 판정에 사용하는 선택 입력. 기간 목록 누락/null은 미확인, 빈 배열은 해당하는 사업 참여 이력 없음. 저장·외부 전달하지 않는다.
+ */
+export type CashFacts = {
+  birth_date?: string | null;
+  exam?: {
+    exam_date?: string | null;
+    fee_won?: LocalNullableWon;
+    supported_exam?: boolean | null;
+    unemployed_on_exam_date?: boolean | null;
+    same_exam_awards?: number | null;
+    prior_awards_won?: LocalNullableWon;
+    other_reimbursement?: boolean | null;
+    other_exclusions?: boolean | null;
+  } | null;
+  rent?: {
+    deposit_won?: LocalNullableWon;
+    contract_rent_won?: LocalNullableWon;
+    health_insurance?: 'employee' | 'regional' | null;
+    health_premium_won?: LocalNullableWon;
+    applicant_lease?: boolean | null;
+    other_exclusions?: boolean | null;
+    /**
+     * @maxItems 24
+     */
+    paid_months?:
+      | {
+          month: string;
+          paid_on: string;
+          amount_won: number;
+        }[]
+      | null;
+  } | null;
+  /**
+   * @maxItems 50
+   */
+  program_periods?:
+    | {
+        program_id: string;
+        starts_on: string;
+        ends_on: string | null;
+      }[]
+    | null;
+} | null;
+export type LocalNullableWon = number | null;
 
 /**
  * domain==youth일 때만 적용되는 13단계 선택지 확장. 공통 profile의 age/region_code/employment_status/income_band/household_type은 유지하고 나머지 선택지는 domain_data에 둔다. 기간+현재가치 옵션은 request.options 단일 위치에 두며 domain_data에는 두지 않는다. null/누락은 미상이며 없는 것으로 단정하지 않는다. min<=max 같은 교차 필드 불변식은 JSON Schema가 아니라 문서와 테스트로 검증한다.

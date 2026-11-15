@@ -10,6 +10,7 @@ from __future__ import annotations
 import uuid
 import math
 from collections.abc import Mapping
+from datetime import datetime
 from functools import partial
 from typing import Any
 from time import monotonic
@@ -29,6 +30,7 @@ from benefitfinder.api.v1.routers.recommendations import router as recommendatio
 from benefitfinder.api.v1.routers.simulations import router as simulations_router
 from benefitfinder.ai.policy_explanation import GroundedPolicyExplainer
 from benefitfinder.application.analytics import AnalyticsService
+from benefitfinder.application.local_cash_recommendations import LocalCashRecommendations
 from benefitfinder.application.policy_explanations import (
     ExplanationGenerator,
     PublishedClauseRepository,
@@ -51,6 +53,7 @@ from benefitfinder.application.analysis_usage import (
     DailyAnalysisLimitExceeded,
 )
 from benefitfinder.application.simulation_service import simulate_mvp
+from benefitfinder.domains.youth.local_cash import assess_cash
 from benefitfinder.domains.youth.policy_evaluator import evaluate_policies
 from benefitfinder.domains.youth.published_eligibility import evaluate_condition
 from benefitfinder.domains.youth.published_scenario import change_published_profile, published_next_threshold
@@ -67,6 +70,7 @@ from benefitfinder.infrastructure.ga4_analytics import GA4MeasurementProtocolAna
 from benefitfinder.infrastructure.ollama_explanations import OllamaExplanationCompletion
 from benefitfinder.infrastructure.published_clauses import InMemoryPublishedClauses
 from benefitfinder.infrastructure.region_codes import OfficialRegionCatalog
+from benefitfinder.infrastructure.local_cash_catalog import load_local_cash_catalog
 from benefitfinder.infrastructure.memory_analysis_usage import MemoryAnalysisUsage
 from benefitfinder.infrastructure.database.repositories.analysis_usage import PostgresAnalysisUsage
 from benefitfinder.infrastructure.database.repositories.base_rates import PostgresBaseRates
@@ -126,6 +130,8 @@ def create_app(
     policy_database_url: str | None = None,
     base_rate_repository: BaseRateRepository | None = None,
     base_rate_database_url: str | None = None,
+    local_cash_policy_file: str | None = None,
+    local_cash_reference_at: datetime | None = None,
     analytics_service: AnalyticsService | None = None,
 ) -> FastAPI:
     """Assemble and return a new FastAPI application.
@@ -133,6 +139,23 @@ def create_app(
     Each call returns an independent instance; routes added to one instance
     never affect another. The app starts without DB, LLM, or secrets.
     """
+    if local_cash_reference_at is not None and (
+        not local_cash_policy_file or local_cash_reference_at.utcoffset() is None
+    ):
+        raise ValueError("local_cash_reference_requires_file_and_timezone")
+    local_cash = None
+    if local_cash_policy_file is not None:
+        if any(item is not None for item in (
+            policy_repository, policy_database_url, analysis_usage_database_url,
+            explanation_database_url, explanation_repository, explanation_model, explanation_generator,
+            service_catalog, service_repository, base_rate_repository, base_rate_database_url,
+        )):
+            raise ValueError("local_cash_requires_isolated_catalog")
+        local_cash = LocalCashRecommendations(
+            load_local_cash_catalog(local_cash_policy_file),
+            assess_cash,
+            reference_at=local_cash_reference_at,
+        )
     if explanation_model is not None and explanation_generator is not None:
         raise ValueError("ambiguous_explanation_generator")
     if analysis_usage is not None and analysis_usage_database_url is not None:
@@ -269,7 +292,7 @@ def create_app(
         evaluate_policies=evaluate_policies,
     )
     app.state.recommendation_explainer = explainer
-    app.state.discount_rate = MVP_ANNUAL_RATE if policy_repository is None else None
+    app.state.discount_rate = MVP_ANNUAL_RATE if policy_repository is None and local_cash is None else None
 
     def read_discount_rate() -> float | None:
         # No network request or mutable per-worker rate cache on the user path.
@@ -287,7 +310,7 @@ def create_app(
     services = (
         PublishedServices(service_repository, evaluate_condition) if service_repository is not None
         else service_catalog if service_catalog is not None else ServiceCatalog(
-            example_services() if policy_repository is None else (),
+            example_services() if policy_repository is None and local_cash is None else (),
         )
     )
     if isinstance(services, ServiceCatalog) and services.policy_ids.intersection(cash_benefits):
@@ -327,6 +350,16 @@ def create_app(
 
         app.state.simulation_service = simulate_published
 
+    if local_cash is not None:
+        app.state.recommendation_service = local_cash
+        app.state.benefit_lookup = local_cash.detail
+
+        def simulate_local_cash(**kwargs: Any) -> dict[str, Any]:
+            # Disclosed real expenses cannot be extrapolated to hypothetical future inputs.
+            raise ValueError("unavailable_simulation_basis")
+
+        app.state.simulation_service = simulate_local_cash
+
     app.state.region_catalog = region_catalog if region_catalog is not None else OfficialRegionCatalog()
     app.state.analysis_usage = (
         analysis_usage if analysis_usage is not None else MemoryAnalysisUsage()
@@ -335,13 +368,17 @@ def create_app(
         app.state.analysis_usage,
         read_discount_rate,
         policy_repository=policy_repository,
-        example_updated_at=MVP_DATA_UPDATED_AT,
+        example_updated_at=local_cash.updated_at if local_cash is not None else MVP_DATA_UPDATED_AT,
         service_repository=service_repository,
     )
 
     app.state.analysis_timeout_seconds = analysis_timeout_seconds
 
-    app.state.analytics_service = analytics_service if analytics_service is not None else AnalyticsService()
+    app.state.analytics_service = (
+        analytics_service
+        if local_cash is None and analytics_service is not None
+        else AnalyticsService()
+    )
 
     app.include_router(health_router)
     app.include_router(analytics_router)
