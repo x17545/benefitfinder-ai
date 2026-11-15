@@ -1,11 +1,13 @@
 import { resetAnalyticsSession, trackEvent } from '../../shared/analytics/events.ts';
 import { showToast } from '../../shared/ui/toastStore.ts';
+import { clearCashFacts } from './cashFactsMemory.ts';
 import { clearFlowState } from './flowStore.ts';
 import { removeSavedConditions } from './savedConditions.ts';
 
 /** 하단 [내 정보 지우기]: 저장한 조건과 마지막 결과를 바로 지운다 (F09-5, 토스트 T-CLEAR) */
 export function clearMyData(): void {
   removeSavedConditions();
+  clearCashFacts();
   clearFlowState();
   trackEvent({ name: 'clear_mine' });
   resetAnalyticsSession();

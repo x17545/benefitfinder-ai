@@ -50,7 +50,8 @@ async def run_recommendation(
     step, label = "search_services", "이용할 수 있는 서비스 확인"
     progress({"step": step, "state": "running", "label": label})
     service_result = dict(await asyncio.to_thread(services.recommend, request.domain, request.profile))
-    response['virtual_data'] = bool(response.get('virtual_data') or service_result.pop('virtual_data', False))
+    service_virtual_data = service_result.pop("virtual_data", False)
+    response["virtual_data"] = bool(response.get("virtual_data") or service_virtual_data)
     response.update(service_result)
     progress({"step": step, "state": "done", "label": label})
 
