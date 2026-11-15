@@ -10,7 +10,7 @@ from benefitfinder.application.recommendation_explanations import Recommendation
 from benefitfinder.application.policy_explanations import ExplanationRequest
 from benefitfinder.application.recommendation_service import RecommendationRequestLike
 from benefitfinder.application.response_mapper import build_recommendation_response
-from benefitfinder.application.service_catalog import ServiceCatalog
+from benefitfinder.application.service_catalog import ServiceRecommendations
 
 Progress = Callable[[dict[str, str]], None]
 
@@ -20,7 +20,7 @@ async def run_recommendation(
     *,
     calculate: Callable[..., dict[str, Any]],
     annual_rate: float | None,
-    services: ServiceCatalog,
+    services: ServiceRecommendations,
     explainer: RecommendationExplainer,
     progress: Progress,
 ) -> dict[str, Any]:
@@ -49,7 +49,9 @@ async def run_recommendation(
 
     step, label = "search_services", "이용할 수 있는 서비스 확인"
     progress({"step": step, "state": "running", "label": label})
-    response.update(await asyncio.to_thread(services.recommend, request.domain, request.profile))
+    service_result = dict(await asyncio.to_thread(services.recommend, request.domain, request.profile))
+    response['virtual_data'] = bool(response.get('virtual_data') or service_result.pop('virtual_data', False))
+    response.update(service_result)
     progress({"step": step, "state": "done", "label": label})
 
     step, label = "explain_with_sources", "원문 근거와 신청 안내 정리"

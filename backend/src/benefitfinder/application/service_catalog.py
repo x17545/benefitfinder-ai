@@ -3,13 +3,18 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from copy import deepcopy
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Literal
+from typing import Any, Literal, Protocol
 from urllib.parse import urlsplit
 
 MAX_SAFE_WON = 2**53 - 1
 Verdict = Literal["met", "not_met", "needs_review"]
+
+
+class ServiceRecommendations(Protocol):
+    def recommend(self, domain: str, profile: Any) -> dict[str, Any]: ...
 
 
 def korea_today() -> date:
@@ -52,8 +57,11 @@ class ServiceCondition:
     condition_id: str
     quote: str
     evaluate: Callable[[Any], Verdict]
+    evidence_items: tuple[dict[str, Any], ...] = ()
 
     def evidence(self, source: dict[str, str]) -> list[dict[str, Any]]:
+        if self.evidence_items:
+            return deepcopy(list(self.evidence_items))
         return [{"quote": self.quote, "location": "지원 대상", "source": source.copy()}]
 
 
@@ -72,6 +80,12 @@ class ServiceOffer:
     price: ServicePrice | None
     conditions: tuple[ServiceCondition, ...]
     virtual_data: bool = False
+    extra_categories: tuple[str, ...] = ()
+    conflicts: tuple[dict[str, Any], ...] = ()
+
+    @property
+    def categories(self) -> list[str]:
+        return [self.category, *self.extra_categories]
 
     def __post_init__(self) -> None:
         if type(self.quantity) is not int or not 1 <= self.quantity <= MAX_SAFE_WON:
@@ -113,7 +127,7 @@ class ServiceOffer:
             "title": self.title,
             "summary": self.summary,
             "provider": self.provider,
-            "categories": [self.category],
+            "categories": self.categories,
             "application": self.application_on(today),
             "source": self.source.copy(),
             "eligibility_conditions": [
@@ -124,6 +138,7 @@ class ServiceOffer:
             "service": self.public_service(today),
             "virtual_data": self.virtual_data,
             "domain_data": {},
+            **({'conflicts': deepcopy(list(self.conflicts))} if self.conflicts else {}),
         }
 
     def diagnosis(self, profile: Any) -> list[dict[str, Any]]:
@@ -166,10 +181,11 @@ class ServiceCatalog:
         interests = data.interests if data is not None else None
         today = self._today()
         rows: list[dict[str, Any]] = []
+        virtual_data = False
         for offer in self._offers.values():
             if not offer.policy_id.startswith(domain + ":"):
                 continue
-            if interests and offer.category not in interests:
+            if interests and not set(offer.categories).intersection(interests):
                 continue
             application = offer.application_on(today)
             if application["status"] in ("closed", "upcoming"):
@@ -177,10 +193,11 @@ class ServiceCatalog:
             eligibility = offer.diagnosis(profile)
             if any(condition["status"] == "not_met" for condition in eligibility):
                 continue
+            virtual_data = virtual_data or offer.virtual_data
             rows.append({
                 "policy_id": offer.policy_id,
                 "title": offer.title,
-                "categories": [offer.category],
+                "categories": offer.categories,
                 "application": application,
                 "source": offer.source.copy(),
                 "service": offer.public_service(today),
@@ -198,4 +215,5 @@ class ServiceCatalog:
             if row["service"]["estimated_value_won"] is not None
         ]
         total = sum(values)
-        return {"services": rows, "services_total_won": total if values and total <= MAX_SAFE_WON else None}
+        return {"services": rows, "services_total_won": total if values and total <= MAX_SAFE_WON else None,
+                "virtual_data": virtual_data}

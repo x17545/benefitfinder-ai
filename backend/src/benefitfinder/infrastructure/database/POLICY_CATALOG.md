@@ -2,7 +2,7 @@
 
 `POLICY_DATABASE_URL`을 설정하면 추천·상세·상황 변화 API가 `policy_catalog_releases`의 현재 게시 버전을 사용한다. 미설정 실행은 기존 가상 예제다. 설정 후 조회 실패는 `503 dependency_unavailable`이며 가상 정책이나 빈 성공 결과로 대체하지 않는다. DB가 비어 있으면 정상 빈 결과다. import·서버 시작 때 접속·DDL·초기 데이터·게시를 실행하지 않는다.
 
-관리 역할로 [마이그레이션](../../../../migrations/README.md)의 0001·0002를 적용한 뒤 런타임에는 별도 읽기 역할을 사용한다.
+관리 역할로 [마이그레이션](../../../../migrations/README.md)의 0001·0002를 적용한 뒤 런타임에는 별도 읽기 역할을 사용한다. 실제 정책 게시에는 수집 영역 0005와 [원천 변경·재검수 0006](POLICY_SOURCE_RECHECKS.md)이 필요하며 기존 실제 게시 자료를 검수 대기로 내리는 데이터 영향을 먼저 확인한다.
 
 ```sql
 GRANT USAGE ON SCHEMA public TO benefitfinder_reader;
@@ -21,6 +21,7 @@ GRANT SELECT ON public.policy_catalog_releases TO benefitfinder_reader;
 | `payment_evidence` | 금액·시점의 인용·위치·출처. benefit과 같은 버전·확인일 |
 | `unresolved_combination_rules` | 미해결 중복·차감·예외 규칙이 있으면 `true`. 이때 `benefit.reviewed: true`는 거부 |
 | `source_sha256` | 별도 보관한 UTF-8 원문 텍스트의 정확한 SHA-256 |
+| `collection_sources` | 검수한 수집 원천의 `source`, `external_id`, `material_sha256` 목록. 실제 정책은 필수, 최대 20개이며 전체가 승인 해시에 포함됨. 원문 텍스트 해시와 구분 |
 
 실행 규칙은 다음 범위만 지원한다. 다른 연산자·필드·불완전한 매개변수는 거부한다.
 
@@ -56,6 +57,6 @@ uv run --locked python -m benefitfinder.jobs policy-catalog publish \
 
 6개 보기와 상황 변화 전후는 45초 계산 예산을 공유한다. 후보 128개·탐색 250,000 노드·안전 정수 한도를 넘으면 `503 calculation_limit_exceeded`다. 후보를 잘라 성공으로 반환하지 않는다. 기본 가상 계산기도 시간 제한과 정확한 그래프 탐색을 사용한다.
 
-ECOS 금리는 후속이므로 `discount_rate: null`이고 현재가치 보기는 계산 불가다. 가상 금리를 실제 금리로 사용하지 않는다. 만기 전 예상 적립액은 별도 모델이 필요하므로 만기형은 검수 완료 계산 대상으로 게시하지 못한다. 서비스 DB 적재·환산은 후속이며 가상 서비스를 섞지 않는다. F13은 같은 ID/버전의 조항이 별도로 게시되어 있으면 검색하고 없으면 기본 문구다. 사용자 프로필·특수 조건·부모 정보는 모델에 전달하지 않는다.
+[ECOS 금리 저장소](ECOS_RATES.md)를 연결하면 같은 마지막 성공값으로 추천·상황 변화의 현재가치를 계산한다. 미설정·빈 금리 테이블·조회 실패 시 `discount_rate: null`이고 현재가치 보기는 계산 불가다. 가상 금리를 실제 금리로 사용하지 않는다. 만기 전 예상 적립액은 별도 모델이 필요하므로 만기형은 검수 완료 계산 대상으로 게시하지 못한다. [서비스·단가 카탈로그](SERVICE_CATALOG.md)는 같은 DB에서 별도 승인·조회하고 현금 계산과 분리한다. 실제 서비스 자료와 단가 검수는 후속이다. F13은 같은 ID/버전의 조항이 별도로 게시되어 있으면 검색하고 없으면 기본 문구다. 사용자 프로필·특수 조건·부모 정보는 모델에 전달하지 않는다.
 
 실제 정책 30개 검수·게시와 정책 사실 검증은 코드 통과만으로 완료되지 않는다. [통합 검사](../../../../integration/README.md)는 PostgreSQL 17에 가상 자료만 넣어 게시·조회·교체·롤백·검수 필터·권한·장애·API 연결을 확인한다.

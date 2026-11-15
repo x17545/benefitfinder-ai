@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 from typing import Any
+from time import monotonic
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
@@ -11,7 +12,7 @@ from benefitfinder.api.analysis_response import analysis_response, wants_event_s
 from benefitfinder.api.schemas.recommendation import RecommendationRequest
 from benefitfinder.application.recommendation_explanations import RecommendationExplainer
 from benefitfinder.application.recommendation_flow import run_recommendation
-from benefitfinder.application.service_catalog import ServiceCatalog
+from benefitfinder.application.service_catalog import ServiceRecommendations
 
 
 def get_recommendation_service(
@@ -26,12 +27,13 @@ def get_recommendation_explainer(request: Request) -> RecommendationExplainer:
     return request.app.state.recommendation_explainer
 
 
-def get_service_catalog(request: Request) -> ServiceCatalog:
+def get_service_catalog(request: Request) -> ServiceRecommendations:
     return request.app.state.service_catalog
 
 
 def get_discount_rate(request: Request) -> float | None:
-    return request.app.state.discount_rate
+    request.state.analysis_started_at = getattr(request.state, "analysis_started_at", monotonic())
+    return request.app.state.read_discount_rate()
 
 
 router = APIRouter(
@@ -52,7 +54,7 @@ async def create_recommendations(
     http_request: Request,
     recommendation_service: Callable[..., dict[str, Any]] = Depends(get_recommendation_service),
     recommendation_explainer: RecommendationExplainer = Depends(get_recommendation_explainer),
-    service_catalog: ServiceCatalog = Depends(get_service_catalog),
+    service_catalog: ServiceRecommendations = Depends(get_service_catalog),
     annual_rate: float | None = Depends(get_discount_rate),
 ) -> Response:
     """조립된 게시 정책 또는 명시적인 개발 예제로 추천한다."""

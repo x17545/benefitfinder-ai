@@ -16,7 +16,7 @@ Pydantic 모델을 DB 모델이나 순수 domain 모델로 그대로 사용하�
 
 `GET /api/v1/meta`는 현재 게시 자료의 가장 최근 `published_at`, 추천 계산과 같은 연 할인율·확인 상태, 오늘(KST)의 서버 전체 `daily_remaining`을 반환한다. 조회는 분석 횟수를 차감하지 않으며, 100회를 소진해도 조회할 수 있다. 변하는 잔여 횟수를 캐시하지 않도록 `Cache-Control: no-store`를 보낸다.
 
-`POLICY_DATABASE_URL` 미설정 시에는 추천과 같은 가상 갱신 시각·가상 금리를 사용하고 `virtual_data: true`, `base_rate_status: unknown`으로 표시한다. 게시 카탈로그 모드에서는 `virtual_data: false`이며 실제 금리 연동 전에는 `base_rate: null`, `base_rate_status: unknown`이다. 게시 자료가 아직 없으면 갱신 시각을 만들지 않고 공통 503과 `Retry-After: 60`을 반환한다. 카탈로그·이용량 DB 오류도 공통 503이며 가상 자료나 메모리 횟수로 대체하지 않는다. `/health`는 이 준비 상태와 별개인 생존 확인이다. 실제 ECOS 수집·보관·자동 갱신과 화면 연결은 후속이다.
+`POLICY_DATABASE_URL` 미설정 시에는 추천과 같은 가상 갱신 시각·가상 금리를 사용하고 `virtual_data: true`, `base_rate_status: unknown`으로 표시한다. 게시 카탈로그 모드에서는 `virtual_data: false`이며 `BASE_RATE_DATABASE_URL`의 마지막 성공한 ECOS 금리를 읽는다. 금리 미설정·빈 테이블·조회 실패 시 `base_rate: null`, `base_rate_status: unknown`이다. 게시 자료가 아직 없으면 갱신 시각을 만들지 않고 공통 503과 `Retry-After: 60`을 반환한다. 카탈로그·이용량 DB 오류도 공통 503이며 가상 자료나 메모리 횟수로 대체하지 않는다. `/health`는 이 준비 상태와 별개인 생존 확인이다. [ECOS 수동 갱신·보관](../infrastructure/database/ECOS_RATES.md)을 제공하며 운영 자동 갱신과 화면 연결은 후속이다.
 
 `POST /api/v1/recommendations`는 `Accept: text/event-stream`을 받으면 SSE로 응답하고, 생략하거나 `q=0`이면 기존 JSON을 반환한다. 프로필은 POST 본문에만 넣는다. 조건·조합 계산(`analyze_recommendations`), 서비스 조회(`search_services`), 근거 설명(`explain_with_sources`)의 실제 실행 전후에 `running`·`done`을 보낸다. 현재 계산 함수 안의 검색·판정을 별도 단계로 꾸며 보내지 않는다. 진행 이벤트는 고정 문구만 담고 프로필·금액·정책 원문을 포함하지 않는다.
 
@@ -93,7 +93,7 @@ curl --fail --silent --show-error http://127.0.0.1:8000/api/v1/benefits/youth%3A
 
 `POST /api/v1/recommendations`는 기존 6개 현금 결과와 별도로 `services`·`services_total_won`을 반환한다. 현재는 가상 취업·주거 카탈로그에서 선택한 관심 분야와 입력 조건을 적용한다. 미충족·모집 종료·예정은 제외하고 확인 필요는 진단과 함께 남긴다. 확인된 단가·근거 설명·출처 URL·확인일이 모두 있을 때만 단가 × 횟수를 계산한다. 유효한 환산이 없으면 합계는 `null`이다.
 
-`GET /api/v1/benefits/{benefit_id}`의 서비스형 응답에는 같은 정책 ID·문서 버전의 공개 `service`가 있다. 입력에 따른 진단은 추천 응답에만 담는다. 모집 일정은 한국 날짜 기준이며 마감 당일을 포함한다. 모집 전·마감 후에는 목록과 합계에서 빼고 상세에는 상태를 표시한다. 아직 도래하지 않은 확인일의 단가는 환산하지 않는다. 실제 정책·단가 자료 게시, PostgreSQL 서비스 카탈로그, F12 수집·검수 연동은 후속이다.
+`GET /api/v1/benefits/{benefit_id}`의 서비스형 응답에는 같은 정책 ID·문서 버전의 공개 `service`가 있다. 입력에 따른 진단은 추천 응답에만 담는다. 모집 일정은 한국 날짜 기준이며 마감 당일을 포함한다. 모집 전·마감 후에는 목록과 합계에서 빼고 상세에는 상태를 표시한다. 아직 도래하지 않은 확인일의 단가는 환산하지 않는다. `POLICY_DATABASE_URL` 설정 시 [게시 서비스 카탈로그](../infrastructure/database/SERVICE_CATALOG.md)를 같은 DB에서 읽는다. 승인 해시·원천 변경 무효화·단가 근거를 검사하며 상세와 메타에 연결한다. 실제 정책·단가 자료 검수/게시와 F12 후보의 검수 인계는 후속이다.
 
 로컬 FastAPI와 웹을 실행하고 27세·경기도 수원시·무주택·월세로 13단계를 입력한다. 구직 중/무소득/취업 관심은 S3 현금 540만 원, S6 정장 대여 12만 원과 단가 미상 상담이 나온다. 재직/연 소득 1,500만~3,000만/주거 관심은 S3 현금 240만 원, S6 이사 차량 25만 원과 단가 미상 상담이 나온다(현금은 1년 명목 기준). 서비스 행을 눌러 내용·근거·진단을 확인하고, 직접 주소 접근에서는 개인 진단이 없음을 확인한다. 모두 가상 정책이다.
 
