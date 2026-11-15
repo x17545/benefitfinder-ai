@@ -14,10 +14,13 @@ class ReconcileTest(unittest.TestCase):
         data = [record("1", "청년 주택", "48121,11110", "주거"),
                 record("2", "청년  주택", "48890", "일자리"),
                 record("3", "다른 정책", "148121", "주거"),
-                record("4", "다른 정책", "48121", "교육")]
+                record("4", "다른 정책", "48121", "교육"),
+                record("5", "전국 청년 정책", "11110", "일자리"),
+                record("6", "전국 청년 정책", "48121", "주거")]
         result = reconcile(data, ["1", "3", "missing"])
-        self.assertEqual(result["candidate_ids"], ["1", "2"])
-        self.assertEqual(result["same_title_candidates"], [["1", "2"]])
+        self.assertEqual(result["candidate_ids"], ["1", "2", "6"])
+        self.assertEqual(result["text_region_candidate_ids"], ["5"])
+        self.assertEqual(result["same_title_candidates"], [["1", "2"], ["5", "6"]])
         self.assertEqual(result["prior_ids_missing_from_source"], ["missing"])
         self.assertEqual(result["prior_ids_outside_filter"], ["3"])
         self.assertFalse(result["scope_confirmed"])

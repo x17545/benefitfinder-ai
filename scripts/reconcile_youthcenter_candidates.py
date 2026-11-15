@@ -23,6 +23,7 @@ def reconcile(records: list[dict[str, Any]], prior_ids: list[str]) -> dict[str, 
         raise ValueError("duplicate_prior_id")
 
     candidates: list[str] = []
+    text_region_candidates: list[str] = []
     titles: dict[str, list[str]] = defaultdict(list)
     for policy_id, record in indexed.items():
         fields = record["fields"]
@@ -31,8 +32,14 @@ def reconcile(records: list[dict[str, Any]], prior_ids: list[str]) -> dict[str, 
         if not any(name in category for name in ("일자리", "주거")):
             continue
         if not any(re.fullmatch(r"48\d{3}", region.strip()) for region in regions):
-            continue
-        candidates.append(policy_id)
+            text = " ".join(str(fields.get(name) or "") for name in (
+                "plcyNm", "plcyExplnCn", "plcySprtCn", "addAplyQlfcCndCn", "rgtrInstCdNm"
+            ))
+            if not re.search(r"경상남도|경남|전국", text):
+                continue
+            text_region_candidates.append(policy_id)
+        else:
+            candidates.append(policy_id)
         title = " ".join(unicodedata.normalize("NFKC", fields.get("plcyNm") or "").split())
         if title:
             titles[title.casefold()].append(policy_id)
@@ -40,6 +47,7 @@ def reconcile(records: list[dict[str, Any]], prior_ids: list[str]) -> dict[str, 
     return {
         "source_records": len(records),
         "candidate_ids": sorted(candidates),
+        "text_region_candidate_ids": sorted(text_region_candidates),
         "prior_ids_missing_from_source": sorted(set(prior_ids) - indexed.keys()),
         "prior_ids_outside_filter": sorted((set(prior_ids) & indexed.keys()) - candidate_ids),
         "same_title_candidates": [sorted(ids) for ids in titles.values() if len(ids) > 1],
