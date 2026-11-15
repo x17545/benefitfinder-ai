@@ -2,13 +2,14 @@ import { useSyncExternalStore } from 'react';
 import {
   isRecommendationResponse,
   postRecommendations,
-  RecommendationError,
 } from '../../shared/api/recommendations.ts';
 import type {
   RecommendationRequest,
   RecommendationResponse,
   SSEProgressEventData,
 } from '../../shared/api/recommendations.ts';
+import { failureReason } from './analysisFailure.ts';
+import type { AnalysisFailureReason } from './analysisFailure.ts';
 
 /** 15초 안 완료가 목표, 60초가 넘으면 실패 (기획서 4.4) */
 const TIMEOUT_MS = 60_000;
@@ -20,8 +21,8 @@ export type AnalysisState =
   | { status: 'running'; progress: SSEProgressEventData[] }
   /** isSample: 개발용 예제 결과(contracts/fixtures)로 본 것 */
   | { status: 'done'; result: RecommendationResponse; isSample: boolean }
-  /** error: 분석 실패(L-E1), limit: 하루 상한(L-E2) */
-  | { status: 'failed'; reason: 'error' | 'limit' };
+  /** 실패 이유는 analysisFailure.ts. limit: 하루 상한(L-E2), 나머지는 분석 실패(L-E1) */
+  | { status: 'failed'; reason: AnalysisFailureReason };
 
 function readLastResult(): AnalysisState {
   try {
@@ -105,8 +106,7 @@ export function startAnalysis(request: RecommendationRequest): void {
       if (controller !== current || (current.signal.aborted && !timedOut)) {
         return;
       }
-      const limit = error instanceof RecommendationError && error.code === 'daily_limit_exceeded';
-      setState({ status: 'failed', reason: limit ? 'limit' : 'error' });
+      setState({ status: 'failed', reason: failureReason(error, timedOut) });
     })
     .finally(() => {
       window.clearTimeout(timer);
