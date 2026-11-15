@@ -12,26 +12,50 @@
 
 ## 2. 데이터 준비와 사용자 요청
 
-현재 F08은 [전체 수집 성공본의 PostgreSQL 인계](../../backend/src/benefitfinder/infrastructure/database/COLLECTED_POLICIES.md)를 제공한다. 원본·해시·시각·건수 검사 후 미검수 원천과 DB 기준 변경 이력을 저장하며 게시 정책·조항·승인 상태와 분리한다. DB 장애 후에는 같은 성공본부터 재인계한다. 별도 [0006 원천 연결·재검수](../../backend/src/benefitfinder/infrastructure/database/POLICY_SOURCE_RECHECKS.md)를 적용하면 승인 해시에 포함한 원천 ID·해시를 기준으로 변경·누락 시 연결된 게시 정책·F13을 내리고 기존 승인 정보와 재검수 이력을 보존한다. 동일 내용의 재수집은 승인을 유지하며 재등장은 자동 재승인이 아니다. 별도 [F12 분석 큐](../../backend/src/benefitfinder/infrastructure/database/F12_ANALYSIS.md)는 확인된 공식 문서·분류·원천 연결을 등록받아 6개 도구 선택과 누락 재탐색을 실행하고 검수 대기 파일을 남긴다. 원천이 바뀌면 실행 중/완료 분석을 무효화하며 F08에서 준비된 작업을 소비한다. 확인된 매핑의 API·공식 보충 문서는 [입력 자동 준비](../../backend/src/benefitfinder/infrastructure/database/F12_PREPARATION.md)로 현재 원천 해시·각 문서의 본문과 수락 시각을 검증해 등록한다. 원천 연결이 없는 수동 보충 문서는 변경 이후 재확인이 필요하다. 실제 대상 확대·사람 검수·운영 게시 완료는 후속이다.
+현재 제공하는 단계와 실행 안내:
+
+| 단계 | 현재 확인 범위 |
+| --- | --- |
+| [F08 수집 성공본 인계](../../backend/src/benefitfinder/infrastructure/database/COLLECTED_POLICIES.md) | 원본·해시·시각·건수를 확인해 미검수 원천과 DB 기준 변경 이력을 게시 자료·승인 상태와 분리해 저장한다. DB 장애 뒤에는 같은 성공본부터 재인계한다 |
+| [원천 연결·재검수](../../backend/src/benefitfinder/infrastructure/database/POLICY_SOURCE_RECHECKS.md) | 0006 적용 시 승인에 연결된 원천이 변경·누락되면 게시 정책·F13을 내리고 기존 승인·재검수 이력을 보존한다. 동일 내용은 승인 유지, 재등장은 자동 재승인하지 않는다 |
+| [F12 분석 큐](../../backend/src/benefitfinder/infrastructure/database/F12_ANALYSIS.md) | 확인된 공식 문서·분류·원천을 등록받아 도구 6개로 누락을 재탐색하고 검수 대기 파일을 남긴다. 원천 변경 시 실행 중이거나 완료된 분석을 무효화한다. F08이 준비된 작업을 실행할 수 있다 |
+| [F12 입력 자동 준비](../../backend/src/benefitfinder/infrastructure/database/F12_PREPARATION.md) | 확인된 매핑의 API·보충 문서를 현재 원천 해시·본문·확인 시각을 검증해 등록한다. 원천 연결이 없는 수동 문서는 변경 이후 재확인이 필요하다 |
+
+실제 대상 확대, 사람 검수, 운영 게시는 후속이다.
+
+아래는 목표 흐름이다. **승인된 버전**이 준비와 계산을 이어 준다.
 
 ```mermaid
-flowchart TD
-    API[공식 API] --> Collect[정책·원문·출처·버전 수집]
-    Docs[공식 공고·사업 지침·FAQ] --> Collect
-    Collect --> Agent[Agent: 관련 조항 탐색·규칙 후보 추출]
-    Agent --> Check[형식·인용·정책 연결·일관성 검사]
-    Check --> Review[사람 검수·가상 사례 검증]
-    Review -->|승인| Rules[(게시된 정책·규칙 버전)]
-    Check -->|누락·상충| Pending[검수 대기·확인 필요]
-    Review -->|미해결| Pending
-    Profile[사용자 선택 조건] --> Calc[코드: 자격·적용 제약 판정·조합 계산]
-    Rules --> Calc
-    Calc --> Rank[총액순 조합·근거·확인 필요 표시]
+---
+config:
+  flowchart:
+    nodeSpacing: 24
+    rankSpacing: 30
+---
+flowchart TB
+    Sources["공식 API·공고·지침·FAQ"] --> Collect["수집 · 원문과 버전 보존"]
+    Collect --> Agent["Agent · 규칙 후보 추출"]
+    Agent --> Check["형식·근거·일관성 검사"]
+    Check -->|"통과"| Review["사람 검수·가상 사례 검증"]
+    Check -->|"누락·상충"| Pending["검수 대기 · 확인 필요"]
+    Review -->|"미해결"| Pending
+    Review -->|"승인"| Rules[("게시된 정책·규칙 버전")]
+
+    classDef ai fill:#F2E9FF,stroke:#7251A3,color:#3E2869;
+    classDef published fill:#DDF7ED,stroke:#137A60,color:#073F33,stroke-width:2px;
+    classDef pending fill:#FFF2D5,stroke:#A66A12,color:#593509;
+    class Agent ai;
+    class Rules published;
+    class Pending pending;
 ```
 
 Agent는 허용된 공식 자료 조회, 연결 문서 확인, 조항 추출, 누락 검사와 재추출을 수행하도록 설계한다. 관련 문서를 찾아 해석하는 데이터 준비의 검색 방식은 별도 필요에 따라 정한다. 사용자 요청의 F13은 게시 조항을 DB에서 조회해 선택적으로 설명하며 임베딩·벡터 검색을 전제하지 않는다. 원문 분석은 갱신 작업에서 수행하고, 사용자 요청마다 웹 탐색과 모델 해석을 반복하는 흐름을 기본으로 삼지 않는다.
 
-게시된 규칙이 있으면 사용자 검색·계산은 LLM 없이 동작한다. 데이터 Agent에 사용자 프로필을 보낼 필요가 없으며, 입력은 공개 정책 문서와 정책 식별 정보로 제한한다. 추천 이유는 코드 결과와 검수한 근거의 템플릿을 기본으로 한다.
+| 구분 | 다루는 입력 | 결과 |
+| --- | --- | --- |
+| 정책 준비 | 공개 정책 문서와 정책 식별 정보 | Agent가 규칙 후보를 만들고 사람이 검수한다 |
+| 사용자 계산 | 선택 조건과 게시된 규칙 | 코드가 LLM 없이 검색·자격 판정·조합 계산을 실행한다 |
+| 사용자 설명 | 코드 결과와 검수한 원문 근거 | 기본은 템플릿이며, F13은 게시 조항을 찾아 선택적으로 생성한다 |
 
 ## 3. 규칙 후보에 남길 정보
 

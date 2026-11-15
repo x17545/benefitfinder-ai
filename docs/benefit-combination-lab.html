@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>지원금 조합 실험실 · AI 혜택 코치</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: system-ui, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+      color: #192e27;
+      background: #f5f6ef;
+      line-height: 1.55;
+      accent-color: #17654d;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    main { width: min(100% - 2rem, 62rem); margin: 0 auto; padding: clamp(2rem, 6vw, 4.5rem) 0; }
+    p, h1, h2 { margin: 0; }
+    .eyebrow { font-size: .82rem; font-weight: 750; color: #325e4e; }
+    h1 { margin-top: .5rem; font-size: clamp(2rem, 7vw, 3.8rem); line-height: 1.13; letter-spacing: -.055em; }
+    .intro { margin-top: .85rem; max-width: 32rem; color: #485b54; }
+    .lab { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1.75rem; }
+    .lab[hidden] { display: none; }
+    .choices, .result { min-width: 0; border-radius: 1.15rem; padding: clamp(1rem, 3vw, 1.5rem); }
+    .choices { margin: 0; padding-top: 1rem; border: 1px solid #cbd8d0; background: #fff; }
+    legend { padding: 0 .35rem; font-weight: 750; }
+    .option {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      gap: .2rem .75rem;
+      padding: .72rem .8rem;
+      border: 1px solid #ccd8d0;
+      border-radius: .8rem;
+      cursor: pointer;
+    }
+    .option + .option { margin-top: .6rem; }
+    .option:has(input:checked) { background: #e9f5ec; border-color: #438470; }
+    .option input { block-size: 1.15rem; inline-size: 1.15rem; margin: 0; grid-row: 1 / 3; }
+    .option input:focus-visible { outline: 3px solid #146d55; outline-offset: 3px; }
+    .option strong { font-size: 1rem; }
+    .amount { font-size: .98rem; font-weight: 750; font-variant-numeric: tabular-nums; }
+    .relation { grid-column: 2 / -1; color: #486258; font-size: .88rem; }
+    .result {
+      align-self: stretch;
+      background: #133c30;
+      color: #f6fff9;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .result h2 { font-size: 1rem; }
+    .selection-output { display: block; margin: .65rem 0 1rem; }
+    .value { display: block; font-size: clamp(2rem, 6.5vw, 3.35rem); font-weight: 760; font-variant-numeric: tabular-nums; line-height: 1.2; letter-spacing: -.06em; }
+    .value[data-conflict="true"] { color: #ffdb9d; font-size: clamp(1.65rem, 5vw, 2.25rem); }
+    .reason { display: block; margin-top: .45rem; color: #d3efe0; }
+    .track { height: .65rem; border-radius: 999px; background: #3a5e53; overflow: hidden; }
+    .bar { display: block; width: var(--fill, 0%); height: 100%; border-radius: inherit; background: #8be4b3; }
+    .reference { margin-top: .65rem; color: #d3efe0; font-size: .88rem; }
+    .reference strong { color: #f6fff9; }
+    .footnote { margin-top: 1.2rem; color: #485b54; font-size: .87rem; }
+    @media (max-width: 42rem) { .lab { grid-template-columns: minmax(0, 1fr); } }
+  </style>
+</head>
+<body>
+  <main>
+    <p class="eyebrow">AI 혜택 코치 · 가상 예시</p>
+    <h1>지원금 조합 실험실</h1>
+    <p class="intro">금액이 가장 큰 지원금 하나를 고르면 1년 총액도 가장 클까요? A·B·C를 골라 함께 받을 수 있는지 비교해 보세요.</p>
+
+    <div class="lab" id="combination-lab" hidden>
+      <fieldset class="choices">
+        <legend>가상 지원금 고르기</legend>
+        <label class="option">
+          <input id="benefit-a" type="checkbox" value="200" checked>
+          <strong>지원금 A</strong>
+          <span class="amount">200만 원</span>
+          <span class="relation">B·C와 함께 받을 수 없음</span>
+        </label>
+        <label class="option">
+          <input id="benefit-b" type="checkbox" value="180">
+          <strong>지원금 B</strong>
+          <span class="amount">180만 원</span>
+          <span class="relation">C와 함께 받을 수 있음</span>
+        </label>
+        <label class="option">
+          <input id="benefit-c" type="checkbox" value="150">
+          <strong>지원금 C</strong>
+          <span class="amount">150만 원</span>
+          <span class="relation">B와 함께 받을 수 있음</span>
+        </label>
+      </fieldset>
+      <section class="result" aria-labelledby="result-title">
+        <div>
+          <h2 id="result-title">선택한 조합의 1년 총액</h2>
+          <output class="selection-output" for="benefit-a benefit-b benefit-c">
+            <span class="value" id="combination-value"></span>
+            <span class="reason" id="combination-reason"></span>
+          </output>
+        </div>
+        <div>
+          <div class="track" id="combination-track" aria-hidden="true"><span class="bar"></span></div>
+          <p class="reference">가능한 최고 조합 <strong>B + C · 330만 원</strong></p>
+        </div>
+      </section>
+    </div>
+    <noscript><p>예시 결과: A 단독 200만 원, B와 C를 함께 받으면 330만 원입니다. A는 B 또는 C와 함께 받을 수 없습니다.</p></noscript>
+    <p class="footnote">세 지원금의 자격을 모두 충족했다고 가정합니다. 실제 정책이나 지급액이 아니며, 현재가치 할인은 적용하지 않습니다.</p>
+  </main>
+  <script>
+    const lab = document.getElementById("combination-lab");
+    const [a, b, c] = lab.querySelectorAll("input");
+    const value = document.getElementById("combination-value");
+    const reason = document.getElementById("combination-reason");
+    const track = document.getElementById("combination-track");
+    const max = Number(b.value) + Number(c.value);
+
+    function updateCombination() {
+      const conflicting = a.checked && (b.checked || c.checked);
+      const total = [a, b, c].reduce((sum, input) => sum + (input.checked ? Number(input.value) : 0), 0);
+      value.dataset.conflict = String(conflicting);
+      track.hidden = conflicting;
+      track.style.setProperty("--fill", `${conflicting ? 0 : total / max * 100}%`);
+      if (conflicting) {
+        const others = b.checked && c.checked ? "B·C" : b.checked ? "B" : "C";
+        value.textContent = "함께 받을 수 없어요";
+        reason.textContent = `A는 ${others}와 함께 받을 수 없습니다. A를 빼거나 나머지를 해제해 보세요.`;
+      } else {
+        value.textContent = `${total}만 원`;
+        reason.textContent = total === 0
+          ? "지원금을 하나 이상 골라 보세요."
+          : total === max
+            ? `A를 단독으로 받을 때보다 ${max - Number(a.value)}만 원 더 많아요.`
+            : `가능한 최고 조합과 ${max - total}만 원 차이가 나요.`;
+      }
+    }
+
+    updateCombination();
+    lab.hidden = false;
+    lab.addEventListener("change", updateCombination);
+  </script>
+</body>
+</html>
