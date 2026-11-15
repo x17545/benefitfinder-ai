@@ -179,6 +179,9 @@
     .refresh-current--new span { color: var(--color-hero-muted); }
     .refresh-current--new strong { color: var(--color-accent); }
     .refresh-note { margin-top: 10px; color: var(--color-muted); font-size: var(--text-sub); }
+    .evidence-intro { margin-bottom: 12px; }
+    .evidence-boundary { margin-top: 8px; padding: 10px 12px; border-inline-start: 4px solid var(--color-accent); border-radius: 8px; background: var(--color-card); color: var(--color-muted); }
+    .evidence-boundary strong { color: var(--color-ink); }
     .refresh[data-moved] .refresh-panel:not([hidden]) .refresh-event--checked,
     .refresh[data-moved] .refresh-panel:not([hidden]) .refresh-event--failed { animation: reveal 380ms ease-out both; }
     .refresh[data-moved] .refresh-panel:not([hidden]) .refresh-current--new { animation: adopt 620ms ease-out both; }
@@ -220,6 +223,7 @@
         <a class="button button--primary" href="#story">예시 보기 ↓</a>
         <a class="button" href="#policy">정책 준비 ↓</a>
         <a class="button" href="#experience">사용자 흐름 ↓</a>
+        <a class="button" href="#f12-f13">F12·F13 자동화 목표 ↓</a>
         <a class="button" href="#documents">목적별 문서 ↓</a>
       </nav>
     </div>
@@ -227,7 +231,7 @@
     <section id="story" class="story" aria-labelledby="story-title" data-step-guide>
       <div class="lane-head">
         <h2 id="story-title">공고 세 건이 추천 조합이 되기까지</h2>
-        <p>가상 예시 · 세 지원금 모두 자격 충족 · 1년 명목금액</p>
+        <p>현재 설계의 가상 예시 · 세 지원금 모두 자격 충족 · 1년 명목금액</p>
       </div>
       <div class="story-card">
         <nav class="story-nav" aria-label="예시 단계 선택" hidden>
@@ -305,7 +309,7 @@
     <section id="policy" aria-labelledby="policy-title">
       <div class="lane-head">
         <h2 id="policy-title">정책을 준비하는 흐름</h2>
-        <p>수집 · 분석 · 사람 검수 · 게시</p>
+        <p>현재 설계 · 수집 · 분석 · 사람 검수 · 게시</p>
       </div>
       <ol class="steps">
         <li class="stage">
@@ -321,6 +325,7 @@
           <h3>후보 추출과 검수</h3>
           <p>AI Agent가 자격·금액·중복 제한 후보와 원문을 찾고, 사람이 근거와 예외를 확인합니다.</p>
           <ul class="links">
+            <li><a href="#f12-f13">F12·F13 자동화 목표 보기 ↓</a></li>
             <li><a href="https://github.com/x17545/benefitfinder-ai/blob/main/backend/src/benefitfinder/infrastructure/database/F12_ANALYSIS.md">F12 공식 문서 분석</a></li>
             <li><a href="https://github.com/x17545/benefitfinder-ai/blob/main/docs/architecture/POLICY_DATA_PIPELINE.md#4-검수게시-기준">검수와 게시 기준</a></li>
           </ul>
@@ -439,9 +444,87 @@
             <li><a href="https://github.com/x17545/benefitfinder-ai/blob/main/docs/product/REQUIREMENTS.md#f06-상황-변화-분석-혜택-절벽">F06 상황 변화</a></li>
             <li><a href="https://github.com/x17545/benefitfinder-ai/blob/main/docs/product/REQUIREMENTS.md#f07-정책-상세신청-안내">F07 상세·신청 안내</a></li>
             <li><a href="https://github.com/x17545/benefitfinder-ai/blob/main/docs/product/REQUIREMENTS.md#f13-맞춤-설명-rag">F13 맞춤 설명</a></li>
+            <li><a href="#f12-f13">원문이 설명이 되는 과정 ↓</a></li>
           </ul>
         </li>
       </ol>
+    </section>
+
+    <section id="f12-f13" class="story directory" aria-labelledby="evidence-title" data-step-guide>
+      <div class="lane-head">
+        <h2 id="evidence-title">F12·F13 · 공고 한 줄이 추천 설명이 되기까지</h2>
+        <p>자동화 목표 · 가상 지원금 B</p>
+      </div>
+      <div class="evidence-intro">
+        <p>사람의 필수 승인 없이 에이전트가 정책 준비를 처리한다면, 공식 원문은 어떻게 자격 판정과 추천 설명에 쓰일까요?</p>
+        <p class="evidence-boundary"><strong>현재 코드:</strong> F12는 후보와 인용을 자동으로 뽑아 검수 대기로 남겨요. 계산 규칙과 F13 근거를 게시하려면 사람의 승인과 별도 게시가 필요해요. 아래는 이 단계를 자동화하려는 <strong>목표 예시</strong>예요.</p>
+      </div>
+
+      <div class="story-card">
+        <nav class="story-nav" aria-label="F12·F13 목표 단계 선택" hidden>
+          <button class="button" type="button" aria-pressed="false" aria-controls="evidence-extract">1. 후보 추출</button>
+          <button class="button" type="button" aria-pressed="false" aria-controls="evidence-verify">2. 자동 검증</button>
+          <button class="button" type="button" aria-pressed="false" aria-controls="evidence-publish">3. 게시</button>
+          <button class="button" type="button" aria-pressed="false" aria-controls="evidence-explain">4. 추천 설명</button>
+        </nav>
+
+        <article id="evidence-extract" class="story-panel" aria-labelledby="evidence-extract-title" data-scene>
+          <div>
+            <p class="eyebrow">01 · F12 후보 추출</p>
+            <h3 id="evidence-extract-title">공고에서 조건과 근거를 찾아요</h3>
+            <p class="story-copy">에이전트가 공고 B의 자격 조항을 읽고 나이 범위와 기준일을 후보로 만들어요. 나중에 대조할 수 있게 인용, 위치, 문서 버전을 함께 남겨요.</p>
+          </div>
+          <div class="story-visual">
+            <p class="story-caption">가상 공고 B · 지원 대상 · 원문 v2</p>
+            <blockquote class="story-quote">“신청일 기준 만 19세 이상 만 39세 이하인 사람”</blockquote>
+            <p class="story-row"><span>규칙 후보</span><strong>신청일에 만 19~39세</strong></p>
+          </div>
+        </article>
+
+        <article id="evidence-verify" class="story-panel" aria-labelledby="evidence-verify-title" data-scene>
+          <div>
+            <p class="eyebrow">02 · F12 자동 검증 목표</p>
+            <h3 id="evidence-verify-title">후보가 원문과 맞는지 다시 대조해요</h3>
+            <p class="story-copy">원문을 다시 읽어 인용과 버전, 범위의 양 끝, 기준일, 예외를 확인해요. 비교에 필요한 값이 빠졌거나 조항끼리 충돌하면 게시를 보류해요.</p>
+          </div>
+          <div class="story-visual">
+            <p class="story-row"><span>이 예시의 원문과 후보가 일치해요</span><strong>✓ 게시 후보</strong></p>
+            <p class="story-row story-row--blocked"><span>기준일을 확인할 수 없는 다른 후보라면</span><strong>? 게시 보류</strong></p>
+          </div>
+        </article>
+
+        <article id="evidence-publish" class="story-panel" aria-labelledby="evidence-publish-title" data-scene>
+          <div>
+            <p class="eyebrow">03 · 자동 게시 목표</p>
+            <h3 id="evidence-publish-title">통과한 규칙과 원문을 같은 버전으로 게시해요</h3>
+            <p class="story-copy">자동 검증을 통과하고 코드가 처리할 수 있는 규칙만 게시 대상으로 삼아요. 나중에 코드가 판정한 버전과 설명이 인용한 버전이 맞아야 해요.</p>
+          </div>
+          <div class="story-visual">
+            <p class="story-caption">같이 게시할 가상 자료 · 지원금 B</p>
+            <p class="story-row"><span>계산용 규칙 · v2</span><strong>신청일에 만 19~39세</strong></p>
+            <p class="story-row"><span>설명용 근거 · v2</span><strong>공고 B의 지원 대상 조항</strong></p>
+          </div>
+        </article>
+
+        <article id="evidence-explain" class="story-panel" aria-labelledby="evidence-explain-title" data-scene>
+          <div>
+            <p class="eyebrow">04 · F13 추천 설명</p>
+            <h3 id="evidence-explain-title">코드가 판정한 이유를 원문으로 설명해요</h3>
+            <p class="story-copy">코드는 게시 규칙으로 만 25세의 나이 조건을 충족으로 판정해요. F13은 판정과 같은 버전의 조항을 찾아 이유를 설명해요. 근거가 없거나 설명의 인용·수치가 맞지 않으면 기본 안내만 쓰고 판정·금액은 그대로 둬요.</p>
+          </div>
+          <div class="story-visual story-total">
+            <p class="story-caption">코드 판정 · 지원금 B의 나이 조건 충족</p>
+            <h3>“공고의 만 19~39세 조건을 충족해요.”</h3>
+            <p class="story-caption">근거: 가상 공고 B · 지원 대상 · v2<br>“신청일 기준 만 19세 이상 만 39세 이하인 사람”</p>
+          </div>
+        </article>
+
+        <div class="story-actions" hidden>
+          <button class="button" type="button" data-move="-1">이전</button>
+          <button class="button" type="button" data-move="1">다음</button>
+          <output class="story-position" aria-live="polite"></output>
+        </div>
+      </div>
     </section>
 
     <section class="directory" id="documents" aria-labelledby="documents-title">
