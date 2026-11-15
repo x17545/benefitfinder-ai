@@ -45,7 +45,7 @@ AI 독립 검수는 [별도 카탈로그 배치 경로](../backend/src/benefitfi
 
 | 먼저 확인할 것 | 기본 개발 환경 | 설정해 확인할 것 |
 | --- | --- | --- |
-| 추천·상황 변화·상세 | 공식 지역 + 가상 취업·주거 정책 | `POLICY_DATABASE_URL`: 검수·게시된 현금 정책 |
+| 추천·상황 변화·상세 | 공식 지역 + 가상 취업·주거 정책 | `POLICY_DATABASE_URL`: 게시된 현금 정책. 0014 및 대응 코드 배포 시 미검수 정책은 계산에서 제외하고 별도로 표시 |
 | 비현금 서비스 | 가상 서비스 | [게시 서비스 카탈로그](../backend/src/benefitfinder/infrastructure/database/SERVICE_CATALOG.md): 검수한 서비스·단가 |
 | 현재가치 할인율 | 개발용 금리 또는 미확인 | `BASE_RATE_DATABASE_URL`: 마지막으로 저장한 ECOS 기준금리 |
 | F13 설명 | 기본 문구 | `DATABASE_URL`: 게시 원문 조항 조회. 모델을 설정하면 선택적으로 설명 생성 |

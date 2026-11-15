@@ -63,3 +63,5 @@ psql "$DATABASE_URL" -X --set=ON_ERROR_STOP=1 --single-transaction \
 ## 공식 첨부 문서 원천 (0012)
 
 `versions/0012_official_document_sources.sql`은 0011 이후 명시적으로 적용한다. 기존 수집·승인 연결·F12 원천에 `official_documents`를 추가한다. 승인·게시·원본 이력은 보존하며 자동 게시·DDL은 없다. 쓰기 잠금 순서를 `gov24` → `official_documents` → `youthcenter` → 정책/행으로 맞춘다. [공식 HTML·PDF 수집과 검수 연결](../src/benefitfinder/infrastructure/database/OFFICIAL_DOCUMENTS.md)을 확인하고 저장 모델 담당자의 리뷰를 받는다.
+
+`versions/0014_unreviewed_catalog.sql`은 0013 이후 명시적으로 적용한다. 미검수 게시물은 검수 승인과 분리하며 원천 변경 시 철회한다. 기존 서버는 미검수 상태를 읽지 못하므로 서버 코드 배포가 필요하다. 테스트 DB 검증과 운영 변경 절차를 따른다.

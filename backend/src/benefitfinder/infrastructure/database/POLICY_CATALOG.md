@@ -93,3 +93,17 @@ uv run --locked python -m benefitfinder.jobs ai-catalog retire --manifest data/l
 [ECOS 금리 저장소](ECOS_RATES.md)를 연결하면 같은 마지막 성공값으로 추천·상황 변화의 현재가치를 계산한다. 미설정·빈 금리 테이블·조회 실패 시 `discount_rate: null`이고 현재가치 보기는 계산 불가다. 가상 금리를 실제 금리로 사용하지 않는다. [서비스·단가 카탈로그](SERVICE_CATALOG.md)는 같은 DB에서 별도 승인·조회하고 현금 계산과 분리한다. 실제 서비스 자료와 단가 검수는 후속이다. [0010](F12_CATALOG.md)의 `explanation_clauses`를 포함하면 같은 승인 해시·버전으로 F13을 함께 게시한다. 같은 ID/버전의 게시 조항이 없으면 기본 문구다. 사용자 프로필·특수 조건·부모 정보는 모델에 전달하지 않는다.
 
 실제 정책 30개 검수·게시와 정책 사실 검증은 코드 통과만으로 완료되지 않는다. [통합 검사](../../../../integration/README.md)는 PostgreSQL 17에 가상 자료만 넣어 게시·조회·교체·롤백·검수 필터·권한·장애·API 연결을 확인한다.
+
+### 미검수 게시 배치 (0014)
+
+미검수 게시 경로는 검수 판정을 만들지 않는다. `review_type`과 `review_status`는 `unreviewed`, 검수자와 검수 시각은 NULL이며, 원천 버전과 본문·레코드 해시를 별도로 기록한다. 현금 정책은 `reviewed=false`, 지급 일정 미확정, 중복 규칙 미확정인 경우만 허용하여 조합 계산에서 제외한다. 단가가 있는 서비스, F12 검수 연결, 가상 정책은 이 경로에서 게시하지 않는다. 기존 원천 연결·해시 및 수집 변경 시 철회 검사는 유지한다. 이 경로의 설명 조항은 검수된 F13 조항으로 게시하지 않는다.
+
+각 manifest 항목은 `input`과 `source` 경로만 가진다. 게시 및 철회는 최대 50건씩 트랜잭션으로 처리하며 기존 게시 정책을 교체하지 않는다.
+
+```sh
+uv run --locked python -m benefitfinder.jobs unreviewed-catalog validate --manifest data/local/catalog/unreviewed.json
+uv run --locked python -m benefitfinder.jobs unreviewed-catalog publish --manifest data/local/catalog/unreviewed.json
+uv run --locked python -m benefitfinder.jobs unreviewed-catalog retire --manifest data/local/catalog/unreviewed.json
+```
+
+게시·철회에는 `POLICY_PUBLISH_DATABASE_URL`이 필요하다. 신규 스키마를 적용한 뒤 기존 서버는 미검수 항목을 읽지 않으므로 변경된 서버 코드도 배포해야 추천·상세에서 조회된다. 운영 스키마 적용과 서버 배포는 정해진 승인·변경 절차를 따른다.

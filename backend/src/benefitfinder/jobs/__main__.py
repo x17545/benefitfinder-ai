@@ -51,6 +51,7 @@ from benefitfinder.infrastructure.f12_evaluation_files import (
 )
 from benefitfinder.infrastructure.f12_catalog_files import prepare_f12_release, write_f12_catalog
 from benefitfinder.infrastructure.ai_catalog_review import AIReview, publish_ai_batch, retire_ai_batch, validate_ai_review
+from benefitfinder.infrastructure.unreviewed_catalog import publish_unreviewed, retire_unreviewed, validate_unreviewed
 from benefitfinder.infrastructure.ollama_chat import OllamaChat
 from benefitfinder.infrastructure.compatible_llm import (
     CompatibleChat,
@@ -254,6 +255,34 @@ def ai_catalog_command(args: argparse.Namespace) -> int:
         print("AI 카탈로그 처리 실패: 입력·원천·검수·DB 상태를 확인하세요.", file=sys.stderr)
         return 2
     print(json.dumps({"action": args.catalog_action, "count": len(entries)}))
+    return 0
+
+
+def unreviewed_catalog_command(args: argparse.Namespace) -> int:
+    """Handle a manifest without inventing review metadata."""
+    try:
+        manifest = json.loads(args.manifest.read_text(encoding='utf-8'))
+        if not isinstance(manifest, list) or not 1 <= len(manifest) <= 50:
+            raise ValueError('invalid_unreviewed_manifest')
+        entries = []
+        for item in manifest:
+            if not isinstance(item, dict) or set(item) != {'input', 'source'}:
+                raise ValueError('invalid_unreviewed_entry')
+            data = json.loads((args.manifest.parent / item['input']).read_text(encoding='utf-8'))
+            model = ServiceCatalogRecord if data.get('kind') == 'service' else CatalogRecord
+            entries.append((model.model_validate(data), (args.manifest.parent / item['source']).read_text(encoding='utf-8')))
+        if args.catalog_action == 'validate':
+            for record, source in entries:
+                validate_unreviewed(record, source)
+        else:
+            database_url = os.environ.get('POLICY_PUBLISH_DATABASE_URL', '')
+            if not database_url:
+                raise ValueError('missing_publish_database_url')
+            (publish_unreviewed if args.catalog_action == 'publish' else retire_unreviewed)(database_url, entries)
+    except Exception:
+        print('미검수 카탈로그 처리 실패: 입력·원천·DB 상태를 확인하세요.', file=sys.stderr)
+        return 2
+    print(json.dumps({'action': args.catalog_action, 'count': len(entries)}))
     return 0
 
 
@@ -1006,6 +1035,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     for action in ("validate", "publish", "retire"):
         command = ai_actions.add_parser(action)
         command.add_argument("--manifest", type=Path, required=True)
+    unreviewed_catalog = commands.add_parser('unreviewed-catalog', help='미검수 원천 연결 배치 검증·게시·철회')
+    unreviewed_actions = unreviewed_catalog.add_subparsers(dest='catalog_action', required=True)
+    for action in ('validate', 'publish', 'retire'):
+        command = unreviewed_actions.add_parser(action)
+        command.add_argument('--manifest', type=Path, required=True)
     catalog = commands.add_parser("policy-catalog", help="검수된 정책 카탈로그 검증·명시적 게시")
     catalog_actions = catalog.add_subparsers(dest="catalog_action", required=True)
     for action in ("validate", "publish"):
@@ -1048,6 +1082,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return f12_analysis_command(args)
     if args.command == "ai-catalog":
         return ai_catalog_command(args)
+    if args.command == 'unreviewed-catalog':
+        return unreviewed_catalog_command(args)
     if args.command == 'service-catalog':
         return service_catalog_command(args)
     if args.command == "refresh-data":
