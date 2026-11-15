@@ -314,5 +314,6 @@ class LiveStreamTests(IsolatedAsyncioTestCase):
         incoming.put_nowait({"type": "http.disconnect"})
         await asyncio.wait_for(task, 1)
         self.assertTrue(cancelled.is_set())
+        self.assertEqual(app.state.analysis_usage.remaining(), 99)
         body = b"".join(message.get("body", b"") for message in sent).decode()
         self.assertTrue(all(kind == "progress" for kind, _ in events(body)))

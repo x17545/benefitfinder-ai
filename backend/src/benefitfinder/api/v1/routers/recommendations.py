@@ -6,6 +6,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
 
+from benefitfinder.api.dependencies.analysis_usage import reserve_analysis
 from benefitfinder.api.analysis_response import analysis_response, wants_event_stream
 from benefitfinder.api.schemas.recommendation import RecommendationRequest
 from benefitfinder.application.recommendation_explanations import RecommendationExplainer
@@ -61,6 +62,8 @@ async def create_recommendations(
             status_code=400,
             detail="unsupported_domain",
         )
+
+    await reserve_analysis(http_request)
 
     async def analyze(progress):
         return await run_recommendation(

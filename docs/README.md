@@ -35,7 +35,9 @@
 
 2026-11-12, 현재 코드의 구현 기준이다. 배포 완료를 뜻하지 않는다.
 
-추천 API는 POST SSE의 실제 계산·서비스·설명 진행과 단일 결과/오류 종료를 제공한다. 기존 JSON도 지원한다. 추천과 상황 변화는 최대 60초이며 연결 취소·오류 뒤 성공 금지를 ASGI 수준에서 검증한다. [프로토콜과 동기 작업 취소의 한계](../backend/src/benefitfinder/api/README.md)를 따른다. 공유 하루 상한과 메타 API는 후속이다.
+추천·상황 변화의 하루 100회 상한은 `ANALYSIS_USAGE_DATABASE_URL` 설정 시 PostgreSQL의 KST 날짜별 익명 집계로 공유한다. DB 장애 시 한도를 우회하지 않고 503으로 중단한다. 미설정은 단일 프로세스 개발용 메모리 카운터다. [예약 시점·재시도·권한·검증](../backend/src/benefitfinder/infrastructure/database/ANALYSIS_USAGE.md)을 따른다. 메타 API와 실제 운영 연결은 후속이다.
+
+추천 API는 POST SSE의 실제 계산·서비스·설명 진행과 단일 결과/오류 종료를 제공한다. 기존 JSON도 지원한다. 추천과 상황 변화는 최대 60초이며 연결 취소·오류 뒤 성공 금지를 ASGI 수준에서 검증한다. [프로토콜과 동기 작업 취소의 한계](../backend/src/benefitfinder/api/README.md)를 따른다. 메타 API와 실제 운영 연결은 후속이다.
 
 | 항목 | 상태 |
 |---|---|

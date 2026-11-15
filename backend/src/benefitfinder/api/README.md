@@ -1,6 +1,6 @@
 # FastAPI HTTP API
 
-`GET /health`, 공통 오류 처리와 추천·상황 변화·상세 API를 구현했다. 추천은 3기간 × 현재가치 on/off 계산과 F13 설명을 JSON 또는 POST SSE로 반환한다. `POLICY_DATABASE_URL` 설정 시 검수·게시한 PostgreSQL 정책을 계산하고, 미설정은 가상 개발 예제다. F13 조항은 `DATABASE_URL` 설정 시 PostgreSQL에서 조회한다. 실제 정책 검수·게시와 공유 하루 상한은 후속이다. 전체 [구현 상태](../../../../docs/README.md)를 따른다.
+`GET /health`, 공통 오류 처리와 추천·상황 변화·상세 API를 구현했다. 추천은 3기간 × 현재가치 on/off 계산과 F13 설명을 JSON 또는 POST SSE로 반환한다. `POLICY_DATABASE_URL` 설정 시 검수·게시한 PostgreSQL 정책을 계산하고, 미설정은 가상 개발 예제다. F13 조항은 `DATABASE_URL` 설정 시 PostgreSQL에서 조회한다. 실제 정책 검수·게시와 운영 연결은 후속이다. 전체 [구현 상태](../../../../docs/README.md)를 따른다.
 
 | 경로 | 책임 |
 |---|---|
@@ -25,6 +25,10 @@ curl --no-buffer http://127.0.0.1:8000/api/v1/recommendations \
   -H 'Content-Type: application/json' -H 'Accept: text/event-stream' \
   --data-binary @contracts/fixtures/recommendation-request.json
 ```
+
+## 공유 분석 이용량
+
+추천·상황 변화는 합쳐 KST 하루 100번의 분석을 허용한다. 스키마·분야·시나리오 검증 뒤 차감하며 실패한 분석·재시도도 각각 포함한다. 한도 초과는 HTTP 429 `daily_limit_exceeded`, 이용량 DB 장애는 HTTP 503 `dependency_unavailable`이다. `ANALYSIS_USAGE_DATABASE_URL`을 설정하면 모든 서버가 PostgreSQL의 같은 날짜별 집계를 사용한다. 미설정은 재시작 시 초기화되는 단일 프로세스 개발 예제이므로 운영에서는 공유 DB 설정이 필요하다. [마이그레이션·권한·집계 범위](../infrastructure/database/ANALYSIS_USAGE.md)를 따른다. 프로필·IP·요청 ID를 저장하지 않는다.
 
 ## F13 설명 실행
 

@@ -7,6 +7,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
 
+from benefitfinder.api.dependencies.analysis_usage import reserve_analysis
 from benefitfinder.api.analysis_response import analysis_response
 from benefitfinder.api.schemas.simulation import SimulationRequest
 
@@ -30,6 +31,7 @@ async def create_simulation(
     income = request.income_change
     if income is not None and request.scenario not in ("employed", "income_up"):
         raise HTTPException(status_code=422)
+    await reserve_analysis(http_request)
     options = request.options
 
     async def analyze(progress):
