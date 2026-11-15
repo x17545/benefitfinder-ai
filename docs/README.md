@@ -112,7 +112,7 @@ F12 자동 준비는 명시적으로 등록한 공식 보충 문서와 확인 �
 | 항목 | 확인 범위 |
 | --- | --- |
 | [서비스 메타데이터](../backend/src/benefitfinder/api/README.md#서비스-메타데이터) | `GET /api/v1/meta`: 최근 게시 자료 시각·추천과 같은 할인율 상태·공유 잔여 횟수를 조회한다. 조회는 차감하지 않는다. 가상 자료는 `virtual_data: true`, 게시 자료가 없으면 503이다. [공통 하단·시작·이용 안내](../apps/web/README.md#자료-상태와-서비스-메타데이터)에서 같은 상태를 표시하고 실패 시 수치를 추정하지 않는다. |
-| [ECOS 기준금리](../backend/src/benefitfinder/infrastructure/database/ECOS_RATES.md) | 공식 일별 시계열의 마지막 성공값을 수동 작업으로 저장한다. 추천·상황 변화·메타가 같은 DB를 읽으며, 더 오래된 값이나 갱신 실패는 마지막 성공값을 바꾸지 않는다. 공식 API 항목·응답은 확인했고 개발 환경에서 발급 키로 확인했다. 운영 키·스케줄 등록·디스코드 도착 검증은 후속 |
+| [ECOS 기준금리](../backend/src/benefitfinder/infrastructure/database/ECOS_RATES.md) | 공식 일별 시계열의 마지막 성공값을 수동 작업으로 저장한다. 추천·상황 변화·메타가 같은 DB를 읽으며, 더 오래된 값이나 갱신 실패는 마지막 성공값을 바꾸지 않는다. 개발 환경에서 발급 키로 공식 API 항목·응답을 확인했다. 운영 키·스케줄 등록·디스코드 도착 검증은 후속 |
 | [공유 분석 한도](../backend/src/benefitfinder/infrastructure/database/ANALYSIS_USAGE.md) | 추천·상황 변화 합계 하루 100회. PostgreSQL 설정 시 KST 날짜별 익명 집계로 공유하고 DB 장애 시 503이다. 미설정 시 단일 프로세스 메모리를 쓴다 |
 | [분석 진행과 취소](../backend/src/benefitfinder/api/README.md) | 추천은 JSON 또는 POST SSE로 결과를 제공한다. SSE는 실제 계산·서비스·설명 진행을 보내고 결과 또는 오류로 한 번 종료한다. 추천·상황 변화는 최대 60초이며, 취소·오류 뒤 성공 방지는 ASGI 수준에서 검증했다 |
 | 배포·통계·검사 | Vercel 환경별 API 프록시·SPA 경로와 Render 실행 설정이 있다. 미연결 Preview의 API·health는 503을 반환한다. F11의 허용 이벤트 17개를 임시 식별자로 서버를 거쳐 GA4에 보낼 수 있다. 기본 설정은 꺼짐이며, [운영 계정 수신·접근 권한](../backend/src/benefitfinder/infrastructure/ANALYTICS.md)은 별도 확인이 필요하다. uv·pnpm, 잠금 파일, 계약 타입 생성, 공통 검사·GitHub CI를 제공한다 |
