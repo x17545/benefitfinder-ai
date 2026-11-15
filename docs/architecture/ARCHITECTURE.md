@@ -12,29 +12,34 @@
 
 ## 2. 구성과 실행 흐름
 
-아래는 목표 구조다. 현재 실행 가능한 부분과 후속 구현은 [구현 상태](../README.md#구현-상태)에서 구분한다.
+**목표 구조:** 정책 갱신에서 검수한 자료를 게시하고, 사용자 요청에서는 게시 자료를 읽어 코드로 판정·계산한다. 두 흐름이 만나는 곳은 PostgreSQL이다. 현재 실행 범위는 [구현 상태](../README.md#구현-상태)를 확인한다.
 
 ```mermaid
-flowchart TD
-    Web[React + TypeScript / Vite SPA] --> API[FastAPI / HTTP API]
-    API --> App[Application: 사용자 요청 조율]
-    App --> Core[Domain: 공통 모델과 판정]
-    App --> Youth[Youth: 청년정책 조건]
-    App --> Explain[판정 결과와 기본 문구 / 선택적 F13 설명]
-    Explain --> Retrieve[게시 원문 조항 검색]
-    Retrieve --> DB
-    Retrieve --> LLM[선택적 LLM / 실패 시 기본 문구]
-    App --> Infra[Infrastructure: 저장·검색 어댑터]
-    Infra --> DB[(PostgreSQL / 게시 정책·규칙·근거 버전)]
-    Scheduler[수동·로컬 03시 설정 / 운영 스케줄 후속] --> Jobs[Jobs]
-    Jobs --> Ingest[Ingestion: 수집·정규화]
-    Official[공식 API·공고·지침·FAQ] --> Ingest
-    Ingest --> Agent[AI: 원문 분석·규칙 후보 추출]
-    Agent --> Review[검증·사람 검수·게시]
-    Review --> Infra
+---
+config:
+  flowchart:
+    nodeSpacing: 24
+    rankSpacing: 30
+---
+flowchart TB
+    Sources["공식 API·원문"] --> Collect["Jobs · 수집 작업 실행"]
+    Collect --> Prepare["수집·정규화 · Agent 추출"]
+    Prepare --> Review["검증·사람 검수"]
+    Review -->|"승인 후 게시"| DB[("PostgreSQL · 정책·규칙·근거")]
+    DB -->|"게시 자료 조회"| App["FastAPI · 요청 조율"]
+    Web["React · 사용자 조건"] --> App
+    App --> Code["코드 · 자격 판정과 조합 계산"]
+    App --> Explain["F13 · 근거 설명"]
+
+    classDef primary fill:#E8F1FF,stroke:#3863A3,color:#152F56;
+    classDef ai fill:#F2E9FF,stroke:#7251A3,color:#3E2869;
+    classDef published fill:#DDF7ED,stroke:#137A60,color:#073F33,stroke-width:2px;
+    class App,Code primary;
+    class Prepare,Explain ai;
+    class DB published;
 ```
 
-위 화살표는 실행 흐름이며 Python import 방향과는 구분한다. 일반 애플리케이션 코드가 검색·판정·계산의 순서와 분기를 실행하며 실제 진행 상태를 SSE로 전송한다. 구조화된 조건으로 검색하고 원문 인용은 저장된 근거에서 조회한다.
+화살표는 자료와 요청이 전달되는 방향이다. 모듈별 책임과 Python import 방향은 3~4장을 따른다. F13은 게시 원문과 코드 결과를 사용하며, 모델이 없거나 실패하면 기본 문구를 제공한다. 일반 애플리케이션 코드가 검색·판정·계산의 순서와 분기를 실행하며 실제 진행 상태를 SSE로 전송한다. 구조화된 조건으로 검색하고 원문 인용은 저장된 근거에서 조회한다.
 
 프론트엔드는 Vite로 빌드하는 React SPA이며 Next.js 서버나 SSR을 전제하지 않는다. 브라우저는 FastAPI의 HTTP API로만 데이터에 접근하고, DB 연결·LLM 호출·비밀 키는 백엔드가 관리한다. 프론트엔드와 백엔드를 논리적으로 나누며 현재 Vercel 프록시와 Render 실행 설정을 제공한다. 운영 적용·비밀값·모델 서비스 준비는 별도다.
 

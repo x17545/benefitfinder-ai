@@ -2,54 +2,9 @@
 
 **내 조건에서 함께 받을 수 있는 청년 지원금을 묶고, 조합별 총액과 선택 이유를 비교하는 서비스**를 만든다. 화면 이름은 ‘청년 정책 매니저’이며, 첫 MVP는 만 19~39세 청년의 **취업·주거 혜택**에 집중한다.
 
-> 코디세이 AI 네이티브 Final Project · 5인 팀 · README 필수 항목: [개요](#해결하려는-문제) · [팀원 역할](#팀원-역할과-기여) · [기술 스택](#기술-스택) · [실행 방법](#로컬-실행) · [결과](#결과)
+> 코디세이 AI 네이티브 Final Project · 5인 팀
 
-## 평가자 안내
-
-이 절은 제출 준비 양식이다. 배포 주소·운영 실행 기록·실사용자 결과가 비어 있으면 검증 완료로 보지 않는다. 목표 기능과 현재 구현은 아래 개발 상태와 [문서 지도](docs/README.md#구현-상태)에서 구분한다. 클릭 시안의 S4·S5·S6은 실제 앱 구현과 별개다.
-
-| 항목 | 내용 |
-| --- | --- |
-| 배포 URL | (배포 후 기입) |
-| 접속 방법 | 로그인·회원가입 없이 위 주소로 바로 접속한다. 평가 전용 계정은 필요 없다 |
-| 서비스 유지 | 결과 안내를 받을 때까지 유지한다 |
-| 시연 영상 (3분 이내) | (촬영 후 링크 기입) |
-| 기획서 | [docs/product/PROJECT_PLAN.md](docs/product/PROJECT_PLAN.md) |
-| 기능 요구 명세서 | [docs/product/REQUIREMENTS.md](docs/product/REQUIREMENTS.md) (12장 시스템 아키텍처, 13장 AI 활용 명세, 14장 구현 현황 표) |
-| 사용자 피드백 기록 | [docs/product/USER_TEST.md](docs/product/USER_TEST.md) 5장·6장 |
-| 발표 자료 | (완성 후 `docs/` PDF 링크 기입) |
-| 프로젝트 진행 기록 | (기입: 회의록·결정 기록 위치) |
-
-### 평가자 테스트 방법
-
-기능별 확인 방법과 기대 결과는 [구현 현황 표](docs/product/REQUIREMENTS.md#14-구현-현황-표)에 있다. 표에서 말하는 '테스트 조건 A'는 아래 값이다.
-
-**테스트 조건 A** (가상 인물, 13단계에서 이대로 고른다)
-
-| 단계 | 고를 값 |
-| --- | --- |
-| 1 나이 | 25 |
-| 2 지역 | 경기도 · 수원시 |
-| 3 지금 상황 | 취업 준비 |
-| 4 최종 학력 | 대학 졸업 |
-| 5 결혼 | 미혼 |
-| 6 사는 형태 | 혼자 살아요 · 없어요 (무주택) · 세대주 |
-| 7 집 계약 | 월세 · 보증금 5천만 원 이하 · 월세 40만 ~ 60만 원 |
-| 8 소득과 재산 | 없음 · 1억 2천만 원 이하 |
-| 9 해당 조건 | 해당 없음 |
-| 10 관심 분야 | 취업, 주거 |
-| 11 이미 받은 정책 | 없음 |
-| 12 부모님 정보 | [건너뛰기] |
-| 13 조건 확인 | 앞의 선택값 확인 후 [내 조합 찾기] |
-
-**자동 갱신 확인** (F08, 목표 03:00 KST): [정책·금리 통합 실행·스케줄 안내](backend/src/benefitfinder/jobs/DAILY_REFRESH.md)를 따른다. 현재 CI는 매일 수집하는 스케줄러가 아니다. 실제 API 수집 성공·디스코드 도착·운영 스케줄 등록은 후속 검증이며, 해당 환경에서 확인한 요약·기록 위치를 제출 전에 기입한다.
-
-**AI Agent 실행 기록 확인** (F12): [추출·검수·평가 CLI](backend/src/benefitfinder/jobs/README.md)를 따른다. 공유 가상 회귀와 실제 E4B 검증 요약은 관련 PR에 남기며, 실제 공고·검수·결과·로그는 로컬 `data/`에만 둔다. 제출용으로는 원문/개인정보를 제거한 실행 순서와 성공·실패 요약을 따로 확인한다.
-
-### AI 사용 표시
-
-- 서비스 목표: 생성된 설명에는 [AI] 표시와 근거를 붙이고, 기본 문구는 AI 생성으로 표시하지 않는다. 현재 앱은 결과 화면의 정책별 설명/근거와 이용 안내·개인정보 페이지를 제공하며 상세·서비스 화면은 서버의 가상 정책으로 연결했다. 클릭 시안의 설명은 가상 예시다.
-- 개발: AI 도구(Claude, Codex 등)를 사용한 커밋·PR은 [협업 절차](CONTRIBUTING.md#ai-사용-표시)에 따라 PR 본문과 커밋 트레일러에 표시했다.
+[서비스 소개](#해결하려는-문제) · [로컬 실행](#로컬-실행) · [문서 지도](docs/README.md) · [평가자 안내](#평가자-안내)
 
 ## 해결하려는 문제
 
@@ -74,7 +29,18 @@
 | B | 180만 원 | A |
 | C | 150만 원 | A |
 
-B와 C는 함께 받을 수 있다고 가정하면, 단독 금액이 가장 큰 A를 고를 때는 **200만 원**, B+C를 고를 때는 **330만 원**이다. 중복 제한을 반영해 조합을 비교해야 이 차이를 알 수 있다.
+```mermaid
+flowchart LR
+    Pick{"1년 지원금 선택"}
+    Pick -->|"A 선택"| A["A 단독: 200만 원"]
+    Pick -->|"B와 C 선택"| BC["B + C: 330만 원"]
+    classDef best fill:#DDF7ED,stroke:#137A60,color:#073F33,stroke-width:2px;
+    class BC best;
+```
+
+개별 금액은 A가 가장 크지만, B와 C를 함께 받으면 **1년 총액이 130만 원 더 커진다.**
+
+[HTML 조합 실험실](docs/benefit-combination-lab.html)에서 A·B·C를 직접 골라 보세요. 파일을 내려받아 브라우저에서 열면 서버 없이 동작합니다.
 
 ## 목표하는 사용 경험
 
@@ -91,13 +57,65 @@ B와 C는 함께 받을 수 있다고 가정하면, 단독 금액이 가장 큰 
 
 ## 현재 개발 상태
 
+| 영역 | 지금 확인할 수 있는 것 | 별도 검증·후속 |
+| --- | --- | --- |
+| 웹과 API | 공식 지역 선택 → 13단계 입력 → 가상 정책의 조합·상황 변화(S4)·상세(S5)·서비스(S6). 입력·결과 탭 복원, 조건 기억하기·삭제, PNG 저장. 가상 결과는 화면과 이미지에 표시 | 실제 서비스 정책·환산 단가 자료의 검수·게시 |
+| 정책 계산·설명 | `POLICY_DATABASE_URL` 설정 시 [게시 현금 정책 카탈로그](backend/src/benefitfinder/infrastructure/database/POLICY_CATALOG.md)로 계산. F13은 [게시 조항과 선택적 로컬 모델](backend/src/benefitfinder/api/README.md#f13-설명-실행) 사용. [게시 서비스 카탈로그](backend/src/benefitfinder/infrastructure/database/SERVICE_CATALOG.md)의 환산액은 현금 조합과 분리 | 실제 정책 검수·운영 게시와 정책 사실 검증 |
+| 수집·검수 도구 | [F08 정책·금리 통합 갱신](backend/src/benefitfinder/jobs/DAILY_REFRESH.md), [수집 성공본 DB 인계](backend/src/benefitfinder/infrastructure/database/COLLECTED_POLICIES.md), [F12 문서 분석 큐](backend/src/benefitfinder/infrastructure/database/F12_ANALYSIS.md)와 [확인된 API·공식 HTML/PDF의 입력 자동 준비](backend/src/benefitfinder/infrastructure/database/F12_PREPARATION.md) | 실제 대상 확대와 사람 검수·게시, 운영 스케줄·알림 도착 확인 |
+
 F11 이용 통계는 명세의 17개 이벤트를 기존 백엔드를 통해 GA4로 전달하도록 연결했다. 사용자 조건·URL 원문은 제외하고 통계용 쿠키·브라우저 저장소 없이 임시 식별자를 사용한다. 기본 설정은 꺼짐이며, 실제 조장 계정 수신과 팀원 보기 권한은 [통계 설정 안내](backend/src/benefitfinder/infrastructure/ANALYTICS.md)에 따라 별도 확인한다.
 
-현재 웹에는 **시작·13단계 조건 입력·분석 진행/오류·조합 결과·상황 변화(S4)·정책 상세(S5) 화면**과 조건 기억하기·삭제·결과 이미지 저장이 있다. 입력값과 마지막 결과는 탭 안에서 새로고침 후 복원하며, 조건을 바꾸면 이전 결과를 지운다. FastAPI는 생존 확인·공통 오류, [공식 지역 선택 API](backend/README.md#실제-지역-선택-api), 같은 가상 MVP 정책의 추천·상황 변화·상세 API를 제공한다. 실제 지역 선택으로 입력부터 결과까지 연결된다. `POLICY_DATABASE_URL`을 설정하면 [게시 정책 카탈로그](backend/src/benefitfinder/infrastructure/database/POLICY_CATALOG.md)로 추천·상세·상황 변화를 계산한다. 실제 정책 자료의 검수·운영 게시는 별도다. [F13 기본 문구·선택적 로컬 E4B 설명](backend/src/benefitfinder/api/README.md#f13-설명-실행)도 연결했다.
+실행 모드와 검증 범위는 [문서 지도의 구현 상태](docs/README.md#구현-상태)를 확인한다.
 
-별도 수동 명령으로 온통청년 목록 수집·원본 보관·버전 비교와 로컬 JSON·CSV 저장을 실행할 수 있다. [로컬 모델로 공식 공고의 중복 제한·자격·금액·지급 시점 후보를 추출](backend/src/benefitfinder/jobs/README.md#한-번에-f12-검수-자료-만들기)한 뒤 근거 검사·사람 검수·원문 변경 시 승인 해제와 [로컬 검수 파일 준비·승인·재검수 명령](backend/src/benefitfinder/jobs/README.md#로컬-규칙-검수-실행)도 제공한다. F08의 전체 성공 후 최신본 전환·재시도와 정책·금리 통합 실행·단일 디스코드 보고·Linux/macOS 로컬 03시 스케줄 설정, F12의 읽기 전용 추출 평가·긴 문맥 분할 명령도 제공한다. 검수·게시된 현금 정책의 PostgreSQL 계산 연결을 구현했다. 설정한 경우 [완전한 수집 성공본·변경 이력의 PostgreSQL 인계](backend/src/benefitfinder/infrastructure/database/COLLECTED_POLICIES.md)와 DB만 재실행도 제공한다. 확인된 API 본문 매핑은 [F12 입력 자동 준비](backend/src/benefitfinder/infrastructure/database/F12_PREPARATION.md)로 분석 큐에 인계한다. 확인된 [공식 HTML·PDF](backend/src/benefitfinder/infrastructure/database/OFFICIAL_DOCUMENTS.md)는 별도 원천으로 수집·변경 추적하고 명시한 검수 의존성의 무효화에 연결한다. 확인된 API와 보충 문서를 F12 준비 계획에 명시하면 각 원천·본문·시각을 검증해 함께 등록한다. 실제 대상 확대·정책 검수·게시와 운영 매일 갱신은 후속이다. S4는 선택한 기간·현재가치로 전후 조합을 다시 계산하고, S5는 같은 가상 정책의 공개 상세를 표시한다. F14의 S6·서비스형 S5는 FastAPI의 가상 취업·주거 서비스로 연결했다. 근거 있는 환산액만 별도로 표시하며 현금 조합에는 더하지 않는다. 실제 서비스 게시와 단가 자료 연결은 후속이다. 자세한 구현 상태와 문서별 기준은 [문서 지도](docs/README.md)를 본다.
+## 평가자 안내
 
-F13은 `DATABASE_URL` 설정 시 [PostgreSQL 게시 조항](backend/src/benefitfinder/infrastructure/database/README.md)을 조회한다. [실제 DB 검증·재현](backend/integration/README.md)은 가상 취업·주거 조항과 로컬 E4B를 사용하며 실제 정책 사실 검증과 구분한다.
+이 절은 제출 준비 양식이다. 배포 주소·운영 실행 기록·실사용자 결과가 비어 있으면 검증 완료로 보지 않는다. 목표 기능과 현재 구현은 [현재 개발 상태](#현재-개발-상태)와 [문서 지도](docs/README.md#구현-상태)에서 구분한다. 클릭 시안의 S4·S5·S6은 실제 앱 구현과 별개다.
+
+| 항목 | 내용 |
+| --- | --- |
+| 배포 URL | (배포 후 기입) |
+| 접속 방법 | 로그인·회원가입 없이 위 주소로 바로 접속한다. 평가 전용 계정은 필요 없다 |
+| 서비스 유지 | 결과 안내를 받을 때까지 유지한다 |
+| 시연 영상 (3분 이내) | (촬영 후 링크 기입) |
+| 기획서 | [docs/product/PROJECT_PLAN.md](docs/product/PROJECT_PLAN.md) |
+| 기능 요구 명세서 | [docs/product/REQUIREMENTS.md](docs/product/REQUIREMENTS.md) (12장 시스템 아키텍처, 13장 AI 활용 명세, 14장 구현 현황 표) |
+| 사용자 피드백 기록 | [docs/product/USER_TEST.md](docs/product/USER_TEST.md) 5장·6장 |
+| 발표 자료 | (완성 후 `docs/` PDF 링크 기입) |
+| 프로젝트 진행 기록 | (기입: 회의록·결정 기록 위치) |
+
+### 평가자 테스트 방법
+
+기능별 확인 방법과 기대 결과는 [구현 현황 표](docs/product/REQUIREMENTS.md#14-구현-현황-표)에 있다. 표에서 말하는 '테스트 조건 A'는 아래 값이다.
+
+<details>
+<summary>테스트 조건 A · 가상 인물의 13단계 선택값</summary>
+
+| 단계 | 고를 값 |
+| --- | --- |
+| 1 나이 | 25 |
+| 2 지역 | 경기도 · 수원시 |
+| 3 지금 상황 | 취업 준비 |
+| 4 최종 학력 | 대학 졸업 |
+| 5 결혼 | 미혼 |
+| 6 사는 형태 | 혼자 살아요 · 없어요 (무주택) · 세대주 |
+| 7 집 계약 | 월세 · 보증금 5천만 원 이하 · 월세 40만 ~ 60만 원 |
+| 8 소득과 재산 | 없음 · 1억 2천만 원 이하 |
+| 9 해당 조건 | 해당 없음 |
+| 10 관심 분야 | 취업, 주거 |
+| 11 이미 받은 정책 | 없음 |
+| 12 부모님 정보 | [건너뛰기] |
+| 13 조건 확인 | 앞의 선택값 확인 후 [내 조합 찾기] |
+
+</details>
+
+**자동 갱신 확인** (F08, 목표 03:00 KST): [정책·금리 통합 실행·스케줄 안내](backend/src/benefitfinder/jobs/DAILY_REFRESH.md)를 따른다. 현재 CI는 매일 수집하는 스케줄러가 아니다. 실제 API 수집 성공·디스코드 도착·운영 스케줄 등록은 후속 검증이며, 해당 환경에서 확인한 요약·기록 위치를 제출 전에 기입한다.
+
+**AI Agent 실행 기록 확인** (F12): [추출·검수·평가 CLI](backend/src/benefitfinder/jobs/README.md)를 따른다. 공유 가상 회귀와 실제 E4B 검증 요약은 관련 PR에 남기며, 실제 공고·검수·결과·로그는 로컬 `data/`에만 둔다. 제출용으로는 원문/개인정보를 제거한 실행 순서와 성공·실패 요약을 따로 확인한다.
+
+### AI 사용 표시
+
+- 서비스 목표: 생성된 설명에는 [AI] 표시와 근거를 붙이고, 기본 문구는 AI 생성으로 표시하지 않는다. 현재 앱은 결과 화면의 정책별 설명/근거와 이용 안내·개인정보 페이지를 제공하며 상세·서비스 화면은 서버의 가상 정책으로 연결했다. 클릭 시안의 설명은 가상 예시다.
+- 개발: AI 도구(Claude, Codex 등)를 사용한 커밋·PR은 [협업 절차](CONTRIBUTING.md#ai-사용-표시)에 따라 PR 본문과 커밋 트레일러에 표시했다.
 
 ## 팀원 역할과 기여
 
@@ -120,7 +138,7 @@ F13은 `DATABASE_URL` 설정 시 [PostgreSQL 게시 조항](backend/src/benefitf
 | 화면 | React, TypeScript, Vite |
 | 서버 | Python 3.12, FastAPI, Pydantic |
 | DB | PostgreSQL. F13 게시 조항·검수 정책 카탈로그 조회와 계산 연결 구현. 실제 정책 게시·벡터/임베딩 검색은 후속 |
-| AI | 로컬 Ollama `gemma4:e4b` 추출·설명 검증, 기본 문구로 복귀. 운영 모델·예산은 확정 전 |
+| AI | [로컬 llama.cpp](docs/development/LOCAL_LLM.md)로 추출·설명 검증. 실패 시 기본 문구로 복귀. Ollama는 호환 경로이며 운영 모델·예산은 확정 전 |
 | 자동화 | F08 정책·금리 통합 실행·재시도·웹훅과 03:00 KST Linux systemd/macOS launchd 설정 생성. 운영 등록·실제 API/알림 도착은 후속 |
 | 데이터 | 온통청년 수집·ECOS 기준금리 수동 갱신/DB 조회 구현. 보조금24 선택 ID의 API·DB·F12 연결 구현. 실제 매핑·운영 갱신은 후속 |
 | 개발 도구 | uv, pnpm, GitHub Actions CI |
