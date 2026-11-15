@@ -144,6 +144,30 @@ class EndpointTests(TestCase):
 
 
 class CompatibleChatTests(TestCase):
+    def test_required_tools_requests_serial_tool_calls_without_forcing_a_tool_name(self):
+        response_calls = [{'id': 'virtual-call', 'type': 'function', 'function': {
+            'name': 'fetch_document', 'arguments': '{"doc_id":"virtual-doc"}'}}]
+        connection = FakeConnection(FakeResponse(200, chat_body(
+            None, finish_reason='tool_calls', tool_calls=response_calls)))
+        endpoint = LLMEndpoint('http://localhost:8080/v1', 'llama-virtual')
+        tools = [{'type': 'function', 'function': {'name': 'fetch_document',
+                  'parameters': {'type': 'object'}}}]
+        with patch(f'{MODULE}.http.client.HTTPConnection', return_value=connection):
+            result = CompatibleChat(endpoint, require_tool_calls=True)(
+                [{'role': 'user', 'content': '가상 문서 분석'}], tools)
+        payload = request_json(connection)
+        self.assertEqual(payload['tool_choice'], 'required')
+        self.assertIs(payload['parallel_tool_calls'], False)
+        self.assertEqual(result['tool_calls'][0]['function']['name'], 'fetch_document')
+
+    def test_required_tools_rejects_empty_tool_list_before_http(self):
+        endpoint = LLMEndpoint('http://localhost:8080/v1', 'llama-virtual')
+        with patch(f'{MODULE}.http.client.HTTPConnection') as connection:
+            with self.assertRaisesRegex(ValueError, CHAT_FAILED):
+                CompatibleChat(endpoint, require_tool_calls=True)(
+                    [{'role': 'user', 'content': '가상 문서'}], [])
+        connection.assert_not_called()
+
     def test_local_chat_uses_http_path_and_default_timeout(self) -> None:
         connection = FakeConnection(FakeResponse(200, chat_body("virtual answer")))
         endpoint = LLMEndpoint("http://127.0.0.1:8080/gateway/v1", "llama-virtual")

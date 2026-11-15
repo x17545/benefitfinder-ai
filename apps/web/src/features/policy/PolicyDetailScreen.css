@@ -103,6 +103,16 @@
   font-weight: 700;
 }
 
+.s5-timing {
+  align-self: flex-start;
+  padding: 3px 9px;
+  border-radius: 8px;
+  background: var(--color-check-soft);
+  color: var(--color-check);
+  font-size: var(--text-sub);
+  font-weight: 700;
+}
+
 /* 조건 칩 + 원문 인용 */
 .s5-conditions {
   list-style: none;
@@ -225,4 +235,9 @@
   .s5-bottom .ui-button {
     max-width: 360px;
   }
+}
+
+.s5-guide-quote {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }

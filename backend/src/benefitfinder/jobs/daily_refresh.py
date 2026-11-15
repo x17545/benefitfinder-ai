@@ -16,6 +16,7 @@ from benefitfinder.jobs.refresh_lock import acquire_refresh_lock
 
 STATUS_FILE = "status.json"
 _MAX_STATE_BYTES = 65_536
+_PREPARATION_COUNTS = ('targets', 'registered', 'replayed', 'failed')
 _ANALYSIS_COUNTS = ('attempted', 'needs_review', 'stale', 'failed',
                     'source_records_awaiting_scope_or_documents')
 
@@ -81,11 +82,23 @@ def _notification(attempt: dict[str, object], *, state_failed: bool) -> str:
     stages = attempt["stages"]
     assert isinstance(stages, dict)
     lines = ["[F08] 정책·기준금리 갱신", f"실행 시각: {attempt['started_at']}"]
-    for name, label in (("youthcenter", "온통청년"), ("ecos", "ECOS 기준금리")):
+    for name, label in (("youthcenter", "온통청년"), ("gov24", "보조금24"),
+                        ("official_documents", "공식 첨부 문서"), ("ecos", "ECOS 기준금리")):
+        if name not in stages:
+            continue
         stage = stages[name]
         assert isinstance(stage, dict)
         # Stage names and codes are constructed in this process, never from raw data.
         lines.append(f"{label}: {'성공' if stage['exit_code'] == 0 else '실패'}")
+    if 'f12_preparation' in stages:
+        stage = stages['f12_preparation']
+        assert isinstance(stage, dict)
+        # Only fixed stage state and validated aggregate counts are formatted.
+        lines.append(f"F12 입력 준비: {'성공' if stage['exit_code'] == 0 else '실패'}")
+        for name, label in (('targets', '대상'), ('registered', '등록'),
+                            ('replayed', '재사용'), ('failed', '실패')):
+            if name in stage.get('counts', {}):
+                lines.append(f"F12 입력 준비 {label}: {stage['counts'][name]}건")
     if 'f12' in stages:
         stage = stages['f12']
         lines.append(f"F12 준비된 문서 분석: {'성공' if stage['exit_code'] == 0 else '실패'}")
@@ -106,7 +119,10 @@ def _run_locked(
     refresh_rate: Callable[[], int],
     clock: Callable[[], datetime],
     notify: Callable[[str], None] | None,
+    prepare_analysis: Callable[[], dict[str, int]] | None = None,
     analyze_pending: Callable[[], int | dict[str, int]] | None,
+    refresh_gov24: Callable[[], int] | None = None,
+    refresh_documents: Callable[[], int] | None = None,
 ) -> int:
     path = root / STATUS_FILE
     previous = _last_success(path)
@@ -141,9 +157,14 @@ def _run_locked(
             code = 1
         return code, clock().isoformat()
 
-    with ThreadPoolExecutor(max_workers=2, thread_name_prefix="f08-source") as executor:
+    sources = [("youthcenter", refresh_policies), ("ecos", refresh_rate)]
+    if refresh_gov24 is not None:
+        sources.append(("gov24", refresh_gov24))
+    if refresh_documents is not None:
+        sources.append(('official_documents',refresh_documents))
+    with ThreadPoolExecutor(max_workers=len(sources), thread_name_prefix="f08-source") as executor:
         futures = {}
-        for name, refresh in (("youthcenter", refresh_policies), ("ecos", refresh_rate)):
+        for name, refresh in sources:
             stages[name] = {
                 "started_at": clock().isoformat(),
                 "finished_at": None,
@@ -168,6 +189,45 @@ def _run_locked(
             except OSError:
                 state_failed = True
     # Source-specific file/DB locks have been released before model inference.
+    if prepare_analysis is not None:
+        stages['f12_preparation'] = {
+            'started_at': clock().isoformat(),
+            'finished_at': None,
+            'status': 'running',
+            'exit_code': None,
+        }
+        try:
+            _write_status(path, state)
+        except OSError:
+            state_failed = True
+        try:
+            result = prepare_analysis()
+            if (
+                not isinstance(result, dict)
+                or set(result) != set(_PREPARATION_COUNTS)
+                or any(
+                    type(value) is not int or not 0 <= value < 2**63
+                    for value in result.values()
+                )
+                or result['targets']
+                != result['registered'] + result['replayed'] + result['failed']
+            ):
+                raise ValueError
+            stages['f12_preparation']['counts'] = {
+                key: result[key] for key in _PREPARATION_COUNTS
+            }
+            code = 1 if result['failed'] != 0 else 0
+        except Exception:
+            code = 1
+        stages['f12_preparation'].update(
+            finished_at=clock().isoformat(),
+            exit_code=code,
+            status='success' if code == 0 else 'failed',
+        )
+        try:
+            _write_status(path, state)
+        except OSError:
+            state_failed = True
     if analyze_pending is not None:
         stages['f12'] = {'started_at': clock().isoformat(), 'finished_at': None,
                          'status': 'running', 'exit_code': None}
@@ -220,7 +280,10 @@ def run_daily_refresh(
     refresh_rate: Callable[[], int],
     clock: Callable[[], datetime],
     notify: Callable[[str], None] | None = None,
+    prepare_analysis: Callable[[], dict[str, int]] | None = None,
     analyze_pending: Callable[[], int | dict[str, int]] | None = None,
+    refresh_gov24: Callable[[], int] | None = None,
+    refresh_documents: Callable[[], int] | None = None,
 ) -> int:
     """Attempt both sources; preserve each source's own atomic last-success state."""
     descriptor = None
@@ -239,7 +302,10 @@ def run_daily_refresh(
             refresh_rate=refresh_rate,
             clock=clock,
             notify=notify,
+            prepare_analysis=prepare_analysis,
             analyze_pending=analyze_pending,
+            refresh_gov24=refresh_gov24,
+            refresh_documents=refresh_documents,
         )
     except OSError:
         raise DailyRefreshError("daily_refresh_io_error") from None

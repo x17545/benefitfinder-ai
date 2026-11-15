@@ -138,6 +138,251 @@ def tool_payloads(messages: list[dict[str, object]]) -> list[dict[str, object]]:
 
 
 class PolicyAnalysisAgentTests(TestCase):
+    def test_body_reference_to_another_field_keeps_the_complete_eligibility_section(self):
+        text = ('지원대상: 만 23세 이상 가상 청년 (신청방법 안내 참조)\n'
+                '단, 가상 지역 거주 예정자도 포함')
+        result = analyze_policy(make_input((text,)), chat=ScriptedChat([
+            reply(fetch('doc-1', 1, 2)), reply(call('check_missing')),
+            reply(call('save_candidate')),
+        ]))
+        self.assertEqual([item.quote for item in result.facts[0].eligibility], [text])
+        self.assertIn('application', {item.field for item in result.missing})
+
+    def test_wrong_application_request_cannot_hide_missing_actual_application_evidence(self):
+        texts = ('[detailTarget]\n가상 구직 청년',
+                 '지원대상: 가상 구직 청년\n단, 가상 대학 재학생도 포함')
+        result = analyze_policy(make_input(texts), chat=ScriptedChat([
+            reply(fetch('doc-1', 1, 2), fetch('doc-2', 1, 2)),
+            reply(extract('doc-1', 'application', 2, 2),
+                  extract('doc-2', 'application', 1, 1)),
+            reply(call('check_missing')), reply(call('save_candidate')),
+        ]))
+        self.assertTrue(all(len(fact.eligibility) == 1 for fact in result.facts))
+        self.assertFalse(any(item.kind == 'application' for item in result.additional))
+        self.assertEqual({item.document_id for item in result.missing
+                          if item.field == 'application'}, {'doc-1', 'doc-2'})
+
+    def test_pdf_inline_fields_preserve_documents_cancellation_and_exclusions(self):
+        lines = [
+            '=== Page 1 ===',
+            ' : 2028. 3. ~ 10. ❍ 지원기간 ※ 가상 예산 소진 시 종료',
+            ' : ❍ 지원대상 가상 청년 구직자로서 지역 주민',
+            '또는 가상 대학교 재학생',
+            ' : ❍ 지원내용 무료 촬영 및 보정',
+            ' - 현장 인화 포함',
+            '2 이용절차',
+            '신청 → 승인 통보 → 예약 → 촬영',
+            '- : 2028. 3. 2. ~ 10. 5. 신청기간 ※ 조기 종료 가능',
+            '- : 구비서류 가상 신청서',
+            '주민 서류 또는 가상 재학 증명서',
+            '2) 선 정: 가상 요건 검토 및 선정(개별 통보)',
+            '신청자가 유선 예약',
+            '※ 선정 후 개월 이내 촬영 1 하지 않을 경우',
+            '선정 취소',
+            '4 유의사항',
+            '허위 서류 제출 시 지원이 제한될 수 있음',
+            '가상 대여 승인은 금요일 09:00~18:00에만 가능',
+            '=== Page 2 ===',
+            '추가 증빙 요구에 응하지 않으면 지원 불가',
+            '헤어 및 메이크업 미지원',
+            '가상 지원금 7만원 지급 불가',
+        ]
+        text = '\r\n'.join(lines)
+        result = analyze_policy(make_input((text,)), chat=ScriptedChat([
+            reply(fetch('doc-1', 1, len(lines))), reply(call('check_missing')),
+            reply(extract('doc-1', 'amount', 22, 22), extract('doc-1', 'timing', 18, 18)),
+            reply(call('check_missing')), reply(call('save_candidate')),
+        ]))
+        self.assertEqual(result.facts[0].eligibility[0].quote, '\r\n'.join(lines[2:4]))
+        self.assertFalse(result.facts[0].amounts)
+        self.assertFalse(result.facts[0].payment_timing)
+        by_kind = {}
+        for item in result.additional:
+            by_kind.setdefault(item.kind, []).append(item.evidence.quote)
+        self.assertEqual(by_kind['program_period'], [lines[1]])
+        self.assertEqual(by_kind['service'], ['\r\n'.join(lines[4:6])])
+        self.assertIn(lines[8], by_kind['application'])
+        self.assertIn('\r\n'.join(lines[9:11]), by_kind['application'])
+        self.assertIn('\r\n'.join(lines[11:15]), by_kind['application'])
+        self.assertEqual(by_kind['exceptions'], ['\r\n'.join(lines[15:])])
+        self.assertEqual(result.rules, ())
+        self.assertIn('overlap', {item.field for item in result.missing})
+
+    def test_inline_pdf_documents_require_reading_the_complete_or_condition(self):
+        text = '- : 구비서류 가상 신청서\n주민 서류 또는 가상 대학 증명서'
+        chat = ScriptedChat([
+            reply(fetch('doc-1', 1, 1)), reply(extract('doc-1', 'application', 1, 1)),
+            reply(fetch('doc-1', 2, 2)), reply(call('check_missing')),
+            reply(call('save_candidate')),
+        ])
+        result = analyze_policy(make_input((text,)), chat=chat)
+        feedback = tool_payloads(chat.messages[2])[-1]
+        self.assertEqual(feedback['next_tool_arguments'], {
+            'doc_id': 'doc-1', 'start_line': 1, 'end_line': 2,
+        })
+        self.assertEqual(result.trace[1].outcome, 'invalid')
+        self.assertEqual(result.additional[0].evidence.quote, text)
+
+    def test_read_prose_sections_survive_model_omission_and_preserve_service_qualifiers(self):
+        api = '[detailTarget]\n만 23세 이상 청년'
+        prose = ('지원대상\r\n거주 또는 거주예정 1인가구(독립가구 예정 포함)\r\n'
+                 '이용료\r\n0원(증빙서류 제출 불필요)\r\n'
+                 '이용일시\r\n월·목 상담, 야간 동행은 사전예약에 한함\r\n'
+                 '운영시간은 자치구별로 다를 수 있음\r\n'
+                 '지원방법\r\n예약 후 전화 또는 대면상담\r\n'
+                 '유의사항\r\n최소 3일 전 신청\r\n특정 매물을 추천하는 서비스는 아님')
+        scripted = ScriptedChat([
+            reply(fetch('doc-1', 1, 2)), reply(call('check_missing')),
+            reply(fetch('doc-2', 1, 12)), reply(call('check_missing')),
+            reply(extract('doc-2', 'amount', 4, 4), extract('doc-2', 'timing', 6, 6)),
+            reply(call('check_missing')), reply(call('save_candidate')),
+        ])
+        result = analyze_policy(make_input((api, prose)), chat=scripted)
+        self.assertEqual(len(result.facts[1].eligibility), 1)
+        target = result.facts[1].eligibility[0]
+        self.assertIn('거주 또는 거주예정', target.quote)
+        self.assertIn('독립가구 예정 포함', target.quote)
+        self.assertIn('\r\n', target.quote)
+        self.assertEqual(target.location, 'lines 1-2')
+        self.assertFalse(result.facts[1].amounts)
+        self.assertFalse(result.facts[1].payment_timing)
+        by_kind = {}
+        for item in result.additional:
+            if item.evidence.document_id == 'doc-2':
+                by_kind.setdefault(item.kind, []).append(item.evidence.quote)
+        self.assertTrue(any('증빙서류 제출 불필요' in q for q in by_kind['service']))
+        self.assertTrue(any('사전예약에 한함' in q and '자치구별' in q for q in by_kind['service']))
+        self.assertIn('예약 후 전화 또는 대면상담', '\n'.join(by_kind['application']))
+        self.assertIn('최소 3일 전 신청', '\n'.join(by_kind['exceptions']))
+        self.assertIn('추천하는 서비스는 아님', '\n'.join(by_kind['exceptions']))
+        self.assertEqual(result.rules, ())
+        self.assertIn('overlap', {m.field for m in result.missing if m.document_id == 'doc-2'})
+        before_prose_read = json.loads(scripted.messages[2][-1]['content'])
+        self.assertEqual(before_prose_read['counts']['facts']['doc-2']['eligibility'], 0)
+
+    def test_unread_prose_qualifier_still_requires_another_read_before_extraction(self):
+        text = '지원대상\n가상 지역 주민\n단, 입주 예정자는 별도 확인 필요'
+        scripted = ScriptedChat([
+            reply(fetch('doc-1', 1, 2)), reply(extract('doc-1', 'eligibility', 2, 2)),
+            reply(fetch('doc-1', 3, 3)), reply(call('check_missing')),
+            reply(call('save_candidate')),
+        ])
+        result = analyze_policy(make_input((text,)), chat=scripted)
+        self.assertEqual(result.trace[1].outcome, 'invalid')
+        feedback = tool_payloads(scripted.messages[2])[-1]
+        self.assertEqual(feedback['next_tool_arguments'], {
+            'doc_id': 'doc-1', 'start_line': 1, 'end_line': 3,
+        })
+        self.assertEqual(result.facts[0].eligibility[0].quote, text)
+
+    def test_oversized_prose_section_fails_instead_of_dropping_conditions(self):
+        text = '\n'.join(['지원대상', *['가상 조건' for _ in range(41)]])
+        with self.assertRaisesRegex(ValueError, '^policy_analysis_evidence_context_limit$'):
+            analyze_policy(make_input((text,)), chat=ScriptedChat([reply(fetch('doc-1', 1, 42))]))
+
+    def test_unshown_expanded_api_context_can_be_read_before_retrying(self):
+        text = '[addAplyQlfcCndCn]\n만 19세 이상 청년 대상\n가상 지역 거주 또는 지역 대학 재학생'
+        scripted = ScriptedChat([
+            reply(fetch('doc-1', 2, 2)),
+            reply(extract('doc-1', 'eligibility', 2, 2)),
+            reply(fetch('doc-1', 1, 3)),
+            reply(extract('doc-1', 'eligibility', 2, 2)),
+            reply(call('check_missing')), reply(call('save_candidate')),
+        ])
+
+        def chat(messages, tools):
+            if len(scripted.messages) == 2:
+                feedback = tool_payloads(messages)[-1]
+                self.assertEqual(feedback['error'], 'evidence_not_previously_shown')
+                self.assertEqual(feedback['next_tool'], 'fetch_document')
+                self.assertEqual(feedback['next_tool_arguments'], {
+                    'doc_id': 'doc-1', 'start_line': 1, 'end_line': 3,
+                })
+                self.assertNotIn('가상 지역', json.dumps(feedback, ensure_ascii=False))
+            return scripted(messages, tools)
+
+        result = analyze_policy(make_input((text,)), chat=chat)
+        self.assertEqual(result.trace[1].outcome, 'invalid')
+        self.assertEqual(result.trace[-1].outcome, 'needs_review')
+        self.assertEqual(len(result.facts[0].eligibility), 1)
+        self.assertEqual(result.facts[0].eligibility[0].quote, text)
+        self.assertEqual(result.facts[0].eligibility[0].location, 'lines 1-3')
+
+    def test_incomplete_check_requires_recheck_after_reading_remaining_lines(self):
+        scripted = ScriptedChat([
+            reply(fetch('doc-1', 1, 2)), reply(call('check_missing')),
+            reply(fetch('doc-1', 3, 7)), reply(call('save_candidate')),
+            reply(call('check_missing')), reply(call('save_candidate')),
+        ])
+
+        def chat(messages, tools):
+            if len(scripted.messages) == 4:
+                feedback = tool_payloads(messages)[-1]
+                self.assertEqual(feedback['error'], 'coverage_incomplete')
+                self.assertEqual(feedback['next_tool'], 'check_missing')
+                self.assertIn('again', feedback['instruction'])
+            return scripted(messages, tools)
+
+        result = analyze_policy(make_input((DOC_ONE,)), chat=chat)
+        self.assertEqual(result.trace[3].outcome, 'invalid')
+        self.assertEqual(result.trace[-1].outcome, 'needs_review')
+
+    def test_fact_review_pair_round_trips_original_line_endings(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+
+        from benefitfinder.application.policy_rules import PolicyReference, RuleReviewBatch
+        from benefitfinder.infrastructure.policy_rule_files import (
+            load_f12_review_pair, write_f12_review_pair,
+        )
+        from benefitfinder.ingestion.rule_review_workflow import prepare_snapshot
+
+        for newline in ('\n', '\r\n'):
+            with self.subTest(newline=repr(newline)), TemporaryDirectory() as directory:
+                text = newline.join(('가상 주거 지원 안내', '지원금은 최대 30만원입니다.',
+                                     '신청인 부담금 1천원을 제외합니다.', '', '신청 안내'))
+                input = make_input((text,))
+                result = analyze_policy(input, chat=ScriptedChat([
+                    reply(fetch('doc-1', 1, 5)),
+                    reply(extract('doc-1', 'amount', 2, 4)),
+                    reply(call('check_missing')), reply(call('save_candidate')),
+                ]))
+                policies = tuple(PolicyReference(p.id, 'youth', p.categories) for p in input.policies)
+                snapshot = prepare_snapshot(RuleReviewBatch(input.documents, policies, ()), at=NOW)
+                path = Path(directory) / 'review'
+                write_f12_review_pair(path, snapshot, result.facts[0])
+                stored, facts = load_f12_review_pair(path)
+                self.assertEqual(stored.batch.documents, input.documents)
+                self.assertEqual(facts, result.facts[0])
+                self.assertEqual(facts.document.text, text)
+                citation = facts.amounts[0].evidence
+                self.assertEqual(citation.quote, newline.join(text.split(newline)[1:3]))
+                self.assertEqual(citation.location, 'lines 2-4')
+                self.assertEqual(citation.content_sha256, input.documents[0].content_sha256)
+                self.assertIn(citation.quote, text)
+                self.assertEqual(facts.amounts[0].amounts_won, (300000,))
+
+    def test_crlf_fact_quote_rejects_interior_newline_normalization(self):
+        from dataclasses import replace
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+
+        from benefitfinder.application.policy_facts import PolicyAmountCandidate
+        from benefitfinder.infrastructure.policy_rule_files import RuleReviewFileError, write_policy_facts
+
+        input = make_input(('가상 공고\r\n최대 30만원 지원\r\n본인 부담금 1천원 제외\r\n신청 안내',))
+        result = analyze_policy(input, chat=ScriptedChat([
+            reply(fetch('doc-1', 1, 4)), reply(extract('doc-1', 'amount', 2, 3)),
+            reply(call('check_missing')), reply(call('save_candidate')),
+        ]))
+        draft = result.facts[0]
+        citation = draft.amounts[0].evidence
+        altered = replace(citation, quote=citation.quote.replace('\r\n', '\n'))
+        with TemporaryDirectory() as directory, self.assertRaises(RuleReviewFileError):
+            write_policy_facts(Path(directory) / 'altered.json', replace(draft, amounts=(
+                PolicyAmountCandidate(altered, draft.amounts[0].amounts_won),
+            )))
+
     def test_tool_history_is_serializable_by_the_actual_compatible_transport(self):
         from benefitfinder.infrastructure.compatible_llm import _wire_messages
         scripted = ScriptedChat([
@@ -221,6 +466,8 @@ class PolicyAnalysisAgentTests(TestCase):
                 ("doc-3", "amount"),
                 ("doc-3", "application"),
                 ("doc-3", "timing"),
+                ("doc-2", "overlap"),
+                ("doc-3", "overlap"),
             ],
         )
         self.assertEqual([item.kind for item in result.additional], [
@@ -454,3 +701,80 @@ if __name__ == "__main__":
     import unittest
 
     unittest.main()
+
+
+class ApiEvidenceRegressionTests(TestCase):
+    def analyze(self, text, *selections):
+        return analyze_policy(make_input((text,)), chat=ScriptedChat([
+            reply(fetch('doc-1', 1, len(text.splitlines()))),
+            *[reply(selection) for selection in selections],
+            reply(call('check_missing')), reply(call('save_candidate')),
+        ]))
+
+    def test_application_program_and_raw_income_are_not_payment_facts(self):
+        text = ('[aplyYmd]\n20300101~20301231\n\n'
+                '[bizPrdBgngYmd]\n20300101\n\n'
+                '[earnMinAmt]\n0\n\n[sprtTrgtAgeLmtYn]\nY\n\n'
+                '[sprtTrgtMinAge]\n21\n\n[sprtTrgtMaxAge]\n37')
+        result = self.analyze(text, extract('doc-1', 'timing', 2, 2),
+                              extract('doc-1', 'amount', 8, 8))
+        facts = result.facts[0]
+        self.assertFalse(facts.amounts)
+        self.assertFalse(facts.payment_timing)
+        missing = {m.field for m in result.missing}
+        self.assertNotIn('application', missing)
+        self.assertNotIn('age', missing)
+        self.assertIn('age_interpretation', missing)
+        self.assertIn('amount', missing)
+        self.assertIn('timing', missing)
+        self.assertIn('program_period', {e.kind for e in result.additional})
+
+    def test_support_preserves_range_type_duration_condition_and_excludes_costs(self):
+        text = ('[detailSupport]\nI유형: 구직활동 이행시 월 73~117만원, 7개월 지원\n'
+                '본인부담금 2천원 제외 금액 지급\n거래금액 2억원 이하\n'
+                '신청인 중개보수 우선 지급 후 증빙서류 제출 시 지원')
+        result = self.analyze(text, extract('doc-1', 'amount', 2, 2))
+        facts = result.facts[0]
+        self.assertEqual(facts.amounts[0].amounts_won, (730000, 1170000))
+        self.assertEqual(facts.amounts[0].evidence.quote, text)
+        self.assertIn('7개월', facts.payment_timing[0].quote)
+        self.assertIn('우선 지급 후', facts.payment_timing[0].quote)
+        self.assertIsNone(facts.scheduled_monthly_day)
+
+    def test_formula_and_compound_eligibility_remain_in_exact_field_context(self):
+        text = ('[detailTarget]\r\n구직자이면서 (지역 거주 또는 대학 재학)\r\n'
+                '주택 거래금액 2억원 이하\r\n※거래금액=임차보증금+(월세액*100)\r\n'
+                '\r\n[detailMethod]\r\n온라인 또는 방문')
+        result = self.analyze(text, extract('doc-1', 'eligibility', 3, 3))
+        citation = result.facts[0].eligibility[0]
+        self.assertIn('또는 대학 재학', citation.quote)
+        self.assertIn('월세액*100', citation.quote)
+        self.assertIn('\r\n', citation.quote)
+        self.assertNotIn('[detailMethod]', citation.quote)
+        self.assertEqual(citation.content_sha256, make_input((text,)).documents[0].content_sha256)
+
+    def test_service_duration_does_not_become_eligibility_or_payment(self):
+        text = '[detailSupport]\n가상 인턴형 일경험 2~4개월 내외\n가상 프로젝트형 3개월 이내'
+        result = self.analyze(text, extract('doc-1', 'eligibility', 2, 2),
+                              extract('doc-1', 'timing', 2, 2))
+        self.assertFalse(result.facts[0].eligibility)
+        self.assertFalse(result.facts[0].payment_timing)
+        self.assertEqual(result.additional[0].kind, 'service')
+        self.assertIn('내외', result.additional[0].evidence.quote)
+
+    def test_context_must_be_read_before_model_can_extract_it(self):
+        text = '[detailTarget]\n지역 거주자 또는 대학 재학생\n단, 휴학생 포함'
+        chat = ScriptedChat([
+            reply(fetch('doc-1', 2, 2)), reply(extract('doc-1', 'eligibility', 2, 2)),
+            reply(fetch('doc-1', 1, 3)), reply(call('check_missing')),
+            reply(call('save_candidate')),
+        ])
+        result = analyze_policy(make_input((text,)), chat=chat)
+        self.assertEqual(result.trace[1].outcome, 'invalid')
+        self.assertIn('휴학생 포함', result.facts[0].eligibility[0].quote)
+
+    def test_allowance_name_alone_is_not_a_payment_schedule(self):
+        text = '[detailSupport]\n맞춤형 프로그램 및 참여수당, 인센티브 제공\n이수 시 취업서비스 연계'
+        result = self.analyze(text, extract('doc-1', 'timing', 2, 2))
+        self.assertFalse(result.facts[0].payment_timing)
+        self.assertIn('timing', {m.field for m in result.missing})

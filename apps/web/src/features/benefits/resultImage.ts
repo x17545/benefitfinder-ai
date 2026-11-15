@@ -4,11 +4,23 @@
 export interface ResultImageModel {
   /** 예: 1년 기준 · 현재가치 */
   periodLabel: string;
-  combos: { label: string; total: string; names: string; selected: boolean }[];
+  /** 만기 적립·현재가치 합계의 기준을 독립 이미지에서도 설명한다. 비만기 응답은 생략한다. */
+  amountBasisNote?: string;
+  combos: { label: string; total: string; breakdown?: string; names: string; selected: boolean }[];
   listTitle: string;
-  policies: { name: string; amount: string }[];
+  policies: { name: string; amount: string; breakdown?: string }[];
   createdAt: Date;
   virtualData?: boolean;
+}
+
+/** 화면의 선택 뷰와 같은 기준으로 이미지 상단 설명을 만든다. 금액을 더하거나 다시 계산하지 않는다. */
+export function resultImageAmountBasisNote(presentValue: boolean, hasAmountBreakdown: boolean): string | undefined {
+  if (!hasAmountBreakdown) {
+    return undefined;
+  }
+  return presentValue
+    ? '만기 지급액은 만기 시 지급돼요. 현재가치 합계는 기간 내 지급 예정 현금만 반영하고, 만기 전 예상 적립액은 제외해요.'
+    : '만기 지급액은 만기 시 지급돼요. 명목 합계에는 만기 전 예상 적립액이 포함돼요.';
 }
 
 /** 한국 날짜 YYYY.MM.DD / YYYYMMDD */
@@ -94,10 +106,26 @@ export function drawResultImage(model: ResultImageModel): HTMLCanvasElement {
     text(model.periodLabel, 28, 500, colors.muted);
     y += 60;
 
+    if (model.amountBasisNote !== undefined) {
+      ctx.font = `500 22px ${FONT}`;
+      const noteLines = wrap(ctx, model.amountBasisNote, inner);
+      for (const line of noteLines) {
+        if (draw) {
+          ctx.fillStyle = colors.muted;
+          ctx.fillText(line, PAD, y);
+        }
+        y += 32;
+      }
+      y += 16;
+    }
+
     for (const combo of model.combos) {
       ctx.font = `500 28px ${FONT}`;
       const nameLines = wrap(ctx, combo.names, inner - 64);
-      const boxHeight = 32 + 40 + 16 + 64 + 12 + nameLines.length * 40 + 24;
+      ctx.font = `500 22px ${FONT}`;
+      const breakdownLines = combo.breakdown !== undefined ? wrap(ctx, combo.breakdown, inner - 64) : [];
+      const boxHeight = 32 + 40 + 16 + 64 + 12 + nameLines.length * 40 +
+        (breakdownLines.length > 0 ? 8 + breakdownLines.length * 32 : 0) + 24;
       if (draw) {
         ctx.fillStyle = colors.card;
         roundRect(ctx, PAD, y, inner, boxHeight, 32);
@@ -133,6 +161,17 @@ export function drawResultImage(model: ResultImageModel): HTMLCanvasElement {
         }
         cy += 40;
       }
+      if (breakdownLines.length > 0) {
+        cy += 8;
+        ctx.font = `500 22px ${FONT}`;
+        for (const line of breakdownLines) {
+          if (draw) {
+            ctx.fillStyle = colors.muted;
+            ctx.fillText(line, PAD + 32, cy);
+          }
+          cy += 32;
+        }
+      }
       y += boxHeight + 24;
     }
 
@@ -143,14 +182,29 @@ export function drawResultImage(model: ResultImageModel): HTMLCanvasElement {
       ctx.font = `700 30px ${FONT}`;
       const amountWidth = ctx.measureText(policy.amount).width;
       const nameLines = wrap(ctx, policy.name, inner - amountWidth - 48);
+      ctx.font = `500 22px ${FONT}`;
+      const breakdownLines = policy.breakdown !== undefined ? wrap(ctx, policy.breakdown, inner) : [];
       if (draw) {
+        ctx.font = `700 30px ${FONT}`;
         ctx.fillStyle = colors.ink;
         nameLines.forEach((line, index) => {
           ctx.fillText(line, PAD, y + index * 42);
         });
         ctx.fillText(policy.amount, WIDTH - PAD - amountWidth, y);
       }
-      y += nameLines.length * 42 + 20;
+      y += nameLines.length * 42;
+      if (breakdownLines.length > 0) {
+        y += 8;
+        ctx.font = `500 22px ${FONT}`;
+        for (const line of breakdownLines) {
+          if (draw) {
+            ctx.fillStyle = colors.muted;
+            ctx.fillText(line, PAD, y);
+          }
+          y += 30;
+        }
+      }
+      y += 20;
       if (draw) {
         ctx.fillStyle = colors.line;
         ctx.fillRect(PAD, y, inner, 2);

@@ -181,10 +181,38 @@
 }
 
 .s6-basis summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   padding: 10px 14px;
   font-size: 14px;
   font-weight: 700;
   cursor: pointer;
+  list-style: none;
+}
+
+/* 브라우저 기본 삼각형 대신 시안의 › (펼치면 아래로) */
+.s6-basis summary::-webkit-details-marker {
+  display: none;
+}
+
+.s6-basis summary::after {
+  content: '›';
+  font-size: 18px;
+  line-height: 1;
+  color: var(--color-muted);
+  transition: transform 0.15s ease;
+}
+
+.s6-basis[open] summary::after {
+  transform: rotate(90deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .s6-basis summary::after {
+    transition: none;
+  }
 }
 
 .s6-basis p {

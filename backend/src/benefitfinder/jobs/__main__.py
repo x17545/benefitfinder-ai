@@ -49,6 +49,7 @@ from benefitfinder.infrastructure.f12_evaluation_files import (
     evaluate_manifest,
     write_evaluation_report,
 )
+from benefitfinder.infrastructure.f12_catalog_files import prepare_f12_release, write_f12_catalog
 from benefitfinder.infrastructure.ollama_chat import OllamaChat
 from benefitfinder.infrastructure.compatible_llm import (
     CompatibleChat,
@@ -109,9 +110,34 @@ from benefitfinder.infrastructure.service_catalog_records import (
     ServiceCatalogRecord, service_record_hash, validate_service_sources,
 )
 from benefitfinder.infrastructure.database.repositories.published_services import publish_service
+from benefitfinder.application.prepare_policy_analysis import prepare_analysis_inputs
+from benefitfinder.infrastructure.policy_preparation_plans import load_preparation_plan
+from benefitfinder.infrastructure.database.repositories.analysis_sources import PostgresAnalysisSources
+from benefitfinder.ingestion.versioning import record_sha256
+from benefitfinder.ingestion.youthcenter import hashed_fields
 
 API_KEY_ENV = "YOUTHCENTER_API_KEY"
 KST = ZoneInfo("Asia/Seoul")
+
+
+def prepare_f12_inputs(plan_path: Path) -> dict[str, int]:
+    plan = load_preparation_plan(plan_path)
+    url = os.environ.get('F12_WRITE_DATABASE_URL', '')
+    tasks = PostgresPolicyAnalysisTasks(url)
+    official = {}
+    if any(target.official_documents for target in plan.targets):
+        from benefitfinder.ingestion.official_documents import official_document_material_hash
+
+        official = {'official_sources': PostgresAnalysisSources(url, source='official_documents'),
+                    'official_material_hash': official_document_material_hash}
+    if plan.source == 'gov24':
+        from benefitfinder.ingestion.gov24 import analysis_fields, gov24_hashed_fields
+
+        return prepare_analysis_inputs(plan, PostgresAnalysisSources(url, source='gov24'),
+            tasks.register_prepared, lambda fields: record_sha256(gov24_hashed_fields(fields)), analysis_fields,
+            **official)
+    return prepare_analysis_inputs(plan, PostgresAnalysisSources(url), tasks.register_prepared,
+        lambda fields: record_sha256(hashed_fields(YOUTHCENTER_POLICY_LIST, fields)), **official)
 
 
 def run_f12_queue(data_dir: Path, *, limit: int = 5) -> dict[str, object]:
@@ -121,7 +147,7 @@ def run_f12_queue(data_dir: Path, *, limit: int = 5) -> dict[str, object]:
     settings = LLMSettings.from_env()
     if settings.provider == 'disabled':
         raise ValueError('llm_not_configured')
-    chat = CompatibleChat(settings.endpoint())
+    chat = CompatibleChat(settings.endpoint(), require_tool_calls=True)
     tasks = PostgresPolicyAnalysisTasks(os.environ.get('F12_WRITE_DATABASE_URL', ''))
 
     def analyze(claim, on_step):
@@ -158,7 +184,9 @@ def run_f12_queue(data_dir: Path, *, limit: int = 5) -> dict[str, object]:
 def f12_analysis_command(args: argparse.Namespace) -> int:
     try:
         tasks = PostgresPolicyAnalysisTasks(os.environ.get('F12_WRITE_DATABASE_URL', ''))
-        if args.analysis_action == 'register':
+        if args.analysis_action == 'prepare':
+            result = prepare_f12_inputs(args.plan)
+        elif args.analysis_action == 'register':
             result = tasks.register(load_policy_analysis_input(args.input),
                                     origin_recheck_id=args.recheck_id)
         elif args.analysis_action == 'status':
@@ -169,6 +197,24 @@ def f12_analysis_command(args: argparse.Namespace) -> int:
         return 1 if isinstance(result, dict) and result.get('failed', 0) else 0
     except Exception:
         print('F12 처리 실패: 입력·DB·LLM 설정과 로컬 실행 기록을 확인하세요.', file=sys.stderr)
+        return 2
+
+
+def f12_catalog_command(args: argparse.Namespace) -> int:
+    """Prepare a review-bound release without creating approval or touching the DB."""
+    try:
+        record = prepare_f12_release(
+            pair_dir=args.pair_dir, decisions_path=args.decisions, approved_path=args.approved,
+            record_path=args.input, plan_path=args.plan, source_text=args.source.read_text(encoding='utf-8'),
+            price_source_text=args.price_source.read_text(encoding='utf-8') if args.price_source else None,
+        )
+        write_f12_catalog(args.output, record)
+        digest = service_record_hash(record) if isinstance(record, ServiceCatalogRecord) else record_hash(record)
+        print(json.dumps({'record_sha256': digest, 'policy_id': record.benefit.id,
+                          'requires_publication_approval': True}, ensure_ascii=False))
+        return 0
+    except Exception:
+        print('F12 게시 입력 준비 실패: 원본 후보·최신 검수·내보내기·실행 규칙과 새 출력 경로를 확인하세요.', file=sys.stderr)
         return 2
 
 
@@ -301,7 +347,7 @@ def collect_youthcenter_command(data_dir: Path) -> int:
     result = collect_youthcenter(
         YOUTHCENTER_POLICY_LIST,
         YouthcenterHttpFetcher(api_key),
-        JsonFileSnapshotStore(raw_root),
+        JsonFileSnapshotStore(raw_root, private=True),
         versions,
         lambda: datetime.now(KST),
     )
@@ -338,7 +384,7 @@ def _refresh_youthcenter(data_dir: Path) -> int:
 
     root = data_dir / "processed" / "f08-youthcenter"
     fetcher = YouthcenterHttpFetcher(api_key)
-    snapshots = JsonFileSnapshotStore(data_dir / "raw" / "f08-youthcenter")
+    snapshots = JsonFileSnapshotStore(data_dir / "raw" / "f08-youthcenter", private=True)
 
     def clock() -> datetime:
         return datetime.now(KST)
@@ -408,6 +454,131 @@ def ingest_youthcenter_command(data_dir: Path) -> int:
     return 0
 
 
+def ingest_gov24_command(data_dir: Path) -> int:
+    """Verify all preserved API responses before replaying a complete generation."""
+    from benefitfinder.ingestion.gov24_generations import load_gov24_generation
+
+    database_url = os.environ.get('COLLECTION_WRITE_DATABASE_URL', '').strip()
+    if not database_url:
+        print('보조금24 DB 인계 실패: collection_database_url_missing', file=sys.stderr)
+        return 2
+    try:
+        batch = load_gov24_generation(
+            lambda relative, limit: read_collection_file(data_dir, relative, limit))
+        result = PostgresCollectedPolicies(database_url).save(batch)
+    except Exception:
+        print('보조금24 DB 인계 실패: 성공본·원본·DB 설정을 확인하세요.', file=sys.stderr)
+        return 1
+    print(f'보조금24 DB 인계 완료: 신규 {result.new}건, 변경 {result.changed}건, '
+          f'동일 {result.unchanged}건, 누락 {result.missing}건')
+    return 0
+
+
+def refresh_gov24_command(data_dir: Path, plan_path: Path) -> int:
+    """Collect only explicitly mapped youth employment/housing service IDs."""
+    from benefitfinder.infrastructure.gov24_http import Gov24HttpFetcher
+    from benefitfinder.ingestion.gov24 import collect_gov24
+
+    try:
+        plan = load_preparation_plan(plan_path)
+        if plan.source != 'gov24':
+            raise ValueError
+        api_key = os.environ.get('GOV24_API_KEY', '').strip()
+        if not api_key:
+            raise ValueError
+        database_enabled = 'COLLECTION_WRITE_DATABASE_URL' in os.environ
+        if database_enabled and not os.environ['COLLECTION_WRITE_DATABASE_URL'].strip():
+            raise ValueError
+        external_ids = tuple(sorted({doc.external_id for target in plan.targets
+                                     for doc in target.documents}))
+        if len(external_ids) > 100:
+            raise ValueError
+        category_values = dict(plan.scope.category_values)
+        scope = json.dumps({'external_ids': external_ids, 'category_values': category_values},
+                           ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode()
+        root = data_dir / 'processed' / 'f08-gov24'
+        fetcher = Gov24HttpFetcher(api_key)
+        snapshots = JsonFileSnapshotStore(data_dir / 'raw' / 'f08-gov24')
+
+        def clock() -> datetime:
+            return datetime.now(KST)
+
+        def build(staging: Path, previous: Path | None) -> CollectionResult:
+            # A changed selection must not turn formerly selected sources into
+            # deletions. Use a new data root for a deliberate mapping migration.
+            scope_path = root / 'scope.json'
+            try:
+                with scope_path.open('rb') as handle:
+                    if handle.read(256 * 1024 + 1) != scope:
+                        raise ValueError('gov24_collection_scope_changed')
+            except FileNotFoundError:
+                if previous is not None:
+                    raise ValueError('gov24_collection_scope_missing') from None
+                descriptor = os.open(scope_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                with os.fdopen(descriptor, 'wb') as handle:
+                    handle.write(scope)
+                    handle.flush()
+                    os.fsync(handle.fileno())
+            versions = JsonFileVersionStore(staging)
+            records_path = versions.records_path('gov24')
+            records_path.parent.mkdir(parents=True, exist_ok=True)
+            if previous is not None:
+                shutil.copyfile(JsonFileVersionStore(previous).records_path('gov24'), records_path)
+            result = collect_gov24(external_ids, category_values, fetcher, snapshots, versions, clock)
+            if result.complete and not records_path.exists():
+                records_path.write_text('{}\n', encoding='utf-8')
+            return result
+
+        complete = run_youthcenter_refresh(root, build, clock, ingest_complete=(
+            lambda: ingest_gov24_command(data_dir) == 0) if database_enabled else None)
+    except Exception:
+        print('보조금24 갱신 실패: 계획·키·원본·DB 설정을 확인하세요.', file=sys.stderr)
+        return 1
+    print('보조금24 갱신 완료' if complete else '보조금24 갱신 실패: 마지막 성공본 유지')
+    return 0 if complete else 1
+
+
+def ingest_official_documents_command(data_dir: Path) -> int:
+    from benefitfinder.ingestion.official_document_generations import load_official_document_generation
+    from benefitfinder.infrastructure.pdf_text import extract_pdf_pages
+
+    try:
+        batch = load_official_document_generation(
+            lambda relative,limit: read_collection_file(data_dir,relative,limit),extract_pdf_pages)
+        result = PostgresCollectedPolicies(os.environ.get('COLLECTION_WRITE_DATABASE_URL','')).save(batch)
+    except Exception:
+        print('공식 문서 DB 인계 실패: official_document_import_failed',file=sys.stderr)
+        return 1
+    print(f'공식 문서 DB 인계: 신규 {result.new}건, 변경 {result.changed}건, '
+          f'동일 {result.unchanged}건, 누락 {result.missing}건')
+    return 0
+
+
+def refresh_official_documents_command(data_dir: Path, plan_path: Path) -> int:
+    from benefitfinder.infrastructure.official_document_http import OfficialDocumentHttpFetcher
+    from benefitfinder.infrastructure.official_document_plans import load_official_document_plan
+    from benefitfinder.infrastructure.pdf_text import extract_pdf_pages
+    from benefitfinder.jobs.official_document_refresh import refresh_official_documents
+
+    try:
+        targets = load_official_document_plan(plan_path)
+        raw = data_dir/'raw/f08-official-documents'
+        raw.mkdir(parents=True,exist_ok=True,mode=0o700)
+        raw.chmod(0o700)
+        complete = refresh_official_documents(data_dir,targets,
+            fetcher=OfficialDocumentHttpFetcher(
+                allowed_urls=tuple(dict.fromkeys(target.url for target in targets))),
+            snapshots=JsonFileSnapshotStore(raw,private=True),versions_factory=JsonFileVersionStore,
+            clock=lambda:datetime.now(KST),pdf_pages=extract_pdf_pages,
+            ingest_complete=(lambda:ingest_official_documents_command(data_dir)==0)
+                if 'COLLECTION_WRITE_DATABASE_URL' in os.environ else None)
+    except Exception:
+        print('공식 문서 갱신 실패: official_document_refresh_failed',file=sys.stderr)
+        return 1
+    print('공식 문서 갱신 완료' if complete else '공식 문서 갱신 실패: 마지막 성공본 유지')
+    return 0 if complete else 1
+
+
 def refresh_youthcenter_command(data_dir: Path, *, notify_discord: bool = False) -> int:
     started_at = datetime.now(KST)
     code = _refresh_youthcenter(data_dir)
@@ -442,13 +613,40 @@ def refresh_data_command(data_dir: Path, *, notify_discord: bool = False) -> int
         return {key: result[key] for key in ('attempted', 'needs_review', 'stale', 'failed',
                                             'source_records_awaiting_scope_or_documents')}
 
+    def prepare_analysis() -> dict[str, int]:
+        if 'F12_WRITE_DATABASE_URL' not in os.environ:
+            raise ValueError('f12_preparation_requires_database')
+        combined = dict.fromkeys(('targets', 'registered', 'replayed', 'failed'), 0)
+        paths = [Path(os.environ[name]) for name in
+                 ('F12_PREPARATION_PLAN', 'GOV24_PREPARATION_PLAN') if name in os.environ]
+        policies = [target.policy_id for path in paths
+                    for target in load_preparation_plan(path).targets]
+        if len(policies) != len(set(policies)):
+            # One canonical policy must not be silently replaced by two separate
+            # inputs. Explicit multi-source registration binds both materials.
+            raise ValueError('f12_preparation_duplicate_policy')
+        for name in ('F12_PREPARATION_PLAN', 'GOV24_PREPARATION_PLAN'):
+            if name in os.environ:
+                result = prepare_f12_inputs(Path(os.environ[name]))
+                for key in combined:
+                    combined[key] += result[key]
+        return combined
+
     try:
         code = run_daily_refresh(
             data_dir / "processed" / "f08",
             refresh_policies=lambda: _refresh_youthcenter(data_dir),
             refresh_rate=refresh_ecos_rate_command,
+            refresh_gov24=(lambda: refresh_gov24_command(data_dir,
+                Path(os.environ['GOV24_PREPARATION_PLAN'])))
+                if 'GOV24_PREPARATION_PLAN' in os.environ else None,
+            refresh_documents=(lambda:refresh_official_documents_command(data_dir,
+                Path(os.environ['OFFICIAL_DOCUMENT_PLAN'])))
+                if 'OFFICIAL_DOCUMENT_PLAN' in os.environ else None,
             clock=lambda: datetime.now(KST),
             notify=notify if notify_discord else None,
+            prepare_analysis=prepare_analysis if any(name in os.environ for name in
+                ('F12_PREPARATION_PLAN', 'GOV24_PREPARATION_PLAN')) else None,
             analyze_pending=analyze_pending if 'F12_WRITE_DATABASE_URL' in os.environ else None,
         )
     except DailyRefreshError as error:
@@ -718,6 +916,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     daily.add_argument("--notify-discord", action="store_true", help="디스코드로 소스별 결과 보고")
     analysis = commands.add_parser('f12-analysis', help='공식 문서 등록·오프라인 분석·검수 대기 조회')
     analysis_actions = analysis.add_subparsers(dest='analysis_action', required=True)
+    prepare = analysis_actions.add_parser('prepare', help='확인된 API 본문 매핑으로 분석 입력 자동 등록')
+    prepare.add_argument('--plan', type=Path, required=True)
     register = analysis_actions.add_parser('register')
     register.add_argument('--input', type=Path, required=True)
     register.add_argument('--recheck-id', type=int)
@@ -730,6 +930,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     collect.add_argument("--data-dir", type=Path, default=Path("data"))
     ingest = commands.add_parser("ingest-youthcenter", help="완전한 수집 성공본만 DB에 재적재")
     ingest.add_argument("--data-dir", type=Path, default=Path("data"))
+    gov24 = commands.add_parser('refresh-gov24', help='확인된 청년 취업·주거 정책 API 수집')
+    gov24.add_argument('--plan', type=Path, required=True)
+    gov24.add_argument('--data-dir', type=Path, default=Path('data'))
+    gov24_ingest = commands.add_parser('ingest-gov24', help='보조금24 완전한 성공본 DB 재인계')
+    gov24_ingest.add_argument('--data-dir', type=Path, default=Path('data'))
+    official = commands.add_parser('refresh-official-documents',help='확인된 공식 HTML·PDF 수집')
+    official.add_argument('--plan',type=Path,required=True)
+    official.add_argument('--data-dir',type=Path,default=Path('data'))
+    official_ingest = commands.add_parser('ingest-official-documents',help='공식 문서 성공본 DB 재인계')
+    official_ingest.add_argument('--data-dir',type=Path,default=Path('data'))
     refresh = commands.add_parser(
         "refresh-youthcenter", help="완전한 온통청년 수집만 최신본으로 전환"
     )
@@ -748,6 +958,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     chunked = commands.add_parser("extract-chunked-facts", help="앞뒤 문맥을 보존한 로컬 E4B 추출")
     chunked.add_argument("--input", type=Path, required=True)
     chunked.add_argument("--output-dir", type=Path, required=True)
+    f12_catalog = commands.add_parser('catalog-from-f12', help='사람 검수 후보와 명시적 실행 규칙을 게시 입력으로 연결')
+    for flag in ('pair-dir', 'decisions', 'approved', 'input', 'plan', 'source', 'output'):
+        f12_catalog.add_argument('--' + flag, type=Path, required=True)
+    f12_catalog.add_argument('--price-source', type=Path)
     catalog = commands.add_parser("policy-catalog", help="검수된 정책 카탈로그 검증·명시적 게시")
     catalog_actions = catalog.add_subparsers(dest="catalog_action", required=True)
     for action in ("validate", "publish"):
@@ -776,6 +990,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     explain.add_argument("--category", choices=("employment", "housing"), default="employment")
     explain.add_argument("--model", help="설정한 제공자 모델. 제공자 미설정 시 명시적 Ollama 호환")
     args = parser.parse_args(argv)
+    if args.command == 'catalog-from-f12':
+        return f12_catalog_command(args)
+    if args.command == 'refresh-gov24':
+        return refresh_gov24_command(args.data_dir, args.plan)
+    if args.command == 'refresh-official-documents':
+        return refresh_official_documents_command(args.data_dir,args.plan)
+    if args.command == 'ingest-official-documents':
+        return ingest_official_documents_command(args.data_dir)
+    if args.command == 'ingest-gov24':
+        return ingest_gov24_command(args.data_dir)
     if args.command == 'f12-analysis':
         return f12_analysis_command(args)
     if args.command == 'service-catalog':

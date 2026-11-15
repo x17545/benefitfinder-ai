@@ -1,5 +1,11 @@
 /* Generated from contracts/v1. Run pnpm types:generate; do not edit. */
 
+export type ApplicationGuideExcerpt = Evidence & {
+  quote?: string;
+  location: string;
+  [k: string]: unknown;
+};
+
 /**
  * 정규화 혜택. 기존 필수(id/domain/title/summary/provider/categories/application/eligibility_conditions/source/domain_data) 유지. benefit_amount/reviewed/conflicts/lifetime_once는 조합 계산용 선택 확장. application.status에 always 값을 두지 않고 상시는 open+공식 상시 근거로 표현한다. 날짜 null을 open으로 추정하지 않는다.
  */
@@ -20,6 +26,17 @@ export interface NormalizedBenefit {
     ends_on: string | null;
     url: string | null;
   };
+  /**
+   * 사람이 해당 버전 원문을 검수한 신청 안내 인용. 생략/null은 미확인. documents:null은 서류 미확인, []는 검수한 원문에 서류 안내가 없음을 뜻한다. provider를 접수 기관으로 추정하지 않는다.
+   */
+  application_guide?: {
+    method: ApplicationGuideExcerpt | null;
+    office: ApplicationGuideExcerpt | null;
+    /**
+     * @maxItems 100
+     */
+    documents: ApplicationGuideExcerpt[] | null;
+  } | null;
   eligibility_conditions: {
     id: string;
     description: string;
