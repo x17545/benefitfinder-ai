@@ -3,7 +3,7 @@
 from collections.abc import Callable
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
 router = APIRouter(prefix="/api/v1", tags=["benefits"])
 
@@ -14,9 +14,12 @@ def get_benefit_lookup(request: Request) -> Callable[[str], dict[str, Any] | Non
 
 @router.get("/benefits/{benefit_id}")
 def read_benefit(
-    benefit_id: str, lookup: Callable[[str], dict[str, Any] | None] = Depends(get_benefit_lookup),
+    benefit_id: str,
+    response: Response,
+    lookup: Callable[[str], dict[str, Any] | None] = Depends(get_benefit_lookup),
 ) -> dict[str, Any]:
     benefit = lookup(benefit_id)
     if benefit is None:
-        raise HTTPException(status_code=404)
+        raise HTTPException(status_code=404, headers={"Cache-Control": "no-store"})
+    response.headers["Cache-Control"] = "no-store"
     return benefit
