@@ -122,14 +122,14 @@ class AICatalogPostgresTest(unittest.TestCase):
             publish_ai_batch(self.url, [(forged_policy, forged_review, forged, None)])
         role = "bf_ai_publisher_" + uuid4().hex
         with psycopg.connect(self.url) as connection:
-            connection.execute(sql.SQL("CREATE ROLE {} LOGIN").format(sql.Identifier(role)))
+            connection.execute(sql.SQL("CREATE ROLE {} LOGIN PASSWORD 'fictional-ai-test-only'").format(sql.Identifier(role)))
             connection.execute(sql.SQL("GRANT USAGE ON SCHEMA public TO {}").format(sql.Identifier(role)))
             connection.execute(sql.SQL("GRANT SELECT, INSERT ON public.policy_catalog_releases TO {}").format(sql.Identifier(role)))
             connection.execute(sql.SQL("GRANT UPDATE (publication_status) ON public.policy_catalog_releases TO {}").format(sql.Identifier(role)))
             connection.execute(sql.SQL("GRANT SELECT (version) ON public.benefitfinder_schema_migrations TO {}").format(sql.Identifier(role)))
             connection.execute(sql.SQL("GRANT SELECT (source,external_id,fields,material_sha256,missing_detected_at) ON public.collected_policies TO {}").format(sql.Identifier(role)))
         try:
-            publish_ai_batch(make_conninfo(self.url, user=role), [(policy, review, official, None)])
+            publish_ai_batch(make_conninfo(self.url, user=role, password="fictional-ai-test-only"), [(policy, review, official, None)])
             self.assertIsNotNone(self.reader.get_published(policy.benefit.id))
         finally:
             with psycopg.connect(self.url) as connection:
