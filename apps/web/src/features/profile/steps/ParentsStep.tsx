@@ -76,7 +76,7 @@ export function ParentsStep(): JSX.Element {
           updateAnswers({ parentAsset: value, parentsSkipped: false });
         }}
       />
-      <PrivacyNote>부모님 정보는 자격 계산에만 써요. 서버에 저장하거나 AI로 보내지 않아요.</PrivacyNote>
+      <PrivacyNote>부모님 정보는 자격 계산에만 써요. 서버에서는 계산이 끝나면 바로 폐기하고, 저장하거나 AI로 보내지 않아요.</PrivacyNote>
     </ConditionStepLayout>
   );
 }
