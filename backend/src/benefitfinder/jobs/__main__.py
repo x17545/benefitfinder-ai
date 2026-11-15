@@ -50,6 +50,7 @@ from benefitfinder.infrastructure.f12_evaluation_files import (
     write_evaluation_report,
 )
 from benefitfinder.infrastructure.f12_catalog_files import prepare_f12_release, write_f12_catalog
+from benefitfinder.infrastructure.ai_catalog_review import AIReview, publish_ai_batch, retire_ai_batch, validate_ai_review
 from benefitfinder.infrastructure.ollama_chat import OllamaChat
 from benefitfinder.infrastructure.compatible_llm import (
     CompatibleChat,
@@ -216,6 +217,44 @@ def f12_catalog_command(args: argparse.Namespace) -> int:
     except Exception:
         print('F12 게시 입력 준비 실패: 원본 후보·최신 검수·내보내기·실행 규칙과 새 출력 경로를 확인하세요.', file=sys.stderr)
         return 2
+
+
+def ai_catalog_command(args: argparse.Namespace) -> int:
+    """Validate, publish, or retire one explicitly specified AI-reviewed batch."""
+    try:
+        manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
+        if not isinstance(manifest, list) or not 1 <= len(manifest) <= 50:
+            raise ValueError("invalid_ai_batch_manifest")
+        entries = []
+        for item in manifest:
+            if not isinstance(item, dict) or not {"input", "review", "source"} <= set(item) or set(item) - {"input", "review", "source", "price_source"}:
+                raise ValueError("invalid_ai_batch_entry")
+            base = args.manifest.parent
+            data = json.loads((base / item["input"]).read_text(encoding="utf-8"))
+            model = ServiceCatalogRecord if data.get("kind") == "service" else CatalogRecord
+            record = model.model_validate(data)
+            review = AIReview.model_validate_json((base / item["review"]).read_text(encoding="utf-8"))
+            source = (base / item["source"]).read_text(encoding="utf-8")
+            price = (base / item["price_source"]).read_text(encoding="utf-8") if item.get("price_source") else None
+            entries.append((record, review, source, price))
+        if args.catalog_action == "validate":
+            for record, review, source, price in entries:
+                validate_ai_review(record, review, source_text=source, price_source_text=price)
+            print(json.dumps({"validated": len(entries), "published": False}))
+            return 0
+        database_url = os.environ.get("POLICY_PUBLISH_DATABASE_URL", "")
+        if not database_url:
+            raise ValueError("missing_publish_database_url")
+        if args.catalog_action == "publish":
+            publish_ai_batch(database_url, entries)
+        else:
+            retire_ai_batch(database_url, [(record.benefit.id, record.benefit.source.document_version,
+                                          review.record_sha256) for record, review, _, _ in entries])
+    except Exception:
+        print("AI 카탈로그 처리 실패: 입력·원천·검수·DB 상태를 확인하세요.", file=sys.stderr)
+        return 2
+    print(json.dumps({"action": args.catalog_action, "count": len(entries)}))
+    return 0
 
 
 def policy_catalog_command(args: argparse.Namespace) -> int:
@@ -962,6 +1001,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     for flag in ('pair-dir', 'decisions', 'approved', 'input', 'plan', 'source', 'output'):
         f12_catalog.add_argument('--' + flag, type=Path, required=True)
     f12_catalog.add_argument('--price-source', type=Path)
+    ai_catalog = commands.add_parser("ai-catalog", help="AI 독립 검수 배치 검증·게시·철회")
+    ai_actions = ai_catalog.add_subparsers(dest="catalog_action", required=True)
+    for action in ("validate", "publish", "retire"):
+        command = ai_actions.add_parser(action)
+        command.add_argument("--manifest", type=Path, required=True)
     catalog = commands.add_parser("policy-catalog", help="검수된 정책 카탈로그 검증·명시적 게시")
     catalog_actions = catalog.add_subparsers(dest="catalog_action", required=True)
     for action in ("validate", "publish"):
@@ -1002,6 +1046,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return ingest_gov24_command(args.data_dir)
     if args.command == 'f12-analysis':
         return f12_analysis_command(args)
+    if args.command == "ai-catalog":
+        return ai_catalog_command(args)
     if args.command == 'service-catalog':
         return service_catalog_command(args)
     if args.command == "refresh-data":
