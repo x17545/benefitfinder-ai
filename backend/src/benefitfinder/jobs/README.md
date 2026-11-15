@@ -4,13 +4,13 @@
 
 ## 한 번에 F12 검수 자료 만들기
 
-공식 공고 한 건, 두 정책의 ID와 빈 후보 목록을 담은 검수 입력을 준비한다. 아래 이름과 ID는 가상이다. Ollama에서 도구 호출을 지원하는 로컬 모델을 실행한 뒤 저장소 루트에서 실행한다.
+공식 공고 한 건, 두 정책의 ID와 빈 후보 목록을 담은 검수 입력을 준비한다. 아래 이름과 ID는 가상이다. [개발용 llama.cpp와 제공자 설정](../../../../docs/development/LOCAL_LLM.md)을 준비하고 저장소 루트에서 실행한다. `--model`은 설정한 제공자 모델의 선택적 재정의이며 생략하면 `LLM_MODEL`을 사용한다. 제공자를 설정하지 않고 `--model`만 명시하면 기존 Ollama 경로를 사용한다.
 
 ```bash
 uv run --locked python -m benefitfinder.jobs rule-review extract-all \
   --input data/processed/rule-reviews/notice-input.json \
   --target-name '가상 정책 B' --target-alias '가상 B' --target-id youth:virtual:b \
-  --model gemma4:e4b --output-dir data/processed/rule-reviews/notice-review
+  --model gemma4-e4b --output-dir data/processed/rule-reviews/notice-review
 ```
 
 같은 원문으로 중복 제한과 자격·금액·지급 시점을 각각 추출한 뒤 새 `--output-dir`에 `rules-pending.json`과 `facts-pending.json`을 저장한다. 한쪽 추출이 실패하면 결과를 저장하지 않으며 기존 디렉터리는 덮어쓰지 않는다. 원문과 두 결과 모두 Git 제외 경로에 둔다.
@@ -63,17 +63,16 @@ uv run --locked python -m benefitfinder.jobs rule-review export-approved \
 `rule-review extract`는 이미 확보한 공식 공고 텍스트 한 건과 상대 정책 한 건으로 중복 제한 후보 하나를 만든다. 검수 입력 v1과 같은 형식으로 공식 `documents` 한 건, 두 정책의 `policies`, 빈 `candidates`를 준비한다. `rule-review example`의 가상 출력에서 필드 구조를 확인할 수 있다. 두 정책 모두 청년 취업·주거 범위에 있어야 하고, 상대 정책의 이름과 ID는 입력자가 공식 자료로 확인한다. 공고가 같은 정책을 다른 이름으로 부르면 확인된 표기를 `--target-alias`로 반복해서 넘길 수 있다. 모르는 별칭을 유사성만으로 정책에 연결하지 않는다. 아래 이름·ID는 가상이다.
 
 ```bash
-ollama pull gemma4:e4b
 uv run --locked python -m benefitfinder.jobs rule-review extract \
   --input data/processed/rule-reviews/notice-input.json \
-  --target-name '가상 정책 B' --target-alias '가상 B' --target-id virtual-b --model gemma4:e4b \
+  --target-name '가상 정책 B' --target-alias '가상 B' --target-id virtual-b --model gemma4-e4b \
   --output data/processed/rule-reviews/notice-candidates.json
 uv run --locked python -m benefitfinder.jobs rule-review prepare \
   --input data/processed/rule-reviews/notice-candidates.json \
   --output data/processed/rule-reviews/notice-pending.json
 ```
 
-Ollama가 `127.0.0.1:11434`에서 실행 중이고 도구 호출을 지원하는 로컬 모델이 설치되어 있어야 한다. 모델은 검색된 줄과 앞뒤 문맥을 함께 보고, 여러 줄에 걸친 제한·기간·예외를 연속된 원문 범위로 인용할 수 있다. 선택한 근거의 명시적 허용은 제한 조건과 구분해 `exceptions`에 저장한다. 예외가 조건에 섞이거나 선택한 근거에서 빠지면 모델에 재제출을 요청한다. 콘솔에는 모델·도구 순서·소요 시간만 남긴다. 모델이 낸 해석은 사람이 검수하며, 이 명령은 승인하거나 게시하지 않는다. 실제 원문과 후보는 `data/` 같은 Git 제외 경로에 보관한다.
+`LLM_PROVIDER=llama_cpp` 설정과 도구 호출을 지원하는 로컬 서버가 준비되어 있어야 한다. 모델은 검색된 줄과 앞뒤 문맥을 함께 보고, 여러 줄에 걸친 제한·기간·예외를 연속된 원문 범위로 인용할 수 있다. 선택한 근거의 명시적 허용은 제한 조건과 구분해 `exceptions`에 저장한다. 예외가 조건에 섞이거나 선택한 근거에서 빠지면 모델에 재제출을 요청한다. 콘솔에는 모델·도구 순서·소요 시간만 남긴다. 모델이 낸 해석은 사람이 검수하며, 이 명령은 승인하거나 게시하지 않는다. 실제 원문과 후보는 `data/` 같은 Git 제외 경로에 보관한다.
 
 ## 자격·금액·지급 시점 후보 만들기
 
@@ -81,7 +80,7 @@ Ollama가 `127.0.0.1:11434`에서 실행 중이고 도구 호출을 지원하는
 
 ```bash
 uv run --locked python -m benefitfinder.jobs rule-review extract-facts \
-  --input data/processed/rule-reviews/notice-input.json --model gemma4:e4b \
+  --input data/processed/rule-reviews/notice-input.json --model gemma4-e4b \
   --output data/processed/rule-reviews/notice-facts-pending.json
 ```
 
@@ -240,7 +239,7 @@ uv run --locked python -m benefitfinder.jobs extract-chunked-facts \
   --output-dir data/local/f12-context/new-run
 ```
 
-입력은 기존 `rule-review`의 로컬 v1 `RuleReviewBatch`입니다. 공식 원문 1개, 연결된 `youth` 취업/주거 정책, 빈 `candidates`가 필요합니다. 원문은 전체 텍스트와 버전·공식 URL·수집 시각을 그대로 보존합니다. 승인 내보내기나 사용자 프로필은 모델에 보내지 않습니다. 실행 전에 Ollama와 E4B가 로컬에 설치되어 있어야 하며 자동 다운로드·원격 모델 호출은 하지 않습니다.
+입력은 기존 `rule-review`의 로컬 v1 `RuleReviewBatch`입니다. 공식 원문 1개, 연결된 `youth` 취업/주거 정책, 빈 `candidates`가 필요합니다. 원문은 전체 텍스트와 버전·공식 URL·수집 시각을 그대로 보존합니다. 승인 내보내기나 사용자 프로필은 모델에 보내지 않습니다. 실행 전에 llama.cpp와 E4B를 로컬에서 준비하고 제공자 환경 변수를 전달합니다. 자동 다운로드는 하지 않으며 외부 API 호출은 `external_api`를 명시한 경우에만 사용합니다. 제공자 미설정 시 이전 로컬 Ollama 경로를 유지합니다.
 
 - `=== PDF PAGE N ===` 표식이 있으면 페이지를 원자 단위로 사용합니다. 표식이 없는 텍스트는 빈 줄로 나눈 문단을 사용합니다. 중심 묶음은 최대 두 단위이며, 앞뒤 한 단위를 통째로 함께 보여 줍니다. 첫/마지막 단위에 없는 이웃을 만들지 않습니다.
 - 모든 원문 줄은 중심 범위에 정확히 한 번 포함됩니다. 문맥은 겹쳐 보여 주지만 원문을 승인 근거가 있는 구간만으로 축소하지 않습니다. 페이지/문단을 자르거나 예외만 별도로 제거하지 않습니다.
