@@ -335,7 +335,7 @@ describe('analysis analytics lifecycle', () => {
     analysis.startAnalysis(REQUEST);
     await vi.advanceTimersByTimeAsync(0);
 
-    expect(analysis.getAnalysisState()).toEqual({ status: 'failed', reason: 'error' });
+    expect(analysis.getAnalysisState()).toEqual({ status: 'failed', reason: 'unavailable' });
     expect(analyticsFlow.events).toEqual([
       { name: 'analyze_start' },
       { name: 'analyze_fail', code: 'dependency_unavailable' },

@@ -71,7 +71,10 @@ vi.mock('../src/features/policy/usePolicyDetail.ts', () => ({
 vi.mock('../src/features/whatIf/useSimulation.ts', () => ({
   useSimulation: () => ({ state: { status: 'loading' }, retry: simulation.retry }),
 }));
-vi.mock('../src/features/benefits/resultImage.ts', () => ({ saveResultImage: image.saveResultImage }));
+vi.mock(import('../src/features/benefits/resultImage.ts'), async (importOriginal) => ({
+  ...await importOriginal(),
+  saveResultImage: image.saveResultImage,
+}));
 vi.mock('../src/shared/ui/toastStore.ts', () => ({ showToast: image.showToast }));
 
 import { Button } from '../src/shared/ui/Button.tsx';
