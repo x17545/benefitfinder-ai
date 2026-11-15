@@ -12,6 +12,16 @@
 
 ## 2. 데이터 준비와 사용자 요청
 
+현재 제공하는 단계와 실행 안내:
+
+| 단계 | 현재 확인 범위 |
+| --- | --- |
+| [F08 수집 성공본 인계](../../backend/src/benefitfinder/infrastructure/database/COLLECTED_POLICIES.md) | 원본·해시·시각·건수를 확인해 미검수 원천과 DB 기준 변경 이력을 저장한다. DB 장애 뒤에는 같은 성공본부터 재인계한다 |
+| [원천 연결·재검수](../../backend/src/benefitfinder/infrastructure/database/POLICY_SOURCE_RECHECKS.md) | 0006 적용 시 승인에 연결된 원천이 변경·누락되면 게시 정책·F13을 내리고 기존 승인·재검수 이력을 보존한다. 동일 내용은 승인 유지, 재등장은 자동 재승인하지 않는다 |
+| [F12 분석 큐](../../backend/src/benefitfinder/infrastructure/database/F12_ANALYSIS.md) | 확인된 공식 문서·분류·원천을 등록받아 도구 6개로 누락을 재탐색하고 검수 대기 파일을 남긴다. 원천 변경 시 분석을 무효화한다. F08이 준비된 작업을 실행할 수 있다 |
+
+운영 원문 입력 자동 준비, 실제 사람 검수와 운영 게시는 후속이다.
+
 아래는 목표 흐름이다. **승인된 버전**이 준비와 계산을 이어 준다.
 
 ```mermaid

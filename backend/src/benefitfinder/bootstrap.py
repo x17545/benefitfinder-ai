@@ -38,6 +38,7 @@ from benefitfinder.application.region_options import RegionCatalog
 from benefitfinder.application.published_policies import PolicyCatalogUnavailable, PublishedPolicyRepository
 from benefitfinder.application.published_recommendations import PublishedRecommendations
 from benefitfinder.application.service_catalog import ServiceCatalog
+from benefitfinder.application.published_services import PublishedServiceRepository, PublishedServices
 from benefitfinder.application.service_meta import ReadServiceMetadata
 from benefitfinder.application.base_rates import BaseRateRepository, BaseRateUnavailable
 from benefitfinder.application.response_mapper import MVP_DATA_UPDATED_AT
@@ -58,6 +59,7 @@ from benefitfinder.infrastructure.database.repositories.published_policies impor
 from benefitfinder.infrastructure.example_explanation_data import recommendation_explanation_data
 from benefitfinder.infrastructure.example_benefits import example_benefits
 from benefitfinder.infrastructure.example_services import example_services
+from benefitfinder.infrastructure.database.repositories.published_services import PostgresPublishedServices
 from benefitfinder.infrastructure.ollama_explanations import OllamaExplanationCompletion
 from benefitfinder.infrastructure.published_clauses import InMemoryPublishedClauses
 from benefitfinder.infrastructure.region_codes import OfficialRegionCatalog
@@ -94,6 +96,7 @@ def create_app(
     explanation_timeout_seconds: float = 5,
     explanation_database_url: str | None = None,
     service_catalog: ServiceCatalog | None = None,
+    service_repository: PublishedServiceRepository | None = None,
     analysis_usage: AnalysisUsage | None = None,
     analysis_usage_database_url: str | None = None,
 
@@ -126,6 +129,10 @@ def create_app(
         raise ValueError("ambiguous_policy_repository")
     if policy_database_url is not None:
         policy_repository = PostgresPublishedPolicies(policy_database_url)
+    if service_catalog is not None and service_repository is not None:
+        raise ValueError('ambiguous_service_catalog')
+    if policy_database_url is not None and service_repository is None and service_catalog is None:
+        service_repository = PostgresPublishedServices(policy_database_url)
     if base_rate_repository is not None and base_rate_database_url is not None:
         raise ValueError("ambiguous_base_rate_repository")
     if base_rate_database_url is not None:
@@ -255,10 +262,13 @@ def create_app(
 
     app.state.read_discount_rate = read_discount_rate
     cash_benefits = example_benefits(policies)
-    services = service_catalog if service_catalog is not None else ServiceCatalog(
-        example_services() if policy_repository is None else (),
+    services = (
+        PublishedServices(service_repository, evaluate_condition) if service_repository is not None
+        else service_catalog if service_catalog is not None else ServiceCatalog(
+            example_services() if policy_repository is None else (),
+        )
     )
-    if services.policy_ids.intersection(cash_benefits):
+    if isinstance(services, ServiceCatalog) and services.policy_ids.intersection(cash_benefits):
         raise ValueError("cash_service_policy_id_collision")
 
     def find_benefit(policy_id: str) -> dict[str, Any] | None:
@@ -277,7 +287,7 @@ def create_app(
     if policy_repository is not None:
         catalog = PublishedRecommendations(policy_repository, evaluate_condition)
         app.state.recommendation_service = catalog
-        app.state.benefit_lookup = catalog.detail
+        app.state.benefit_lookup = lambda policy_id: catalog.detail(policy_id) or services.detail(policy_id)
 
         def simulate_published(**kwargs: Any) -> dict[str, Any]:
             # All before/after views use one release snapshot, including a version rollover.
@@ -304,6 +314,7 @@ def create_app(
         read_discount_rate,
         policy_repository=policy_repository,
         example_updated_at=MVP_DATA_UPDATED_AT,
+        service_repository=service_repository,
     )
 
     app.state.analysis_timeout_seconds = analysis_timeout_seconds

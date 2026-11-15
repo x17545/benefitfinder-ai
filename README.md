@@ -59,9 +59,9 @@ flowchart LR
 
 | 영역 | 지금 확인할 수 있는 것 | 별도 검증·후속 |
 | --- | --- | --- |
-| 웹과 API | 공식 지역 선택 → 13단계 입력 → 가상 정책의 조합·상황 변화(S4)·상세(S5)·서비스(S6). 입력·결과 탭 복원, 조건 기억하기·삭제, PNG 저장. 가상 결과는 화면과 이미지에 표시 | 실제 서비스 정책·환산 단가 연결 |
-| 정책 계산·설명 | `POLICY_DATABASE_URL` 설정 시 [게시 현금 정책 카탈로그](backend/src/benefitfinder/infrastructure/database/POLICY_CATALOG.md)로 계산. F13은 [게시 조항과 선택적 로컬 모델](backend/src/benefitfinder/api/README.md#f13-설명-실행) 사용. 서비스 환산액은 현금 조합과 분리 | 실제 정책 검수·운영 게시와 정책 사실 검증 |
-| 수집·검수 도구 | [F08 로컬 갱신](backend/src/benefitfinder/jobs/README.md#f08-온통청년-갱신-한-번-실행), [F12 로컬 추출·검수·평가](backend/src/benefitfinder/jobs/README.md) | 공고 원문 수집·수집 적재, 실제 API·알림 확인, 운영 스케줄 등록 |
+| 웹과 API | 공식 지역 선택 → 13단계 입력 → 가상 정책의 조합·상황 변화(S4)·상세(S5)·서비스(S6). 입력·결과 탭 복원, 조건 기억하기·삭제, PNG 저장. 가상 결과는 화면과 이미지에 표시 | 실제 서비스 정책·환산 단가 자료의 검수·게시 |
+| 정책 계산·설명 | `POLICY_DATABASE_URL` 설정 시 [게시 현금 정책 카탈로그](backend/src/benefitfinder/infrastructure/database/POLICY_CATALOG.md)로 계산. F13은 [게시 조항과 선택적 로컬 모델](backend/src/benefitfinder/api/README.md#f13-설명-실행) 사용. [게시 서비스 카탈로그](backend/src/benefitfinder/infrastructure/database/SERVICE_CATALOG.md)의 환산액은 현금 조합과 분리 | 실제 정책 검수·운영 게시와 정책 사실 검증 |
+| 수집·검수 도구 | [F08 정책·금리 통합 갱신](backend/src/benefitfinder/jobs/DAILY_REFRESH.md), [수집 성공본 DB 인계](backend/src/benefitfinder/infrastructure/database/COLLECTED_POLICIES.md), [F12 문서 분석 큐](backend/src/benefitfinder/infrastructure/database/F12_ANALYSIS.md) | 공식 원문 자동 준비, 실제 API·알림 확인, 운영 스케줄 등록 |
 
 실행 모드와 검증 범위는 [문서 지도의 구현 상태](docs/README.md#구현-상태)를 확인한다.
 
@@ -106,7 +106,7 @@ flowchart LR
 
 </details>
 
-**자동 갱신 확인** (F08, 목표 03:00 KST): [로컬 갱신 실행·스케줄 설정 안내](backend/src/benefitfinder/jobs/README.md#f08-온통청년-갱신-한-번-실행)를 따른다. 현재 CI는 매일 수집하는 스케줄러가 아니다. 실제 API 수집 성공·디스코드 도착·운영 스케줄 등록은 후속 검증이며, 해당 환경에서 확인한 요약·기록 위치를 제출 전에 기입한다.
+**자동 갱신 확인** (F08, 목표 03:00 KST): [정책·금리 통합 실행·스케줄 안내](backend/src/benefitfinder/jobs/DAILY_REFRESH.md)를 따른다. 현재 CI는 매일 수집하는 스케줄러가 아니다. 실제 API 수집 성공·디스코드 도착·운영 스케줄 등록은 후속 검증이며, 해당 환경에서 확인한 요약·기록 위치를 제출 전에 기입한다.
 
 **AI Agent 실행 기록 확인** (F12): [추출·검수·평가 CLI](backend/src/benefitfinder/jobs/README.md)를 따른다. 공유 가상 회귀와 실제 E4B 검증 요약은 관련 PR에 남기며, 실제 공고·검수·결과·로그는 로컬 `data/`에만 둔다. 제출용으로는 원문/개인정보를 제거한 실행 순서와 성공·실패 요약을 따로 확인한다.
 
@@ -137,7 +137,7 @@ flowchart LR
 | 서버 | Python 3.12, FastAPI, Pydantic |
 | DB | PostgreSQL. F13 게시 조항·검수 정책 카탈로그 조회와 계산 연결 구현. 실제 정책 게시·벡터/임베딩 검색은 후속 |
 | AI | [로컬 llama.cpp](docs/development/LOCAL_LLM.md)로 추출·설명 검증. 실패 시 기본 문구로 복귀. Ollama는 호환 경로이며 운영 모델·예산은 확정 전 |
-| 자동화 | F08 로컬 갱신·재시도·웹훅과 03:00 KST macOS launchd 설정 생성. 운영 등록·실제 API/알림 도착은 후속 |
+| 자동화 | F08 정책·금리 통합 실행·재시도·웹훅과 03:00 KST Linux systemd/macOS launchd 설정 생성. 운영 등록·실제 API/알림 도착은 후속 |
 | 데이터 | 온통청년 수집·ECOS 기준금리 수동 갱신/DB 조회 구현. 보조금24와 운영 통합 자동 갱신은 후속 |
 | 개발 도구 | uv, pnpm, GitHub Actions CI |
 | 배포 | Vercel/Render 실행 설정 있음. 운영 API·배포 주소의 전체 흐름 검증은 별도 |
