@@ -6,6 +6,7 @@ import { missingSteps } from '../profile/answerRules.ts';
 import { getFlowState, updateAnswers } from '../profile/flowStore.ts';
 import { useRegionOptions } from '../profile/regionOptions.ts';
 import { isValidRegionSelection, normalizeRegionAnswers } from '../profile/regionSelection.ts';
+import { getCashFactsForRegion } from '../profile/cashFactsMemory.ts';
 import { removeSavedConditions, saveConditions } from '../profile/savedConditions.ts';
 import { toRecommendationRequest } from '../profile/toRequest.ts';
 import {
@@ -20,14 +21,15 @@ import './LoadingScreen.css';
 
 function start(): void {
   const { answers, remember } = getFlowState();
-  const request = toRecommendationRequest(answers);
+  const base = toRecommendationRequest(answers);
   // 기억하기를 켰을 때만 분석을 시작하는 순간 저장한다. 끄면 남아 있던 것도 지운다 (F09)
   if (remember) {
-    saveConditions(request.profile);
+    saveConditions(base.profile);
   } else {
     removeSavedConditions();
   }
-  startAnalysis(request);
+  const facts = getCashFactsForRegion(answers.regionCode);
+  startAnalysis(facts === null ? base : toRecommendationRequest(answers, facts));
 }
 
 /** L 로딩 (기획서 4.4). 상단 바와 뒤로 버튼이 없다 */

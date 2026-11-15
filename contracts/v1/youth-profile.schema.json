@@ -72,6 +72,69 @@
     }
   },
   "$defs": {
+    "cash_facts": {
+      "type": ["object", "null"],
+      "description": "로컬 현금 정책 모드에서만 판정에 사용하는 선택 입력. 기간 목록 누락/null은 미확인, 빈 배열은 해당하는 사업 참여 이력 없음. 저장·외부 전달하지 않는다.",
+      "additionalProperties": false,
+      "properties": {
+        "birth_date": {"type": ["string", "null"], "format": "date"},
+        "exam": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "properties": {
+            "exam_date": {"type": ["string", "null"], "format": "date"},
+            "fee_won": {"$ref": "#/$defs/local_nullable_won"},
+            "supported_exam": {"type": ["boolean", "null"]},
+            "unemployed_on_exam_date": {"type": ["boolean", "null"]},
+            "same_exam_awards": {"type": ["integer", "null"], "minimum": 0, "maximum": 1000},
+            "prior_awards_won": {"$ref": "#/$defs/local_nullable_won"},
+            "other_reimbursement": {"type": ["boolean", "null"]},
+            "other_exclusions": {"type": ["boolean", "null"]}
+          }
+        },
+        "rent": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "properties": {
+            "deposit_won": {"$ref": "#/$defs/local_nullable_won"},
+            "contract_rent_won": {"$ref": "#/$defs/local_nullable_won"},
+            "health_insurance": {"enum": ["employee", "regional", null]},
+            "health_premium_won": {"$ref": "#/$defs/local_nullable_won"},
+            "applicant_lease": {"type": ["boolean", "null"]},
+            "other_exclusions": {"type": ["boolean", "null"]},
+            "paid_months": {
+              "type": ["array", "null"],
+              "maxItems": 24,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["month", "paid_on", "amount_won"],
+                "properties": {
+                  "month": {"type": "string", "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"},
+                  "paid_on": {"type": "string", "format": "date"},
+                  "amount_won": {"type": "integer", "minimum": 0, "maximum": 9007199254740991}
+                }
+              }
+            }
+          }
+        },
+        "program_periods": {
+          "type": ["array", "null"],
+          "maxItems": 50,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["program_id", "starts_on", "ends_on"],
+            "properties": {
+              "program_id": {"type": "string", "pattern": "^[a-z][a-z0-9_:-]{0,79}$"},
+              "starts_on": {"type": "string", "format": "date"},
+              "ends_on": {"type": ["string", "null"], "format": "date"}
+            }
+          }
+        }
+      }
+    },
+    "local_nullable_won": {"type": ["integer", "null"], "minimum": 0, "maximum": 9007199254740991},
     "youth_domain_data": {
       "type": [
         "object",
@@ -79,6 +142,9 @@
       ],
       "additionalProperties": false,
       "properties": {
+        "cash_facts": {
+          "$ref": "#/$defs/cash_facts"
+        },
         "military_months_range": {
           "type": [
             "object",

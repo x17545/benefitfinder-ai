@@ -11,6 +11,8 @@ from pydantic import (
     model_validator,
 )
 
+from benefitfinder.api.schemas.cash_facts import CashFacts
+
 
 class HousingInfo(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -166,6 +168,8 @@ class YouthDomainData(BaseModel):
     ]] | None = None
 
     household: HouseholdInfo | None = None
+
+    cash_facts: CashFacts | None = None
 
 
     @field_validator("special", "interests", "received")

@@ -235,3 +235,33 @@
 .s2-summary__value--missing {
   color: var(--color-check);
 }
+
+/* 13단계 개발 전용 추가 사실 입력 */
+.s2-cashfacts {
+  padding: 16px;
+  border: 2px dashed var(--color-line);
+  border-radius: 16px;
+}
+
+.s2-textarea {
+  min-height: 160px;
+  padding: 12px 14px;
+  border: 2px solid var(--color-line);
+  border-radius: 14px;
+  background: var(--color-card);
+  font-family: ui-monospace, monospace;
+  font-size: 14px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.s2-textarea:focus {
+  border-color: var(--color-primary);
+  outline: none;
+}
+
+.s2-cashfacts__error {
+  margin: 0;
+  font-size: var(--text-sub);
+  color: var(--color-check);
+}

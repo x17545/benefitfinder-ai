@@ -37,6 +37,18 @@ backend/
 
 `bootstrap.py`·`main.py`에서 서버와 원천 어댑터를 조립한다. `GET /health`·`GET /api/v1/options`·`POST /api/v1/recommendations`가 동작한다. 기본 추천은 가상 정책 계산이며 `POLICY_DATABASE_URL` 설정 시 검수·게시된 현금 정책을 계산한다. 실제 정책 사실 검증 완료와는 구분한다. F13은 기본 문구로 동작하며 선택한 로컬 E4B 모델로 설명을 생성할 수 있다. [실행과 실패 시 동작](src/benefitfinder/api/README.md#f13-설명-실행)을 따른다. F13 게시 조항의 PostgreSQL 조회는 별도 통합 검사로 확인하며 실제 정책 자료·운영 게시·스케줄 연결은 후속이다.
 
+## 로컬 현금 정책 계산
+
+루트에서 `LOCAL_CASH_POLICY_FILE`을 데이터 파일 경로로 설정해 기본 `benefitfinder.main:app`을 실행한다. 운영 게시·설명·사용량 DB나 설명 모델과 함께 설정할 수 없다. 파일을 읽기만 하며 `reviewed: false`인 `youth:local:` 정책만 받는다. 소스 변경은 서버 재시작 시 읽는다. 별도 기준일이 필요하면 서버에서 시간대가 있는 `LOCAL_CASH_REFERENCE_AT`을 지정한다. 예: `2026-11-16T12:00:00+09:00`. 생략하면 한국 시간의 현재 시각을 쓴다.
+
+- 파일은 `{"policies":[...]}`이고 각 행은 `benefit`(정책 상세와 출처·근거), `region_code`(시군구 코드), `rule`(규칙 및 신청 기한)을 가진다. 실제 자료는 Git 제외 경로인 `data/local/`에 둔다.
+- `exam_reimbursement`는 시험일, 지원 대상 여부, 응시일 미취업 여부, 동일 시험 수혜 횟수와 누적 지원액을 확인한다. 응시일에 제외 사업 참여 중이었거나 같은 응시료를 중복 지원받았으면 제외한다. 공고상 허용하는 할인은 자기부담 실납부액만 입력한다.
+- `rent_reimbursement`는 거주·임대차와 공고의 1인 가구 보험료 기준, 신청 기준일의 중복 사업 참여를 확인한다. 보험료는 공고가 요구한 대상 기간의 값 또는 평균을 입력한다. 대상 월의 기준일까지 낸 금액과 월 상한 중 작은 값을 합한다.
+- 정확한 금액과 사업 참여 기간은 요청의 `profile.domain_data.cash_facts`로 전달한다. `program_periods: []`는 해당 사업 참여 없음, 누락은 미확인이다. `other_exclusions`는 공고의 별도 제외 조건(예: 수급 이력 한도, 기초급여, 가족 임대차)을 신청자가 확인한 값이며 누락하면 단정하지 않는다. 목록에 없는 사업은 자료별 유사사업 코드가 명시된 경우에만 그 범주로 입력한다.
+- 로컬 결과는 개별 추정액과 제외 사유만 표시한다. 확인이 빠진 경우 지원액을 표시하지 않으며, 운영 조합·현재가치·상황 변화에는 쓰지 않는다. 기존 게시 정책과 검수 큐는 변경하지 않는다.
+
+웹 개발 서버에서 `VITE_LOCAL_CASH_POLICY_INPUT=1`을 지정하면 해당 지역의 13단계 확인 화면에서 추가 사실을 입력할 수 있다. 이 입력은 브라우저 저장 프로필에 남기지 않는다. 운영 웹 번들에는 입력 패널이 없다.
+
 ## 실제 지역 선택 API
 
 `GET /api/v1/options`는 [행정표준코드관리시스템 법정동코드 전체자료](https://www.code.go.kr/stdcode/regCodeL.do)를 백엔드에서 읽는다. 공식 화면의 공개 다운로드 `POST https://www.code.go.kr/etc/codeFullDown.do`에 UTF-8 form `codeseId=법정동코드`를 보내 ZIP 안 CP949 TSV를 변환한다. 별도 인증키나 원문 파일 배치 없이 `pnpm dev`로 실행한다.

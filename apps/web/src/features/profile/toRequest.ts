@@ -3,16 +3,16 @@ import { MILITARY_MONTHS } from '../../domains/youth/conditionOptions.ts';
 import type { RecommendationRequest } from '../../shared/api/generated/recommendation-request.ts';
 import type { YouthProfileExtension } from '../../shared/api/generated/youth-profile.ts';
 import { needsDeposit, needsMilitary, needsRent } from './answerRules.ts';
+import type { CashFacts } from './cashFactsMemory.ts';
 import type { ConditionAnswers } from './flowStore.ts';
 
 type YouthDomainData = NonNullable<YouthProfileExtension['domain_data']>;
-
 /** '모름'은 서버에 미상(null)으로 보낸다 */
 function known<T>(value: T | 'unknown' | null): T | null {
   return value === 'unknown' ? null : value;
 }
 
-export function toRecommendationRequest(answers: ConditionAnswers): RecommendationRequest {
+export function toRecommendationRequest(answers: ConditionAnswers, cashFacts?: CashFacts | null): RecommendationRequest {
   const married = answers.marital === 'married';
 
   const domainData: YouthDomainData = {
@@ -44,6 +44,8 @@ export function toRecommendationRequest(answers: ConditionAnswers): Recommendati
           parent_income_band: known(answers.parentIncome),
           parent_asset_band: known(answers.parentAsset),
         },
+    // DEV cash_facts only
+    ...(cashFacts !== null && cashFacts !== undefined ? { cash_facts: cashFacts } : {}),
   };
 
   return {

@@ -223,12 +223,19 @@ def map_published_response(
             if view["calculation_status"] != "available":
                 continue
             amounts = view["amounts"]
-            if not any(frozenset(pair) not in conflicts for pair in combinations(amounts, 2)):
+            individual_only = catalog.get("individual_only", False)
+            if individual_only or not any(
+                frozenset(pair) not in conflicts for pair in combinations(amounts, 2)
+            ):
                 result["fallback_list"] = [
                     {
                         "policy_id": key,
                         "amount_in_period_won": amounts[key],
-                        "reason": "함께 받을 두 정책 이상인 조합을 만들 수 없어 개별 정책을 표시해요.",
+                        "reason": (
+                            "입력 조건에 맞는 로컬 자료의 개별 추정액이에요."
+                            if individual_only
+                            else "함께 받을 두 정책 이상인 조합을 만들 수 없어 개별 정책을 표시해요."
+                        ),
                     }
                     for key in sorted(amounts, key=lambda key: (-amounts[key], key))[:5]
                 ]

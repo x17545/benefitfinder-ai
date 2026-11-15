@@ -10,11 +10,15 @@ Run from the repository root with:
 from __future__ import annotations
 
 import os
+from datetime import datetime
 
 from benefitfinder.ai.policy_explanation import GroundedPolicyExplainer
 from benefitfinder.bootstrap import create_app
 from benefitfinder.infrastructure.compatible_llm import CompatibleExplanationCompletion
 from benefitfinder.infrastructure.llm_settings import LLMSettings
+
+local_cash_file = os.environ.get("LOCAL_CASH_POLICY_FILE") or None
+reference_at = os.environ.get("LOCAL_CASH_REFERENCE_AT") or None
 
 settings = LLMSettings.from_env()
 
@@ -35,4 +39,6 @@ app = create_app(
 
     policy_database_url=os.environ.get("POLICY_DATABASE_URL") or None,
     explanation_generator=explanation_generator,
+    local_cash_policy_file=local_cash_file,
+    local_cash_reference_at=datetime.fromisoformat(reference_at) if reference_at else None,
 )
