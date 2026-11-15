@@ -1,8 +1,8 @@
 """청년 정책 추천 API 라우터."""
 
+import asyncio
 from collections.abc import Callable
 from typing import Any
-from time import monotonic
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
@@ -31,11 +31,6 @@ def get_service_catalog(request: Request) -> ServiceRecommendations:
     return request.app.state.service_catalog
 
 
-def get_discount_rate(request: Request) -> float | None:
-    request.state.analysis_started_at = getattr(request.state, "analysis_started_at", monotonic())
-    return request.app.state.read_discount_rate()
-
-
 router = APIRouter(
     prefix="/api/v1",
     tags=["recommendations"],
@@ -55,7 +50,6 @@ async def create_recommendations(
     recommendation_service: Callable[..., dict[str, Any]] = Depends(get_recommendation_service),
     recommendation_explainer: RecommendationExplainer = Depends(get_recommendation_explainer),
     service_catalog: ServiceRecommendations = Depends(get_service_catalog),
-    annual_rate: float | None = Depends(get_discount_rate),
 ) -> Response:
     """조립된 게시 정책 또는 명시적인 개발 예제로 추천한다."""
 
@@ -68,6 +62,7 @@ async def create_recommendations(
     await reserve_analysis(http_request)
 
     async def analyze(progress):
+        annual_rate = await asyncio.to_thread(http_request.app.state.read_discount_rate)
         return await run_recommendation(
             request,
             calculate=recommendation_service,
@@ -80,6 +75,5 @@ async def create_recommendations(
     return await analysis_response(
         http_request,
         analyze,
-        timeout_seconds=http_request.app.state.analysis_timeout_seconds,
         stream=wants_event_stream(http_request.headers.get("accept", "")),
     )

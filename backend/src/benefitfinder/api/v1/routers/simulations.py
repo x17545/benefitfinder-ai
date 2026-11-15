@@ -54,6 +54,5 @@ async def create_simulation(
     return await analysis_response(
         http_request,
         analyze,
-        timeout_seconds=http_request.app.state.analysis_timeout_seconds,
         stream=False,
     )

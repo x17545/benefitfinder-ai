@@ -7,7 +7,7 @@ from collections.abc import Awaitable, Callable
 from contextlib import suppress
 import json
 import time
-from typing import Any
+from typing import Any, TypeVar
 import uuid
 
 from fastapi import HTTPException, Request
@@ -17,6 +17,7 @@ from benefitfinder.api.schemas import ErrorResponse
 from benefitfinder.application.recommendation_flow import Progress
 
 Analysis = Callable[[Progress], Awaitable[dict[str, Any]]]
+_T = TypeVar("_T")
 
 
 def wants_event_stream(accept: str) -> bool:
@@ -62,25 +63,31 @@ def frame(event: str, data: dict[str, Any]) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False, allow_nan=False)}\n\n"
 
 
-async def analysis_response(
-    request: Request,
-    analyze: Analysis,
-    *,
-    timeout_seconds: float,
-    stream: bool,
-) -> Response:
-    started = getattr(request.state, "analysis_started_at", time.monotonic())
+async def within_analysis_budget(
+    request: Request, operation: Callable[[], Awaitable[_T]],
+) -> _T:
+    """Apply a single deadline to admission and all subsequent analysis work."""
+    now = time.monotonic()
+    started = getattr(request.state, "analysis_started_at", now)
+    request.state.analysis_started_at = started
+    remaining = request.app.state.analysis_timeout_seconds - (now - started)
+    if remaining <= 0:
+        raise HTTPException(status_code=503, detail="calculation_limit_exceeded")
+    deadline = asyncio.timeout(remaining)
+    try:
+        async with deadline:
+            return await operation()
+    except TimeoutError:
+        if not deadline.expired():
+            raise
+        raise HTTPException(status_code=503, detail="calculation_limit_exceeded") from None
 
+
+async def analysis_response(
+    request: Request, analyze: Analysis, *, stream: bool,
+) -> Response:
     async def run(progress: Progress) -> dict[str, Any]:
-        remaining = max(0, timeout_seconds - (time.monotonic() - started))
-        deadline = asyncio.timeout(remaining)
-        try:
-            async with deadline:
-                return await analyze(progress)
-        except TimeoutError:
-            if not deadline.expired():
-                raise
-            raise HTTPException(status_code=503, detail="calculation_limit_exceeded") from None
+        return await within_analysis_budget(request, lambda: analyze(progress))
 
     if not stream:
         try:
