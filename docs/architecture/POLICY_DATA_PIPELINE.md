@@ -12,24 +12,39 @@
 
 ## 2. 데이터 준비와 사용자 요청
 
+아래는 목표 흐름이다. **승인된 버전**이 준비와 계산을 이어 준다.
+
 ```mermaid
-flowchart TD
-    API[공식 API] --> Collect[정책·원문·출처·버전 수집]
-    Docs[공식 공고·사업 지침·FAQ] --> Collect
-    Collect --> Agent[Agent: 관련 조항 탐색·규칙 후보 추출]
-    Agent --> Check[형식·인용·정책 연결·일관성 검사]
-    Check --> Review[사람 검수·가상 사례 검증]
-    Review -->|승인| Rules[(게시된 정책·규칙 버전)]
-    Check -->|누락·상충| Pending[검수 대기·확인 필요]
-    Review -->|미해결| Pending
-    Profile[사용자 선택 조건] --> Calc[코드: 자격·적용 제약 판정·조합 계산]
-    Rules --> Calc
-    Calc --> Rank[총액순 조합·근거·확인 필요 표시]
+---
+config:
+  flowchart:
+    nodeSpacing: 24
+    rankSpacing: 30
+---
+flowchart TB
+    Sources["공식 API·공고·지침·FAQ"] --> Collect["수집 · 원문과 버전 보존"]
+    Collect --> Agent["Agent · 규칙 후보 추출"]
+    Agent --> Check["형식·근거·일관성 검사"]
+    Check -->|"통과"| Review["사람 검수·가상 사례 검증"]
+    Check -->|"누락·상충"| Pending["검수 대기 · 확인 필요"]
+    Review -->|"미해결"| Pending
+    Review -->|"승인"| Rules[("게시된 정책·규칙 버전")]
+
+    classDef ai fill:#F2E9FF,stroke:#7251A3,color:#3E2869;
+    classDef published fill:#DDF7ED,stroke:#137A60,color:#073F33,stroke-width:2px;
+    classDef pending fill:#FFF2D5,stroke:#A66A12,color:#593509;
+    class Agent ai;
+    class Rules published;
+    class Pending pending;
 ```
 
 Agent는 허용된 공식 자료 조회, 연결 문서 확인, 조항 추출, 누락 검사와 재추출을 수행하도록 설계한다. 관련 문서를 찾아 해석하는 데이터 준비의 검색 방식은 별도 필요에 따라 정한다. 사용자 요청의 F13은 게시 조항을 DB에서 조회해 선택적으로 설명하며 임베딩·벡터 검색을 전제하지 않는다. 원문 분석은 갱신 작업에서 수행하고, 사용자 요청마다 웹 탐색과 모델 해석을 반복하는 흐름을 기본으로 삼지 않는다.
 
-게시된 규칙이 있으면 사용자 검색·계산은 LLM 없이 동작한다. 데이터 Agent에 사용자 프로필을 보낼 필요가 없으며, 입력은 공개 정책 문서와 정책 식별 정보로 제한한다. 추천 이유는 코드 결과와 검수한 근거의 템플릿을 기본으로 한다.
+| 구분 | 다루는 입력 | 결과 |
+| --- | --- | --- |
+| 정책 준비 | 공개 정책 문서와 정책 식별 정보 | Agent가 규칙 후보를 만들고 사람이 검수한다 |
+| 사용자 계산 | 선택 조건과 게시된 규칙 | 코드가 LLM 없이 검색·자격 판정·조합 계산을 실행한다 |
+| 사용자 설명 | 코드 결과와 검수한 원문 근거 | 기본은 템플릿이며, F13은 게시 조항을 찾아 선택적으로 생성한다 |
 
 ## 3. 규칙 후보에 남길 정보
 

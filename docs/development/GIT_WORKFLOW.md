@@ -4,6 +4,33 @@
 예시 명령은 상황별로 나눠져 있다. 통째로 복사해 한 번에 실행하지 않는다.
 각 코드블록은 해당 상황에서만 순서대로 실행한다.
 
+## 작업 흐름 한눈에 보기
+
+```mermaid
+---
+config:
+  flowchart:
+    nodeSpacing: 24
+    rankSpacing: 30
+---
+flowchart TB
+    Commit["작업 브랜치에서 커밋"] --> Sync["최신 origin/main 합치기"]
+    Sync --> Check{"전체 PR 검사 통과?"}
+    Check -->|"실패"| Fix["원인 수정 후 재검사"]
+    Fix --> Check
+    Check -->|"통과"| Push["작업 브랜치 push"]
+    Push --> PR["main 대상 PR 만들기"]
+    PR --> Review["리뷰와 CI 확인"]
+
+    classDef primary fill:#E8F1FF,stroke:#3863A3,color:#152F56;
+    classDef pending fill:#FFF2D5,stroke:#A66A12,color:#593509;
+    class Sync,PR primary;
+    class Fix pending;
+```
+
+- **동기화 방향:** 최신 `origin/main` → **내 작업 브랜치**. [최신 main을 합치고](#8-완료-전-main-동기화) [충돌을 해결한 뒤 검사](#9-충돌-해결)한다.
+- **반영 요청 방향:** 내 작업 브랜치 → **`main` 대상 PR**. [11장 push와 PR](#11-push와-pr-만들기)
+
 ## 1. 핵심 원칙
 
 1. main에서 직접 작업하지 않고 main에 직접 push하지 않는다.
