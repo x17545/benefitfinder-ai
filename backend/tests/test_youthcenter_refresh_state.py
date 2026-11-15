@@ -40,7 +40,7 @@ run_youthcenter_refresh(root, build, lambda: datetime.now(timezone.utc))
 
 
 def _complete(staging: Path, previous: Path | None) -> CollectionResult:
-    (staging / "example.json").write_text("{}\n", encoding="utf-8")
+    (staging / "example.json").write_bytes(b"{}\n")
     return CollectionResult("youthcenter", AT, (), (), (), True)
 
 

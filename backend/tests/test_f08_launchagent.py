@@ -7,6 +7,7 @@ import subprocess
 import sys
 import time
 import zoneinfo
+import unittest
 from contextlib import redirect_stderr
 from io import StringIO
 from pathlib import Path
@@ -16,8 +17,11 @@ from unittest.mock import patch
 
 from scripts import f08_launchagent as gen
 
-FAKE_UV = "/usr/local/bin/uv"
-
+FAKE_UV = (
+    str(Path("C:/").resolve() / "usr/local/bin/uv")
+    if os.name == "nt"
+    else "/usr/local/bin/uv"
+)
 
 def _required_tzif_path(name: str) -> Path:
     for root in zoneinfo.TZPATH:
@@ -64,8 +68,14 @@ class LaunchAgentTests(TestCase):
         self.assertEqual(data["StartCalendarInterval"], {"Hour": 3, "Minute": 0})
         self.assertIs(data["RunAtLoad"], False)
         self.assertEqual(data["WorkingDirectory"], proj)
-        self.assertEqual(data["StandardOutPath"], dat + "/logs/f08.stdout.log")
-        self.assertEqual(data["StandardErrorPath"], dat + "/logs/f08.stderr.log")
+        self.assertEqual(
+            data["StandardOutPath"],
+            str(Path(dat) / "logs" / "f08.stdout.log"),
+        )
+        self.assertEqual(
+            data["StandardErrorPath"],
+            str(Path(dat) / "logs" / "f08.stderr.log"),
+        )
         self.assertEqual(
             data["ProgramArguments"],
             [
@@ -76,7 +86,10 @@ class LaunchAgentTests(TestCase):
                 "--project",
                 proj,
                 "--env-file",
-                env,
+                "".join(
+                    "\\" + char if char == "\\" or char.isspace() else char
+                    for char in env
+                ),
                 "python",
                 "-m",
                 "benefitfinder.jobs",
@@ -102,6 +115,7 @@ class LaunchAgentTests(TestCase):
         self.assertFalse(self.output.exists())
         self.assertIn("launchd", err.getvalue())
 
+    @unittest.skipUnless(hasattr(time, "tzset"), "requires time.tzset")
     def test_timezone_probe_ignores_process_tz(self) -> None:
         self.addCleanup(time.tzset)
         cases = (
