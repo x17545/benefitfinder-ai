@@ -122,3 +122,15 @@ describe.each([
     expect(html).not.toContain('공식 페이지 보기');
   });
 });
+
+it.each(['url', 'document_version'] as const)(
+  'does not attach a direct application link to a result from a different %s',
+  (field) => {
+    const current = benefit({ status: 'open', starts_on: null, ends_on: null, url: APPLICATION_URL });
+    current.source[field] = field === 'url' ? 'https://new-source.example.test/P1' : 'test-v2';
+    const html = renderPolicyCard(current);
+    expect(html).toContain('자세히 보기');
+    expect(html).not.toContain('신청하러 가기');
+    expect(html).not.toContain(APPLICATION_URL);
+  },
+);

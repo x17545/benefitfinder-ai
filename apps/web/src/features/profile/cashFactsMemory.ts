@@ -3,6 +3,7 @@
 // Attached as domain_data.cash_facts only for DEV + VITE_LOCAL_CASH_POLICY_INPUT=1
 // for the current district. The cash_facts shape lives in contracts/v1 and
 // the generated youth-profile type; this file only gates and holds the values.
+import { clearAnalysis } from '../benefits/analysisStore.ts';
 import type { YouthProfileExtension } from '../../shared/api/generated/youth-profile.ts';
 
 export type CashFacts = NonNullable<NonNullable<YouthProfileExtension['domain_data']>['cash_facts']>;
@@ -23,11 +24,19 @@ export function getCashFactsForRegion(regionCode: string | null): CashFacts | nu
 }
 
 export function setCashFactsForRegion(regionCode: string, facts: CashFacts | null): void {
+  const hadFacts = memory !== null;
   memoryRegion = regionCode;
   memory = facts;
+  if (hadFacts || facts !== null) {
+    clearAnalysis();
+  }
 }
 
 export function clearCashFacts(): void {
+  const hadFacts = memory !== null;
   memory = null;
   memoryRegion = null;
+  if (hadFacts) {
+    clearAnalysis();
+  }
 }

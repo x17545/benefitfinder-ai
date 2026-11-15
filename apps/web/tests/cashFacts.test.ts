@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { getAnalysisState, startAnalysis } from '../src/features/benefits/analysisStore.ts';
+import recommendation from '../../../contracts/fixtures/recommendation-response.json';
 import { EMPTY_ANSWERS } from '../src/features/profile/flowStore.ts';
 import type { ConditionAnswers } from '../src/features/profile/flowStore.ts';
 import {
@@ -42,6 +44,7 @@ const FACTS: CashFacts = {
 afterEach(() => {
   clearCashFacts();
   vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
 });
 
 describe('cash_facts request building', () => {
@@ -87,4 +90,32 @@ describe('cash facts module memory', () => {
     clearCashFacts();
     expect(getCashFactsForRegion('41820')).toBeNull();
   });
+});
+
+it('invalidates the result when exact cash facts are changed or cleared', async () => {
+  vi.stubEnv('VITE_LOCAL_CASH_POLICY_INPUT', '1');
+  const storage = new Map<string, string>();
+  vi.stubGlobal('window', {
+    setTimeout, clearTimeout,
+    sessionStorage: {
+      getItem: (key: string) => storage.get(key) ?? null,
+      setItem: (key: string, value: string) => storage.set(key, value),
+      removeItem: (key: string) => storage.delete(key),
+    },
+  });
+  vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(JSON.stringify(recommendation), {
+    headers: { 'Content-Type': 'application/json' },
+  }))));
+  setCashFactsForRegion('41280', FACTS);
+  startAnalysis(toRecommendationRequest(BASE, FACTS));
+  await vi.waitFor(() => expect(getAnalysisState().status).toBe('done'));
+  setCashFactsForRegion('41280', { ...FACTS, birth_date: '2001-03-16' });
+  expect(getAnalysisState().status).toBe('idle');
+  expect(storage.has('ypm.lastResult')).toBe(false);
+
+  startAnalysis(toRecommendationRequest(BASE, FACTS));
+  await vi.waitFor(() => expect(getAnalysisState().status).toBe('done'));
+  clearCashFacts();
+  expect(getAnalysisState().status).toBe('idle');
+  expect(storage.has('ypm.lastResult')).toBe(false);
 });

@@ -17,7 +17,12 @@ vi.mock('react', () => ({
   useEffect: (effect: EffectCallback) => { hook.effects.push(effect); },
 }));
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  hook.info = new Map();
+  hook.changes = 0;
+  hook.effects = [];
+});
 
 it('leaves malformed public details out of the UI map and allows a later valid retry', async () => {
   vi.resetModules();
@@ -25,7 +30,8 @@ it('leaves malformed public details out of the UI map and allows a later valid r
   if (!isNormalizedBenefit(benefit)) { throw new Error('invalid fixture'); }
   const fetchFn = vi.fn()
     .mockResolvedValueOnce(new Response(JSON.stringify({ ...benefit, conflicts: {} })))
-    .mockResolvedValueOnce(new Response(fixtureText));
+    .mockResolvedValueOnce(new Response(fixtureText))
+    .mockResolvedValueOnce(new Response(null, { status: 404 }));
   vi.stubGlobal('fetch', fetchFn);
   const { usePolicyInfo } = await import('../src/features/benefits/policyInfo.ts');
 
@@ -34,12 +40,13 @@ it('leaves malformed public details out of the UI map and allows a later valid r
   await vi.waitFor(() => expect(hook.changes).toBe(1));
   expect(hook.info.size).toBe(0);
 
-  // 다음 화면 진입 때 실패한 상세는 다시 받으며, 검증된 값만 공유 캐시에 남긴다.
+  // 같은 페이지를 다시 열 때 복구된 상세를 받고, 이후 게시 취소도 반영한다.
   usePolicyInfo([benefit.id]);
   hook.effects.pop()?.();
   await vi.waitFor(() => expect(hook.info.get(benefit.id)).toEqual(benefit));
   usePolicyInfo([benefit.id]);
   hook.effects.pop()?.();
   await vi.waitFor(() => expect(hook.changes).toBe(3));
-  expect(fetchFn).toHaveBeenCalledTimes(2);
+  expect(fetchFn).toHaveBeenCalledTimes(3);
+  expect(hook.info.has(benefit.id)).toBe(false);
 });
