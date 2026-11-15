@@ -69,10 +69,19 @@ export interface FetchBenefitOptions {
   fetchFn?: typeof fetch;
 }
 
+export class BenefitNotFoundError extends Error {
+  constructor() {
+    super('benefit request failed: HTTP 404');
+  }
+}
+
 /** GET /api/v1/benefits/{benefit_id} */
 export async function fetchBenefit(id: string, options: FetchBenefitOptions = {}): Promise<NormalizedBenefit> {
   const { signal, fetchFn = fetch } = options;
   const response = await fetchFn(`${BENEFITS_PATH}/${encodeURIComponent(id)}`, { signal });
+  if (response.status === 404) {
+    throw new BenefitNotFoundError();
+  }
   if (!response.ok) {
     throw new Error(`benefit request failed: HTTP ${response.status.toString()}`);
   }

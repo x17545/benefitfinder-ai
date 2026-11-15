@@ -2,6 +2,25 @@ import type { NormalizedBenefit } from '../../shared/api/benefits.ts';
 import type { RecommendationResponse, RecommendedService } from '../../shared/api/generated/recommendation-response.ts';
 import type { InKindService } from '../../shared/api/generated/service.ts';
 
+const SERVICE_FIELDS = [
+  'item', 'unit', 'quantity', 'estimated_value_won', 'unit_value_won', 'value_basis',
+  'value_source_url', 'value_checked_at', 'value_status',
+] as const satisfies readonly (keyof InKindService)[];
+
+/** Keep the server's saved total only when each current service still supports it. */
+export function matchesServiceSnapshot(entry: RecommendedService, benefit: NormalizedBenefit): boolean {
+  const service = benefit.service;
+  return service !== undefined && benefit.id === entry.policy_id &&
+    benefit.source.url === entry.source.url &&
+    benefit.source.document_version === entry.source.document_version &&
+    benefit.application.status !== 'closed' && benefit.application.status !== 'upcoming' &&
+    benefit.application.status === entry.application.status &&
+    benefit.application.starts_on === entry.application.starts_on &&
+    benefit.application.ends_on === entry.application.ends_on &&
+    benefit.application.url === entry.application.url &&
+    SERVICE_FIELDS.every((key) => service[key] === entry.service[key]);
+}
+
 /** 지난 분석을 복원해도 마감된 행과 그 합계를 다시 보여 주지 않는다. */
 export function hasExpiredServices(entries: readonly RecommendedService[] | undefined, now = new Date()): boolean {
   const today = new Date(now.getTime() + 9 * 3_600_000).toISOString().slice(0, 10);
