@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>프로젝트 문서 지도 · AI 혜택 코치</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --background: #f4f6ef;
+      --surface: #fff;
+      --ink: #172d26;
+      --muted: #475f54;
+      --line: #cbd9d0;
+      --accent: #16634e;
+      --soft: #e5f2e8;
+      --bridge: #173e32;
+      --on-bridge: #f3fff8;
+      font-family: system-ui, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+      line-height: 1.55;
+      word-break: keep-all;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --background: #111e19;
+        --surface: #1a2b23;
+        --ink: #ecf8ef;
+        --muted: #bbd1c3;
+        --line: #415a4b;
+        --accent: #a2e5bc;
+        --soft: #223d2e;
+        --bridge: #b8ead0;
+        --on-bridge: #132d22;
+      }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--background); color: var(--ink); }
+    .wrap { width: min(100% - 2rem, 67rem); margin-inline: auto; }
+    h1, h2, h3, p { margin: 0; }
+    a { color: var(--accent); text-underline-offset: .22em; }
+    a:hover { text-decoration-thickness: .13em; }
+    a:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+    .topbar { background: var(--surface); border-bottom: 1px solid var(--line); }
+    .topbar .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: .2rem 1rem; padding-block: .55rem; }
+    .topbar a { display: inline-flex; align-items: center; min-height: 2.75rem; }
+    .brand { color: var(--ink); font-weight: 800; }
+    .hero { padding-block: clamp(1.75rem, 4.5vw, 3.4rem) 1.45rem; }
+    .eyebrow { color: var(--accent); font-size: .8rem; font-weight: 800; letter-spacing: .065em; }
+    h1 { margin: .45rem 0 .65rem; font-size: clamp(2rem, 5.1vw, 3.8rem); line-height: 1.12; letter-spacing: -.055em; }
+    .intro { color: var(--muted); max-width: 38rem; }
+    .jumps { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1.1rem; }
+    .jumps a {
+      display: inline-flex;
+      align-items: center;
+      min-height: 2.75rem;
+      padding: .35rem .8rem;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 2rem;
+      font-size: .91rem;
+      font-weight: 700;
+      text-decoration: none;
+    }
+    .jumps a:hover { background: var(--soft); }
+    main { padding-bottom: 2rem; }
+    section { scroll-margin-top: 1rem; }
+    .lane-head { display: flex; flex-wrap: wrap; gap: .15rem 1rem; align-items: baseline; margin-bottom: .65rem; }
+    h2 { font-size: clamp(1.25rem, 3vw, 1.65rem); letter-spacing: -.035em; }
+    .lane-head p { color: var(--muted); font-size: .9rem; }
+    .steps, .groups { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.35rem; }
+    .steps { list-style: none; margin: 0; padding: 0; counter-reset: stage; }
+    .stage, .group { border: 1px solid var(--line); border-radius: .95rem; background: var(--surface); padding: .95rem 1rem; }
+    .stage { position: relative; display: flex; flex-direction: column; counter-increment: stage; }
+    .stage:not(:last-child)::after {
+      content: "→" / "";
+      position: absolute;
+      top: calc(50% - .8rem);
+      left: calc(100% + .17rem);
+      width: 1rem;
+      color: var(--accent);
+      text-align: center;
+      font-weight: 800;
+    }
+    h3 { font-size: 1.04rem; letter-spacing: -.026em; }
+    .stage h3::before { content: counter(stage, decimal-leading-zero) / ""; margin-right: .4rem; color: var(--accent); font-variant-numeric: tabular-nums; font-size: .79rem; }
+    .stage p, .group p { color: var(--muted); margin: .32rem 0 .5rem; font-size: .88rem; }
+    .links { list-style: none; margin: 0; padding: 0; }
+    .stage .links { margin-top: auto; }
+    .links a { display: flex; align-items: center; width: fit-content; min-height: 2rem; font-size: .9rem; font-weight: 650; }
+    .bridge {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: .2rem .7rem;
+      margin: .95rem 0;
+      padding: .7rem 1rem;
+      border-radius: .7rem;
+      background: var(--bridge);
+      color: var(--on-bridge);
+      font-size: .91rem;
+    }
+    .bridge strong { font-size: .95rem; }
+    .directory { margin-top: 1.65rem; }
+    .groups { gap: .9rem; }
+    footer { padding: 1.05rem 0 1.6rem; border-top: 1px solid var(--line); font-size: .85rem; color: var(--muted); }
+    @media (max-width: 46rem) {
+      .steps, .groups { grid-template-columns: minmax(0, 1fr); }
+      .stage:not(:last-child)::after { content: "↓" / ""; top: calc(100% + .04rem); left: 1rem; }
+      .links a { min-height: 2.75rem; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="wrap">
+      <a class="brand" href="https://github.com/x17545/benefitfinder-ai#readme">AI 혜택 코치 README</a>
+      <a href="https://github.com/x17545/benefitfinder-ai/blob/main/docs/README.md">Markdown 문서 지도</a>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <div class="hero">
+      <p class="eyebrow">BENEFITFINDER AI · 문서 탐색</p>
+      <h1>프로젝트 문서 지도</h1>
+      <p class="intro">청년 취업·주거 지원금의 공식 원문이 어떻게 조합 추천으로 이어지는지, 관심 있는 단계에서 자세한 문서를 열어 보세요.</p>
+      <nav class="jumps" aria-label="지도에서 바로 이동">
+        <a href="#policy">정책 준비 ↓</a>
+        <a href="#experience">사용자 흐름 ↓</a>
+        <a href="#documents">목적별 문서 ↓</a>
+      </nav>
+    </div>
+
+    <section id="policy" aria-labelledby="policy-title">
+      <div class="lane-head">
+        <h2 id="policy-title">정책을 준비하는 흐름</h2>
+        <p>수집 · 분석 · 사람 검수 · 게시</p>
+      </div>
+      <ol class="steps">
+        <li class="stage">
+          <h3>공식 자료 수집</h3>
+          <p>공식 API와 공고·지침을 읽고 원문과 버전을 보존합니다.</p>
+          <ul class="links">
+            <li><a href="https://github.com/x17545/benefitfinder-ai/blob/main/docs/architecture/POLICY_DATA_PIPELINE.md">정책 데이터 준비 설계</a></li>
+            <li><a href="https://github.com/x17545/benefitfinder-ai/blob/main/backend/src/benefitfinder/jobs/DAILY_REFRESH.md">F08 갱신 실행과 운영 확인</a></li>
+          </ul>
+        </li>
+        <li class="stage">
+          <h3>후보 추출과 검수</h3>
+          <p>AI Agent가 자격·금액·중복 제한 후보와 원문을 찾고, 사람이 근거와 예외를 확인합니다.</p>
+          <ul class="links">
+            <li><a href="https://github.com/x17545/benefitfinder-ai/blob/main/backend/src/benefitfinder/infrastructure/database/F12_ANALYSIS.md">F12 공식 문서 분석</a></li>
+            <li><a href="https://github.com/x17545/benefitfinder-ai/blob/main/docs/architecture/POLICY_DATA_PIPELINE.md#4-검수게시-기준">검수와 게시 기준</a></li>
+          </ul>
+        </li>
+        <li class="stage">
+          <h3>승인 자료 게시</h3>
+          <p>승인된 정책·계산 규칙·근거를 같은 버전으로 게시합니다.</p>
+          <ul class="links">
+            <li><a href="https://github.com/x17545/benefitfinder-ai/blob/main/backend/src/benefitfinder/infrastructure/database/F12_CATALOG.md">승인 자료의 게시 절차</a></li>
+            <li><a href="https://github.com/x17545/benefitfinder-ai/blob/main/backend/src/benefitfinder/infrastructure/database/POLICY_CATALOG.md">현금 정책 카탈로그</a></li>
+          </ul>
+        </li>
+      </ol>
+    </section>
+
+    <p class="bridge"><span aria-hidden="true">↓</span><strong>게시된 정책·규칙·근거</strong> 실제 정책 모드에서 계산과 설명의 입력으로 사용합니다.</p>
+
+    <section id="experience" aria-labelledby="experience-title">
+      <div class="lane-head">
+        <h2 id="experience-title">사용자가 결과를 보는 흐름</h2>
+        <p>조건 입력 · 코드 계산 · 결과 확인</p>
+      </div>
+      <ol class="steps">
+        <li class="stage">
+          <h3>13단계 조건 선택</h3>
+          <p>연령·지역·소득·주거 등 내 상황을 고릅니다.</p>
+          <ul class="links">
+            <li><a href="https://github.com/x17545/benefitfinder-ai/blob/main/docs/product/REQUIREMENTS.md#f01-조건-선택-입력">F01 조건 입력 명세</a></li>
+            <li><a href="https://github.com/x17545/benefitfinder-ai/blob/main/docs/product/REQUIREMENTS.md#41-화면-목록과-흐름">화면 목록과 이동 흐름</a></li>
+          </ul>
+        </li>
+        <li class="stage">
+          <h3>자격과 조합 계산</h3>
+          <p>코드가 자격과 중복 수급 제한을 반영해 금액을 계산합니다. 모호한 조건은 확인이 필요하다고 표시합니다.</p>
+          <ul class="links">
+            <li><a href="https://github.com/x17545/benefitfinder-ai/blob/main/docs/product/REQUIREMENTS.md#f04-자격-진단">F04 자격 진단</a></li>
+            <li><a href="https://github.com/x17545/benefitfinder-ai/blob/main/docs/product/REQUIREMENTS.md#f05-최적-조합">F05 조합 계산</a></li>
+          </ul>
+        </li>
+        <li class="stage">
+          <h3>비교하고 신청 준비</h3>
+          <p>조합 총액·근거·상황 변화·정책 상세를 보고 공식 신청처를 확인합니다. AI 설명은 선택적으로 덧붙입니다.</p>
+          <ul class="links">
+            <li><a href="https://github.com/x17545/benefitfinder-ai/blob/main/docs/product/REQUIREMENTS.md#f06-상황-변화-분석-혜택-절벽">F06 상황 변화</a></li>
+            <li><a href="https://github.com/x17545/benefitfinder-ai/blob/main/docs/product/REQUIREMENTS.md#f07-정책-상세신청-안내">F07 상세·신청 안내</a></li>
+            <li><a href="https://github.com/x17545/benefitfinder-ai/blob/main/docs/product/REQUIREMENTS.md#f13-맞춤-설명-rag">F13 맞춤 설명</a></li>
+          </ul>
+        </li>
+      </ol>
+    </section>
+
+    <section class="directory" id="documents" aria-labelledby="documents-title">
+      <div class="lane-head">
+        <h2 id="documents-title">목적별 문서</h2>
+        <p>기획과 제출, 실행, 기술 설계</p>
+      </div>
+      <div class="groups">
+        <div class="group">
+          <h3>기획·평가</h3>
+          <p>목표·제출 기준과 검증 기록을 봅니다.</p>
+          <ul class="links">
+            <li><a href="https://github.com/x17545/benefitfinder-ai/blob/main/docs/product/PROJECT_PLAN.md">기획서</a></li>
+            <li><a href="https://github.com/x17545/benefitfinder-ai/blob/main/docs/README.md#구현-상태">현재 구현 상태</a></li>
+            <li><a href="https://github.com/x17545/benefitfinder-ai/blob/main/docs/product/USER_TEST.md">사용자 테스트</a></li>
+          </ul>
+        </div>
+        <div class="group">
+          <h3>실행·협업</h3>
+          <p>처음 실행하고 변경을 올리는 순서를 봅니다.</p>
+          <ul class="links">
+            <li><a href="https://github.com/x17545/benefitfinder-ai/blob/main/docs/development/GETTING_STARTED.md">설치와 로컬 실행</a></li>
+            <li><a href="https://github.com/x17545/benefitfinder-ai/blob/main/CONTRIBUTING.md">팀 협업과 검증</a></li>
+            <li><a href="https://github.com/x17545/benefitfinder-ai/blob/main/docs/development/GIT_WORKFLOW.md">Git과 PR 작업 절차</a></li>
+          </ul>
+        </div>
+        <div class="group">
+          <h3>구조·계약</h3>
+          <p>구현 위치와 데이터를 주고받는 경계를 확인합니다.</p>
+          <ul class="links">
+            <li><a href="https://github.com/x17545/benefitfinder-ai/blob/main/docs/architecture/ARCHITECTURE.md">시스템 아키텍처</a></li>
+            <li><a href="https://github.com/x17545/benefitfinder-ai/blob/main/contracts/README.md">API와 데이터 공용 계약</a></li>
+            <li><a href="https://github.com/x17545/benefitfinder-ai/blob/main/docs/product/REQUIREMENTS.md#9-팀원별-담당-기능-및-협업-기준">팀 담당과 인계</a></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">그림은 서비스와 데이터 준비의 전체 흐름입니다. 문서 링크는 GitHub의 main을 열며, 실제 운영·검증 범위는 현재 구현 상태에서 확인하세요.</div>
+  </footer>
+</body>
+</html>
