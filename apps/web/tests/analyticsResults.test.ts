@@ -379,6 +379,18 @@ describe('application-link handlers', () => {
     expect(propsOf(link).onClick).toBeUndefined();
   });
 
+  it('does not record an application click when the saved open policy has expired', () => {
+    const policy = firstPolicy();
+    const expired = benefitFor(policy.policy_id);
+    expired.application.ends_on = '2000-01-01';
+    const link = applyLink(renderPolicyCard(expired), 'ui-button--primary');
+    expect(link).toBeDefined();
+    if (link !== undefined) {
+      expect(propsOf(link).href).toBe(expired.source.url);
+      expect(propsOf(link).onClick).toBeUndefined();
+    }
+  });
+
   it('records fallback application clicks with rank null and guards sample/virtual links', () => {
     const policy = firstPolicy();
     const link = applyLink(renderFallback(benefitFor(policy.policy_id)), 'ui-button--primary');

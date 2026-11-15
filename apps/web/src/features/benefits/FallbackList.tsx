@@ -24,12 +24,12 @@ export function FallbackList({ items, info, virtualData }: FallbackListProps): J
         const now = new Date();
         const applicationState = benefit !== undefined ? recruitmentState(benefit.application, now) : null;
         const tag = benefit !== undefined ? recruitTag(benefit.application, now) : null;
-        const actionUrl = virtualData || benefit === undefined || benefit.virtual_data === true
+        const actionUrl = benefit === undefined || benefit.virtual_data === true
           ? null
           : applicationState === 'open'
             ? benefit.application.url ?? benefit.source.url
             : benefit.source.url;
-        const actualApplicationLink = actionUrl !== null && applicationState === 'open' &&
+        const actualApplicationLink = !virtualData && actionUrl !== null && applicationState === 'open' &&
           benefit?.application.url != null;
         return (
           <article key={item.policy_id} className="s3-policy">

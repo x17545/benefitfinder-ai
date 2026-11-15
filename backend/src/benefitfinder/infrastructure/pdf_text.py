@@ -5,7 +5,6 @@ import json
 import logging
 import os
 from pathlib import Path
-import resource
 import subprocess
 import sys
 from tempfile import TemporaryDirectory
@@ -57,10 +56,45 @@ def extract_pdf_pages(body: bytes) -> list[str]:
         raise ValueError('official_document_pdf_unavailable') from None
 
 
+def _darwin_virtual_size() -> int:
+    import ctypes
+    import struct
+
+    # XNU proc_info.h: PROC_PIDTASKINFO (4), struct proc_taskinfo.
+    layout = struct.Struct("=6Q12i")
+    info = ctypes.create_string_buffer(layout.size)
+    proc_pidinfo = ctypes.CDLL("/usr/lib/libproc.dylib").proc_pidinfo
+    proc_pidinfo.argtypes = (
+        ctypes.c_int, ctypes.c_int, ctypes.c_uint64, ctypes.c_void_p, ctypes.c_int,
+    )
+    proc_pidinfo.restype = ctypes.c_int
+    if proc_pidinfo(os.getpid(), 4, 0, info, layout.size) != layout.size:
+        raise OSError("pdf_worker_address_space_unavailable")
+    virtual_size = layout.unpack(info)[0]
+    if virtual_size == 0:
+        raise OSError("pdf_worker_address_space_unavailable")
+    return virtual_size
+
+
+def _limit_worker() -> None:
+    # Workers must fail closed when the OS cannot enforce the limits. Keeping the
+    # import here lets other job commands run on systems without resource.
+    import resource
+
+    address_space = 768 * 1024 * 1024
+    if sys.platform == "darwin":
+        # dyld and the allocator reserve virtual regions before the worker starts.
+        address_space += _darwin_virtual_size()
+    for kind, cap in ((resource.RLIMIT_AS, address_space), (resource.RLIMIT_CPU, 20)):
+        for inherited in resource.getrlimit(kind):
+            if inherited != resource.RLIM_INFINITY:
+                cap = min(cap, inherited)
+        resource.setrlimit(kind, (cap, cap))
+
+
 if __name__ == '__main__':
     try:
-        resource.setrlimit(resource.RLIMIT_AS, (768 * 1024 * 1024, 768 * 1024 * 1024))
-        resource.setrlimit(resource.RLIMIT_CPU, (20, 20))
+        _limit_worker()
         content = Path(sys.argv[1]).read_bytes()
         print(json.dumps(_extract(content), ensure_ascii=False))
     except Exception:
