@@ -1,16 +1,15 @@
 """청년 정책 추천 API 라우터."""
 
-from fastapi import APIRouter, Depends, HTTPException, Request
-from starlette.concurrency import run_in_threadpool
-
-from benefitfinder.api.schemas.recommendation import RecommendationRequest
 from collections.abc import Callable
 from typing import Any
-from benefitfinder.application.policy_explanations import ExplanationRequest
-from benefitfinder.application.response_mapper import (
-    build_recommendation_response,
-)
+
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import Response
+
+from benefitfinder.api.analysis_response import analysis_response, wants_event_stream
+from benefitfinder.api.schemas.recommendation import RecommendationRequest
 from benefitfinder.application.recommendation_explanations import RecommendationExplainer
+from benefitfinder.application.recommendation_flow import run_recommendation
 from benefitfinder.application.service_catalog import ServiceCatalog
 
 
@@ -40,14 +39,21 @@ router = APIRouter(
 )
 
 
-@router.post("/recommendations")
+@router.post(
+    "/recommendations",
+    response_model=None,
+    responses={
+        200: {"content": {"text/event-stream": {"schema": {"type": "string"}}}},
+    },
+)
 async def create_recommendations(
     request: RecommendationRequest,
+    http_request: Request,
     recommendation_service: Callable[..., dict[str, Any]] = Depends(get_recommendation_service),
     recommendation_explainer: RecommendationExplainer = Depends(get_recommendation_explainer),
     service_catalog: ServiceCatalog = Depends(get_service_catalog),
     annual_rate: float | None = Depends(get_discount_rate),
-) -> dict[str, Any]:
+) -> Response:
     """조립된 게시 정책 또는 명시적인 개발 예제로 추천한다."""
 
     if request.domain != "youth":
@@ -56,24 +62,19 @@ async def create_recommendations(
             detail="unsupported_domain",
         )
 
-    calculation = await run_in_threadpool(
-        recommendation_service,
-        request,
-        annual_rate=annual_rate,
-    )
-
-    response = build_recommendation_response(
-        calculation=calculation,
-        annual_rate=annual_rate,
-    )
-    response.update(service_catalog.recommend(request.domain, request.profile))
-
-    if "catalog" in calculation:
-        policies = tuple(
-            ExplanationRequest(
-                policy_id=key, policy_name=detail["title"], category=detail["categories"][0],
-                document_version=detail["source"]["document_version"], amount_won=None,
-            ) for key, detail in calculation["catalog"]["details"].items()
+    async def analyze(progress):
+        return await run_recommendation(
+            request,
+            calculate=recommendation_service,
+            annual_rate=annual_rate,
+            services=service_catalog,
+            explainer=recommendation_explainer,
+            progress=progress,
         )
-        return await recommendation_explainer.enrich(response, policies=policies)
-    return await recommendation_explainer.enrich(response)
+
+    return await analysis_response(
+        http_request,
+        analyze,
+        timeout_seconds=http_request.app.state.analysis_timeout_seconds,
+        stream=wants_event_stream(http_request.headers.get("accept", "")),
+    )
