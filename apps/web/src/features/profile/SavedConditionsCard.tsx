@@ -1,8 +1,9 @@
 import type { JSX } from 'react';
 import { navigate, paths } from '../../app/router.ts';
+import { trackEvent } from '../../shared/analytics/events.ts';
 import { Button } from '../../shared/ui/Button.tsx';
 import { conditionSummary } from './conditionSummary.ts';
-import { updateAnswers, updateFlowState } from './flowStore.ts';
+import { getFlowState, updateAnswers, updateFlowState } from './flowStore.ts';
 import { useRegionOptions } from './regionOptions.ts';
 import type { SavedConditions } from './savedConditions.ts';
 import { isValidRegionSelection, normalizeRegionAnswers } from './regionSelection.ts';
@@ -27,6 +28,9 @@ export function SavedConditionsCard({ saved, onClear }: SavedConditionsCardProps
   function startAgain(): void {
     if (state.status !== 'ready') { return; }
     // 저장할 때 이미 동의했으므로 동의와 기억하기를 켠 상태로 다시 분석한다
+    if (!getFlowState().remember) {
+      trackEvent({ name: 'remember_on' });
+    }
     updateFlowState({ consent: true, remember: true });
     updateAnswers(answers);
     navigate(regionOk ? paths.loading : paths.conditions(2));

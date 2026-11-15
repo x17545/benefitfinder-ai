@@ -1,7 +1,9 @@
+import { useEffect, useRef } from 'react';
 import type { JSX } from 'react';
 import { CONDITION_STEPS, navigate, paths } from '../../app/router.ts';
 import { conditionLabel } from '../../domains/youth/conditionLabels.ts';
 import type { NormalizedBenefit } from '../../shared/api/benefits.ts';
+import { trackEvent } from '../../shared/analytics/events.ts';
 import { SiteFooter } from '../../shared/ui/SiteFooter.tsx';
 import { StatusChip } from '../../shared/ui/StatusChip.tsx';
 import { TopBar } from '../../shared/ui/TopBar.tsx';
@@ -35,6 +37,7 @@ interface PolicyDetailScreenProps {
 
 /** S5 정책 상세 (기획서 4.7). 주소 /policy/{정책ID} */
 export function PolicyDetailScreen({ policyId }: PolicyDetailScreenProps): JSX.Element {
+  const viewedPolicyId = useRef<string | null>(null);
   const { state, retry } = usePolicyDetail(policyId);
   const analysis = useAnalysis();
   const { consent } = useFlowState();
@@ -49,6 +52,14 @@ export function PolicyDetailScreen({ policyId }: PolicyDetailScreenProps): JSX.E
   const conditionsHref = consent ? paths.conditions(result !== null ? CONDITION_STEPS : 1) : paths.start;
 
   const title = state.status === 'ok' ? state.benefit.title : '정책 상세';
+
+  useEffect(() => {
+    if (viewedPolicyId.current === policyId) {
+      return;
+    }
+    viewedPolicyId.current = policyId;
+    trackEvent({ name: 'detail_view', policy_id: policyId });
+  }, [policyId]);
 
   return (
     <div className="page-width screen">
@@ -112,6 +123,7 @@ function PolicyDetail({ benefit, isSample, mine, serviceDiagnosis, hasAnalysis, 
   const closed = applicationState === 'closed';
   const applicationUrl = applicationState === 'open' ? benefit.application.url : null;
   const applyUrl = applicationUrl ?? benefit.source.url;
+  const actualApplicationLink = !virtualData && benefit.virtual_data !== true && applicationUrl !== null;
   const conflicts = benefit.conflicts ?? [];
   const conflictInfo = usePolicyInfo(isSample ? [] : conflicts.map((conflict) => conflict.policy_id));
   const diagnosis = service !== null ? serviceDiagnosis : mine?.eligibility ?? null;
@@ -293,6 +305,9 @@ function PolicyDetail({ benefit, isSample, mine, serviceDiagnosis, hasAnalysis, 
           href={applyUrl}
           target="_blank"
           rel="noopener noreferrer"
+          onClick={actualApplicationLink ? () => {
+            trackEvent({ name: 'apply_click', policy_id: benefit.id, from: 'detail', rank: null });
+          } : undefined}
         >
           {applicationUrl !== null ? '신청하러 가기 ↗' : '공식 페이지 보기 ↗'}
         </a>}

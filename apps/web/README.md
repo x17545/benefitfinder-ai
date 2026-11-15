@@ -84,6 +84,12 @@ pnpm --filter @benefitfinder/web test           # vitest run
 
 화면 이동·창 포커스 복귀·추천 완료/실패와 상황 변화 요청 완료 후 다시 조회한다. 중복 요청은 이전 요청을 취소하고 늦게 도착한 결과는 버린다. 앱을 벗어나면 요청과 포커스 구독을 정리한다. 메타데이터는 메모리에만 두며 사용자 조건을 보내거나 저장하지 않는다. 이미 받은 추천의 금액·현재가치·순위를 이 값으로 다시 계산하지 않는다. 03시 실제 자동 갱신 완료 여부는 메타 응답만으로 보장하지 않는다.
 
+### F11 이용 통계
+
+화면 동작의 통계 이벤트는 기능 명세 6.6의 17개 이름과 허용된 숫자·상태·정책 ID만 전송한다. 브라우저는 외부 추적 스크립트를 불러오지 않으며, 같은 출처의 `/api/v1/analytics/config`가 사용 중이라고 확인한 환경에서만 `/api/v1/analytics/events`를 호출한다. 조건·프로필·원문 URL·오류 문장은 전송하지 않는다. 쿠키·브라우저 저장소 없이 탭 메모리에 임시 UUID를 만들며, 새로고침·내 정보 삭제 때 폐기한다. 브라우저 추적 거부를 존중하고 통계 실패가 분석을 중단하지 않는다.
+
+GA4 측정 ID와 Measurement Protocol API 비밀키는 백엔드에만 둔다. 기본값은 꺼짐이다. [설정·검증 안내](../../backend/src/benefitfinder/infrastructure/ANALYTICS.md)를 따르며, 실제 조장 계정 수신·팀원 보기 권한 부여는 별도 확인이 필요하다.
+
 ### Vercel 배포 연결
 
 Vercel의 프로젝트 Root Directory는 `apps/web`이며 `vercel.ts`가 `/api/*`·`/health`를 먼저 백엔드로 보내고 나머지 화면 주소는 `/index.html`로 연결한다. `/privacy`, `/about`, `/result` 직접 접근·새로고침도 SPA 라우터가 처리한다. [공식 프로그램 설정 안내](https://vercel.com/docs/project-configuration/vercel-ts)의 `config` export 형식을 사용하며 별도 런타임 의존성을 추가하지 않는다.

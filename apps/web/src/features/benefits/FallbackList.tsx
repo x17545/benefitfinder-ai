@@ -1,6 +1,7 @@
 import type { JSX } from 'react';
 import { paths } from '../../app/router.ts';
 import type { NormalizedBenefit } from '../../shared/api/benefits.ts';
+import { trackEvent } from '../../shared/analytics/events.ts';
 import { AmountBreakdown } from './AmountBreakdown.tsx';
 import { formatManWon, recruitTag, recruitmentState } from './format.ts';
 import { policyName } from './resultModel.ts';
@@ -11,10 +12,11 @@ type FallbackItem = NonNullable<ResultView['fallback_list']>[number];
 interface FallbackListProps {
   items: readonly FallbackItem[];
   info: ReadonlyMap<string, NormalizedBenefit>;
+  virtualData: boolean;
 }
 
 /** 조합을 못 만들 때: 받을 수 있는 정책 최대 5개 목록 (기획서 4.5 예외 화면) */
-export function FallbackList({ items, info }: FallbackListProps): JSX.Element {
+export function FallbackList({ items, info, virtualData }: FallbackListProps): JSX.Element {
   return (
     <div className="s3-policies">
       {items.map((item) => {
@@ -22,11 +24,13 @@ export function FallbackList({ items, info }: FallbackListProps): JSX.Element {
         const now = new Date();
         const applicationState = benefit !== undefined ? recruitmentState(benefit.application, now) : null;
         const tag = benefit !== undefined ? recruitTag(benefit.application, now) : null;
-        const actionUrl = benefit === undefined || benefit.virtual_data === true
+        const actionUrl = virtualData || benefit === undefined || benefit.virtual_data === true
           ? null
           : applicationState === 'open'
             ? benefit.application.url ?? benefit.source.url
             : benefit.source.url;
+        const actualApplicationLink = actionUrl !== null && applicationState === 'open' &&
+          benefit?.application.url != null;
         return (
           <article key={item.policy_id} className="s3-policy">
             <a className="s3-policy__main" href={paths.policy(item.policy_id)}>
@@ -58,7 +62,10 @@ export function FallbackList({ items, info }: FallbackListProps): JSX.Element {
                 자세히 보기
               </a>
               {actionUrl !== null ? (
-                <a className="ui-button ui-button--primary" href={actionUrl} target="_blank" rel="noopener noreferrer">
+                <a className="ui-button ui-button--primary" href={actionUrl} target="_blank" rel="noopener noreferrer"
+                  onClick={actualApplicationLink ? () => {
+                    trackEvent({ name: 'apply_click', policy_id: item.policy_id, from: 'result', rank: null });
+                  } : undefined}>
                   {applicationState === 'open' ? '신청하러 가기 ↗' : '공식 페이지 보기 ↗'}
                 </a>
               ) : null}

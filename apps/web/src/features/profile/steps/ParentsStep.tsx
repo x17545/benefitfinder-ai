@@ -5,6 +5,7 @@ import {
   PARENT_ASSET_CHOICES,
   PARENT_INCOME_CHOICES,
 } from '../../../domains/youth/conditionOptions.ts';
+import { trackEvent } from '../../../shared/analytics/events.ts';
 import { ConditionStepLayout } from '../ConditionStepLayout.tsx';
 import { updateAnswers, useFlowState } from '../flowStore.ts';
 import { ChipQuestion } from './ChipQuestion.tsx';
@@ -18,6 +19,7 @@ export function ParentsStep(): JSX.Element {
   const married = marital === 'married';
 
   function skip(): void {
+    trackEvent({ name: 'step_skip' });
     updateAnswers({ parentsSkipped: true, householdSize: null, parentIncome: null, parentAsset: null });
     navigate(paths.conditions(13));
   }

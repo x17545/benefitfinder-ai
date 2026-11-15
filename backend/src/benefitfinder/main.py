@@ -12,7 +12,7 @@ from __future__ import annotations
 import os
 
 from benefitfinder.ai.policy_explanation import GroundedPolicyExplainer
-from benefitfinder.bootstrap import create_app
+from benefitfinder.bootstrap import analytics_service_from_environment, create_app
 from benefitfinder.infrastructure.compatible_llm import CompatibleExplanationCompletion
 from benefitfinder.infrastructure.llm_settings import LLMSettings
 
@@ -36,4 +36,5 @@ app = create_app(
     policy_database_url=os.environ.get("POLICY_DATABASE_URL") or None,
     explanation_generator=explanation_generator,
     base_rate_database_url=os.environ.get("BASE_RATE_DATABASE_URL") or None,
+    analytics_service=analytics_service_from_environment(os.environ),
 )
