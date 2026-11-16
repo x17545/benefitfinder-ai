@@ -253,6 +253,21 @@ class PostgresPolicyAnalysisTasks:
         except (psycopg.Error, OSError, ValueError):
             raise _store_error() from None
 
+    def renew(self, claim: AnalysisClaim) -> bool:
+        """Extend a live unchanged lease; an expired/stale token cannot be revived."""
+        if claim.analysis_version != self._version:
+            return False
+        try:
+            with self._connect() as connection:
+                return connection.execute("""UPDATE public.f12_analysis_tasks t
+                    SET lease_until=clock_timestamp()+interval '10 minutes'
+                    WHERE t.task_id=%s AND t.status='running' AND t.claim_token=%s
+                      AND t.analysis_version=%s AND t.lease_until>clock_timestamp() AND NOT """
+                    + _CHANGED + " RETURNING t.task_id",
+                    (claim.task_id, claim.token, self._version)).fetchone() is not None
+        except (psycopg.Error, OSError, ValueError):
+            raise _store_error() from None
+
     def complete(self, claim: AnalysisClaim, *, output_ref: str, output_sha256: str,
                  summary: dict[str, object]) -> str:
         if type(claim.analysis_version) is not int or claim.analysis_version != self._version:

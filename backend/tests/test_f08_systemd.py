@@ -36,6 +36,7 @@ class SystemdGeneratorTests(TestCase):
         uv: str = FAKE_UV,
         project_dir: Path | None = None,
         job: str | None = None,
+        run_time: str | None = None,
     ) -> list[str]:
         args = [
             "--env-file",
@@ -51,6 +52,8 @@ class SystemdGeneratorTests(TestCase):
         ]
         if job is not None:
             args.extend(("--job", job))
+        if run_time is not None:
+            args.extend(("--time", run_time))
         return args
 
     def _unit_text(self, name: str, output_dir: Path | None = None) -> str:
@@ -120,6 +123,32 @@ class SystemdGeneratorTests(TestCase):
         exec_start = self._exec_start(service)
         self.assertIn('"refresh-youthcenter"', exec_start)
         self.assertNotIn('"refresh-data"', exec_start)
+
+    def test_custom_daily_time_is_written_to_the_kst_timer(self) -> None:
+        self.assertEqual(gen.main(self._args(run_time="07:45")), 0)
+        timer = self._unit_text(gen.TIMER_NAME)
+        self.assertIn("OnCalendar=*-*-* 07:45:00 Asia/Seoul", timer)
+        self.assertNotIn("OnCalendar=*-*-* 03:00:00 Asia/Seoul", timer)
+
+    def test_time_injection_and_out_of_range_values_are_rejected_without_echo(self) -> None:
+        invalid_times = (
+            "24:00",
+            "23:60",
+            "9:30",
+            "03:00:00 Asia/Seoul",
+            "03:00\nOnCalendar=*-*-* 00:00:00 UTC",
+        )
+        for index, invalid in enumerate(invalid_times):
+            with self.subTest(invalid=invalid):
+                output_dir = self.tmp / f"invalid-time-{index}"
+                stderr = StringIO()
+                with redirect_stderr(stderr):
+                    code = gen.main(self._args(output_dir=output_dir, run_time=invalid))
+                self.assertEqual(code, 2)
+                self.assertIn("f08_systemd_invalid_path", stderr.getvalue())
+                self.assertNotIn(invalid, stderr.getvalue())
+                self.assertFalse((output_dir / gen.SERVICE_NAME).exists())
+                self.assertFalse((output_dir / gen.TIMER_NAME).exists())
 
     def test_special_paths_are_quoted_and_escaped_without_shell(self) -> None:
         root = self.tmp / "space % $ ' \" \\ root"

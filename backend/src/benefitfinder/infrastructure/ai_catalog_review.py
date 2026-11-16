@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+from collections.abc import Mapping
 from datetime import datetime, timezone
 from typing import Literal
 
@@ -120,17 +122,50 @@ def _verify_real_source(connection, record, source_text: str) -> None:
     fields = observed[0]
     expected_url = "https://www.youthcenter.go.kr/youthPolicy/ythPlcyTotalSearch/ythPlcyDetail/" + binding.external_id
     if (fields.get("plcyNo") != binding.external_id or fields.get("plcyNm") != record.benefit.title
-        or record.benefit.id != "youth:" + binding.external_id
+        or record.benefit.id not in {
+            "youth:" + binding.external_id,
+            "youth:youthcenter:" + binding.external_id,
+        }
         or record.benefit.source.url != expected_url
         or record.benefit.source.document_version != "sha256:" + binding.material_sha256
         or source_text != project_youthcenter_source(fields)):
         raise ValueError("ai_catalog_source_projection_mismatch")
 
 
+def _expected_previous_hashes(
+    policy_ids: set[str],
+    *,
+    allow_replace_ai: bool,
+    expected_previous: Mapping[str, str] | None,
+) -> dict[str, str]:
+    if expected_previous is None:
+        return {}
+    if not isinstance(expected_previous, Mapping):
+        raise ValueError("invalid_ai_catalog_expected_previous")
+    previous = dict(expected_previous)
+    if any(
+        type(policy_id) is not str
+        or policy_id not in policy_ids
+        or type(digest) is not str
+        or re.fullmatch(r"[0-9a-f]{64}", digest) is None
+        for policy_id, digest in previous.items()
+    ):
+        raise ValueError("invalid_ai_catalog_expected_previous")
+    if previous and not allow_replace_ai:
+        raise ValueError("ai_catalog_replacement_not_allowed")
+    return previous
+
+
 def publish_ai_batch(database_url: str, entries: list[tuple[
     CatalogRecord | ServiceCatalogRecord, AIReview, str, str | None
-]]) -> None:
-    """Publish validated AI-reviewed records atomically; existing guards stay active."""
+]], *, allow_replace_ai: bool = False,
+    expected_previous: Mapping[str, str] | None = None) -> dict[str, int]:
+    """Publish AI records idempotently or replace an exact current AI release.
+
+    ``expected_previous`` maps policy IDs to the approved hash of the current AI
+    release that may be retired. It is consulted only when a different version
+    is actually replaced, so retrying an already committed batch remains a replay.
+    """
     import psycopg
     from psycopg.types.json import Jsonb
 
@@ -139,12 +174,16 @@ def publish_ai_batch(database_url: str, entries: list[tuple[
     ids = [record.benefit.id for record, _, _, _ in entries]
     if len(set(ids)) != len(ids):
         raise ValueError("duplicate_ai_catalog_policy")
+    previous_hashes = _expected_previous_hashes(
+        set(ids), allow_replace_ai=allow_replace_ai, expected_previous=expected_previous
+    )
     for record, review, source, price_source in entries:
         validate_ai_review(record, review, source_text=source, price_source_text=price_source)
         if record.f12_review is not None and review.reviewed_at < datetime.fromisoformat(
             record.f12_review.latest_reviewed_at.replace("Z", "+00:00")
         ):
             raise ValueError("ai_review_predates_f12_review")
+    counts = {"published": 0, "replayed": 0, "replaced": 0}
     with psycopg.connect(database_url, connect_timeout=2) as connection:
         connection.execute("SET LOCAL statement_timeout = '5s'")
         connection.execute("SET LOCAL lock_timeout = '500ms'")
@@ -167,11 +206,65 @@ def publish_ai_batch(database_url: str, entries: list[tuple[
         published_at = datetime.now(timezone.utc)
         for record, review, source_text, _ in entries:
             _verify_real_source(connection, record, source_text)
-            if connection.execute(
-                "SELECT 1 FROM public.policy_catalog_releases WHERE policy_id=%s AND publication_status='published'",
+            policy_id = record.benefit.id
+            if not record.benefit.virtual_data:
+                external_id = record.collection_sources[0].external_id
+                aliases = ['youth:' + external_id, 'youth:youthcenter:' + external_id]
+                duplicate = connection.execute(
+                    'SELECT policy_id FROM public.policy_catalog_releases '
+                    'WHERE policy_id = ANY(%s) AND policy_id<>%s LIMIT 1',
+                    (aliases, policy_id),
+                ).fetchone()
+                if duplicate is not None:
+                    # Preserve a single policy identity across legacy and F12 IDs,
+                    # including retired history. Use its existing ID on retry.
+                    raise ValueError('ai_catalog_policy_alias_conflict')
+            version = record.benefit.source.document_version
+            digest = review.record_sha256
+            current = connection.execute(
+                "SELECT document_version,approved_sha256,review_type "
+                "FROM public.policy_catalog_releases "
+                "WHERE policy_id=%s AND publication_status='published' FOR UPDATE",
                 (record.benefit.id,),
-            ).fetchone():
-                raise ValueError("ai_catalog_existing_release_requires_separate_review")
+            ).fetchone()
+            if current is not None:
+                current_version, current_digest, current_type = current
+                if current_type == "ai" and current_version == version:
+                    if current_digest == digest:
+                        counts["replayed"] += 1
+                        continue
+                    raise ValueError("ai_catalog_version_hash_conflict")
+                if current_type != "ai" or not allow_replace_ai:
+                    raise ValueError("ai_catalog_existing_release_requires_separate_review")
+                if policy_id not in previous_hashes:
+                    raise ValueError("ai_catalog_replacement_requires_expected_previous")
+                if previous_hashes[policy_id] != current_digest:
+                    raise ValueError("ai_catalog_replacement_conflict")
+            existing = connection.execute(
+                "SELECT approved_sha256 FROM public.policy_catalog_releases "
+                "WHERE policy_id=%s AND document_version=%s",
+                (policy_id, version),
+            ).fetchone()
+            if current is not None:
+                if existing is not None:
+                    if existing[0] != digest:
+                        raise ValueError("ai_catalog_version_hash_conflict")
+                    raise ValueError("ai_catalog_release_not_current")
+                result = connection.execute(
+                    "UPDATE public.policy_catalog_releases SET publication_status='retired' "
+                    "WHERE policy_id=%s AND document_version=%s AND approved_sha256=%s "
+                    "AND review_type='ai' AND publication_status='published'",
+                    (policy_id, current_version, current_digest),
+                )
+                if result.rowcount != 1:
+                    raise ValueError("ai_catalog_replacement_conflict")
+                counts["replaced"] += 1
+            else:
+                if existing is not None:
+                    if existing[0] != digest:
+                        raise ValueError("ai_catalog_version_hash_conflict")
+                    raise ValueError("ai_catalog_release_not_current")
+                counts["published"] += 1
             connection.execute(
                 """INSERT INTO public.policy_catalog_releases
                 (policy_id,document_version,payload,approved_sha256,review_status,reviewed_by,
@@ -182,6 +275,7 @@ def publish_ai_batch(database_url: str, entries: list[tuple[
                  "ai:" + review.reviewer_agent, review.reviewed_at, published_at,
                  Jsonb(review.model_dump(mode="json"))),
             )
+    return counts
 
 
 def retire_ai_batch(database_url: str, releases: list[tuple[str, str, str]]) -> None:

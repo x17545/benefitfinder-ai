@@ -15,10 +15,12 @@ import json
 import os
 import shutil
 import sys
+import threading
+from contextlib import contextmanager
 from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import asdict
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from time import monotonic
 from zoneinfo import ZoneInfo
@@ -98,7 +100,7 @@ from benefitfinder.application.policy_explanations import explain_policy
 from benefitfinder.infrastructure.ollama_explanations import OllamaExplanationCompletion
 from benefitfinder.infrastructure.published_clauses import InMemoryPublishedClauses
 from benefitfinder.jobs.explanation_example import explanation_example
-from benefitfinder.application.policy_analysis import PolicyAnalysisStoreError
+from benefitfinder.application.policy_analysis import AnalysisClaim, PolicyAnalysisInput, PolicyAnalysisStoreError
 from benefitfinder.application.policy_rules import PolicyReference, RuleReviewBatch
 from benefitfinder.application.run_policy_analysis import run_pending_analysis
 from benefitfinder.infrastructure.database.repositories.policy_analysis import PostgresPolicyAnalysisTasks
@@ -118,14 +120,225 @@ from benefitfinder.infrastructure.database.repositories.analysis_sources import 
 from benefitfinder.ingestion.versioning import record_sha256
 from benefitfinder.ingestion.youthcenter import hashed_fields
 
+from benefitfinder.ai.decider_extraction import analyze_batch as analyze_decider_batch
+from benefitfinder.application.decider import Compilation, Decisions, DocumentExtraction, canonical_hash
+from benefitfinder.application.decider_evaluation import evaluate_report, require_evaluation
+from benefitfinder.infrastructure.decider_client import (
+    CheckpointDecider, HostedDecider, LocalDecider, private_json,
+)
+from benefitfinder.jobs.decider_batch import run_batch as run_decider_batch
+from benefitfinder.jobs.refresh_lock import acquire_refresh_lock
+from benefitfinder.infrastructure.database.repositories.decider_inputs import load_decider_corpus
+
 API_KEY_ENV = "YOUTHCENTER_API_KEY"
 KST = ZoneInfo("Asia/Seoul")
+
+DECIDER_ANALYSIS_VERSION = 5
+
+
+def _analysis_version() -> int:
+    engine = os.environ.get('F12_ANALYSIS_ENGINE', 'tools')
+    if engine not in {'tools', 'decider'}:
+        raise ValueError('invalid_f12_analysis_engine')
+    return DECIDER_ANALYSIS_VERSION if engine == 'decider' else 4
+
+
+@contextmanager
+def _decider_lock(root: Path) -> Iterator[None]:
+    root.mkdir(parents=True, exist_ok=True, mode=0o700)
+    descriptor = os.open(root / '.batch-lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    try:
+        acquire_refresh_lock(descriptor)
+        yield
+    finally:
+        os.close(descriptor)
+
+
+def _decider_client(root: Path) -> tuple[LocalDecider | HostedDecider, CheckpointDecider]:
+    provider = os.environ.get('DECIDER_PROVIDER', 'local')
+    if provider == 'local':
+        raw = LocalDecider(Path(os.environ.get('DECIDER_CHECKPOINT', 'data/local/decider/checkpoint')),
+            max_length=int(os.environ.get('DECIDER_MAX_LENGTH', '3072')),
+            batch_tokens=int(os.environ.get('DECIDER_BATCH_TOKENS', '2048')))
+    elif provider == 'external_api':
+        raw = HostedDecider(os.environ.get('DECIDER_ENDPOINT_URL', ''),
+            os.environ.get('DECIDER_API_KEY', ''), budget_path=root / 'api-budget.json',
+            daily_calls=int(os.environ.get('DECIDER_DAILY_CALLS', '100')))
+    else:
+        raise ValueError('decider_provider_required')
+    return raw, CheckpointDecider(raw, root / 'responses')
+
+
+def _decider_publisher(client: Decisions, *, tasks: PostgresPolicyAnalysisTasks | None = None,
+                      claims: dict[str, AnalysisClaim] | None = None
+                      ) -> Callable[[dict, PolicyAnalysisInput], str]:
+    evaluation_path = os.environ.get('DECIDER_EVALUATION_PATH')
+    if not evaluation_path:
+        raise ValueError('decider_evaluation_required')
+    require_evaluation(json.loads(Path(evaluation_path).read_text()), client.identity)
+    database_url = os.environ.get('POLICY_PUBLISH_DATABASE_URL', '')
+    if not database_url:
+        raise ValueError('decider_publication_database_required')
+
+    def publish(payload: dict, value: PolicyAnalysisInput) -> str:
+        if tasks is not None and (claims is None or not tasks.is_current(claims[value.policy_id])):
+            raise ValueError('decider_source_changed')
+        record = CatalogRecord.model_validate(payload)
+        source = value.documents[0].text
+        validate_source_text(record, source)
+        review = AIReview(writer_agent='decider-locate:' + client.identity['questions'],
+            reviewer_agent='decider-followup-code:' + client.identity['questions'],
+            reviewer_model=client.identity['id'] + '@' + client.identity['revision'],
+            verdict='pass', reviewed_at=datetime.now(timezone.utc),
+            document_version=record.benefit.source.document_version,
+            source_sha256=record.source_sha256, record_sha256=record_hash(record))
+        result = publish_ai_batch(database_url, [(record, review, source, None)])
+        return next(key for key in ('published', 'replayed', 'replaced') if result.get(key))
+    return publish
+
+
+def _compile_decider(value: PolicyAnalysisInput, extracted: tuple[DocumentExtraction, ...]) -> Compilation:
+    from benefitfinder.ingestion.decider_normalization import compile_policy
+
+    result = compile_policy(value, extracted)
+    if result.payload is not None:
+        record = CatalogRecord.model_validate(result.payload)
+        validate_source_text(record, value.documents[0].text)
+    return result
+
+
+def _run_decider_values(values: Sequence[PolicyAnalysisInput], client: Decisions, root: Path, *,
+                       publish: Callable[[dict, PolicyAnalysisInput], str] | None = None) -> dict:
+    return run_decider_batch(tuple(values), client, root=root,
+        analyze=analyze_decider_batch, compile_policy=_compile_decider, save=private_json,
+        publish=publish, batch_size=int(os.environ.get('DECIDER_BATCH_SIZE', '4')),
+        window_chars=int(os.environ.get('DECIDER_WINDOW_CHARS', '900')))
+
+
+def run_decider_queue(data_dir: Path, *, limit: int = 20, daily: bool = False,
+                      publish: bool | None = None) -> dict:
+    """Reuse F12 leases and source invalidation; source/LLM work is never online."""
+    if not 1 <= limit <= 10000:
+        raise ValueError('decider_invalid_limit')
+    if daily and os.environ.get('DECIDER_PROVIDER') != 'external_api':
+        raise ValueError('decider_daily_requires_external_api')
+    root = data_dir / 'processed' / 'decider'
+    tasks = PostgresPolicyAnalysisTasks(os.environ.get('F12_WRITE_DATABASE_URL', ''),
+                                       analysis_version=DECIDER_ANALYSIS_VERSION)
+    combined = Counter(dict.fromkeys(('targets', 'published', 'replayed', 'replaced',
+                                      'dry_run_ready', 'held', 'failed'), 0))
+    with _decider_lock(root):
+        _raw, client = _decider_client(root)
+        # Validate all operational settings before taking a queue lease.
+        auto = os.environ.get('DECIDER_AUTO_PUBLISH', 'false') if publish is None else str(publish).lower()
+        if auto not in {'true', 'false'}:
+            raise ValueError('decider_invalid_auto_publish')
+        if auto == 'true':
+            _decider_publisher(client)
+        attempted = 0
+        while attempted < limit:
+            group = []
+            for _ in range(min(int(os.environ.get('DECIDER_BATCH_SIZE', '4')), limit - attempted)):
+                claim = tasks.claim()
+                if claim is None:
+                    break
+                group.append(claim)
+            if not group:
+                break
+            claims = {claim.input.policy_id: claim for claim in group}
+            stop = threading.Event()
+
+            def renew() -> None:
+                while not stop.wait(30):
+                    for claim in group:
+                        try:
+                            tasks.renew(claim)
+                        except Exception:
+                            pass  # is_current and complete still fail closed.
+
+            heartbeat = threading.Thread(target=renew, daemon=True)
+            heartbeat.start()
+            try:
+                report = _run_decider_values([claim.input for claim in group], client, root,
+                    publish=_decider_publisher(client, tasks=tasks, claims=claims)
+                    if auto == 'true' else None)
+                for entry in report['entries']:
+                    claim = claims[entry['policy_id']]
+                    if entry['status'] == 'failed':
+                        tasks.fail(claim)
+                        continue
+                    reference = f'f12-analysis/{claim.task_id}/{claim.token}'
+                    private_json(data_dir / reference / 'decider-summary.json', entry)
+                    tasks.complete(claim, output_ref=reference, output_sha256=canonical_hash(entry),
+                                   summary={'engine': 'decider', 'status': entry['status'],
+                                            'reasons': entry['reasons']})
+                combined.update(report['counts'])
+            except Exception:
+                for claim in group:
+                    tasks.fail(claim)
+                combined['failed'] += len(group)
+                combined['targets'] += len(group)
+            finally:
+                stop.set()
+                heartbeat.join(timeout=1)
+            attempted += len(group)
+        summary = {'format_version': 1, 'model': client.identity, 'counts': dict(combined)}
+        private_json(root / 'queue-summary.json', summary)
+    return dict(combined)
+
+
+def decider_command(args: argparse.Namespace) -> int:
+    try:
+        if args.decider_action == 'export':
+            values, selection = load_decider_corpus(os.environ.get('F12_WRITE_DATABASE_URL', ''))
+            inputs = []
+            tasks = PostgresPolicyAnalysisTasks(os.environ.get('F12_WRITE_DATABASE_URL', ''),
+                analysis_version=DECIDER_ANALYSIS_VERSION) if args.register else None
+            for value in values:
+                name = 'inputs/' + value.fingerprint() + '.json'
+                private_json(args.output / name, {'format_version': 1, **value.payload()})
+                inputs.append(name)
+                if tasks is not None:
+                    tasks.register_prepared(value)
+            private_json(args.output / 'manifest.json', {'format_version': 1, 'inputs': inputs})
+            private_json(args.output / 'selection.json', selection)
+            print(json.dumps(selection, sort_keys=True))
+            return 1 if selection['counts']['held'] else 0
+        if args.decider_action == 'evaluate':
+            report = json.loads(args.report.read_text())
+            extractions = {entry['policy_id']: json.loads((Path(entry['artifact']) / 'extraction.json').read_text())
+                for entry in report['entries'] if (Path(entry['artifact']) / 'extraction.json').exists()}
+            result = evaluate_report(report, json.loads(args.gold.read_text()), extractions)
+            private_json(args.output, result)
+            print(json.dumps(result, ensure_ascii=False))
+            return 0 if result['eligible_for_publication'] else 1
+        if args.queue:
+            result = run_decider_queue(args.data_dir, limit=args.limit, publish=args.publish)
+            print(json.dumps(result, sort_keys=True))
+            return 1 if result.get('failed', 0) or result.get('held', 0) else 0
+        manifest = json.loads(args.manifest.read_text())
+        if (manifest.get('format_version') != 1 or not isinstance(manifest.get('inputs'), list)
+            or not 1 <= len(manifest['inputs']) <= 10000):
+            raise ValueError('decider_invalid_manifest')
+        values = [load_policy_analysis_input(args.manifest.parent / path) for path in manifest['inputs']]
+        root = args.data_dir / 'processed' / 'decider'
+        with _decider_lock(root):
+            raw, client = _decider_client(root)
+            report = _run_decider_values(values, client, root,
+                publish=_decider_publisher(client) if args.publish else None)
+            if isinstance(raw, LocalDecider):
+                private_json(root / 'gpu-metrics.json', raw.metrics)
+        print(json.dumps({'counts': report['counts'], 'reason_counts': report['reason_counts']}, sort_keys=True))
+        return 1 if report['counts']['failed'] or report['counts']['held'] else 0
+    except Exception:
+        print('decider_batch_failed: 설정·비공개 실행 기록을 확인하세요.', file=sys.stderr)
+        return 2
 
 
 def prepare_f12_inputs(plan_path: Path) -> dict[str, int]:
     plan = load_preparation_plan(plan_path)
     url = os.environ.get('F12_WRITE_DATABASE_URL', '')
-    tasks = PostgresPolicyAnalysisTasks(url)
+    tasks = PostgresPolicyAnalysisTasks(url, analysis_version=_analysis_version())
     official = {}
     if any(target.official_documents for target in plan.targets):
         from benefitfinder.ingestion.official_documents import official_document_material_hash
@@ -143,6 +356,8 @@ def prepare_f12_inputs(plan_path: Path) -> dict[str, int]:
 
 
 def run_f12_queue(data_dir: Path, *, limit: int = 5) -> dict[str, object]:
+    if _analysis_version() == DECIDER_ANALYSIS_VERSION:
+        return run_decider_queue(data_dir, limit=limit)
     # Lazy import keeps non-LLM CLI commands independent of model initialization.
     from benefitfinder.ai.policy_analysis_agent import analyze_policy
 
@@ -185,7 +400,8 @@ def run_f12_queue(data_dir: Path, *, limit: int = 5) -> dict[str, object]:
 
 def f12_analysis_command(args: argparse.Namespace) -> int:
     try:
-        tasks = PostgresPolicyAnalysisTasks(os.environ.get('F12_WRITE_DATABASE_URL', ''))
+        tasks = PostgresPolicyAnalysisTasks(os.environ.get('F12_WRITE_DATABASE_URL', ''),
+                                           analysis_version=_analysis_version())
         if args.analysis_action == 'prepare':
             result = prepare_f12_inputs(args.plan)
         elif args.analysis_action == 'register':
@@ -677,6 +893,9 @@ def refresh_data_command(data_dir: Path, *, notify_discord: bool = False) -> int
         DiscordWebhook(webhook).send(message)
 
     def analyze_pending():
+        if _analysis_version() == DECIDER_ANALYSIS_VERSION:
+            return run_decider_queue(data_dir, limit=int(os.environ.get('DECIDER_LIMIT', '20')),
+                                     daily=True)
         result = run_f12_queue(data_dir, limit=5)
         return {key: result[key] for key in ('attempted', 'needs_review', 'stale', 'failed',
                                             'source_records_awaiting_scope_or_documents')}
@@ -685,6 +904,20 @@ def refresh_data_command(data_dir: Path, *, notify_discord: bool = False) -> int
         if 'F12_WRITE_DATABASE_URL' not in os.environ:
             raise ValueError('f12_preparation_requires_database')
         combined = dict.fromkeys(('targets', 'registered', 'replayed', 'failed'), 0)
+        if os.environ.get('DECIDER_DISCOVER_YOUTHCENTER') == 'true':
+            if _analysis_version() != DECIDER_ANALYSIS_VERSION:
+                raise ValueError('decider_discovery_requires_decider_engine')
+            values, selection = load_decider_corpus(os.environ['F12_WRITE_DATABASE_URL'])
+            tasks = PostgresPolicyAnalysisTasks(os.environ['F12_WRITE_DATABASE_URL'],
+                                               analysis_version=DECIDER_ANALYSIS_VERSION)
+            combined['targets'] += selection['counts']['targets']
+            combined['failed'] += selection['counts']['held']
+            for value in values:
+                try:
+                    result = tasks.register_prepared(value)
+                    combined['replayed' if result['replayed'] else 'registered'] += 1
+                except Exception:
+                    combined['failed'] += 1
         paths = [Path(os.environ[name]) for name in
                  ('F12_PREPARATION_PLAN', 'GOV24_PREPARATION_PLAN') if name in os.environ]
         policies = [target.policy_id for path in paths
@@ -713,8 +946,9 @@ def refresh_data_command(data_dir: Path, *, notify_discord: bool = False) -> int
                 if 'OFFICIAL_DOCUMENT_PLAN' in os.environ else None,
             clock=lambda: datetime.now(KST),
             notify=notify if notify_discord else None,
-            prepare_analysis=prepare_analysis if any(name in os.environ for name in
-                ('F12_PREPARATION_PLAN', 'GOV24_PREPARATION_PLAN')) else None,
+            prepare_analysis=prepare_analysis if (any(name in os.environ for name in
+                ('F12_PREPARATION_PLAN', 'GOV24_PREPARATION_PLAN'))
+                or os.environ.get('DECIDER_DISCOVER_YOUTHCENTER') == 'true') else None,
             analyze_pending=analyze_pending if 'F12_WRITE_DATABASE_URL' in os.environ else None,
         )
     except DailyRefreshError as error:
@@ -978,6 +1212,22 @@ def extract_chunked_command(source: Path, output: Path) -> int:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m benefitfinder.jobs")
     commands = parser.add_subparsers(dest="command", required=True)
+    decider = commands.add_parser('decider-batch', help='공식 Decider 일괄 추출·검증·명시적 게시')
+    decider_actions = decider.add_subparsers(dest='decider_action', required=True)
+    decider_export = decider_actions.add_parser('export', help='공식 취업·주거 분류 전체를 읽기 전용으로 준비')
+    decider_export.add_argument('--output', type=Path, required=True)
+    decider_export.add_argument('--register', action='store_true', help='F12 v5 큐에도 멱등 등록')
+    decider_run = decider_actions.add_parser('run')
+    decider_input = decider_run.add_mutually_exclusive_group(required=True)
+    decider_input.add_argument('--manifest', type=Path)
+    decider_input.add_argument('--queue', action='store_true')
+    decider_run.add_argument('--data-dir', type=Path, default=Path('data'))
+    decider_run.add_argument('--limit', type=int, default=20)
+    decider_run.add_argument('--publish', action='store_true', help='통과한 평가·검증 항목만 운영 게시')
+    decider_eval = decider_actions.add_parser('evaluate')
+    decider_eval.add_argument('--report', type=Path, required=True)
+    decider_eval.add_argument('--gold', type=Path, required=True)
+    decider_eval.add_argument('--output', type=Path, required=True)
     commands.add_parser("refresh-ecos-rate", help="ECOS 기준금리의 마지막 성공값을 DB에 갱신")
     daily = commands.add_parser("refresh-data", help="정책·기준금리 통합 갱신과 단일 결과 보고")
     daily.add_argument("--data-dir", type=Path, default=Path("data"))
@@ -1068,6 +1318,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     explain.add_argument("--category", choices=("employment", "housing"), default="employment")
     explain.add_argument("--model", help="설정한 제공자 모델. 제공자 미설정 시 명시적 Ollama 호환")
     args = parser.parse_args(argv)
+    if args.command == 'decider-batch':
+        return decider_command(args)
     if args.command == 'catalog-from-f12':
         return f12_catalog_command(args)
     if args.command == 'refresh-gov24':

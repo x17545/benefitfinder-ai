@@ -24,6 +24,7 @@
 | 기능·화면·문구·계산·수락 조건·역할·회의 항목 | [기능 명세](product/REQUIREMENTS.md) | 6장·11.2는 회의 확인이 필요한 초안 |
 | 프레임워크·모듈 경계·확장·기술 결정 | [아키텍처](architecture/ARCHITECTURE.md) | 9장이 기술 결정의 기준 |
 | 원문 수집→Agent 추출→검수→게시 | [정책 데이터 준비](architecture/POLICY_DATA_PIPELINE.md) | 사용자 요청의 코드 계산과 구분 |
+| native Decider 추출·평가·AI release | [Decider 파이프라인](development/DECIDER_PIPELINE.md) | 구현·측정 상태이며 운영 게시 완료가 아님 |
 | API·데이터 교환 형식 | [공용 계약](../contracts/README.md), [JSON Schema](../contracts/v1/) | 현행 개발 계약. 기획자 최종 승인과 구분 |
 | 설치·실행·의존성 관리 | [처음 개발 시작하기](development/GETTING_STARTED.md) | 정확한 도구 버전은 선언 파일·lockfile 기준 |
 | 작업 분담·개발·검증·AI 표시·리뷰 | [CONTRIBUTING.md](../CONTRIBUTING.md) | 기획 수정과 인계 절차 포함 |
@@ -39,7 +40,7 @@
 
 AI 독립 검수는 [별도 카탈로그 배치 경로](../backend/src/benefitfinder/infrastructure/database/POLICY_CATALOG.md#ai-독립-검수-배치-0013)로 구현한다. 작성·검수 ID와 모델·판정·원천/레코드 해시를 남기며 기존 사람 승인 경로는 유지한다. 실제 정책 검수와 운영 반영은 별도로 확인한다.
 
-2026-11-15 기준이다. 배포 완료를 뜻하지 않는다.
+2026-11-16 기준이다. 배포 완료를 뜻하지 않는다.
 
 > **확인 범위:** 기본 개발 환경은 가상 정책으로 동작한다. 게시 정책 DB와 로컬 모델은 별도 설정으로 검증했다. 실제 정책 게시, 운영 배포, 평가 결과는 각 환경에서 따로 확인한다. 11월 14일 점검에서는 온통청년 오류가 반복돼 전체 갱신을 완료하지 못했다.
 
@@ -50,6 +51,11 @@ AI 독립 검수는 [별도 카탈로그 배치 경로](../backend/src/benefitfi
 | 현재가치 할인율 | 개발용 금리 또는 미확인 | `BASE_RATE_DATABASE_URL`: 마지막으로 저장한 ECOS 기준금리 |
 | F13 설명 | 기본 문구 | `DATABASE_URL`: 게시 원문 조항 조회. 모델을 설정하면 선택적으로 설명 생성 |
 | 분석 횟수 | 단일 프로세스 메모리 | `ANALYSIS_USAGE_DATABASE_URL`: PostgreSQL 공유 집계 |
+
+2026-11-16 현재 native Decider v2 경로는 선택 의존성 그룹과 `F12_ANALYSIS_ENGINE=decider`로
+구현했지만 설정한 자동 게시 기준을 통과하지 못했다. 실제 정책 10건은 모두 검증 보류였고, 대량
+1,944건 중 완료·게시는 0이다. 상세 명령·측정·금지 조건은
+[Decider 파이프라인](development/DECIDER_PIPELINE.md)을 따른다.
 
 ### 화면과 정책 계산
 
@@ -70,6 +76,7 @@ AI 독립 검수는 [별도 카탈로그 배치 경로](../backend/src/benefitfi
 - **[F12 분석 큐](../backend/src/benefitfinder/infrastructure/database/F12_ANALYSIS.md):** `F12_WRITE_DATABASE_URL` 설정 시 준비된 취업·주거 공식 문서를 6개 도구로 분석하고 누락을 다시 찾아 검수 대기 결과를 남긴다.
 - **[F12 추출·검수](../backend/src/benefitfinder/jobs/README.md#승인-항목만-로컬-파일로-내보내기):** 공식 공고 한 건에서 중복 제한과 자격·금액·지급 시점 후보를 두 검수 대기 파일로 만든다. 항목별 승인·반려·사유를 기록하고 사람이 승인한 항목만 원문 근거와 함께 내보낸다.
 - **[F12 긴 문서 추출](../backend/src/benefitfinder/jobs/README.md#긴-공식-지침의-문맥-분할-추출) · [품질 평가](../backend/src/benefitfinder/jobs/README.md#f12-추출-품질-평가):** 문서를 페이지·문단으로 나눠 앞뒤 문맥과 함께 로컬 E4B로 근거를 고른다. 로컬 검수 자료·승인 내보내기와 추출 결과를 비교해 누락과 원문의 차이를 확인한다.
+- **[Decider F12 v5](development/DECIDER_PIPELINE.md):** `locate` 뒤 별도 `choice`·`noul`·`score`를 실행하고 코드 정규화·full gold 평가 뒤에만 AI release한다. 현재 v2 10건 평가는 `eligible=false`이며 운영 쓰기·외부 연결·스케줄 등록은 0이다.
 - **[F13 로컬 설명 코어](#f13-로컬-설명-코어):** 추천 API·결과 화면에 게시 조항과 원문 위치·확인일을 연결했다. PostgreSQL 또는 가상 메모리에서 조항을 조회한다. DB 중단에는 기본 안내를 표시하고 계산을 보존한다.
 
 <details>
@@ -110,6 +117,7 @@ F12 자동 준비는 명시적으로 등록한 공식 보충 문서와 확인 �
 - **서비스 카탈로그:** 공식 서비스 내용과 별도 가격 근거를 전체 검수 해시에 묶어 저장한다. 같은 원천이 바뀌면 승인 해제·재검수를 적용한다. DB 모드의 추천·공개 상세·메타 조회를 지원한다. 실제 사람 검수·자료 공개와 가격 변경 자동 탐지는 후속이다.
 - **실제 승인 근거:** 별도 로컬 `_test` DB에 승인 내보내기만 `draft`로 적재한다. 원본 ID·해시·검수자·사유·범위를 보존한다. #19를 결합한 검증 서버에서 실제 지역 입력부터 E4B 안내·원문 표시까지 확인했다. 자격 확인 전·금액 `null`·조합 없음 상태를 유지한다.
 - **모델 실행:** 개발용 [llama.cpp](development/LOCAL_LLM.md)는 로컬 GPU에서 F12 도구 호출·문맥별 추출과 F13 설명을 같은 설정으로 연결한다. 운영은 외부 API의 HTTPS 주소·모델·키를 명시한다. 기존 Ollama는 명시적 호환 경로다. 외부 공급자 평가는 별도다.
+- **Decider 검증:** 공식 model snapshot hash·source/model/question identity·private checkpoint를 유지한다. 12GB에서 v2 실제 10건은 ready 0·held 10·failed 0·published 0이었고 critical recall 37.889%로 평가 미달이다. 격리 PostgreSQL 189건은 31.366초에 통과했다. 공통 PR 검사 결과는 PR에 별도로 기록한다.
 
 ### 서비스 운영과 배포
 
@@ -120,6 +128,14 @@ F12 자동 준비는 명시적으로 등록한 공식 보충 문서와 확인 �
 | [공유 분석 한도](../backend/src/benefitfinder/infrastructure/database/ANALYSIS_USAGE.md) | 추천·상황 변화 합계 하루 100회. PostgreSQL 설정 시 KST 날짜별 익명 집계로 공유하고 DB 장애 시 503이다. 미설정 시 단일 프로세스 메모리를 쓴다 |
 | [분석 진행과 취소](../backend/src/benefitfinder/api/README.md) | 추천은 JSON 또는 POST SSE로 결과를 제공한다. SSE는 실제 계산·서비스·설명 진행을 보내고 결과 또는 오류로 한 번 종료한다. 추천·상황 변화는 최대 60초이며, 취소·오류 뒤 성공 방지는 ASGI 수준에서 검증했다 |
 | 배포·통계·검사 | Vercel 환경별 API 프록시·SPA 경로와 Render 실행 설정이 있다. 미연결 Preview의 API·health는 503을 반환한다. F11의 허용 이벤트 17개를 임시 식별자로 서버를 거쳐 GA4에 보낼 수 있다. 기본 설정은 꺼짐이며, [운영 계정 수신·접근 권한](../backend/src/benefitfinder/infrastructure/ANALYTICS.md)은 별도 확인이 필요하다. uv·pnpm, 잠금 파일, 계약 타입 생성, 공통 검사·GitHub CI를 제공한다 |
+
+2026-11-16 공개 배포의 `GET /api/v1/meta`·`GET /api/v1/options`·`POST
+/api/v1/recommendations`는 HTTP 200을 확인했다. 가상 25세·경기·구직·1년·월세 fixture의
+1년 PV off 응답은
+`portfolios=0`, `not_yet_reviewed=55`, `closed_now=36`, `not_eligible=6`이었고 6개 view가
+같았다. 응답은 `virtual_data=false`, `ai_generated=false`였지만 실제 금액 조합 검증 완료를
+뜻하지 않는다. 운영 현금 정책 97건은 모두 `reviewed=false`였고 calculator의 실행 가능한
+금액 조합은 0이다. 현재 Decider 코드가 이 배포에 포함된 것은 아니다.
 
 `/health`는 프로세스 생존 확인이다. 목표 아키텍처, 디렉터리 존재, 참조 계산 테스트 통과만으로 기능·운영 검증을 판단할 수 없다. 실제 동작과 검사 범위는 코드·테스트·[검사 안내](development/REPOSITORY_SETTINGS.md#3-현재-공통-검사의-범위)를 확인한다. 구현 상태가 바뀌면 이 절을 갱신한다.
 
