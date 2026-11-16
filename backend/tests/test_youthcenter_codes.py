@@ -8,6 +8,7 @@ from benefitfinder.application.region_options import DistrictOption, RegionOptio
 from benefitfinder.ingestion.youthcenter_codes import (
     CODE_GROUPS,
     CodeState,
+    IncompleteRegionAliasError,
     InvalidRegionCatalogError,
     InvalidYouthcenterCodeError,
     LEGAL_REGION_CODE_ARCHIVE_SHA256,
@@ -43,6 +44,52 @@ REGIONS = (
         ),
     ),
 )
+
+CHEONGBUK_REGIONS = (
+    RegionOption(
+        "43",
+        "충청북도",
+        (
+            DistrictOption("43110", "청주시"),
+            DistrictOption("43130", "충주시"),
+            DistrictOption("43150", "제천시"),
+            DistrictOption("43720", "보은군"),
+            DistrictOption("43730", "옥천군"),
+            DistrictOption("43740", "영동군"),
+            DistrictOption("43745", "진천군"),
+            DistrictOption("43750", "괴산군"),
+            DistrictOption("43760", "음성군"),
+            DistrictOption("43770", "단양군"),
+            DistrictOption("43800", "증평군"),
+        ),
+    ),
+)
+
+CHEONGBUK_WITH_OTHER_REGION = (*CHEONGBUK_REGIONS, REGIONS[0])
+CHEONGBUK_WIDE_ZIP = (
+    "43111,43112,43113,43114,43130,43150,43720,43730,"
+    "43740,43745,43750,43760,43770,43800"
+)
+
+YEONGNAM_REGIONS = (
+    RegionOption(
+        "47",
+        "경상북도",
+        (
+            DistrictOption("47110", "포항시"),
+            DistrictOption("47130", "경주시"),
+        ),
+    ),
+    RegionOption(
+        "48",
+        "경상남도",
+        (
+            DistrictOption("48120", "창원시"),
+            DistrictOption("48170", "진주시"),
+        ),
+    ),
+)
+
 
 EXPECTED_LABELS = {
     "plcyMajorCd": {
@@ -323,6 +370,80 @@ class ZipCodeTests(unittest.TestCase):
             with self.subTest(value=value):
                 with self.assertRaises(InvalidYouthcenterCodeError):
                     decode_zip_codes(value, REGIONS)
+
+    def test_complete_cheongju_district_group_collapses_to_city_code(self) -> None:
+        coverage = decode_zip_codes("43111,43112,43113,43114", CHEONGBUK_REGIONS)
+
+        self.assertFalse(coverage.nationwide)
+        self.assertEqual(coverage.state, CodeState.HOLD)
+        self.assertEqual(coverage.text, "충청북도 청주시")
+        self.assertEqual(len(coverage.groups), 1)
+        self.assertEqual(coverage.groups[0].code, "43110")
+        self.assertEqual(
+            coverage.groups[0].source_codes,
+            ("43111", "43112", "43113", "43114"),
+        )
+
+    def test_partial_cheongju_district_group_never_widens_to_the_city(self) -> None:
+        for value in ("43111", "43111,43112", "43111,43112,43113"):
+            with self.subTest(value=value):
+                with self.assertRaises(IncompleteRegionAliasError):
+                    decode_zip_codes(value, CHEONGBUK_REGIONS)
+
+    def test_explicit_cheongju_city_code_makes_partial_district_codes_redundant(self) -> None:
+        coverage = decode_zip_codes("43110,43111,43112", CHEONGBUK_REGIONS)
+
+        self.assertEqual(coverage.groups[0].code, "43110")
+        self.assertEqual(coverage.groups[0].source_codes, ("43110", "43111", "43112"))
+
+    def test_cheongbuk_wide_notice_resolves_to_province_not_nationwide(self) -> None:
+        coverage = decode_zip_codes(CHEONGBUK_WIDE_ZIP, CHEONGBUK_WITH_OTHER_REGION)
+
+        self.assertFalse(coverage.nationwide)
+        self.assertEqual(len(coverage.groups), 1)
+        self.assertEqual(coverage.groups[0].code, "43000")
+        self.assertEqual(coverage.groups[0].name, "충청북도")
+        self.assertEqual(
+            coverage.groups[0].source_codes,
+            tuple(CHEONGBUK_WIDE_ZIP.split(",")),
+        )
+
+    def test_complete_pohang_district_group_collapses_to_city_code(self) -> None:
+        coverage = decode_zip_codes("47111,47113", YEONGNAM_REGIONS)
+
+        self.assertEqual(coverage.groups[0].code, "47110")
+        self.assertEqual(coverage.text, "경상북도 포항시")
+        self.assertEqual(coverage.groups[0].source_codes, ("47111", "47113"))
+
+    def test_partial_pohang_district_group_never_widens_to_the_city(self) -> None:
+        for value in ("47111", "47113"):
+            with self.subTest(value=value):
+                with self.assertRaises(IncompleteRegionAliasError):
+                    decode_zip_codes(value, YEONGNAM_REGIONS)
+
+    def test_complete_changwon_district_group_collapses_to_city_code(self) -> None:
+        coverage = decode_zip_codes(
+            "48121,48123,48125,48127,48129",
+            YEONGNAM_REGIONS,
+        )
+
+        self.assertEqual(coverage.groups[0].code, "48120")
+        self.assertEqual(coverage.text, "경상남도 창원시")
+        self.assertEqual(
+            coverage.groups[0].source_codes,
+            ("48121", "48123", "48125", "48127", "48129"),
+        )
+
+    def test_partial_changwon_district_group_never_widens_to_the_city(self) -> None:
+        for value in (
+            "48121",
+            "48121,48123",
+            "48121,48123,48125",
+            "48121,48123,48125,48127",
+        ):
+            with self.subTest(value=value):
+                with self.assertRaises(IncompleteRegionAliasError):
+                    decode_zip_codes(value, YEONGNAM_REGIONS)
 
     def test_invalid_region_catalogs_fail_loudly(self) -> None:
         with self.assertRaises(InvalidRegionCatalogError):

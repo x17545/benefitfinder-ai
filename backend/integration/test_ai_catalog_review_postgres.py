@@ -73,6 +73,18 @@ class AICatalogPostgresTest(unittest.TestCase):
     def entry(self, item, **kwargs):
         return (item, self.review(item, **kwargs), source_text(), None)
 
+    def test_source_facts_version_publishes_without_a_model_and_replays(self):
+        external_id = "20260101000000000099"
+        text, item = self.real_policy(external_id, "youth:" + external_id,
+                                      version_suffix=":source-facts-v1")
+        review = self.review(item, reviewer_model="deterministic-code:no-model-review",
+                             reviewed_at=self.next_generation_at())
+        entries = [(item, review, text, None)]
+        self.assertEqual(publish_ai_batch(self.url, entries),
+                         {"published": 1, "replayed": 0, "replaced": 0})
+        self.assertEqual(publish_ai_batch(self.url, entries),
+                         {"published": 0, "replayed": 1, "replaced": 0})
+
     def published_version(self, policy_id):
         with psycopg.connect(self.url) as connection:
             return connection.execute(

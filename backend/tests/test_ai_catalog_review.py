@@ -175,6 +175,22 @@ class OfficialPrimarySourceTest(unittest.TestCase):
             ):
                 _verify_real_source(BoundSourceConnection(rows), changed, text)
 
+    def test_official_cash_rule_revision_keeps_the_exact_material_binding(self) -> None:
+        record, text, rows = official_publication_fixture()
+        source = record.benefit.source
+        for suffix in (":cash-rules-v1", ":cash-rules-v2"):
+            changed = record.model_copy(update={"benefit": record.benefit.model_copy(update={
+                "source": source.model_copy(update={"document_version": source.document_version + suffix}),
+            })})
+            _verify_real_source(BoundSourceConnection(rows), changed, text)
+            wrong = changed.model_copy(update={"benefit": changed.benefit.model_copy(update={
+                "source": source.model_copy(update={"document_version": "official-v1:" + "0" * 64 + suffix}),
+            })})
+            with self.subTest(suffix=suffix), self.assertRaisesRegex(
+                ValueError, "ai_catalog_source_projection_mismatch",
+            ):
+                _verify_real_source(BoundSourceConnection(rows), wrong, text)
+
     def test_primary_cannot_cover_fewer_categories_than_the_release(self) -> None:
         record, text, rows = official_publication_fixture()
         changed = record.model_copy(update={"benefit": record.benefit.model_copy(update={
@@ -305,6 +321,7 @@ class AIReviewTest(unittest.TestCase):
             for document_version in (
                 "sha256:" + material,
                 "sha256:" + material + ":decider-v3",
+                "sha256:" + material + ":source-facts-v1",
             ):
                 with self.subTest(policy_id=policy_id, document_version=document_version):
                     _verify_real_source(

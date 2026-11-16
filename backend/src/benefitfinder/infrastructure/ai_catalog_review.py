@@ -133,7 +133,11 @@ def _verify_official_source(connection: Any, record: CatalogRecord, source_text:
         or fields.get("text") != source_text or not source_text.strip()
         or len(source_text) > 100_000 or "\0" in source_text
         or fields.get("text_sha256") != digest or record.source_sha256 != digest
-        or record.benefit.source.document_version != "official-v1:" + official[0].material_sha256
+        or record.benefit.source.document_version not in {
+            "official-v1:" + official[0].material_sha256,
+            "official-v1:" + official[0].material_sha256 + ":cash-rules-v1",
+            "official-v1:" + official[0].material_sha256 + ":cash-rules-v2",
+        }
         or not isinstance(categories, list) or not 1 <= len(categories) <= 2
         or any(type(category) is not str for category in categories)
         or len(set(categories)) != len(categories)
@@ -204,6 +208,7 @@ def _verify_real_source(
         or record.benefit.source.document_version not in {
             "sha256:" + binding.material_sha256,
             "sha256:" + binding.material_sha256 + ":decider-v3",
+            "sha256:" + binding.material_sha256 + ":source-facts-v1",
         }
         or source_text != project_youthcenter_source(fields)):
         raise ValueError("ai_catalog_source_projection_mismatch")

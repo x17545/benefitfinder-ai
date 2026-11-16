@@ -14,6 +14,11 @@ Source evidence:
 * Administrative standard code source:
   https://www.code.go.kr/stdcode/regCodeL.do
 
+The current legal-code hierarchy includes parent cities whose catalogs may expose
+only the parent code: Cheongju 43110, Pohang 47110, and Changwon 48120. Each
+official child-code set expands to its parent only when the complete set is
+present, or when the source explicitly contains the parent itself.
+
 Known restricted values intentionally return ``CodeState.HOLD``. Unknown values raise
 ``UnknownYouthcenterCodeError``; they are never inferred as unrestricted.
 """
@@ -153,6 +158,34 @@ class UnknownYouthcenterCodeError(YouthcenterCodeError):
 
 class InvalidRegionCatalogError(ValueError):
     pass
+
+
+class IncompleteRegionAliasError(InvalidYouthcenterCodeError):
+    """An official child-code group is missing one or more required children."""
+
+
+# Source: LEGAL_REGION_CODE_SOURCE_URL at LEGAL_REGION_CODE_VERSION (2026-10-01).
+_CITY_DISTRICT_ALIASES: Mapping[str, tuple[tuple[str, str], ...]] = MappingProxyType(
+    {
+        "43110": (
+            ("43111", "상당구"),
+            ("43112", "서원구"),
+            ("43113", "흥덕구"),
+            ("43114", "청원구"),
+        ),
+        "47110": (
+            ("47111", "남구"),
+            ("47113", "북구"),
+        ),
+        "48120": (
+            ("48121", "의창구"),
+            ("48123", "성산구"),
+            ("48125", "마산합포구"),
+            ("48127", "마산회원구"),
+            ("48129", "진해구"),
+        ),
+    }
+)
 
 
 JOB_CODES: Mapping[str, CodeDefinition] = MappingProxyType(
@@ -355,6 +388,7 @@ class _ProvinceCatalog:
     units: tuple[_RegionUnit, ...]
     codes: frozenset[str]
     names: Mapping[str, str]
+    aliases: Mapping[str, tuple[str, ...]]
 
 
 def _province_marker(sido_code: str) -> str:
@@ -399,6 +433,25 @@ def _region_catalog(
             district_codes.add(district.code)
             by_code[district.code] = district
 
+        aliases: dict[str, tuple[str, ...]] = {}
+        for parent_code, children in _CITY_DISTRICT_ALIASES.items():
+            parent = by_code.get(parent_code)
+            if parent is None or any(code in by_code for code, _ in children):
+                continue
+            added: list[str] = []
+            for code, child_name in children:
+                if code in district_codes:
+                    raise InvalidRegionCatalogError("지역 별칭 코드가 중복되었습니다.")
+                name = (
+                    child_name
+                    if child_name.startswith(parent.name.strip())
+                    else f"{parent.name.strip()} {child_name}"
+                )
+                by_code[code] = DistrictOption(code, name)
+                district_codes.add(code)
+                added.append(code)
+            aliases[parent_code] = tuple(added)
+
         child_to_parent: dict[str, str] = {}
         for code in by_code:
             parent = code[:4] + "0"
@@ -431,6 +484,7 @@ def _region_catalog(
                 names=MappingProxyType(
                     {code: district.name for code, district in by_code.items()}
                 ),
+                aliases=MappingProxyType(aliases),
             )
         )
 
@@ -477,6 +531,20 @@ def decode_zip_codes(
             raise UnknownYouthcenterCodeError("zipCd", code)
 
     selected = set(codes)
+    for catalog in catalogs:
+        for parent_code, children in catalog.aliases.items():
+            present = tuple(code for code in children if code in selected)
+            if not present:
+                continue
+            if len(present) != len(children) and parent_code not in selected:
+                raise IncompleteRegionAliasError(
+                    f"zipCd에 {parent_code}의 하위 지역 일부만 있어 "
+                    "상위 지역 전체로 해석할 수 없습니다."
+                )
+            selected.difference_update(children)
+            if parent_code in selected or len(present) == len(children):
+                selected.add(parent_code)
+
     complete_provinces = tuple(
         catalog
         for catalog in catalogs

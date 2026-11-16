@@ -126,6 +126,41 @@ class DeciderOfficialPublicationPostgresTest(unittest.TestCase):
                 with psycopg.connect(self.url) as connection:
                     connection.execute("TRUNCATE public.policy_catalog_releases CASCADE")
 
+    def test_official_rule_revision_preserves_history_and_replays(self) -> None:
+        record, text, rows = official_publication_fixture()
+        self.save_sources(rows)
+        publish_ai_batch(self.url, [self.entry(record, text)])
+        data = record.model_dump(mode="json")
+        version = data["benefit"]["source"]["document_version"] + ":cash-rules-v1"
+
+        def revise(value):
+            if isinstance(value, dict):
+                if "document_version" in value:
+                    value["document_version"] = version
+                for child in value.values():
+                    revise(child)
+            elif isinstance(value, list):
+                for child in value:
+                    revise(child)
+
+        revise(data)
+        data["benefit"]["conflicts"] = [{
+            "policy_id": "youth:fictional-other-policy",
+            "evidence": [data["payment_evidence"][0]],
+        }]
+        changed = CatalogRecord.model_validate(data)
+        kwargs = {"allow_replace_ai": True,
+                  "expected_previous": {record.benefit.id: record_hash(record)}}
+        self.assertEqual(publish_ai_batch(self.url, [self.entry(changed, text)], **kwargs),
+                         {"published": 0, "replayed": 0, "replaced": 1})
+        self.assertEqual(publish_ai_batch(self.url, [self.entry(changed, text)], **kwargs),
+                         {"published": 0, "replayed": 1, "replaced": 0})
+        with psycopg.connect(self.url) as connection:
+            self.assertEqual(connection.execute(
+                "SELECT publication_status,count(*) FROM public.policy_catalog_releases "
+                "GROUP BY publication_status ORDER BY publication_status"
+            ).fetchall(), [("published", 1), ("retired", 1)])
+
     def test_each_absent_source_binding_blocks_publication(self) -> None:
         record, text, rows = official_publication_fixture(include_api=True)
         for missing_source in ("official_documents", "youthcenter"):

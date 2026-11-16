@@ -20,7 +20,7 @@ from contextlib import contextmanager
 from collections import Counter
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import asdict
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from time import monotonic
 from zoneinfo import ZoneInfo
@@ -225,6 +225,171 @@ def import_source_command(args: argparse.Namespace) -> int:
                       'counts': report['counts'], 'reason_counts': report['reason_counts']},
                      ensure_ascii=False, sort_keys=True))
     return 1 if report['counts']['failed'] or report['counts']['held'] else 0
+
+
+def source_cash_command(args: argparse.Namespace) -> int:
+    """Compile current youthcenter cash facts without loading a model."""
+    from benefitfinder.infrastructure.ai_catalog_review import AIReview, publish_ai_batch
+    from benefitfinder.infrastructure.database.repositories.decider_inputs import load_decider_corpus
+    from benefitfinder.infrastructure.database.repositories.source_catalog_import import (
+        load_source_release_identities,
+    )
+    from benefitfinder.infrastructure.decider_client import private_json
+    from benefitfinder.infrastructure.policy_catalog_records import (
+        CatalogRecord, record_hash, validate_source_text,
+    )
+    from benefitfinder.infrastructure.region_codes import OfficialRegionCatalog
+    from benefitfinder.ingestion.source_cash import compile_source_cash
+    from benefitfinder.jobs.refresh_lock import acquire_refresh_lock
+    from benefitfinder.jobs.source_cash_batch import (
+        PreparedSourceCash, SOURCE_CASH_REVIEWER_AGENT, SOURCE_CASH_REVIEW_METADATA,
+        SOURCE_CASH_WRITER_AGENT, restore_checked_at_only, run_source_cash_batch,
+        source_cash_review_timestamp,
+    )
+
+    def load_checkpoint(path: Path) -> dict | None:
+        if not path.exists():
+            return None
+        with path.open("rb") as handle:
+            encoded = handle.read(2 * 1024 * 1024 + 1)
+        if len(encoded) > 2 * 1024 * 1024:
+            raise ValueError("source_cash_batch_checkpoint_size_exceeded")
+        value = json.loads(encoded)
+        if not isinstance(value, dict):
+            raise ValueError("source_cash_batch_checkpoint_invalid")
+        return value
+
+    try:
+        database_url = os.environ.get("POLICY_PUBLISH_DATABASE_URL", "").strip()
+        if not database_url:
+            raise ValueError("source_cash_batch_database_url_required")
+        args.output.mkdir(mode=0o700, parents=True, exist_ok=True)
+        descriptor = os.open(
+            args.output / ".source-cash-lock", os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600
+        )
+        try:
+            acquire_refresh_lock(descriptor)
+            values, selection = load_decider_corpus(database_url)
+            regions = OfficialRegionCatalog().get_regions()
+            as_of = args.as_of or datetime.now(KST).date()
+
+            def compile_source(value):
+                return compile_source_cash(value, as_of=as_of, regions=regions)
+
+            def prepare(compiled, source_text, local_date) -> PreparedSourceCash:
+                record = CatalogRecord.model_validate(compiled.payload)
+                digest = record_hash(record)
+                validate_source_text(record, source_text)
+                checked_at = datetime.fromisoformat(
+                    record.benefit.source.checked_at.replace("Z", "+00:00")
+                )
+                reviewed_at = source_cash_review_timestamp(checked_at=checked_at)
+                review = AIReview(
+                    writer_agent=SOURCE_CASH_WRITER_AGENT,
+                    reviewer_agent=SOURCE_CASH_REVIEWER_AGENT,
+                    reviewer_model=SOURCE_CASH_REVIEW_METADATA,
+                    verdict="pass",
+                    reviewed_at=reviewed_at,
+                    document_version=record.benefit.source.document_version,
+                    source_sha256=record.source_sha256,
+                    record_sha256=digest,
+                )
+                source_version = compiled.normalized.get("mode")
+                if type(source_version) is not str:
+                    raise ValueError("source_cash_batch_source_version_invalid")
+                return PreparedSourceCash(
+                    record.benefit.id, record.benefit.source.document_version, digest,
+                    source_version, record, review, source_text,
+                )
+
+            import psycopg
+            from psycopg.rows import dict_row
+
+            # Load source-fact replay candidates together. Fresh identities are
+            # still checked by the batch writer before every transaction.
+            with psycopg.connect(
+                database_url, connect_timeout=2, row_factory=dict_row,
+                options="-c default_transaction_read_only=on -c statement_timeout=4000 "
+                "-c timezone=UTC",
+            ) as connection:
+                replay_rows = connection.execute(
+                    "SELECT policy_id,payload,approved_sha256,document_version,review_type,"
+                    "review_status,publication_status FROM public.policy_catalog_releases "
+                    "WHERE policy_id=ANY(%s) AND publication_status='published' "
+                    "AND document_version LIKE %s",
+                    ([value.policy_id for value in values], "%:source-facts-v1"),
+                ).fetchmany(5001)
+            if len(replay_rows) > 5000:
+                raise ValueError("source_cash_batch_current_release_size_exceeded")
+            replay_payloads = {
+                (row["policy_id"], row["document_version"]): dict(row) for row in replay_rows
+            }
+
+            def load_current_release(policy_id: str, document_version: str) -> dict | None:
+                return replay_payloads.get((policy_id, document_version))
+
+            def timestamp_replay(prepared, current) -> bool:
+                if (
+                    current.get("publication_status") != "published"
+                    or current.get("review_type") != "ai"
+                    or current.get("review_status") != "approved"
+                    or current.get("document_version") != prepared.document_version
+                    or not isinstance(prepared.record, CatalogRecord)
+                ):
+                    return False
+                try:
+                    approved = CatalogRecord.model_validate(current["payload"])
+                    approved_digest = current["approved_sha256"]
+                    if record_hash(approved) != approved_digest:
+                        return False
+                    restored = restore_checked_at_only(
+                        prepared.record.model_dump(mode="json"),
+                        approved.model_dump(mode="json"),
+                    )
+                    if restored is None:
+                        return False
+                    return record_hash(CatalogRecord.model_validate(restored)) == approved_digest
+                except (KeyError, TypeError, ValueError):
+                    return False
+
+            def publish(entries, expected_previous, allow_replace_ai, allow_replace_unreviewed):
+                return publish_ai_batch(
+                    database_url,
+                    [(entry.record, entry.review, entry.source_text, None) for entry in entries],
+                    allow_replace_ai=allow_replace_ai,
+                    allow_replace_unreviewed=allow_replace_unreviewed,
+                    expected_previous=dict(expected_previous),
+                )
+
+            report = run_source_cash_batch(
+                values, output=args.output, as_of=as_of,
+                compile_source=compile_source, prepare=prepare,
+                load_existing=lambda ids, external: load_source_release_identities(
+                    database_url, ids, external
+                ),
+                load_current_release=load_current_release,
+                timestamp_replay=timestamp_replay,
+                publish=publish if args.publish else None,
+                save=private_json, load=load_checkpoint, selection=selection,
+                batch_size=args.batch_size,
+            )
+        finally:
+            os.close(descriptor)
+    except Exception as error:
+        code = str(error)
+        allowed = code.startswith("source_cash_batch_") and code.replace("_", "").isalnum()
+        print(code if allowed else "source_cash_batch_failed", file=sys.stderr)
+        return 2
+
+    print(json.dumps({
+        "mode": report["mode"], "dry_run": report["dry_run"],
+        "source_version": report["source_version"],
+        "review_metadata": report["review_metadata"],
+        "model_calls": report["model_calls"], "ai_review_calls": report["ai_review_calls"],
+        "ai_verification": report["ai_verification"],
+        "counts": report["counts"], "reason_counts": report["reason_counts"],
+    }, ensure_ascii=False, sort_keys=True))
+    return 1 if report["counts"]["failed"] or report["counts"]["held"] else 0
 
 
 def _analysis_version() -> int:
@@ -1334,6 +1499,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     decider_eval.add_argument('--report', type=Path, required=True)
     decider_eval.add_argument('--gold', type=Path, required=True)
     decider_eval.add_argument('--output', type=Path, required=True)
+    source_cash = commands.add_parser(
+        'source-cash', help='현재 원천으로 결정론적 현금 사실을 준비하고 명시적으로 게시'
+    )
+    source_cash.add_argument('--output', type=Path, required=True)
+    source_cash.add_argument('--publish', action='store_true', help='검증된 항목만 새 버전으로 게시')
+    source_cash.add_argument('--batch-size', type=int, default=10)
+    source_cash.add_argument('--as-of', type=date.fromisoformat)
     commands.add_parser("refresh-ecos-rate", help="ECOS 기준금리의 마지막 성공값을 DB에 갱신")
     daily = commands.add_parser("refresh-data", help="정책·기준금리 통합 갱신과 단일 결과 보고")
     daily.add_argument("--data-dir", type=Path, default=Path("data"))
@@ -1426,6 +1598,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.command == 'decider-batch':
         return decider_command(args)
+    if args.command == 'source-cash':
+        return source_cash_command(args)
     if args.command == 'catalog-from-f12':
         return f12_catalog_command(args)
     if args.command == 'refresh-gov24':
