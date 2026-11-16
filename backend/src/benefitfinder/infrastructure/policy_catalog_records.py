@@ -18,6 +18,8 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from benefitfinder.application.published_policies import PublishedPolicy
 from benefitfinder.application.policy_explanations import SAFE_CONDITIONS
 
+from benefitfinder.infrastructure.rent_support_records import RentSupportRule
+
 MAX_WON = 2**53 - 1
 
 
@@ -187,13 +189,14 @@ SELECTION_FIELDS = {
 
 class ExecutableCondition(Record):
     condition_id: str = Field(min_length=1)
-    kind: Literal["manual", "age", "income_max", "selection", "none_of"]
+    kind: Literal["manual", "age", "income_max", "selection", "none_of", "rent_support"]
     minimum: int | None = Field(default=None, ge=0)
     maximum: int | None = Field(default=None, ge=0, le=MAX_WON)
     military_extension_years: int | None = Field(default=None, ge=0, le=3)
     inclusive: bool | None = None
     field: str | None = None
     values: list[str] | None = None
+    rent_support: RentSupportRule | None = Field(default=None, exclude_if=lambda value: value is None)
 
     @model_validator(mode="after")
     def validate_operation(self):
@@ -204,6 +207,7 @@ class ExecutableCondition(Record):
         }
         expected = {
             "manual": set(),
+            "rent_support": {"rent_support"},
             "age": {"minimum", "maximum", "military_extension_years"},
             "income_max": {"maximum", "inclusive"},
             "selection": {"field", "values"},
@@ -322,13 +326,30 @@ class CatalogRecord(Record):
             amount = benefit.benefit_amount
             if (
                 self.unresolved_combination_rules
-                or not self.payments
+                or (not self.payments and not any(r.kind == "rent_support" for r in self.conditions))
                 or not self.payment_evidence
                 or amount is None
                 or amount.amount_status != "verified"
                 or amount.pay_timing is None
             ):
                 raise ValueError("reviewed_policy_requires_verified_calculation")
+            if benefit.lifetime_once and not any(
+                rule.kind == "none_of" and rule.field == "domain_data.received"
+                for rule in self.conditions
+            ):
+                raise ValueError("lifetime_policy_requires_received_rule")
+            rent_rules = [r.rent_support for r in self.conditions if r.kind == "rent_support"]
+            if rent_rules:
+                if len(rent_rules) != 1:
+                    raise ValueError("duplicate_rent_support_rule")
+                rent = rent_rules[0]
+                if (self.payments is not None or self.maturity_accruals is not None
+                        or amount.type != "monthly" or amount.pay_timing != "monthly_from_start"
+                        or amount.amount_won != rent.monthly_cap_won
+                        or amount.period_months != rent.maximum_months
+                        or amount.max_total_won != rent.monthly_cap_won * rent.maximum_months):
+                    raise ValueError("rent_support_requires_dynamic_cap_metadata")
+                return self
             total = sum(payment.amount_won for payment in self.payments)
             if total > MAX_WON or amount.max_total_won != total:
                 raise ValueError("payment_total_mismatch")

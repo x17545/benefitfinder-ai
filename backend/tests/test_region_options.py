@@ -56,6 +56,20 @@ class RegionArchiveTest(unittest.TestCase):
         self.assertEqual(regions[1].sigungu[0].code, "36110")
         self.assertEqual(regions[1].sido_name, regions[1].sigungu[0].name)
 
+    def test_general_districts_are_opt_in_and_require_their_city(self) -> None:
+        default = parse_region_archive(archive(ROWS))
+        expanded = parse_region_archive(archive(ROWS), include_general_districts=True)
+
+        self.assertEqual([c.code for c in default[2].sigungu], ["41110", "41130"])
+        self.assertEqual(
+            [(c.code, c.name) for c in expanded[2].sigungu],
+            [("41110", "가상시"), ("41111", "가상시 일반구"), ("41130", "다른시")],
+        )
+
+        orphan = [row for row in ROWS if not row.startswith("4111000000")]
+        with self.assertRaises(RegionOptionsUnavailable):
+            parse_region_archive(archive(orphan), include_general_districts=True)
+
     def test_rejects_corrupt_empty_duplicate_or_incomplete_hierarchy(self) -> None:
         cases = [
             b"<html>upstream error</html>",

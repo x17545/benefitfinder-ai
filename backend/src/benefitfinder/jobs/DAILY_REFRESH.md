@@ -4,6 +4,11 @@
 
 `refresh-data`는 온통청년 목록 수집과 ECOS 기준금리 갱신을 별도 작업으로 동시에 시작하고 결과를 한 번 보고한다. 한 소스가 지연되거나 실패해도 다른 소스를 시도한다. 각각의 기존 저장기가 성공한 결과만 반영하므로, 실패한 소스의 마지막 성공본과 시각은 보존한다. 성공한 다른 소스의 갱신을 되돌리지 않는다.
 
+`F12_ANALYSIS_ENGINE=decider`는 준비된 작업을 F12 v5 Decider queue로 보낸다. 일일 실행은
+`DECIDER_PROVIDER=external_api`가 필요하고, 최종 AI release는 full gold gate와 source
+lease를 다시 통과해야 한다. [명령·평가·현재 한도](../../../../docs/development/DECIDER_PIPELINE.md)를
+따른다. 2026-11-16 확인 시 후보 systemd는 생성·문법 검사만 했고 실제 timer 등록은 없다.
+
 ## 실행
 
 작업 프로세스에 `YOUTHCENTER_API_KEY`, `ECOS_API_KEY`, `BASE_RATE_WRITE_DATABASE_URL`을 설정한다. 알림을 요청하면 `DISCORD_WEBHOOK_URL`도 필요하다. 실제 값은 Git 제외 파일 `data/local/f08.env` 또는 실행 환경에만 두고 파일 권한을 600으로 제한한다. DB에는 [ECOS 0004 마이그레이션과 쓰기 역할](../infrastructure/database/ECOS_RATES.md)이 준비되어 있어야 한다. `.env`는 자동으로 읽지 않는다.

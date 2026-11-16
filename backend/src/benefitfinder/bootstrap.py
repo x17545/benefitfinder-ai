@@ -56,6 +56,7 @@ from benefitfinder.application.simulation_service import simulate_mvp
 from benefitfinder.domains.youth.local_cash import assess_cash
 from benefitfinder.domains.youth.policy_evaluator import evaluate_policies
 from benefitfinder.domains.youth.published_eligibility import evaluate_condition
+from benefitfinder.domains.youth.rent_support import rent_support_payments
 from benefitfinder.domains.youth.published_scenario import change_published_profile, published_next_threshold
 from benefitfinder.domains.youth.scenario import change_profile, next_threshold
 from benefitfinder.infrastructure.database.repositories.published_clauses import (
@@ -330,7 +331,9 @@ def create_app(
     )
 
     if policy_repository is not None:
-        catalog = PublishedRecommendations(policy_repository, evaluate_condition)
+        catalog = PublishedRecommendations(
+            policy_repository, evaluate_condition, resolve_payments=rent_support_payments,
+        )
         app.state.recommendation_service = catalog
         app.state.benefit_lookup = lambda policy_id: catalog.detail(policy_id) or services.detail(policy_id)
 

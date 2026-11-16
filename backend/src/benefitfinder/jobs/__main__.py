@@ -15,117 +15,594 @@ import json
 import os
 import shutil
 import sys
+import threading
+from contextlib import contextmanager
 from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import asdict
-from datetime import datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 from time import monotonic
 from zoneinfo import ZoneInfo
 
-from benefitfinder.ai.chunked_evidence import extract_chunked_evidence
-from benefitfinder.ai.policy_facts_agent import extract_policy_facts
-from benefitfinder.ai.policy_rule_agent import extract_rule_batch
-from benefitfinder.application.f12_review import F12ReviewDecision
-from benefitfinder.infrastructure.collection_files import read_collection_file
-from benefitfinder.infrastructure.database.repositories.collected_policies import (
-    PostgresCollectedPolicies,
-)
-from benefitfinder.ingestion.collected_generations import load_youthcenter_generation
-from benefitfinder.infrastructure.ecos_base_rate import EcosBaseRate
-from benefitfinder.infrastructure.database.repositories.base_rates import PostgresBaseRates
-from benefitfinder.application.policy_rules import RuleReviewSnapshot
-from benefitfinder.infrastructure.chunk_e4b import LocalE4BChat
-from benefitfinder.infrastructure.chunk_evidence_files import write_chunk_checkpoint, write_chunked_run
-from benefitfinder.infrastructure.discord_webhook import DiscordWebhook, DiscordWebhookError
-from benefitfinder.infrastructure.local_files import (
-    JsonFileSnapshotStore,
-    JsonFileVersionStore,
-    write_field_summary_csv,
-    write_records_csv,
-)
-from benefitfinder.infrastructure.f12_evaluation_files import (
-    EvaluationFileError,
-    evaluate_manifest,
-    write_evaluation_report,
-)
-from benefitfinder.infrastructure.f12_catalog_files import prepare_f12_release, write_f12_catalog
-from benefitfinder.infrastructure.ai_catalog_review import AIReview, publish_ai_batch, retire_ai_batch, validate_ai_review
-from benefitfinder.infrastructure.unreviewed_catalog import publish_unreviewed, retire_unreviewed, validate_unreviewed
-from benefitfinder.infrastructure.ollama_chat import OllamaChat
-from benefitfinder.infrastructure.compatible_llm import (
-    CompatibleChat,
-    CompatibleExplanationCompletion,
-)
-from benefitfinder.infrastructure.llm_settings import LLMSettings
-from benefitfinder.application.source_chunks import evidence_schema
-from benefitfinder.infrastructure.policy_rule_files import (
-    RULE_REVIEW_OUTPUT_EXISTS,
-    RuleReviewFileError,
-    load_f12_decisions,
-    load_f12_review_pair,
-    load_rule_batch,
-    load_rule_snapshot,
-    write_f12_approved_export,
-    write_f12_decisions,
-    write_f12_review_pair,
-    write_policy_facts,
-    write_rule_batch,
-    write_rule_snapshot,
-)
-from benefitfinder.infrastructure.youthcenter_http import YouthcenterHttpFetcher
-from benefitfinder.ingestion.collect import CollectionResult, collect_youthcenter
-from benefitfinder.ingestion.rule_review_workflow import (
-    RuleReviewWorkflowError,
-    approve_snapshot,
-    inspect_snapshot,
-    prepare_snapshot,
-    refresh_snapshot,
-)
-from benefitfinder.ingestion.youthcenter import SOURCE_NAME, YOUTHCENTER_POLICY_LIST
-from benefitfinder.jobs.f12_review_display import format_f12_review
-from benefitfinder.jobs.daily_refresh import DailyRefreshError, run_daily_refresh
-from benefitfinder.jobs.rule_review_example import example_rule_batch
-from benefitfinder.jobs.youthcenter_refresh import (
-    STATUS_FILE,
-    RefreshError,
-    refresh_notification,
-    run_youthcenter_refresh,
-)
+# The source-only CLI must not load model clients or AI quality gates.
+if sys.argv[1:3] != ['decider-batch', 'import-source']:
+    from benefitfinder.ai.chunked_evidence import extract_chunked_evidence
+    from benefitfinder.ai.policy_facts_agent import extract_policy_facts
+    from benefitfinder.ai.policy_rule_agent import extract_rule_batch
+    from benefitfinder.application.f12_review import F12ReviewDecision
+    from benefitfinder.infrastructure.collection_files import read_collection_file
+    from benefitfinder.infrastructure.database.repositories.collected_policies import (
+        PostgresCollectedPolicies,
+    )
+    from benefitfinder.ingestion.collected_generations import load_youthcenter_generation
+    from benefitfinder.infrastructure.ecos_base_rate import EcosBaseRate
+    from benefitfinder.infrastructure.database.repositories.base_rates import PostgresBaseRates
+    from benefitfinder.application.policy_rules import RuleReviewSnapshot
+    from benefitfinder.infrastructure.chunk_e4b import LocalE4BChat
+    from benefitfinder.infrastructure.chunk_evidence_files import write_chunk_checkpoint, write_chunked_run
+    from benefitfinder.infrastructure.discord_webhook import DiscordWebhook, DiscordWebhookError
+    from benefitfinder.infrastructure.local_files import (
+        JsonFileSnapshotStore,
+        JsonFileVersionStore,
+        write_field_summary_csv,
+        write_records_csv,
+    )
+    from benefitfinder.infrastructure.f12_evaluation_files import (
+        EvaluationFileError,
+        evaluate_manifest,
+        write_evaluation_report,
+    )
+    from benefitfinder.infrastructure.f12_catalog_files import prepare_f12_release, write_f12_catalog
+    from benefitfinder.infrastructure.ai_catalog_review import AIReview, publish_ai_batch, retire_ai_batch, validate_ai_review
+    from benefitfinder.infrastructure.unreviewed_catalog import publish_unreviewed, retire_unreviewed, validate_unreviewed
+    from benefitfinder.infrastructure.ollama_chat import OllamaChat
+    from benefitfinder.infrastructure.compatible_llm import (
+        CompatibleChat,
+        CompatibleExplanationCompletion,
+    )
+    from benefitfinder.infrastructure.llm_settings import LLMSettings
+    from benefitfinder.application.source_chunks import evidence_schema
+    from benefitfinder.infrastructure.policy_rule_files import (
+        RULE_REVIEW_OUTPUT_EXISTS,
+        RuleReviewFileError,
+        load_f12_decisions,
+        load_f12_review_pair,
+        load_rule_batch,
+        load_rule_snapshot,
+        write_f12_approved_export,
+        write_f12_decisions,
+        write_f12_review_pair,
+        write_policy_facts,
+        write_rule_batch,
+        write_rule_snapshot,
+    )
+    from benefitfinder.infrastructure.youthcenter_http import YouthcenterHttpFetcher
+    from benefitfinder.ingestion.collect import CollectionResult, collect_youthcenter
+    from benefitfinder.ingestion.rule_review_workflow import (
+        RuleReviewWorkflowError,
+        approve_snapshot,
+        inspect_snapshot,
+        prepare_snapshot,
+        refresh_snapshot,
+    )
+    from benefitfinder.ingestion.youthcenter import SOURCE_NAME, YOUTHCENTER_POLICY_LIST
+    from benefitfinder.jobs.f12_review_display import format_f12_review
+    from benefitfinder.jobs.daily_refresh import DailyRefreshError, run_daily_refresh
+    from benefitfinder.jobs.rule_review_example import example_rule_batch
+    from benefitfinder.jobs.youthcenter_refresh import (
+        STATUS_FILE,
+        RefreshError,
+        refresh_notification,
+        run_youthcenter_refresh,
+    )
 
-from benefitfinder.ai.policy_explanation import GroundedPolicyExplainer
-from benefitfinder.application.policy_explanations import explain_policy
-from benefitfinder.infrastructure.ollama_explanations import OllamaExplanationCompletion
-from benefitfinder.infrastructure.published_clauses import InMemoryPublishedClauses
-from benefitfinder.jobs.explanation_example import explanation_example
-from benefitfinder.application.policy_analysis import PolicyAnalysisStoreError
-from benefitfinder.application.policy_rules import PolicyReference, RuleReviewBatch
-from benefitfinder.application.run_policy_analysis import run_pending_analysis
-from benefitfinder.infrastructure.database.repositories.policy_analysis import PostgresPolicyAnalysisTasks
-from benefitfinder.infrastructure.policy_analysis_files import PolicyAnalysisFiles
-from benefitfinder.infrastructure.policy_analysis_inputs import load_policy_analysis_input
-from benefitfinder.infrastructure.policy_catalog_records import CatalogRecord, record_hash, validate_source_text
-from benefitfinder.infrastructure.database.repositories.published_policies import publish_policy
-from benefitfinder.infrastructure.database.repositories.policy_rechecks import list_policy_rechecks
-from benefitfinder.infrastructure.policy_recheck_files import write_recheck_page
-from benefitfinder.infrastructure.service_catalog_records import (
-    ServiceCatalogRecord, service_record_hash, validate_service_sources,
-)
-from benefitfinder.infrastructure.database.repositories.published_services import publish_service
-from benefitfinder.application.prepare_policy_analysis import prepare_analysis_inputs
-from benefitfinder.infrastructure.policy_preparation_plans import load_preparation_plan
-from benefitfinder.infrastructure.database.repositories.analysis_sources import PostgresAnalysisSources
-from benefitfinder.ingestion.versioning import record_sha256
-from benefitfinder.ingestion.youthcenter import hashed_fields
+    from benefitfinder.ai.policy_explanation import GroundedPolicyExplainer
+    from benefitfinder.application.policy_explanations import explain_policy
+    from benefitfinder.infrastructure.ollama_explanations import OllamaExplanationCompletion
+    from benefitfinder.infrastructure.published_clauses import InMemoryPublishedClauses
+    from benefitfinder.jobs.explanation_example import explanation_example
+    from benefitfinder.application.policy_analysis import AnalysisClaim, PolicyAnalysisInput, PolicyAnalysisStoreError
+    from benefitfinder.application.policy_rules import PolicyReference, RuleReviewBatch
+    from benefitfinder.application.run_policy_analysis import run_pending_analysis
+    from benefitfinder.infrastructure.database.repositories.policy_analysis import PostgresPolicyAnalysisTasks
+    from benefitfinder.infrastructure.policy_analysis_files import PolicyAnalysisFiles
+    from benefitfinder.infrastructure.policy_analysis_inputs import load_policy_analysis_input
+    from benefitfinder.infrastructure.policy_catalog_records import CatalogRecord, record_hash, validate_source_text
+    from benefitfinder.infrastructure.database.repositories.published_policies import publish_policy
+    from benefitfinder.infrastructure.database.repositories.policy_rechecks import list_policy_rechecks
+    from benefitfinder.infrastructure.policy_recheck_files import write_recheck_page
+    from benefitfinder.infrastructure.service_catalog_records import (
+        ServiceCatalogRecord, service_record_hash, validate_service_sources,
+    )
+    from benefitfinder.infrastructure.database.repositories.published_services import publish_service
+    from benefitfinder.application.prepare_policy_analysis import prepare_analysis_inputs
+    from benefitfinder.infrastructure.policy_preparation_plans import load_preparation_plan
+    from benefitfinder.infrastructure.database.repositories.analysis_sources import PostgresAnalysisSources
+    from benefitfinder.ingestion.versioning import record_sha256
+    from benefitfinder.ingestion.youthcenter import hashed_fields
+
+    from benefitfinder.ai.decider_extraction import analyze_batch as analyze_decider_batch
+    from benefitfinder.ingestion.decider_source_fields import prepare_source_fields
+    from benefitfinder.application.decider import Compilation, Decisions, DocumentExtraction, canonical_hash
+    from benefitfinder.application.decider_evaluation import evaluate_report, require_evaluation
+    from benefitfinder.infrastructure.decider_client import (
+        CheckpointDecider, HostedDecider, LocalDecider, private_json,
+    )
+    from benefitfinder.jobs.decider_batch import run_batch as run_decider_batch
+    from benefitfinder.jobs.refresh_lock import acquire_refresh_lock
+    from benefitfinder.infrastructure.database.repositories.decider_inputs import load_decider_corpus
 
 API_KEY_ENV = "YOUTHCENTER_API_KEY"
 KST = ZoneInfo("Asia/Seoul")
+
+DECIDER_ANALYSIS_VERSION = 7
+
+
+def _add_source_import_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--publish', action='store_true', help='새 원문만 미검수 상태로 적재')
+
+
+def import_source_command(args: argparse.Namespace) -> int:
+    """Assemble source-only import without constructing or loading model clients."""
+    from tempfile import NamedTemporaryFile
+
+    from benefitfinder.infrastructure.database.repositories.decider_inputs import load_decider_corpus
+    from benefitfinder.infrastructure.database.repositories.source_catalog_import import (
+        load_source_inventory, load_source_release_identities,
+    )
+    from benefitfinder.infrastructure.policy_catalog_records import CatalogRecord
+    from benefitfinder.infrastructure.unreviewed_catalog import publish_unreviewed, validate_unreviewed
+    from benefitfinder.ingestion.decider_pending import compile_pending_source
+    from benefitfinder.jobs.refresh_lock import acquire_refresh_lock
+    from benefitfinder.jobs.source_catalog_import import run_source_catalog_import
+
+    def save(path: Path, value: object) -> None:
+        path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        temporary = None
+        try:
+            with NamedTemporaryFile(mode='w', encoding='utf-8', dir=path.parent,
+                                    prefix='.source-import-', delete=False) as handle:
+                temporary = Path(handle.name)
+                json.dump(value, handle, ensure_ascii=False, sort_keys=True, allow_nan=False)
+                handle.write('\n')
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temporary, path)
+        finally:
+            if temporary is not None and temporary.exists():
+                temporary.unlink()
+
+    def load(path: Path) -> dict | None:
+        if not path.exists():
+            return None
+        with path.open('rb') as handle:
+            encoded = handle.read(2 * 1024 * 1024 + 1)
+        if len(encoded) > 2 * 1024 * 1024:
+            raise ValueError('source_import_checkpoint_size_exceeded')
+        value = json.loads(encoded)
+        if not isinstance(value, dict):
+            raise ValueError('source_import_checkpoint_invalid')
+        return value
+
+    def validate(payload: dict, source: str) -> tuple[CatalogRecord, str]:
+        record = CatalogRecord.model_validate(payload)
+        return record, validate_unreviewed(record, source)
+
+    try:
+        publish_url = os.environ.get('POLICY_PUBLISH_DATABASE_URL', '').strip()
+        read_url = publish_url or os.environ.get('F12_WRITE_DATABASE_URL', '').strip()
+        if args.publish and not publish_url:
+            raise ValueError('source_import_publish_database_required')
+        if not read_url:
+            raise ValueError('source_import_read_database_required')
+        args.output.mkdir(mode=0o700, parents=True, exist_ok=True)
+        descriptor = os.open(args.output / '.source-import-lock',
+                             os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+        try:
+            acquire_refresh_lock(descriptor)
+            inventory = load_source_inventory(read_url)
+            values, selection = load_decider_corpus(read_url)
+            today = datetime.now(KST).date()
+            report = run_source_catalog_import(
+                values, root=args.output, inventory=inventory, selection=selection,
+                compile_source=lambda value: compile_pending_source(value, as_of=today),
+                validate=validate,
+                load_existing=lambda ids, external: load_source_release_identities(read_url, ids, external),
+                save=save, load=load,
+                publish=(lambda entries: publish_unreviewed(publish_url, entries)) if args.publish else None,
+            )
+        finally:
+            os.close(descriptor)
+    except Exception as error:
+        code = str(error)
+        if not code.startswith('source_import_') or not code.replace('_', '').isalnum():
+            code = 'source_import_failed'
+        print(code, file=sys.stderr)
+        return 2
+    print(json.dumps({'mode': 'source_only', 'model_analysis': 'not_run',
+                      'counts': report['counts'], 'reason_counts': report['reason_counts']},
+                     ensure_ascii=False, sort_keys=True))
+    return 1 if report['counts']['failed'] or report['counts']['held'] else 0
+
+
+def source_cash_command(args: argparse.Namespace) -> int:
+    """Compile current youthcenter cash facts without loading a model."""
+    from benefitfinder.infrastructure.ai_catalog_review import AIReview, publish_ai_batch
+    from benefitfinder.infrastructure.database.repositories.decider_inputs import load_decider_corpus
+    from benefitfinder.infrastructure.database.repositories.source_catalog_import import (
+        load_source_release_identities,
+    )
+    from benefitfinder.infrastructure.decider_client import private_json
+    from benefitfinder.infrastructure.policy_catalog_records import (
+        CatalogRecord, record_hash, validate_source_text,
+    )
+    from benefitfinder.infrastructure.region_codes import OfficialRegionCatalog
+    from benefitfinder.ingestion.source_cash import compile_source_cash
+    from benefitfinder.jobs.refresh_lock import acquire_refresh_lock
+    from benefitfinder.jobs.source_cash_batch import (
+        PreparedSourceCash, SOURCE_CASH_REVIEWER_AGENT, SOURCE_CASH_REVIEW_METADATA,
+        SOURCE_CASH_WRITER_AGENT, restore_checked_at_only, run_source_cash_batch,
+        source_cash_review_timestamp,
+    )
+
+    def load_checkpoint(path: Path) -> dict | None:
+        if not path.exists():
+            return None
+        with path.open("rb") as handle:
+            encoded = handle.read(2 * 1024 * 1024 + 1)
+        if len(encoded) > 2 * 1024 * 1024:
+            raise ValueError("source_cash_batch_checkpoint_size_exceeded")
+        value = json.loads(encoded)
+        if not isinstance(value, dict):
+            raise ValueError("source_cash_batch_checkpoint_invalid")
+        return value
+
+    try:
+        database_url = os.environ.get("POLICY_PUBLISH_DATABASE_URL", "").strip()
+        if not database_url:
+            raise ValueError("source_cash_batch_database_url_required")
+        args.output.mkdir(mode=0o700, parents=True, exist_ok=True)
+        descriptor = os.open(
+            args.output / ".source-cash-lock", os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600
+        )
+        try:
+            acquire_refresh_lock(descriptor)
+            values, selection = load_decider_corpus(database_url)
+            regions = OfficialRegionCatalog().get_regions()
+            as_of = args.as_of or datetime.now(KST).date()
+
+            def compile_source(value):
+                return compile_source_cash(value, as_of=as_of, regions=regions)
+
+            def prepare(compiled, source_text, local_date) -> PreparedSourceCash:
+                record = CatalogRecord.model_validate(compiled.payload)
+                digest = record_hash(record)
+                validate_source_text(record, source_text)
+                checked_at = datetime.fromisoformat(
+                    record.benefit.source.checked_at.replace("Z", "+00:00")
+                )
+                reviewed_at = source_cash_review_timestamp(checked_at=checked_at)
+                review = AIReview(
+                    writer_agent=SOURCE_CASH_WRITER_AGENT,
+                    reviewer_agent=SOURCE_CASH_REVIEWER_AGENT,
+                    reviewer_model=SOURCE_CASH_REVIEW_METADATA,
+                    verdict="pass",
+                    reviewed_at=reviewed_at,
+                    document_version=record.benefit.source.document_version,
+                    source_sha256=record.source_sha256,
+                    record_sha256=digest,
+                )
+                source_version = compiled.normalized.get("mode")
+                if type(source_version) is not str:
+                    raise ValueError("source_cash_batch_source_version_invalid")
+                return PreparedSourceCash(
+                    record.benefit.id, record.benefit.source.document_version, digest,
+                    source_version, record, review, source_text,
+                )
+
+            import psycopg
+            from psycopg.rows import dict_row
+
+            # Load source-fact replay candidates together. Fresh identities are
+            # still checked by the batch writer before every transaction.
+            with psycopg.connect(
+                database_url, connect_timeout=2, row_factory=dict_row,
+                options="-c default_transaction_read_only=on -c statement_timeout=4000 "
+                "-c timezone=UTC",
+            ) as connection:
+                replay_rows = connection.execute(
+                    "SELECT policy_id,payload,approved_sha256,document_version,review_type,"
+                    "review_status,publication_status FROM public.policy_catalog_releases "
+                    "WHERE policy_id=ANY(%s) AND publication_status='published' "
+                    "AND document_version LIKE %s",
+                    ([value.policy_id for value in values], "%:source-facts-v1"),
+                ).fetchmany(5001)
+            if len(replay_rows) > 5000:
+                raise ValueError("source_cash_batch_current_release_size_exceeded")
+            replay_payloads = {
+                (row["policy_id"], row["document_version"]): dict(row) for row in replay_rows
+            }
+
+            def load_current_release(policy_id: str, document_version: str) -> dict | None:
+                return replay_payloads.get((policy_id, document_version))
+
+            def timestamp_replay(prepared, current) -> bool:
+                if (
+                    current.get("publication_status") != "published"
+                    or current.get("review_type") != "ai"
+                    or current.get("review_status") != "approved"
+                    or current.get("document_version") != prepared.document_version
+                    or not isinstance(prepared.record, CatalogRecord)
+                ):
+                    return False
+                try:
+                    approved = CatalogRecord.model_validate(current["payload"])
+                    approved_digest = current["approved_sha256"]
+                    if record_hash(approved) != approved_digest:
+                        return False
+                    restored = restore_checked_at_only(
+                        prepared.record.model_dump(mode="json"),
+                        approved.model_dump(mode="json"),
+                    )
+                    if restored is None:
+                        return False
+                    return record_hash(CatalogRecord.model_validate(restored)) == approved_digest
+                except (KeyError, TypeError, ValueError):
+                    return False
+
+            def publish(entries, expected_previous, allow_replace_ai, allow_replace_unreviewed):
+                return publish_ai_batch(
+                    database_url,
+                    [(entry.record, entry.review, entry.source_text, None) for entry in entries],
+                    allow_replace_ai=allow_replace_ai,
+                    allow_replace_unreviewed=allow_replace_unreviewed,
+                    expected_previous=dict(expected_previous),
+                )
+
+            report = run_source_cash_batch(
+                values, output=args.output, as_of=as_of,
+                compile_source=compile_source, prepare=prepare,
+                load_existing=lambda ids, external: load_source_release_identities(
+                    database_url, ids, external
+                ),
+                load_current_release=load_current_release,
+                timestamp_replay=timestamp_replay,
+                publish=publish if args.publish else None,
+                save=private_json, load=load_checkpoint, selection=selection,
+                batch_size=args.batch_size,
+            )
+        finally:
+            os.close(descriptor)
+    except Exception as error:
+        code = str(error)
+        allowed = code.startswith("source_cash_batch_") and code.replace("_", "").isalnum()
+        print(code if allowed else "source_cash_batch_failed", file=sys.stderr)
+        return 2
+
+    print(json.dumps({
+        "mode": report["mode"], "dry_run": report["dry_run"],
+        "source_version": report["source_version"],
+        "review_metadata": report["review_metadata"],
+        "model_calls": report["model_calls"], "ai_review_calls": report["ai_review_calls"],
+        "ai_verification": report["ai_verification"],
+        "counts": report["counts"], "reason_counts": report["reason_counts"],
+    }, ensure_ascii=False, sort_keys=True))
+    return 1 if report["counts"]["failed"] or report["counts"]["held"] else 0
+
+
+def _analysis_version() -> int:
+    engine = os.environ.get('F12_ANALYSIS_ENGINE', 'tools')
+    if engine not in {'tools', 'decider'}:
+        raise ValueError('invalid_f12_analysis_engine')
+    return DECIDER_ANALYSIS_VERSION if engine == 'decider' else 4
+
+
+@contextmanager
+def _decider_lock(root: Path) -> Iterator[None]:
+    root.mkdir(parents=True, exist_ok=True, mode=0o700)
+    descriptor = os.open(root / '.batch-lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    try:
+        acquire_refresh_lock(descriptor)
+        yield
+    finally:
+        os.close(descriptor)
+
+
+def _decider_client(root: Path) -> tuple[LocalDecider | HostedDecider, CheckpointDecider]:
+    provider = os.environ.get('DECIDER_PROVIDER', 'local')
+    if provider == 'local':
+        raw = LocalDecider(Path(os.environ.get('DECIDER_CHECKPOINT', 'data/local/decider/checkpoint')),
+            max_length=int(os.environ.get('DECIDER_MAX_LENGTH', '3072')),
+            batch_tokens=int(os.environ.get('DECIDER_BATCH_TOKENS', '2048')),
+            mode=os.environ.get('DECIDER_MODE', 'separate'),
+            locate_threshold=float(os.environ.get('DECIDER_LOCATE_THRESHOLD', '0.5')))
+    elif provider == 'external_api':
+        raw = HostedDecider(os.environ.get('DECIDER_ENDPOINT_URL', ''),
+            os.environ.get('DECIDER_API_KEY', ''), budget_path=root / 'api-budget.json',
+            daily_calls=int(os.environ.get('DECIDER_DAILY_CALLS', '100')))
+    else:
+        raise ValueError('decider_provider_required')
+    return raw, CheckpointDecider(raw, root / 'responses')
+
+
+def _decider_publisher(client: Decisions, *, tasks: PostgresPolicyAnalysisTasks | None = None,
+                      claims: dict[str, AnalysisClaim] | None = None
+                      ) -> Callable[[dict, PolicyAnalysisInput], str]:
+    evaluation_path = os.environ.get('DECIDER_EVALUATION_PATH')
+    if not evaluation_path:
+        raise ValueError('decider_evaluation_required')
+    require_evaluation(json.loads(Path(evaluation_path).read_text()), client.identity)
+    database_url = os.environ.get('POLICY_PUBLISH_DATABASE_URL', '')
+    if not database_url:
+        raise ValueError('decider_publication_database_required')
+
+    def publish(payload: dict, value: PolicyAnalysisInput) -> str:
+        if tasks is not None and (claims is None or not tasks.is_current(claims[value.policy_id])):
+            raise ValueError('decider_source_changed')
+        record = CatalogRecord.model_validate(payload)
+        source = value.documents[0].text
+        validate_source_text(record, source)
+        review = AIReview(writer_agent='decider-locate:' + client.identity['questions'],
+            reviewer_agent='decider-followup-code:' + client.identity['questions'],
+            reviewer_model=client.identity['id'] + '@' + client.identity['revision'],
+            verdict='pass', reviewed_at=datetime.now(timezone.utc),
+            document_version=record.benefit.source.document_version,
+            source_sha256=record.source_sha256, record_sha256=record_hash(record))
+        result = publish_ai_batch(database_url, [(record, review, source, None)])
+        return next(key for key in ('published', 'replayed', 'replaced') if result.get(key))
+    return publish
+
+
+def _compile_decider(value: PolicyAnalysisInput, extracted: tuple[DocumentExtraction, ...]) -> Compilation:
+    from benefitfinder.ingestion.decider_normalization import compile_policy
+
+    result = compile_policy(value, extracted)
+    if result.payload is not None:
+        record = CatalogRecord.model_validate(result.payload)
+        validate_source_text(record, value.documents[0].text)
+    return result
+
+
+def _run_decider_values(values: Sequence[PolicyAnalysisInput], client: Decisions, root: Path, *,
+                       publish: Callable[[dict, PolicyAnalysisInput], str] | None = None) -> dict:
+    def analyze(values, client, **settings):
+        return analyze_decider_batch(values, client, prepare_source=prepare_source_fields,
+            max_policy_requests=int(os.environ.get('DECIDER_MAX_POLICY_REQUESTS', '32')),
+            max_policy_characters=int(os.environ.get('DECIDER_MAX_POLICY_CHARACTERS', '40000')),
+            **settings)
+
+    return run_decider_batch(tuple(values), client, root=root,
+        analyze=analyze, compile_policy=_compile_decider, save=private_json,
+        publish=publish, batch_size=int(os.environ.get('DECIDER_BATCH_SIZE', '4')),
+        window_chars=int(os.environ.get('DECIDER_WINDOW_CHARS', '900')))
+
+
+def run_decider_queue(data_dir: Path, *, limit: int = 20, daily: bool = False,
+                      publish: bool | None = None) -> dict:
+    """Reuse F12 leases and source invalidation; source/LLM work is never online."""
+    if not 1 <= limit <= 10000:
+        raise ValueError('decider_invalid_limit')
+    if daily and os.environ.get('DECIDER_PROVIDER') != 'external_api':
+        raise ValueError('decider_daily_requires_external_api')
+    root = data_dir / 'processed' / 'decider'
+    tasks = PostgresPolicyAnalysisTasks(os.environ.get('F12_WRITE_DATABASE_URL', ''),
+                                       analysis_version=DECIDER_ANALYSIS_VERSION)
+    combined = Counter(dict.fromkeys(('targets', 'published', 'replayed', 'replaced',
+                                      'dry_run_ready', 'held', 'failed'), 0))
+    with _decider_lock(root):
+        _raw, client = _decider_client(root)
+        # Validate all operational settings before taking a queue lease.
+        auto = os.environ.get('DECIDER_AUTO_PUBLISH', 'false') if publish is None else str(publish).lower()
+        if auto not in {'true', 'false'}:
+            raise ValueError('decider_invalid_auto_publish')
+        if auto == 'true':
+            _decider_publisher(client)
+        attempted = 0
+        while attempted < limit:
+            group = []
+            for _ in range(min(int(os.environ.get('DECIDER_BATCH_SIZE', '4')), limit - attempted)):
+                claim = tasks.claim()
+                if claim is None:
+                    break
+                group.append(claim)
+            if not group:
+                break
+            claims = {claim.input.policy_id: claim for claim in group}
+            stop = threading.Event()
+
+            def renew() -> None:
+                while not stop.wait(30):
+                    for claim in group:
+                        try:
+                            tasks.renew(claim)
+                        except Exception:
+                            pass  # is_current and complete still fail closed.
+
+            heartbeat = threading.Thread(target=renew, daemon=True)
+            heartbeat.start()
+            try:
+                report = _run_decider_values([claim.input for claim in group], client, root,
+                    publish=_decider_publisher(client, tasks=tasks, claims=claims)
+                    if auto == 'true' else None)
+                for entry in report['entries']:
+                    claim = claims[entry['policy_id']]
+                    if entry['status'] == 'failed':
+                        tasks.fail(claim)
+                        continue
+                    reference = f'f12-analysis/{claim.task_id}/{claim.token}'
+                    private_json(data_dir / reference / 'decider-summary.json', entry)
+                    tasks.complete(claim, output_ref=reference, output_sha256=canonical_hash(entry),
+                                   summary={'engine': 'decider', 'status': entry['status'],
+                                            'reasons': entry['reasons']})
+                combined.update(report['counts'])
+            except Exception:
+                for claim in group:
+                    tasks.fail(claim)
+                combined['failed'] += len(group)
+                combined['targets'] += len(group)
+            finally:
+                stop.set()
+                heartbeat.join(timeout=1)
+            attempted += len(group)
+        summary = {'format_version': 1, 'model': client.identity, 'counts': dict(combined)}
+        private_json(root / 'queue-summary.json', summary)
+    return dict(combined)
+
+
+def decider_command(args: argparse.Namespace) -> int:
+    try:
+        if args.decider_action == 'export':
+            values, selection = load_decider_corpus(os.environ.get('F12_WRITE_DATABASE_URL', ''))
+            inputs = []
+            tasks = PostgresPolicyAnalysisTasks(os.environ.get('F12_WRITE_DATABASE_URL', ''),
+                analysis_version=DECIDER_ANALYSIS_VERSION) if args.register else None
+            for value in values:
+                name = 'inputs/' + value.fingerprint() + '.json'
+                private_json(args.output / name, {'format_version': 1, **value.payload()})
+                inputs.append(name)
+                if tasks is not None:
+                    tasks.register_prepared(value)
+            private_json(args.output / 'manifest.json', {'format_version': 1, 'inputs': inputs})
+            private_json(args.output / 'selection.json', selection)
+            print(json.dumps(selection, sort_keys=True))
+            return 1 if selection['counts']['held'] else 0
+        if args.decider_action == 'evaluate':
+            report = json.loads(args.report.read_text())
+            extractions = {entry['policy_id']: json.loads((Path(entry['artifact']) / 'extraction.json').read_text())
+                for entry in report['entries'] if (Path(entry['artifact']) / 'extraction.json').exists()}
+            result = evaluate_report(report, json.loads(args.gold.read_text()), extractions)
+            private_json(args.output, result)
+            print(json.dumps(result, ensure_ascii=False))
+            return 0 if result['eligible_for_publication'] else 1
+        if args.queue:
+            result = run_decider_queue(args.data_dir, limit=args.limit, publish=args.publish)
+            print(json.dumps(result, sort_keys=True))
+            return 1 if result.get('failed', 0) or result.get('held', 0) else 0
+        manifest = json.loads(args.manifest.read_text())
+        if (manifest.get('format_version') != 1 or not isinstance(manifest.get('inputs'), list)
+            or not 1 <= len(manifest['inputs']) <= 10000):
+            raise ValueError('decider_invalid_manifest')
+        values = [load_policy_analysis_input(args.manifest.parent / path) for path in manifest['inputs']]
+        root = args.data_dir / 'processed' / 'decider'
+        with _decider_lock(root):
+            raw, client = _decider_client(root)
+            report = _run_decider_values(values, client, root,
+                publish=_decider_publisher(client) if args.publish else None)
+            if isinstance(raw, LocalDecider):
+                private_json(root / 'gpu-metrics.json', raw.metrics)
+        print(json.dumps({'counts': report['counts'], 'reason_counts': report['reason_counts']}, sort_keys=True))
+        return 1 if report['counts']['failed'] or report['counts']['held'] else 0
+    except Exception:
+        print('decider_batch_failed: 설정·비공개 실행 기록을 확인하세요.', file=sys.stderr)
+        return 2
 
 
 def prepare_f12_inputs(plan_path: Path) -> dict[str, int]:
     plan = load_preparation_plan(plan_path)
     url = os.environ.get('F12_WRITE_DATABASE_URL', '')
-    tasks = PostgresPolicyAnalysisTasks(url)
+    tasks = PostgresPolicyAnalysisTasks(url, analysis_version=_analysis_version())
     official = {}
     if any(target.official_documents for target in plan.targets):
         from benefitfinder.ingestion.official_documents import official_document_material_hash
@@ -143,6 +620,8 @@ def prepare_f12_inputs(plan_path: Path) -> dict[str, int]:
 
 
 def run_f12_queue(data_dir: Path, *, limit: int = 5) -> dict[str, object]:
+    if _analysis_version() == DECIDER_ANALYSIS_VERSION:
+        return run_decider_queue(data_dir, limit=limit)
     # Lazy import keeps non-LLM CLI commands independent of model initialization.
     from benefitfinder.ai.policy_analysis_agent import analyze_policy
 
@@ -185,7 +664,8 @@ def run_f12_queue(data_dir: Path, *, limit: int = 5) -> dict[str, object]:
 
 def f12_analysis_command(args: argparse.Namespace) -> int:
     try:
-        tasks = PostgresPolicyAnalysisTasks(os.environ.get('F12_WRITE_DATABASE_URL', ''))
+        tasks = PostgresPolicyAnalysisTasks(os.environ.get('F12_WRITE_DATABASE_URL', ''),
+                                           analysis_version=_analysis_version())
         if args.analysis_action == 'prepare':
             result = prepare_f12_inputs(args.plan)
         elif args.analysis_action == 'register':
@@ -677,6 +1157,9 @@ def refresh_data_command(data_dir: Path, *, notify_discord: bool = False) -> int
         DiscordWebhook(webhook).send(message)
 
     def analyze_pending():
+        if _analysis_version() == DECIDER_ANALYSIS_VERSION:
+            return run_decider_queue(data_dir, limit=int(os.environ.get('DECIDER_LIMIT', '20')),
+                                     daily=True)
         result = run_f12_queue(data_dir, limit=5)
         return {key: result[key] for key in ('attempted', 'needs_review', 'stale', 'failed',
                                             'source_records_awaiting_scope_or_documents')}
@@ -685,6 +1168,20 @@ def refresh_data_command(data_dir: Path, *, notify_discord: bool = False) -> int
         if 'F12_WRITE_DATABASE_URL' not in os.environ:
             raise ValueError('f12_preparation_requires_database')
         combined = dict.fromkeys(('targets', 'registered', 'replayed', 'failed'), 0)
+        if os.environ.get('DECIDER_DISCOVER_YOUTHCENTER') == 'true':
+            if _analysis_version() != DECIDER_ANALYSIS_VERSION:
+                raise ValueError('decider_discovery_requires_decider_engine')
+            values, selection = load_decider_corpus(os.environ['F12_WRITE_DATABASE_URL'])
+            tasks = PostgresPolicyAnalysisTasks(os.environ['F12_WRITE_DATABASE_URL'],
+                                               analysis_version=DECIDER_ANALYSIS_VERSION)
+            combined['targets'] += selection['counts']['targets']
+            combined['failed'] += selection['counts']['held']
+            for value in values:
+                try:
+                    result = tasks.register_prepared(value)
+                    combined['replayed' if result['replayed'] else 'registered'] += 1
+                except Exception:
+                    combined['failed'] += 1
         paths = [Path(os.environ[name]) for name in
                  ('F12_PREPARATION_PLAN', 'GOV24_PREPARATION_PLAN') if name in os.environ]
         policies = [target.policy_id for path in paths
@@ -713,8 +1210,9 @@ def refresh_data_command(data_dir: Path, *, notify_discord: bool = False) -> int
                 if 'OFFICIAL_DOCUMENT_PLAN' in os.environ else None,
             clock=lambda: datetime.now(KST),
             notify=notify if notify_discord else None,
-            prepare_analysis=prepare_analysis if any(name in os.environ for name in
-                ('F12_PREPARATION_PLAN', 'GOV24_PREPARATION_PLAN')) else None,
+            prepare_analysis=prepare_analysis if (any(name in os.environ for name in
+                ('F12_PREPARATION_PLAN', 'GOV24_PREPARATION_PLAN'))
+                or os.environ.get('DECIDER_DISCOVER_YOUTHCENTER') == 'true') else None,
             analyze_pending=analyze_pending if 'F12_WRITE_DATABASE_URL' in os.environ else None,
         )
     except DailyRefreshError as error:
@@ -976,8 +1474,38 @@ def extract_chunked_command(source: Path, output: Path) -> int:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    arguments = list(argv) if argv is not None else sys.argv[1:]
+    if arguments[:2] == ['decider-batch', 'import-source']:
+        parser = argparse.ArgumentParser(prog='python -m benefitfinder.jobs decider-batch import-source')
+        _add_source_import_arguments(parser)
+        return import_source_command(parser.parse_args(arguments[2:]))
     parser = argparse.ArgumentParser(prog="python -m benefitfinder.jobs")
     commands = parser.add_subparsers(dest="command", required=True)
+    decider = commands.add_parser('decider-batch', help='공식 Decider 일괄 추출·검증·명시적 게시')
+    decider_actions = decider.add_subparsers(dest='decider_action', required=True)
+    source_import = decider_actions.add_parser('import-source', help='모델 없이 API 원문을 미검수 상태로 준비')
+    _add_source_import_arguments(source_import)
+    decider_export = decider_actions.add_parser('export', help='공식 취업·주거 분류 전체를 읽기 전용으로 준비')
+    decider_export.add_argument('--output', type=Path, required=True)
+    decider_export.add_argument('--register', action='store_true', help='F12 v5 큐에도 멱등 등록')
+    decider_run = decider_actions.add_parser('run')
+    decider_input = decider_run.add_mutually_exclusive_group(required=True)
+    decider_input.add_argument('--manifest', type=Path)
+    decider_input.add_argument('--queue', action='store_true')
+    decider_run.add_argument('--data-dir', type=Path, default=Path('data'))
+    decider_run.add_argument('--limit', type=int, default=20)
+    decider_run.add_argument('--publish', action='store_true', help='통과한 평가·검증 항목만 운영 게시')
+    decider_eval = decider_actions.add_parser('evaluate')
+    decider_eval.add_argument('--report', type=Path, required=True)
+    decider_eval.add_argument('--gold', type=Path, required=True)
+    decider_eval.add_argument('--output', type=Path, required=True)
+    source_cash = commands.add_parser(
+        'source-cash', help='현재 원천으로 결정론적 현금 사실을 준비하고 명시적으로 게시'
+    )
+    source_cash.add_argument('--output', type=Path, required=True)
+    source_cash.add_argument('--publish', action='store_true', help='검증된 항목만 새 버전으로 게시')
+    source_cash.add_argument('--batch-size', type=int, default=10)
+    source_cash.add_argument('--as-of', type=date.fromisoformat)
     commands.add_parser("refresh-ecos-rate", help="ECOS 기준금리의 마지막 성공값을 DB에 갱신")
     daily = commands.add_parser("refresh-data", help="정책·기준금리 통합 갱신과 단일 결과 보고")
     daily.add_argument("--data-dir", type=Path, default=Path("data"))
@@ -1068,6 +1596,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     explain.add_argument("--category", choices=("employment", "housing"), default="employment")
     explain.add_argument("--model", help="설정한 제공자 모델. 제공자 미설정 시 명시적 Ollama 호환")
     args = parser.parse_args(argv)
+    if args.command == 'decider-batch':
+        return decider_command(args)
+    if args.command == 'source-cash':
+        return source_cash_command(args)
     if args.command == 'catalog-from-f12':
         return f12_catalog_command(args)
     if args.command == 'refresh-gov24':

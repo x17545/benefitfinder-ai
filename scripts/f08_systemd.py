@@ -9,6 +9,7 @@ an explicit KST calendar so it does not depend on the host timezone.
 from __future__ import annotations
 
 import argparse
+import re
 import shutil
 import sys
 from collections.abc import Sequence
@@ -33,6 +34,7 @@ def parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     parser.add_argument("--uv", default=None)
     parser.add_argument("--project-dir", type=Path, default=None)
     parser.add_argument("--job", choices=JOB_CHOICES, default=DEFAULT_JOB)
+    parser.add_argument("--time", default="03:00", help="매일 실행할 KST 시각 (HH:MM)")
     return parser.parse_args(argv)
 
 
@@ -144,7 +146,9 @@ def build_service(
     )
 
 
-def build_timer() -> str:
+def build_timer(run_time: str = "03:00") -> str:
+    if re.fullmatch(r"(?:[01][0-9]|2[0-3]):[0-5][0-9]", run_time) is None:
+        raise ValueError("invalid F08 daily time")
     return "\n".join(
         (
             "[Unit]",
@@ -152,7 +156,7 @@ def build_timer() -> str:
             "",
             "[Timer]",
             f"Unit={SERVICE_NAME}",
-            f"OnCalendar={RUN_CALENDAR}",
+            f"OnCalendar=*-*-* {run_time}:00 Asia/Seoul",
             "AccuracySec=1s",
             "Persistent=false",
             "",
@@ -201,6 +205,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         data_dir = _absolute_path(args.data_dir)
         output_dir = _absolute_path(args.output_dir)
         _validate_job(args.job)
+        timer = build_timer(args.time)
     except (OSError, RuntimeError, ValueError):
         print("f08_systemd_invalid_path", file=sys.stderr)
         return 2
@@ -235,7 +240,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         data_dir,
         job=args.job,
     )
-    timer = build_timer()
     first_created: Path | None = None
     try:
         _write_exclusive(service_path, service)
