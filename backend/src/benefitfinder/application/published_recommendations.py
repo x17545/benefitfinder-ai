@@ -34,10 +34,12 @@ class PublishedRecommendations:
         evaluate: Callable[[Any, dict[str, Any]], str],
         *,
         today: Callable[[], date] = korea_today,
+        resolve_payments: Callable[[Any, PublishedPolicy, date], tuple[tuple[int, int], ...] | None] | None = None,
     ) -> None:
         self.repository = repository
         self.evaluate = evaluate
         self.today = today
+        self.resolve_payments = resolve_payments or (lambda profile, policy, today: policy.payments)
 
     def detail(self, policy_id: str) -> dict[str, Any] | None:
         policy = self.repository.get_published(policy_id)
@@ -98,13 +100,16 @@ class PublishedRecommendations:
                 }
                 for condition in policy.detail["eligibility_conditions"]
             ]
+        resolved_payments = {
+            p.policy_id: self.resolve_payments(request.profile, p, today) for p in policies
+        }
         candidates = [
             p.policy_id
             for p in policies
             if eligibility[p.policy_id]["status"] != "not_met"
             and details[p.policy_id]["application"]["status"] == "open"
             and p.detail["reviewed"]
-            and p.payments is not None
+            and resolved_payments[p.policy_id] is not None
         ]
         conflicts = [
             [p.policy_id, conflict["policy_id"]]
@@ -121,7 +126,7 @@ class PublishedRecommendations:
             for pair in combinations(candidates, 2)
             if frozenset(pair) not in conflict_sets
         ]
-        payments = {key: list(by_id[key].payments or ()) for key in candidates}
+        payments = {key: list(resolved_payments[key] or ()) for key in candidates}
         accruals = {
             key: list(by_id[key].maturity_accruals)
             for key in candidates if by_id[key].maturity_accruals is not None

@@ -31,7 +31,9 @@ MAX_ARCHIVE_BYTES = 4 * 1024 * 1024
 MAX_TEXT_BYTES = 16 * 1024 * 1024
 
 
-def parse_region_archive(archive: bytes) -> tuple[RegionOption, ...]:
+def parse_region_archive(
+    archive: bytes, *, include_general_districts: bool = False
+) -> tuple[RegionOption, ...]:
     """CP949 TSV의 현존 코드만 변환한다. 손상·빈 목록·불완전 계층은 거부한다."""
     try:
         if len(archive) > MAX_ARCHIVE_BYTES:
@@ -67,6 +69,8 @@ def parse_region_archive(archive: bytes) -> tuple[RegionOption, ...]:
         if active.get("3611000000") == "세종특별자치시":
             provinces["36"] = "세종특별자치시"
         children: dict[str, list[DistrictOption]] = {code: [] for code in provinces}
+        city_names: dict[str, set[str]] = {code: set() for code in provinces}
+        general_districts: list[tuple[str, str, str]] = []
         for code, name in active.items():
             if not code.endswith("00000") or code.endswith("00000000"):
                 continue
@@ -74,10 +78,18 @@ def parse_region_archive(archive: bytes) -> tuple[RegionOption, ...]:
             if parent is None or not (name == parent or name.startswith(parent + " ")):
                 raise ValueError("missing parent")
             local_name = name.removeprefix(parent).strip()
-            # 자치 시군구를 사용한다. '수원시 장안구' 같은 일반구는 상위 시로 선택한다.
             if " " in local_name:
+                if include_general_districts:
+                    general_districts.append((code[:2], code[:5], local_name))
                 continue
             children[code[:2]].append(DistrictOption(code[:5], local_name or parent))
+            city_names[code[:2]].add(local_name or parent)
+        if include_general_districts:
+            for province, code, local_name in general_districts:
+                city, separator, _ = local_name.partition(" ")
+                if not separator or city not in city_names[province]:
+                    raise ValueError("missing municipality")
+                children[province].append(DistrictOption(code, local_name))
         if not provinces or any(not values for values in children.values()):
             raise ValueError("empty region hierarchy")
         return tuple(

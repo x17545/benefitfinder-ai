@@ -115,6 +115,31 @@ class PublishedRecordTest(unittest.TestCase):
         profile.domain_data.special = ["disabled"]
         self.assertEqual(evaluate_condition(profile, rule), "met")
 
+    def test_received_exact_id_needs_review_for_category_only_answers(self):
+        exact = "youth:youthcenter:999000123"
+        other = "youth:youthcenter:999000456"
+        rule = {"kind": "none_of", "field": "domain_data.received", "values": [exact]}
+        payload = json.loads((ROOT / "contracts/fixtures/recommendation-request.json").read_text())["profile"]
+        for received in (["none"], ["monthly_rent"], ["monthly_rent", "youth_account"]):
+            with self.subTest(received=received):
+                payload["domain_data"]["received"] = received
+                profile = UserProfile.model_validate(payload)
+                self.assertEqual(evaluate_condition(profile, rule), "needs_review")
+        profile = SimpleNamespace(domain_data=SimpleNamespace(received=[exact]))
+        self.assertEqual(evaluate_condition(profile, rule), "not_met")
+        profile = SimpleNamespace(domain_data=SimpleNamespace(received=[other]))
+        self.assertEqual(evaluate_condition(profile, rule), "needs_review")
+        mixed = {"kind": "none_of", "field": "domain_data.received", "values": ["monthly_rent", exact]}
+        profile = SimpleNamespace(domain_data=SimpleNamespace(received=["monthly_rent"]))
+        self.assertEqual(evaluate_condition(profile, mixed), "not_met")
+        profile = SimpleNamespace(domain_data=SimpleNamespace(received=["youth_account"]))
+        self.assertEqual(evaluate_condition(profile, mixed), "needs_review")
+        category_rule = {"kind": "none_of", "field": "domain_data.received", "values": ["monthly_rent"]}
+        profile = SimpleNamespace(domain_data=SimpleNamespace(received=["none"]))
+        self.assertEqual(evaluate_condition(profile, category_rule), "met")
+        profile = SimpleNamespace(domain_data=SimpleNamespace(received=["monthly_rent"]))
+        self.assertEqual(evaluate_condition(profile, category_rule), "not_met")
+
 
 class PublishedCatalogApiTest(unittest.TestCase):
     def setUp(self):

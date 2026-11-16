@@ -50,6 +50,10 @@ jobs:
           cache: pnpm
       - name: Install Python dependencies from lockfile
         run: uv sync --locked
+      # Native GPU inference is evaluated on the designated GPU host. The API/CI
+      # environment keeps the optional decider group uninstalled intentionally.
+      - name: Check optional model dependency lock
+        run: uv lock --check
       - name: Install JavaScript dependencies from lockfile
         run: pnpm install --frozen-lockfile
       - name: Refresh main for PR or manual work-branch check

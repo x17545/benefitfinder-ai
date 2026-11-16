@@ -36,6 +36,8 @@
 - 초기 정책 분류: `domain: youth` 안에서 `categories`의 `employment`(취업)·`housing`(주거)만 활성화한다. 관심 선택 `interests`도 이 두 값만 받는다. 수집 출처의 분류를 검수하여 대응시키고 혼합·불명확한 분류는 확인 전 노출하지 않는다. 공통 혜택의 `categories`와 분야 식별자는 확장 가능하게 유지하며, 확장 시 청년 관심 enum·선택지·후보 필터·예제·검증을 함께 갱신한다. 현재 공식 지역·가상 추천 API가 이 계약을 사용하며, 관심 enum 축소는 MVP 회의 결정에 맞춘 초안 계약 변경이다.
 - `domain_data`: 분야 고유 정보. 공통 필드나 정책 조건을 중복 저장하지 않는다. 분야별 이름·자료형은 해당 분야 문서에서 정의하고 실제 사용 전 추가 검증한다.
 - `profile`: 사용자가 제공·확인한 조건. 공통 `age`/`region_code`/`employment_status`/`income_band`/`household_type`은 유지하고, 혼인·학력·주거·계약/보증금/월세·재산·특수조건·관심·이미수혜·가구/부모정보는 `domain_data`에 둔다. 지역은 공통 `region_code`(시군구 전체 코드)가 SSOT이며, `domain_data.region`에는 피커 상위 시도(`sido_code`)만 둔다. 기간+현재가치 옵션은 `request.options` 한 곳에만 둔다. 누락 또는 `null`은 미확인을 뜻하며 `0`, 무소득, 미충족으로 바꾸지 않는다.
+- `profile.domain_data.cash_facts.rent_support`: 선택적 로컬/게시된 월세지원 판정 입력이다. `youth_income_ratio_bps`·`original_income_ratio_bps`는 공식 심사 기준중위소득 대비 비율(bps, `10000=100%`, `0~1000000`)이며 개인 연봉 구간으로 추정하지 않는다. 청년·원가구 재산과 월세·주거급여 차감액은 원 단위다. `original_household_exempt`는 나이·혼인 외 사유로 기관이 원가구 미고려를 인정했는지(`없음=false`, `미상=null`)만 나타내며 나이·혼인은 공통 `age`·`domain_data.marital`을 쓴다. `subscription_account`·`independent_from_parents`·`other_exclusions_clear`는 확인된 boolean이다. 모든 값의 누락 또는 `null`은 미상으로 보수적으로 판정하고 `false`, `0`, 미충족으로 바꾸지 않는다.
+- `profile.domain_data.cash_facts.rent_support`의 기간: `requested_months`는 `1~24`, `prior_supported_months`는 `0~24`다. `first_payment_month`는 `YYYY-MM` 첫 지급예정월이며 누락 또는 `null`이면 계산을 확인 필요로 남긴다. 미래예정월은 그 예정월로 판정하고 신청기간을 임의로 앞당기거나 바꾸지 않는다. 실제 지급기간(현재 연결 대상 `2024-03~2026-12`)과 `as_of`의 상대 월 차이는 domain이 계산하며, 지급기간을 넘는 24개월 계산은 금액을 확정하지 않는다.
 - `military_months_range`: `{min, max}`. 정확한 개월은 동일값, 미상은 전체 `null`, 열린 상한은 `max: null`. UI 매핑은 해당없음 `0..0`, 1년6개월이하 `0..18`, 1년6개월초과~2년 `19..24`, 2년초과 `25..null`이다. `min<=max`는 스키마가 강제하지 않고 애플리케이션 검증과 테스트로 확인한다. 정책별 최대 6년 연장은 해당 공고 근거가 있을 때만 적용하고 근거 없으면 사용하지 않는다.
 - `income_band`: 사용자가 선택한 소득 구간의 식별자다. 구간이 정책 기준선을 가로지르면 정확한 여유 금액이나 충족을 추정하지 않는다.
 - `source`: 원문 URL, 마지막 확인 시점(`checked_at`), 문서 버전(`document_version`). 시각은 시간대가 있는 ISO 8601 형식이다.
@@ -61,11 +63,12 @@
 
 ## 민감 정보 취급
 
-다음 계약 필드는 LLM·임베딩·GA·서버 로그에 보내지 않으며, 추천 이유 문장에도 쓰지 않는다.
+다음 계약 필드는 LLM·임베딩·GA·서버 로그 및 그 밖의 외부 서비스에 보내지 않으며, 추천 이유 문장에도 쓰지 않는다.
 
 - `profile.domain_data.special` (9단계 특수 조건)
 - `profile.domain_data.household.parent_income_band` (부모님 소득)
 - `profile.domain_data.household.parent_asset_band` (부모님 재산)
+- `profile.domain_data.cash_facts.rent_support` (월세지원 소득 비율·재산·월세·주거급여·청약/독립/제외 확인·지급월)
 
 서버는 판정 코드로만 사용하고 저장하지 않는다. GA에는 조건 값을 보내지 않고 단계·소요 시간·오류 코드 등만 보낸다.
 

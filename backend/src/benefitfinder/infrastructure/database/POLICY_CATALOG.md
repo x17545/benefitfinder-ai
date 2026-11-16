@@ -63,6 +63,23 @@ uv run --locked python -m benefitfinder.jobs policy-catalog publish \
 
 승인 해시·원문 해시·인용·검수 시각을 확인한 뒤 한 트랜잭션에서 이전 버전을 은퇴시키고 새 버전을 게시한다. 같은 정책/버전을 덮어쓰지 않는다. 실패 시 이전 게시 상태까지 롤백한다. 저장 데이터가 승인 해시와 달라지면 조회도 실패한다. 공유·운영 DB 적용은 별도 승인 범위를 따른다.
 
+## AI 독립 검수 배치 (0013)
+
+사람 승인 명령은 그대로 유지한다. 별도의 `ai-catalog` 경로는 작성자와 다른 검수자의 ID, 검수 모델, 판정·시각, 문서 버전·원문 SHA-256과 전체 카탈로그 레코드 SHA-256을 기록한다. 이 파일은 서명이 아니며 에이전트 신원 인증 자체를 제공하지 않는다. 실제 작업에서 배치 산출물과 검수 기록의 출처를 확인해야 한다. `pass` 이외, 작성자와 검수자가 같거나 시각·해시가 맞지 않는 경우를 거부한다. 원문·인용·수집 원천 해시와 현재 DB 상태는 기존 검사와 트리거를 그대로 적용한다. 실제 AI 배치는 현재 온통청년 원천 하나에만 연결하고, 저장 필드에서 정해진 순서로 만든 본문·정책 ID·공식 상세 URL·내용 해시 버전을 DB에서 대조한다. 별도 단가 원문이 필요한 실제 서비스와 복수 원천 정책은 이 경로에서 거부한다. 게시 역할에는 수집 원천의 `source`, `external_id`, `fields`, `material_sha256`, `missing_detected_at` 열 SELECT가 추가로 필요하다. 조건·금액·시점·중복이 확인되지 않은 현금 정책을 검수 완료 계산 대상으로 만들지 않는다.
+
+0012까지 적용한 뒤 `0013_ai_catalog_review.sql`을 별도 트랜잭션으로 명시적으로 적용한다. 기존 행의 검수 유형은 `human`으로 유지되며, AI 행은 `ai`와 AI 검수 자료가 불변으로 기록된다. 애플리케이션 시작 시 DDL·게시를 실행하지 않는다. 운영 적용·코드 배포는 별도 승인 및 DB 담당자 검토 후 실행한다.
+
+manifest는 최대 50개 항목의 JSON 배열이며 각 항목은 `input`, `review`, `source` 파일 경로와 필요한 경우 `price_source` 경로를 가진다. 경로는 manifest 위치 기준이다. `input`은 기존 현금 또는 서비스 카탈로그 형식이며 `review`의 필드는 `writer_agent`, `reviewer_agent`, `reviewer_model`, `verdict`, `reviewed_at`(시간대 포함), `document_version`, `source_sha256`, `record_sha256`이다. 내용과 근거를 검수한 뒤 생성한 파일을 사용한다. 원천·검수·manifest는 Git 제외 경로에 보관한다.
+
+```sh
+uv run --locked python -m benefitfinder.jobs ai-catalog validate --manifest data/local/catalog/ai-batch.json
+uv run --locked python -m benefitfinder.jobs ai-catalog publish --manifest data/local/catalog/ai-batch.json
+# 해당 배치의 게시 결과가 잘못된 경우에만 같은 manifest 사용
+uv run --locked python -m benefitfinder.jobs ai-catalog retire --manifest data/local/catalog/ai-batch.json
+```
+
+게시·철회는 `POLICY_PUBLISH_DATABASE_URL` 환경 변수로 별도 게시 역할을 받는다. 전체 배치는 한 트랜잭션이며 하나라도 실패하면 모두 롤백된다. 이미 게시된 정책 ID는 보호를 위해 AI 배치에서 거부한다. 철회는 manifest가 지정한 AI 게시 버전과 해시가 모두 현재 값과 일치할 때만 처리하며 다른 정책이나 사람 승인 정책을 건드리지 않는다. 이미 원천 변경으로 철회된 항목이 포함돼도 전체 요청은 실패하므로 상태를 먼저 확인한다. 최초 AI 배치는 기존 게시 버전을 교체하지 않으므로 철회 시 복원할 이전 버전은 없다.
+
 ## 계산과 남은 범위
 
 모집 중이며 미충족이 없고 금액·중복·시점 검수가 끝난 정책만 조합에 들어간다. 기간별 금액은 검수한 지급·적립 일정으로 계산한다. 모집 종료·미충족·아직 조합 계산 전 목록, 개별 목록, 기회비용 근거를 분리한다. 근거 없는 정책 쌍은 동시 수급 확인 필요로 표시한다. 상황 변화 전후는 같은 게시 스냅샷을 쓰고 소득 절벽은 게시된 상한으로 비교한다.
@@ -76,3 +93,18 @@ uv run --locked python -m benefitfinder.jobs policy-catalog publish \
 [ECOS 금리 저장소](ECOS_RATES.md)를 연결하면 같은 마지막 성공값으로 추천·상황 변화의 현재가치를 계산한다. 미설정·빈 금리 테이블·조회 실패 시 `discount_rate: null`이고 현재가치 보기는 계산 불가다. 가상 금리를 실제 금리로 사용하지 않는다. [서비스·단가 카탈로그](SERVICE_CATALOG.md)는 같은 DB에서 별도 승인·조회하고 현금 계산과 분리한다. 실제 서비스 자료와 단가 검수는 후속이다. [0010](F12_CATALOG.md)의 `explanation_clauses`를 포함하면 같은 승인 해시·버전으로 F13을 함께 게시한다. 같은 ID/버전의 게시 조항이 없으면 기본 문구다. 사용자 프로필·특수 조건·부모 정보는 모델에 전달하지 않는다.
 
 실제 정책 30개 검수·게시와 정책 사실 검증은 코드 통과만으로 완료되지 않는다. [통합 검사](../../../../integration/README.md)는 PostgreSQL 17에 가상 자료만 넣어 게시·조회·교체·롤백·검수 필터·권한·장애·API 연결을 확인한다.
+
+### 미검수 게시 배치 (0014)
+
+미검수 게시 경로는 검수 판정을 만들지 않는다. `review_type`과 `review_status`는 `unreviewed`, 검수자와 검수 시각은 NULL이며, 원천 버전과 본문·레코드 해시를 별도로 기록한다. 현금 정책은 `reviewed=false`, 지급 일정 미확정, 중복 규칙 미확정인 경우만 허용하여 조합 계산에서 제외한다. 단가가 있는 서비스, F12 검수 연결, 가상 정책은 이 경로에서 게시하지 않는다. 기존 원천 연결·해시 및 수집 변경 시 철회 검사는 유지한다. 이 경로의 설명 조항은 검수된 F13 조항으로 게시하지 않는다.
+
+각 manifest 항목은 `input`과 `source` 경로만 가진다. 게시 및 철회는 최대 50건씩 트랜잭션으로 처리하며 기존 게시 정책을 교체하지 않는다.
+수동 철회한 미검수 버전은 원천·전체 레코드·해시가 정확히 일치하고 현재 원천 검사도 통과한 경우에만 같은 배치 명령으로 재게시할 수 있다. 원천 변경으로 보류된 버전은 재게시하지 않는다.
+
+```sh
+uv run --locked python -m benefitfinder.jobs unreviewed-catalog validate --manifest data/local/catalog/unreviewed.json
+uv run --locked python -m benefitfinder.jobs unreviewed-catalog publish --manifest data/local/catalog/unreviewed.json
+uv run --locked python -m benefitfinder.jobs unreviewed-catalog retire --manifest data/local/catalog/unreviewed.json
+```
+
+게시·철회에는 `POLICY_PUBLISH_DATABASE_URL`이 필요하다. 신규 스키마를 적용한 뒤 기존 서버는 미검수 항목을 읽지 않으므로 변경된 서버 코드도 배포해야 추천·상세에서 조회된다. 운영 스키마 적용과 서버 배포는 정해진 승인·변경 절차를 따른다.
