@@ -150,7 +150,7 @@ F11 이용 통계는 명세의 17개 이벤트를 기존 백엔드를 통해 GA4
 
 | 이름 | 역할 | 기여 요약 (본인 작성) | 대표 커밋·PR·문서 |
 | --- | --- | --- | --- |
-| 양승현 (조장) | 통합·배포 / 백엔드 | | |
+| 양승현 (조장) | 통합·배포 / 백엔드 | 백엔드 아키텍처 의존성 오류 해결, LLM 제공자 연동 및 F08 Windows 호환성 개선, Vercel·Render 배포 연동 설정, 통합 테스트 오류 수정 및 PR 병합 관리 | [PR #12](https://github.com/x17545/benefitfinder-ai/pull/12), [PR #21](https://github.com/x17545/benefitfinder-ai/pull/21), [PR #56](https://github.com/x17545/benefitfinder-ai/pull/56), [커밋 a6f70c9](https://github.com/x17545/benefitfinder-ai/commit/a6f70c9) |
 | 이현서 | 기획 / 화면 설계 | | |
 | 김하정 | 디자인 / 프론트엔드 | | |
 | 윤정찬 | 원천 데이터 수집·적재 | | |
