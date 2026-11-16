@@ -152,7 +152,7 @@ F11 이용 통계는 명세의 17개 이벤트를 기존 백엔드를 통해 GA4
 | --- | --- | --- | --- |
 | 양승현 (조장) | 통합·배포 / 백엔드 | | |
 | 이현서 | 기획 / 화면 설계 | | |
-| 김하정 | 디자인 / 프론트엔드 | | |
+| 김하정 | 디자인 / 프론트엔드 | 화면 디자인과 웹 화면 구현(시작·조건 입력·결과·상세·상황 변화·서비스·안내 페이지), 배포 사이트 PC·모바일 점검 및 보완 | [#7](https://github.com/x17545/benefitfinder-ai/pull/7) · [#22](https://github.com/x17545/benefitfinder-ai/pull/22) · [#28](https://github.com/x17545/benefitfinder-ai/pull/28) · [#31](https://github.com/x17545/benefitfinder-ai/pull/31) · [#54](https://github.com/x17545/benefitfinder-ai/pull/54) |
 | 윤정찬 | 원천 데이터 수집·적재 | | |
 | 탁서윤 | 데이터 정제·AI / 자동화 | | |
 
