@@ -17,9 +17,6 @@ vi.mock('../src/features/benefits/analysisStore.ts', () => ({
 vi.mock('../src/features/profile/flowStore.ts', () => ({
   useFlowState: () => ({ consent: false }),
 }));
-vi.mock('../src/features/benefits/policyInfo.ts', () => ({
-  usePolicyInfo: () => new Map(),
-}));
 
 import { PolicyDetailScreen } from '../src/features/policy/PolicyDetailScreen.tsx';
 

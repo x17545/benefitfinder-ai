@@ -64,7 +64,6 @@ vi.mock('../src/features/profile/answerRules.ts', () => ({ missingSteps: () => [
 vi.mock('../src/features/profile/toRequest.ts', () => ({
   toRecommendationRequest: () => ({ profile: {} }),
 }));
-vi.mock('../src/features/benefits/policyInfo.ts', () => ({ usePolicyInfo: () => new Map() }));
 vi.mock('../src/features/policy/usePolicyDetail.ts', () => ({
   usePolicyDetail: () => ({ state: tree.detailState, retry: vi.fn() }),
 }));
@@ -204,12 +203,19 @@ async function clickImageSave(node: ReactNode): Promise<void> {
   await Promise.resolve();
 }
 
+function policySummary(benefit: NormalizedBenefit) {
+  return {
+    title: benefit.title,
+    card: { ...benefit, amount_text: benefit.benefit_amount?.amount_text ?? null },
+  };
+}
+
 function renderPolicyCard(benefit: NormalizedBenefit, virtualData = false): ReactNode {
   const policy = firstPolicy();
   return PolicyCard({
     policy,
     rank: 2,
-    info: new Map([[policy.policy_id, benefit]]),
+    info: new Map([[policy.policy_id, policySummary(benefit)]]),
     aiGenerated: false,
     detailHref: '/policy/' + policy.policy_id,
     virtualData,
@@ -223,7 +229,7 @@ function renderFallback(benefit: NormalizedBenefit, virtualData = false): ReactN
   } as FallbackItem;
   return FallbackList({
     items: [item],
-    info: new Map([[benefit.id, benefit]]),
+    info: new Map([[benefit.id, policySummary(benefit)]]),
     virtualData,
   });
 }

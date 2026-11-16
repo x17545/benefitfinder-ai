@@ -172,6 +172,11 @@ class PublishedCatalogApiTest(unittest.TestCase):
             detail = client.get("/api/v1/benefits/" + policy["policy_id"]).json()
             validator("benefit.schema.json").validate(detail)
             self.assertEqual(detail["source"], policy["source"])
+            summary = data["policy_summaries"][policy["policy_id"]]
+            self.assertEqual(summary["title"], detail["title"])
+            self.assertEqual(summary["card"]["application"], detail["application"])
+            self.assertEqual(summary["card"]["source"], policy["source"])
+            self.assertNotIn("eligibility_conditions", summary)
         self.assertEqual(client.get("/api/v1/benefits/youth:example:P1").status_code, 404)
 
     def test_fallback_empty_and_closed_unknown_unreviewed_are_distinct(self):
@@ -187,6 +192,10 @@ class PublishedCatalogApiTest(unittest.TestCase):
         self.assertEqual([p["policy_id"] for p in view["fallback_list"]], ["youth:catalog:A"])
         self.assertEqual([p["policy_id"] for p in view["closed_now"]], ["youth:catalog:C"])
         self.assertEqual(len(view["not_yet_reviewed"]), 2)
+        self.assertEqual(
+            set(data["policy_summaries"]), {f"youth:catalog:{key}" for key in ("A", "C", "U", "R", "F")},
+        )
+        self.assertEqual(set(data["policy_summaries"]["youth:catalog:C"]), {"title"})
         self.assertEqual(view["not_eligible"][0]["failed"], ["age"])
         empty, _, _ = self.recommend([])
         self.assertEqual(empty["view"], "empty")

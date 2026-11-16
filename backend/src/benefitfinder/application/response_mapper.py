@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 from uuid import uuid4
 
@@ -194,6 +195,47 @@ def map_all_results(
         mapped_results[period] = mapped_period
 
     return mapped_results
+
+
+def map_policy_summaries(
+    results: Mapping[str, Any], details: Mapping[str, dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    # Every period shares one catalog snapshot. Keep the list entries small;
+    # only policies shown as cards need application or amount information.
+    card_ids: set[str] = set()
+    conflict_targets: dict[str, set[str]] = {}
+    for period in results.values():
+        for view in period.values():
+            card_ids.update(item["policy_id"] for item in (view.get("fallback_list") or ()))
+            for portfolio in view["portfolios"]:
+                members = {item["policy_id"] for item in portfolio["policies"]}
+                given_up = {item["policy_id"] for item in (portfolio.get("given_up") or ())}
+                card_ids.update(members)
+                for member in members:
+                    conflict_targets.setdefault(member, set()).update(given_up)
+                for excluded in given_up:
+                    conflict_targets.setdefault(excluded, set()).update(members)
+
+    summaries: dict[str, dict[str, Any]] = {}
+    for policy_id, detail in details.items():
+        entry: dict[str, Any] = {"title": detail["title"]}
+        if policy_id in card_ids:
+            entry["card"] = {
+                "categories": detail["categories"],
+                "application": detail["application"],
+                "source": detail["source"],
+                "amount_text": (detail.get("benefit_amount") or {}).get("amount_text"),
+                "virtual_data": detail.get("virtual_data", False),
+            }
+        if targets := conflict_targets.get(policy_id):
+            conflicts = [
+                conflict for conflict in (detail.get("conflicts") or ())
+                if conflict["policy_id"] in targets
+            ]
+            if conflicts:
+                entry["conflicts"] = conflicts
+        summaries[policy_id] = entry
+    return summaries
 
 
 def build_recommendation_response(

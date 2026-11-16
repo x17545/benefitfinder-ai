@@ -1,17 +1,16 @@
 import type { JSX } from 'react';
 import { paths } from '../../app/router.ts';
-import type { NormalizedBenefit } from '../../shared/api/benefits.ts';
 import { trackEvent } from '../../shared/analytics/events.ts';
 import { AmountBreakdown } from './AmountBreakdown.tsx';
 import { formatManWon, recruitTag, recruitmentState } from './format.ts';
 import { policyName } from './resultModel.ts';
-import type { ResultView } from './resultModel.ts';
+import type { PolicySummaries, ResultView } from './resultModel.ts';
 
 type FallbackItem = NonNullable<ResultView['fallback_list']>[number];
 
 interface FallbackListProps {
   items: readonly FallbackItem[];
-  info: ReadonlyMap<string, NormalizedBenefit>;
+  info: PolicySummaries;
   virtualData: boolean;
 }
 
@@ -20,7 +19,7 @@ export function FallbackList({ items, info, virtualData }: FallbackListProps): J
   return (
     <div className="s3-policies">
       {items.map((item) => {
-        const benefit = info.get(item.policy_id);
+        const benefit = info.get(item.policy_id)?.card;
         const now = new Date();
         const applicationState = benefit !== undefined ? recruitmentState(benefit.application, now) : null;
         const tag = benefit !== undefined ? recruitTag(benefit.application, now) : null;
@@ -39,8 +38,8 @@ export function FallbackList({ items, info, virtualData }: FallbackListProps): J
                   <span className="s3-policy__name">
                     {policyName(item.policy_id, info)}&nbsp;<span aria-hidden="true">›</span>
                   </span>
-                  {benefit?.benefit_amount?.amount_text ? (
-                    <span className="s3-policy__summary">{benefit.benefit_amount.amount_text}</span>
+                  {benefit?.amount_text ? (
+                    <span className="s3-policy__summary">{benefit.amount_text}</span>
                   ) : null}
                 </span>
                 <span className="s3-policy__amount">

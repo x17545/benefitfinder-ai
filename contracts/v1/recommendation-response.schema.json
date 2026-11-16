@@ -31,6 +31,12 @@
       "type": "boolean",
       "description": "true면 가상 정책·금액의 개발용 계산이다. 화면과 저장 이미지에 실제 추천이 아님을 표시한다. 생략은 실제 자료 검증 완료를 뜻하지 않는다."
     },
+    "policy_summaries": {
+      "type": "object",
+      "description": "추천에 사용한 게시본의 정책 ID별 이름과 카드 표시 정보. 이전 응답에서는 생략될 수 있다.",
+      "propertyNames": {"minLength": 1},
+      "additionalProperties": {"$ref": "#/$defs/policy_summary"}
+    },
     "services": {
       "type": "array",
       "items": {"$ref": "#/$defs/service_entry"},
@@ -94,6 +100,31 @@
     }
   },
   "$defs": {
+    "policy_summary": {
+      "title": "Policy summary",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title"],
+      "properties": {
+        "title": {"type": "string", "minLength": 1},
+        "card": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["categories", "application", "source", "amount_text"],
+          "properties": {
+            "categories": {"$ref": "benefit.schema.json#/properties/categories"},
+            "application": {"$ref": "benefit.schema.json#/properties/application"},
+            "source": {"$ref": "common.schema.json#/$defs/source"},
+            "amount_text": {"type": ["string", "null"]},
+            "virtual_data": {"type": "boolean"}
+          }
+        },
+        "conflicts": {
+          "description": "선택 가능한 조합에서 포기하는 정책의 근거 표시용 제한 목록.",
+          "$ref": "benefit.schema.json#/properties/conflicts"
+        }
+      }
+    },
     "service_entry": {
       "title": "Recommended service",
       "type": "object",
