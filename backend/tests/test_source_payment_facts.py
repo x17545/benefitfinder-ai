@@ -25,7 +25,7 @@ class SourcePaymentFactsTest(unittest.TestCase):
         return result, facts
 
     def test_exact_monthly_amount_and_period_create_relative_schedule(self):
-        text = "가상 지원금 월 50만원씩 6개월간 매월 지급"
+        text = "가상 지원금 월 50만원씩 6개월간 매월 지급. 신청일 기준 익월부터 지급"
         result, facts = self.assert_payment(text)
 
         self.assertEqual(facts.amount_won, 500_000)
@@ -33,9 +33,10 @@ class SourcePaymentFactsTest(unittest.TestCase):
         self.assertEqual(facts.period_months, 6)
         self.assertEqual(facts.pay_timing, "monthly_from_start")
         self.assertEqual(facts.payments, tuple((month, 500_000) for month in range(1, 7)))
-        self.assertIn("actual_calendar_schedule_unknown", facts.reasons)
+        self.assertIn("monthly_payment_start_confirmed", facts.reasons)
         self.assertIn("확정 6개월분", facts.amount_text)
-        self.assertIn("actual_calendar_schedule_unknown", facts.amount_text)
+        self.assertIn("신청 기준 다음 달부터", facts.amount_text)
+        self.assertTrue(any("신청일 기준 익월부터" in text[slice(*span)] for span in facts.evidence_spans))
         self.assertIsNone(facts.lifetime_once)
         self.assertEqual(result.reasons, facts.reasons)
 
@@ -45,7 +46,7 @@ class SourcePaymentFactsTest(unittest.TestCase):
 
         self.assertEqual(facts.amount_won, 500_000)
         self.assertEqual(facts.period_months, 1)
-        self.assertEqual(facts.payments, ((1, 500_000),))
+        self.assertEqual(facts.payments, ())
         self.assertIn("전체 기간 합계가 아닌 1개월분", facts.amount_text)
         self.assertIn("maximum_period_not_used_as_total", facts.reasons)
 
@@ -55,13 +56,13 @@ class SourcePaymentFactsTest(unittest.TestCase):
         )
 
         self.assertEqual(facts.period_months, 1)
-        self.assertEqual(facts.payments, ((1, 300_000),))
+        self.assertEqual(facts.payments, ())
 
     def test_fixed_monthly_amount_without_period_keeps_one_month(self):
         _, facts = self.assert_payment("가상 주거안정 지원금 월 20만원 지급")
 
         self.assertEqual(facts.period_months, 1)
-        self.assertEqual(facts.payments, ((1, 200_000),))
+        self.assertEqual(facts.payments, ())
         self.assertIn("support_period_not_stated", facts.reasons)
 
     def test_eligibility_month_is_not_mistaken_for_support_period(self):
@@ -69,7 +70,22 @@ class SourcePaymentFactsTest(unittest.TestCase):
         _, facts = self.assert_payment(text)
 
         self.assertEqual(facts.period_months, 1)
-        self.assertEqual(facts.payments, ((1, 300_000),))
+        self.assertEqual(facts.payments, ())
+
+    def test_monthly_amount_does_not_imply_the_first_payment_month(self):
+        for timing in (
+            "",
+            "선정일 기준 익월부터 지급",
+            "신청일 기준 익월부터 심사",
+            "신청일 기준 2개월 뒤부터 지급",
+            "신청일 기준 익월부터 지급하지 않음",
+            "신청일 기준 익월부터 지급. 예외 대상은 당월 지급",
+        ):
+            with self.subTest(timing=timing):
+                _, facts = self.assert_payment(f"가상 지원금 월 50만원씩 6개월간 매월 지급. {timing}")
+                self.assertEqual(facts.amount_won, 500_000)
+                self.assertEqual(facts.payments, ())
+                self.assertIn("payment_start_unknown_or_unsupported", facts.reasons)
 
     def test_exact_next_month_payment_uses_relative_month_one(self):
         text = "가상 지원금 100만원 □ 지급일 : 접수일 기준 다음달 20일까지"
@@ -95,7 +111,7 @@ class SourcePaymentFactsTest(unittest.TestCase):
 
     def test_current_month_and_exact_month_delay_are_supported(self):
         cases = {
-            "가상 지원금 10만원 당월 지급": 0,
+            "가상 지원금 10만원 신청월 지급": 0,
             "가상 지원금 10만원 신청 후 2개월 뒤 지급": 2,
             "가상 지원금 10만원 접수 후 3개월 후 입금": 3,
         }
@@ -110,6 +126,8 @@ class SourcePaymentFactsTest(unittest.TestCase):
             "가상 일시금 10만원 지급",
             "가상 지원금 10만원 1회 지급",
             "가상 지원금 10만원 이수 시 지급",
+            "가상 지원금 10만원 선정일 기준 다음 달 지급",
+            "가상 지원금 10만원 다음 달 지급",
         )
         for text in cases:
             with self.subTest(text=text):
@@ -130,19 +148,19 @@ class SourcePaymentFactsTest(unittest.TestCase):
         self.assertEqual(facts.payments, ((1, 50_000),))
         self.assertIn("annual_limit_not_multiplied", facts.reasons)
 
-    def test_exact_annual_amount_and_period_keep_annual_cadence(self):
+    def test_exact_annual_amount_and_duration_do_not_supply_calendar(self):
         _, facts = self.assert_payment("가상 정착지원금 연 100만원씩 2년간 지원")
 
         self.assertEqual(facts.amount_type, "lump_sum")
         self.assertEqual(facts.pay_timing, "yearly")
         self.assertEqual(facts.period_months, 24)
-        self.assertEqual(facts.payments, ((1, 1_000_000), (13, 1_000_000)))
+        self.assertEqual(facts.payments, ())
 
     def test_maximum_annual_period_keeps_one_year_component(self):
         _, facts = self.assert_payment("가상 정착지원금 연 100만원, 최대 2년 지원")
 
         self.assertEqual(facts.period_months, 12)
-        self.assertEqual(facts.payments, ((1, 1_000_000),))
+        self.assertEqual(facts.payments, ())
         self.assertIn("전체 기간 합계가 아닌 1년분", facts.amount_text)
 
     def test_explicit_lifetime_limit_is_preserved(self):
@@ -224,11 +242,11 @@ class SourcePaymentFactsTest(unittest.TestCase):
 
     def test_payment_timing_uses_all_mentions_and_ignores_announcement(self):
         _, facts = self.assert_payment(
-            "가상 면접수당 5만원 지원\n선정 결과 다음달 안내\n지급일: 다음달 20일"
+            "가상 면접수당 5만원 지원\n선정 결과 다음달 안내\n지급일: 신청일 기준 다음달 20일"
         )
         self.assertEqual(facts.payments, ((1, 50_000),))
         result = parse_source_payment(
-            "가상 수당 5만원 지급\n1차 지급은 신청월\n2차 지급은 다음달"
+            "가상 수당 5만원 지급\n1차 지급은 신청월\n2차 지급은 신청일 기준 다음달"
         )
         self.assertIsNone(result.amountfact)
 

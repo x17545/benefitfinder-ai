@@ -1,12 +1,8 @@
 """Deterministic extraction of fixed source payment facts.
 
 ``parse_source_payment`` returns ``PaymentParseResult``. A calculation-ready result has
-``amountfact`` populated with ``PaymentFacts``; an unsupported or ambiguous source has
-``amountfact=None`` and diagnostic reason codes in the outer result. Reasons inside
-``PaymentFacts`` describe assumptions made for a successful conservative component.
-
-Monthly and yearly payments use months relative to the start of support. They are calculator
-periods, not claims about an actual calendar day or an application-to-payment delay.
+``amountfact`` populated with ``PaymentFacts`` and a nonempty payment schedule. A fixed
+amount can be extracted without a schedule; callers must not use it for period totals.
 """
 
 from __future__ import annotations
@@ -28,8 +24,9 @@ _MAX_PERIOD_MONTHS = 600
 class PaymentFacts:
     """One independently calculable cash payment component.
 
-    ``payments`` contains ``(relative_month, amount_won)`` pairs. For monthly support the
-    first period is month 1. A one-time payment may use month 0 only when the source explicitly
+    ``payments`` contains ``(relative_month, amount_won)`` pairs or is empty if the start is
+    unknown or cannot be represented. Monthly schedules support a confirmed start in month 1.
+    A one-time payment may use month 0 only when the source explicitly
     says the current month/day. ``lifetime_once`` is ``None`` when the source does not say it.
     """
 
@@ -165,6 +162,11 @@ _DAY_DELAY_RE = re.compile(
     r"(?:일|주)\s*(?:후|이내|이후|뒤)"
 )
 _LIFETIME_RE = re.compile(r"생애\s*(?:1\s*회|한\s*번)|평생\s*1\s*회")
+_MONTHLY_START_RE = re.compile(
+    r"(?:신청|접수|제출)(?:일|월)?\s*기준\s*(?:익월|다음\s*달)\s*부터\s*"
+    r"(?:매월\s*|매달\s*)?(?:지급|입금)"
+)
+_REQUEST_ANCHOR_RE = re.compile(r"(?:신청|접수|제출)(?:일|월)?\s*(?:기준(?:으로)?|후|이후|부터)\s*$")
 
 
 def _dedupe(values: tuple[str, ...]) -> tuple[str, ...]:
@@ -404,19 +406,32 @@ def _near_payment_label(text: str, start: int, end: int) -> bool:
     return bool(_PAYMENT_WORD_RE.search(text[left:right]))
 
 
-def _find_offset(text: str) -> tuple[_Timing | None, bool, bool]:
+def _find_offset(text: str, *, require_request_anchor: bool = False) -> tuple[_Timing | None, bool, bool]:
     """Return an exact month offset, plus day-delay and unsupported-anchor flags."""
 
     offsets: list[_Timing] = []
+
+    def add_month(match: re.Match[str], month: int) -> None:
+        if not _near_payment_label(text, *match.span()):
+            return
+        left, right = _segment_bounds(text, *match.span())
+        anchor = _REQUEST_ANCHOR_RE.search(text[left:match.start()])
+        if (require_request_anchor
+                and anchor is None and match.group() not in {"신청월", "접수월"}):
+            return
+        if require_request_anchor and re.search(r"미지급|하지\s*않|지급\s*불가", text[match.end():right]):
+            return
+        offsets.append(_Timing(month, left + anchor.start() if anchor else match.start(), match.end()))
+
     for current in _CURRENT_MONTH_RE.finditer(text):
-        if _near_payment_label(text, current.start(), current.end()):
-            offsets.append(_Timing(0, current.start(), current.end()))
+        add_month(current, 0)
     for next_month in _NEXT_MONTH_RE.finditer(text):
-        if _near_payment_label(text, next_month.start(), next_month.end()):
-            offsets.append(_Timing(1, next_month.start(), next_month.end()))
+        add_month(next_month, 1)
 
     for match in _MONTH_OFFSET_RE.finditer(text):
         if not _near_payment_label(text, match.start(), match.end()):
+            continue
+        if require_request_anchor and not match.group("anchor"):
             continue
         before = text[max(0, match.start() - 24) : match.start()]
         anchor_text = (match.group("anchor") or "") + before
@@ -434,6 +449,17 @@ def _find_offset(text: str) -> tuple[_Timing | None, bool, bool]:
     )
     event_anchor = bool(_EVENT_ANCHOR_RE.search(text)) and not bool(_PAYMENT_WORD_RE.search(text))
     return exact, day_delay, event_anchor
+
+
+def _monthly_start_span(text: str) -> tuple[int, int] | None:
+    timing, day_delay, _ = _find_offset(text)
+    if timing is None or timing.month != 1 or day_delay:
+        return None
+    for match in _MONTHLY_START_RE.finditer(text):
+        left, right = _segment_bounds(text, *match.span())
+        if not re.search(r"다만|예외|제외|변경|연기|미지급|하지\s*않|불가", text[left:right]):
+            return match.span()
+    return None
 
 
 def _lifetime_once(text: str) -> bool | None:
@@ -520,15 +546,23 @@ def parse_source_payment(text: str) -> PaymentParseResult:
             )
         else:
             base_reasons.append("exact_support_period_used")
-        base_reasons.append("actual_calendar_schedule_unknown")
         spans = [(amount.start, amount.end), monthly_span]
         if duration:
             spans.append((duration.start, duration.end))
-        payments = tuple((month, amount.value) for month in range(1, period + 1))
+        start_span = _monthly_start_span(text)
+        if start_span is None:
+            base_reasons.append("payment_start_unknown_or_unsupported")
+            payments = ()
+            timing_note = "첫 지급월 확인 필요"
+        else:
+            base_reasons.append("monthly_payment_start_confirmed")
+            spans.append(start_span)
+            payments = tuple((month, amount.value) for month in range(1, period + 1))
+            timing_note = "신청 기준 다음 달부터"
         note = (
-            f"월별 지원, 확정 {period}개월분; actual_calendar_schedule_unknown"
+            f"월별 지원, 확정 {period}개월분; {timing_note}"
             if exact_duration
-            else "전체 기간 합계가 아닌 1개월분; actual_calendar_schedule_unknown"
+            else f"전체 기간 합계가 아닌 1개월분; {timing_note}"
         )
         amount_text = f"{amount.raw} ({note})"
         facts = PaymentFacts(
@@ -565,22 +599,21 @@ def parse_source_payment(text: str) -> PaymentParseResult:
         period = years * 12
         if period > _MAX_PERIOD_MONTHS:
             return _hold("payment_period_exceeds_limit")
-        base_reasons.append("actual_calendar_schedule_unknown")
+        base_reasons.append("payment_start_unknown_or_unsupported")
         spans = [(amount.start, amount.end), annual_span]
         if duration:
             spans.append((duration.start, duration.end))
-        payments = tuple((1 + 12 * index, amount.value) for index in range(years))
         note = (
-            f"연별 고정금액, 확정 {years}년분; actual_calendar_schedule_unknown"
+            f"연별 고정금액, 확정 {years}년분; 실제 지급월 확인 필요"
             if exact_duration
-            else "전체 기간 합계가 아닌 1년분; actual_calendar_schedule_unknown"
+            else "전체 기간 합계가 아닌 1년분; 실제 지급월 확인 필요"
         )
         facts = PaymentFacts(
             amount.value,
             "lump_sum",
             period,
             "yearly",
-            payments,
+            (),
             _dedupe_spans(spans),
             f"{amount.raw} ({note})",
             lifetime_once,
@@ -588,7 +621,7 @@ def parse_source_payment(text: str) -> PaymentParseResult:
         )
         return PaymentParseResult(facts, facts.reasons)
 
-    timing, day_delay, event_anchor = _find_offset(text)
+    timing, day_delay, event_anchor = _find_offset(text, require_request_anchor=True)
     if timing is None:
         if day_delay:
             return _hold("payment_timing_not_integer_month")

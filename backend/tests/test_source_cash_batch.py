@@ -29,14 +29,14 @@ TODAY = date(2026, 11, 16)
 REGIONS = (RegionOption("11", "가상도", (DistrictOption("11110", "가상시"),)),)
 
 
-def value(number: str) -> PolicyAnalysisInput:
+def value(number: str, **changes: str) -> PolicyAnalysisInput:
     fields = {
         "plcyNo": number, "plcyNm": "[가상] 청년 구직수당", "lclsfNm": "일자리",
-        "mclsfNm": "취업", "plcySprtCn": "매월 12만원을 6개월 동안 지급",
+        "mclsfNm": "취업", "plcySprtCn": "매월 12만원을 6개월 동안 지급. 신청일 기준 익월부터 지급",
         "aplyPrdSeCd": "0057002", "zipCd": "11110", "jobCd": "0013003",
         "sprtTrgtMinAge": "19", "sprtTrgtMaxAge": "39", "plcyPvsnMthdCd": "0042006",
         "ptcpPrpTrgtCn": "가상 타 사업 참여자는 신청 전 확인",
-    }
+    } | changes
     policy_id = "youth:youthcenter:" + number
     document = SourceDocument(
         "youthcenter:" + number, policy_id,
@@ -139,6 +139,26 @@ def run(files, db, values, *, publish=True, batch_size=10, current_release=None,
 
 
 class SourceCashBatchTest(unittest.TestCase):
+    def test_publish_batch_never_sends_unresolved_timing_or_overlap_to_writer(self):
+        files, database = MemoryFiles(), MemoryDatabase()
+        values = (
+            value("20260101000000000091", plcySprtCn="매월 12만원을 6개월 동안 지급"),
+            value("20260101000000000092", ptcpPrpTrgtCn="가상 다른 수당과 중복 수급 불가"),
+        )
+        report = run_source_cash_batch(
+            values, output=Path("/virtual/source-cash"), as_of=TODAY,
+            compile_source=lambda item: compile_source_cash(item, as_of=TODAY, regions=REGIONS),
+            prepare=synthetic_prepare, load_existing=database.existing, publish=database.publish,
+            save=files.save, load=files.load,
+        )
+        self.assertEqual(report["counts"]["held"], 2)
+        self.assertEqual(report["counts"]["published"], 0)
+        self.assertEqual(report["reason_counts"], {
+            "source_cash_payment_start_unknown_or_unsupported": 1,
+            "source_cash_overlap_requires_review": 1,
+        })
+        self.assertEqual(database.calls, [])
+
     def test_real_source_cash_dry_run_checkpoints_without_model_or_publish(self):
         item = value("20260101000000000091")
         compiled = compile_source_cash(item, as_of=TODAY, regions=REGIONS)

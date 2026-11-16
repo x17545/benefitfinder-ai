@@ -22,8 +22,7 @@ _TEXT = (
     '매년 12월 신청분은 10일까지 접수 후 당월 지급\n'
     '❍ 대상: 지원금 신청일 기준 가상군에 주민등록을 둔 자\n'
     '면접 당시 미취업자, 현재 재직 여부와 별도로 면접 당시 자격 확인\n'
-    '예산 소진 시 조기 마감. 동일·유사 사업 중복 지원 금지\n'
-    '국민취업지원제도와 중복 수혜 불가\n'
+    '예산 소진 시 조기 마감\n'
     '서류와 면접 사실 및 연간 2회 수혜 이력을 확인해야 함\n'
 )
 
@@ -134,15 +133,28 @@ class OfficialEventGrantTest(unittest.TestCase):
         exact = AnalysisPolicy('youth:2001', '국민 취업지원제도', ('employment',))
         similar = AnalysisPolicy('youth:2002', '국민취업지원제도 Ⅰ유형', ('employment',))
         alias_only = AnalysisPolicy('youth:2003', '다른 가상 사업', ('employment',), ('국민취업지원제도',))
-        record = self.record(sample(), conflict_policies=(exact, similar, alias_only))
+        ban = '국민취업지원제도와 중복 수혜 불가'
+        record = self.record(sample(_TEXT + ban), conflict_policies=(exact, similar, alias_only))
         self.assertEqual([c.policy_id for c in record.benefit.conflicts], ['youth:2001'])
         self.assertIn('중복 수혜 불가', record.benefit.conflicts[0].evidence[0].quote)
-        self.assertEqual(self.record(sample(), conflict_policies=(similar, alias_only)).benefit.conflicts, [])
-        for source in (_TEXT.replace('국민취업지원제도와 중복 수혜 불가', '국민취업지원제도 안내'),
-                       _TEXT.replace('국민취업지원제도와 중복 수혜 불가', '제외 대상 표 | 국민취업지원제도 참여자'),
-                       _TEXT.replace('중복 수혜 불가', '중복 수혜 불가. 다만 예외는 별도 확인')):
-            with self.subTest(source=source[-60:]):
-                self.assertEqual(self.record(sample(source), conflict_policies=(exact,)).benefit.conflicts, [])
+        self.assertEqual(self.record(sample(_TEXT + '국민취업지원제도 안내'),
+                                     conflict_policies=(exact,)).benefit.conflicts, [])
+        for clause, policies in (
+            (ban, (similar, alias_only)),
+            (ban, (exact, replace(exact, id='youth:2004'))),
+            (ban + '\n다만 일부는 별도 확인', (exact,)),
+            (ban + '\n※ 단, 일부는 예외', (exact,)),
+            ('한시 사업에 한해 ' + ban, (exact,)),
+            (ban + '하지 않음', (exact,)),
+            (ban.replace('불가', '제한'), (exact,)),
+            (ban + '\n동일·유사 사업 중복 지원 금지', (exact,)),
+            ('제외 대상 표 | 국민취업지원제도 참여자', (exact,)),
+        ):
+            with self.subTest(clause=clause, policies=policies):
+                result = compile_official_event_grant(sample(_TEXT + clause),
+                    as_of=date(2026, 11, 16), conflict_policies=policies)
+                self.assertIsNone(result.payload)
+                self.assertEqual(result.reasons, ('event_grant_overlap_unresolved',))
 
     def test_money_units_and_caller_codes_need_actual_residence_evidence(self):
         value = sample(_TEXT.replace('1회당 5만원', '1회당 50,000원'))

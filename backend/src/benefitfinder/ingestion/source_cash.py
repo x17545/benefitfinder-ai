@@ -12,6 +12,7 @@ from benefitfinder.ingestion.decider_pending import _fields
 from benefitfinder.ingestion.source_application import source_application
 from benefitfinder.ingestion.source_cash_components import select_monthly_personal_component
 from benefitfinder.ingestion.source_eligibility import compile_source_eligibility
+from benefitfinder.ingestion.source_overlap import overlap_spans
 from benefitfinder.ingestion.source_payment_facts import parse_source_payment
 from benefitfinder.ingestion.youthcenter_codes import decode_zip_codes, YouthcenterCodeError
 
@@ -70,6 +71,8 @@ def compile_source_cash(
         return hold("source_cash_employer_recipient")
     if re.search(r"임대료\s*[:：]|기숙사비|이용비용|시급|일급|급여조건|세전", support):
         return hold("source_cash_cost_or_wage")
+    if overlap_spans(doc.text):
+        return hold("source_cash_overlap_requires_review")
     # The parsed payment text keeps complete, independently mapped field offsets.
     chunks = [(key, fields[key]) for key in (
         "plcySprtCn", "plcyAplyMthdCn", "srngMthdCn", "etcMttrCn",
@@ -90,6 +93,8 @@ def compile_source_cash(
     fact = parsed.amountfact
     if fact.pay_timing == "yearly":
         return hold("source_cash_annual_payment_calendar_not_stated")
+    if not fact.payments:
+        return hold("source_cash_payment_start_unknown_or_unsupported")
     if getattr(fact, "reasons", ()):
         normalized["payment_reasons"] = list(fact.reasons)
     doc = replace(doc, document_version="sha256:" + binding.material_sha256 + ":" + SOURCE_CASH_DOCUMENT_SUFFIX)
@@ -179,10 +184,14 @@ def compile_official_cash_component(
     start, end = component_span
     if not doc.official or not 0 <= start < end <= len(doc.text):
         return Compilation(None, ("source_cash_component_location_invalid",), normalized)
+    if overlap_spans(doc.text):
+        return Compilation(None, ("source_cash_overlap_requires_review",), normalized)
     parsed = parse_source_payment(doc.text[start:end])
     if parsed.amountfact is None:
         return Compilation(None, parsed.reasons, normalized)
     fact = parsed.amountfact
+    if not fact.payments:
+        return Compilation(None, ("source_cash_payment_start_unknown_or_unsupported",), normalized)
     source = {"url": doc.source_url, "document_version": doc.document_version,
               "checked_at": doc.collected_at.isoformat()}
 

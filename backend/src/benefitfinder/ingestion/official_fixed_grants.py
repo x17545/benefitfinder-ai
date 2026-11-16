@@ -13,6 +13,7 @@ from benefitfinder.application.decider import Compilation
 from benefitfinder.application.policy_analysis import PolicyAnalysisInput
 from benefitfinder.application.region_options import RegionOption
 from benefitfinder.ingestion.decider_normalization import _parse_money
+from benefitfinder.ingestion.source_overlap import overlap_spans
 
 
 def compile_official_fixed_grant(
@@ -58,6 +59,8 @@ def compile_official_fixed_grant(
         return Compilation(None, ('fixed_grant_application_dates_unknown',), normalized)
     if '□ 자격요건' not in text or '□ 기타 유의사항' not in text:
         return Compilation(None, ('fixed_grant_complete_terms_required',), normalized)
+    if overlap_spans(text):
+        return Compilation(None, ('fixed_grant_overlap_unresolved',), normalized)
     source = {'url': doc.source_url, 'document_version': doc.document_version,
               'checked_at': doc.collected_at.isoformat()}
 

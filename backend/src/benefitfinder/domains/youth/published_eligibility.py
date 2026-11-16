@@ -61,6 +61,12 @@ def evaluate_condition(profile: Any, rule: dict[str, Any]) -> str:
         if value is None or value == "unknown" or value == []:
             return "needs_review"
         selected = set(value) if isinstance(value, list) else {value}
+        if kind == "none_of" and rule["field"] == "domain_data.received":
+            rule_values = set(rule["values"])
+            if any(isinstance(item, str) and item.startswith("youth:") for item in rule_values):
+                if selected.intersection(rule_values):
+                    return "not_met"
+                return "needs_review"
         matches = bool(selected.intersection(rule["values"]))
         satisfied = not matches if kind == "none_of" else matches
         return "met" if satisfied else "not_met"

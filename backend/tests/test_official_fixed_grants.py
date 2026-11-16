@@ -55,6 +55,13 @@ class OfficialFixedGrantTest(unittest.TestCase):
         self.assertIsNone(result.payload)
         self.assertIn('fixed_grant_amount_not_fixed', result.reasons)
 
+    def test_unresolved_overlap_in_terms_holds_fixed_grant(self):
+        source = sample().documents[0].text
+        value = sample(source + '가상 사업과 동시 수혜 불가\n다만 별도 기준 적용\n')
+        result = compile_official_fixed_grant(value, as_of=date(2026, 11, 16))
+        self.assertIsNone(result.payload)
+        self.assertEqual(result.reasons, ('fixed_grant_overlap_unresolved',))
+
     def test_payment_sequence_does_not_invent_a_payment_month(self):
         value = sample()
         source = value.documents[0].text.replace('매월 말까지 접수 → 다음달 20일 이내 개인 계좌 지급', '심사 후 계좌로 지급')

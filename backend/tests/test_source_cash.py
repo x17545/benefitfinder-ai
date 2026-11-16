@@ -20,7 +20,8 @@ TODAY = date(2026, 11, 16)
 def sample(**changes):
     fields = {
         "plcyNo": ID, "plcyNm": "가상 청년 구직수당", "lclsfNm": "일자리", "mclsfNm": "취업",
-        "plcySprtCn": "매월 12만원을 6개월 동안 지급", "aplyPrdSeCd": "0057002",
+        "plcySprtCn": "매월 12만원을 6개월 동안 지급. 신청일 기준 다음 달부터 지급",
+        "aplyPrdSeCd": "0057002",
         "zipCd": "11110", "jobCd": "0013003", "sprtTrgtMinAge": "19", "sprtTrgtMaxAge": "39",
         "plcyPvsnMthdCd": "0042006", "ptcpPrpTrgtCn": "가상 타 사업 참여자는 신청 전 확인",
     } | changes
@@ -46,6 +47,25 @@ class SourceCashTest(unittest.TestCase):
         self.assertEqual(compiled.normalized["ai_review_calls"], 0)
         self.assertIn("가상 타 사업", " ".join(c.description for c in record.benefit.eligibility_conditions))
         self.assertNotIn("actual_calendar_schedule_unknown", record.benefit.benefit_amount.amount_text)
+
+    def test_fixed_monthly_amount_without_first_payment_month_is_not_published(self):
+        for proof in ("", " 선정일 기준 다음 달부터 지급"):
+            with self.subTest(proof=proof):
+                value = sample(plcySprtCn="매월 12만원을 6개월 동안 지급." + proof)
+                compiled = compile_source_cash(value, as_of=TODAY, regions=REGIONS)
+                self.assertIsNone(compiled.payload)
+                self.assertEqual(compiled.reasons, ("source_cash_payment_start_unknown_or_unsupported",))
+
+    def test_overlap_outside_the_payment_fields_blocks_publication(self):
+        for restriction in (
+            "국민취업지원제도와 중복 수급 불가",
+            "기존 수당과 동시 수혜 제한. 다만 일부 참여자 예외",
+        ):
+            with self.subTest(restriction=restriction):
+                value = sample(ptcpPrpTrgtCn=restriction)
+                compiled = compile_source_cash(value, as_of=TODAY, regions=REGIONS)
+                self.assertIsNone(compiled.payload)
+                self.assertEqual(compiled.reasons, ("source_cash_overlap_requires_review",))
 
     def test_title_whitespace_is_preserved_for_source_identity(self):
         value = sample(plcyNm="가상 수당 ")
@@ -80,7 +100,7 @@ class SourceCashTest(unittest.TestCase):
 
     def test_mixed_employer_and_personal_components_count_only_named_personal_part(self):
         value = sample(plcySprtCn=(
-            "청년 근로자 : 임금격차지원금(월 50만원), "
+            "청년 근로자 : 임금격차지원금(월 50만원, 신청일 기준 익월부터 지급), "
             "일자리 창출 중소기업 : 채용지원금(인원수에 따라 차등) 지급"
         ))
         compiled = compile_source_cash(value, as_of=TODAY, regions=REGIONS)
@@ -98,7 +118,8 @@ class SourceCashTest(unittest.TestCase):
 
     def test_explicit_monthly_side_benefit_keeps_source_qualifications(self):
         value = sample(plcySprtCn=("자립물품 구입비 지원(50만원, 1회), "
-            "주거 생활비 지원(월 10만원, 12개월)"), ptcpPrpTrgtCn="가상 보호종료 청년만 신청 가능")
+            "주거 생활비 지원(월 10만원, 12개월, 신청일 기준 익월부터 지급)"),
+            ptcpPrpTrgtCn="가상 보호종료 청년만 신청 가능")
         compiled = compile_source_cash(value, as_of=TODAY, regions=REGIONS)
         record = CatalogRecord.model_validate(compiled.payload)
         validate_source_text(record, value.documents[0].text)
@@ -108,7 +129,7 @@ class SourceCashTest(unittest.TestCase):
     def test_first_business_year_component_keeps_one_month_and_does_not_count_loan(self):
         value = sample(plcyNm="가상 청년 영농정착 지원", plcySprtCn=(
             "대상: 독립경영 3년 이하 청년농업인\n"
-            "영농정착지원금 지급: 독립경영 1년차는 월 110만원, 2년차 월 100만원, "
+            "영농정착지원금 지급: 독립경영 1년차는 월 110만원 (신청일 기준 익월부터 지급), 2년차 월 100만원, "
             "3년차 월 90만원 지급\n육성자금 대출 최대 5억원 별도"
         ))
         compiled = compile_source_cash(value, as_of=TODAY, regions=REGIONS)
@@ -124,18 +145,38 @@ class SourceCashTest(unittest.TestCase):
         compiled = compile_source_cash(value, as_of=TODAY, regions=REGIONS)
         self.assertIsNone(compiled.payload)
 
-    def test_official_component_keeps_all_exceptions(self):
+    def compile_official_component(self, payment, tail):
         value = sample()
-        text = "[가상 공고] 지원대상 확인\n기본수당 매월 12만원을 6개월 동안 지급\n연장 시 총액 동일, 타 급여 참여 제한과 소득 신고 의무"
-        start, end = text.index("기본수당"), text.index("\n연장")
+        text = f"[가상 공고] 지원대상 확인\n{payment}\n{tail}"
+        start = text.index(payment)
+        end = start + len(payment)
         doc = replace(value.documents[0], text=text, document_version="official-v1:" + "b" * 64)
         value = replace(value, documents=(doc,), collection_sources=(AnalysisSource("official_documents", "fixture", "b" * 64),))
         compiled = compile_official_cash_component(value, component_span=(start, end),
             application={"status": "open", "starts_on": None, "ends_on": None, "url": None},
             provider="가상 기관", component_description="기본수당만 계산, 연장·소득 조건 확인")
+        return compiled, text
+
+    def test_official_component_keeps_all_exceptions(self):
+        compiled, text = self.compile_official_component(
+            "기본수당 매월 12만원을 6개월 동안 지급. 접수일 기준 익월부터 지급",
+            "연장 시 총액 동일, 소득 신고 의무",
+        )
         record = CatalogRecord.model_validate(compiled.payload)
         validate_source_text(record, text)
         quotes = [e.quote for c in record.benefit.eligibility_conditions
                   if c.id.startswith("official_source_terms_") for e in c.evidence]
         self.assertEqual("".join(quotes), text)
         self.assertEqual(record.benefit.benefit_amount.max_total_won, 720000)
+
+    def test_official_component_checks_payment_start_and_overlap_outside_the_selection(self):
+        payment = "기본수당 매월 12만원을 6개월 동안 지급"
+        for start_proof, tail, reason in (
+            ("", "소득 신고 의무", "source_cash_payment_start_unknown_or_unsupported"),
+            (". 접수일 기준 익월부터 지급", "다른 가상 수당과 동시 수혜 불가",
+             "source_cash_overlap_requires_review"),
+        ):
+            with self.subTest(reason=reason):
+                compiled, _ = self.compile_official_component(payment + start_proof, tail)
+                self.assertIsNone(compiled.payload)
+                self.assertEqual(compiled.reasons, (reason,))

@@ -12,6 +12,7 @@ import unicodedata
 
 from benefitfinder.application.decider import Compilation
 from benefitfinder.application.policy_analysis import AnalysisPolicy, PolicyAnalysisInput
+from benefitfinder.ingestion.source_overlap import overlap_spans
 
 
 _MONEY = re.compile(
@@ -169,22 +170,28 @@ def compile_official_event_grant(
         executable.append({'condition_id': 'residence', 'kind': 'selection',
                            'field': 'region_code', 'values': list(dict.fromkeys(region_codes))})
 
+    overlaps = overlap_spans(text)
     conflicts = []
-    ban = re.search(
-        r'국민\s*취업\s*지원\s*제도(?:와|과)?\s*(?:중복|동시)\s*'
-        r'(?:수혜|지원|수급|참여)?\s*(?:은|는)?\s*(?:불가|금지|제한)', text,
-    )
-    if ban:
-        # Qualified bans remain manual: a global conflict cannot encode exceptions.
-        line_start = text.rfind('\n', 0, ban.start()) + 1
-        line_end = text.find('\n', ban.end())
-        line = text[line_start:line_end if line_end != -1 else len(text)]
-        if not re.search(r'다만|예외|경우|단[,\s(]', line):
-            for policy in conflict_policies:
-                name = re.sub(r'\s+', '', unicodedata.normalize('NFKC', policy.name))
-                if (name == '국민취업지원제도' and policy.id != value.policy_id
-                        and policy.id not in {item['policy_id'] for item in conflicts}):
-                    conflicts.append({'policy_id': policy.id, 'evidence': [evidence(*ban.span())]})
+    if overlaps:
+        # Only an exact, standalone prohibition can become an unconditional pair.
+        bans = list(re.finditer(
+            r"(?m)^[ \t]*(?:[-•○❍][ \t]*)?(?P<clause>"
+            r"국민[ \t]*취업[ \t]*지원[ \t]*제도(?:와|과)?[ \t]*(?:중복|동시)[ \t]*"
+            r"(?:수혜|지원|수급|참여)?[ \t]*(?:은|는)?[ \t]*(?:불가|금지))[ \t]*\.?[ \t]*$",
+            text,
+        ))
+        targets = {
+            policy.id for policy in conflict_policies if policy.id != value.policy_id
+            and "".join(unicodedata.normalize("NFKC", policy.name).split()) == "국민취업지원제도"
+        }
+        if len(bans) != 1 or len(targets) != 1:
+            return Compilation(None, ("event_grant_overlap_unresolved",), normalized)
+        start, end = bans[0].span("clause")
+        next_clause = text[bans[0].end():].lstrip("\r\n \t-·•○❍※□")
+        if (any(lo < start or hi > end for lo, hi in overlaps)
+                or re.match(r"다만|예외|단(?:[\s,:：.(]|$)", next_clause)):
+            return Compilation(None, ("event_grant_overlap_unresolved",), normalized)
+        conflicts.append({"policy_id": targets.pop(), "evidence": [evidence(start, end)]})
 
     amount_text = f'1회 신청분 면접수당 {amount:,}원 (연간 한도·횟수 등은 원문 조건 확인)'
     payload = {
