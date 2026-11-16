@@ -8,11 +8,11 @@ import { SiteFooter } from '../../shared/ui/SiteFooter.tsx';
 import { StatusChip } from '../../shared/ui/StatusChip.tsx';
 import { TopBar } from '../../shared/ui/TopBar.tsx';
 import { useAnalysis } from '../benefits/analysisStore.ts';
-import { formatManWon, isStale, monthDay, recruitTag, recruitmentState, shortPolicyId, sourceName } from '../benefits/format.ts';
-import { usePolicyInfo } from '../benefits/policyInfo.ts';
+import { formatManWon, isStale, monthDay, recruitTag, recruitmentState, sourceName } from '../benefits/format.ts';
 import { PolicyExplanation } from '../benefits/PolicyExplanation.tsx';
 import { readResultBasis, withResultBasis } from '../benefits/resultBasis.ts';
-import type { PortfolioPolicy } from '../benefits/resultModel.ts';
+import { policyName, policySummaries } from '../benefits/resultModel.ts';
+import type { PolicySummaries, PortfolioPolicy } from '../benefits/resultModel.ts';
 import { clearMyData } from '../profile/clearMyData.ts';
 import { useFlowState } from '../profile/flowStore.ts';
 import { findServiceForDetail } from '../services/serviceModel.ts';
@@ -70,7 +70,8 @@ export function PolicyDetailScreen({ policyId }: PolicyDetailScreenProps): JSX.E
       {state.status === 'ok' ? (
         <PolicyDetail benefit={state.benefit} isSample={state.isSample} mine={mine}
           serviceDiagnosis={serviceDiagnosis?.eligibility ?? null}
-          hasAnalysis={result !== null} conditionsHref={conditionsHref} aiGenerated={result?.ai_generated ?? false} />
+          hasAnalysis={result !== null} conditionsHref={conditionsHref} aiGenerated={result?.ai_generated ?? false}
+          info={policySummaries(result)} />
       ) : (
         <main className="screen__body s5-body">
           {state.status === 'loading' ? <p className="s5-muted" role="status">정책 정보를 불러오고 있어요</p> : null}
@@ -112,9 +113,10 @@ interface PolicyDetailProps {
   hasAnalysis: boolean;
   conditionsHref: string;
   aiGenerated: boolean;
+  info: PolicySummaries;
 }
 
-function PolicyDetail({ benefit, isSample, mine, serviceDiagnosis, hasAnalysis, conditionsHref, aiGenerated }: PolicyDetailProps): JSX.Element {
+function PolicyDetail({ benefit, isSample, mine, serviceDiagnosis, hasAnalysis, conditionsHref, aiGenerated, info }: PolicyDetailProps): JSX.Element {
   const service = benefit.service ?? null;
   const virtualData = isSample || benefit.virtual_data === true;
   const now = new Date();
@@ -125,14 +127,13 @@ function PolicyDetail({ benefit, isSample, mine, serviceDiagnosis, hasAnalysis, 
   const applyUrl = applicationUrl ?? benefit.source.url;
   const actualApplicationLink = !virtualData && benefit.virtual_data !== true && applicationUrl !== null;
   const conflicts = benefit.conflicts ?? [];
-  const conflictInfo = usePolicyInfo(isSample ? [] : conflicts.map((conflict) => conflict.policy_id));
   const diagnosis = service !== null ? serviceDiagnosis : mine?.eligibility ?? null;
   const reviewItems = diagnosis?.filter((item) => item.status === 'needs_review') ?? [];
   const serviceValue = service?.estimated_value_won ?? null;
   const payoutTiming = payoutTimingSummary(benefit.benefit_amount);
 
   function conflictName(id: string): string {
-    return (isSample ? devSampleBenefit(id)?.title : conflictInfo.get(id)?.title) ?? `정책 ${shortPolicyId(id)}`;
+    return (isSample ? devSampleBenefit(id)?.title : undefined) ?? policyName(id, info);
   }
 
   return (

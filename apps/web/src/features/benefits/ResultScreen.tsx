@@ -16,13 +16,12 @@ import { amountBreakdownText, formatManWon, josa, PERIOD_TABS, withJosa } from '
 import type { Period } from './format.ts';
 import { PolicyCard } from './PolicyCard.tsx';
 import { PortfolioCard } from './PortfolioCard.tsx';
-import { usePolicyInfo } from './policyInfo.ts';
 import { resultImageAmountBasisNote, saveResultImage } from './resultImage.ts';
 import { ResultLists } from './ResultLists.tsx';
 import { readResultBasis, withResultBasis } from './resultBasis.ts';
 import { hasExpiredServices } from '../services/serviceModel.ts';
 import '../services/ServicesScreen.css';
-import { allPolicyIds, pickView, policyName, portfolioLabel } from './resultModel.ts';
+import { pickView, policyName, policySummaries, portfolioLabel } from './resultModel.ts';
 import type { ResultView } from './resultModel.ts';
 import './ResultScreen.css';
 
@@ -99,7 +98,7 @@ export function ResultScreen(): JSX.Element {
   const [selectedRank, setSelectedRank] = useState(1);
 
   const result = analysis.status === 'done' ? analysis.result : null;
-  const info = usePolicyInfo(result !== null ? allPolicyIds(result) : []);
+  const info = policySummaries(result);
   // F14: 돈 말고 받을 수 있는 서비스 수 (현금 총액에는 더하지 않는다)
   const expiredServices = hasExpiredServices(result?.services);
   const serviceCount = expiredServices ? 0 : result?.services?.length ?? 0;

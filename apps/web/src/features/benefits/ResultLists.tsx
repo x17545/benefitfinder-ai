@@ -1,13 +1,12 @@
 import type { JSX, ReactNode } from 'react';
 import { paths } from '../../app/router.ts';
 import { conditionLabel } from '../../domains/youth/conditionLabels.ts';
-import type { NormalizedBenefit } from '../../shared/api/benefits.ts';
 import { StatusChip } from '../../shared/ui/StatusChip.tsx';
 import { AmountBreakdown } from './AmountBreakdown.tsx';
 import { formatManWon } from './format.ts';
 import { PolicyExplanation } from './PolicyExplanation.tsx';
 import { policyName, portfolioExclusions } from './resultModel.ts';
-import type { Portfolio, ResultView } from './resultModel.ts';
+import type { PolicySummaries, Portfolio, ResultView } from './resultModel.ts';
 
 interface FoldProps {
   title: string;
@@ -33,7 +32,7 @@ interface ResultListsProps {
   view: ResultView;
   /** 기회비용을 보여 줄 지금 고른 조합 */
   selected: Portfolio | undefined;
-  info: ReadonlyMap<string, NormalizedBenefit>;
+  info: PolicySummaries;
   /** preview 설명의 AI 배지 기준. 생략하면 기본 안내로 해석한다. */
   aiGenerated?: boolean;
 }
@@ -41,7 +40,7 @@ interface ResultListsProps {
 type NotReviewedItem = NonNullable<ResultView['not_yet_reviewed']>[number];
 
 /** preview가 있으면 실제 정책명과 검증 표시를 쓴다. 없으면 기존 동작을 유지한다. */
-function notReviewedName(item: NotReviewedItem, info: ReadonlyMap<string, NormalizedBenefit>): string {
+function notReviewedName(item: NotReviewedItem, info: PolicySummaries): string {
   return item.policy_name ?? policyName(item.policy_id, info);
 }
 

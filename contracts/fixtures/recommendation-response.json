@@ -3,6 +3,44 @@
   "domain": "youth",
   "virtual_data": true,
   "view": "portfolio",
+  "policy_summaries": {
+    "youth:example:P1": {
+      "title": "[가상] 청년 월세 지원",
+      "card": {
+        "categories": [
+          "housing"
+        ],
+        "application": {
+          "status": "unknown",
+          "starts_on": null,
+          "ends_on": null,
+          "url": null
+        },
+        "source": {
+          "url": "https://policy.example/youth/sample-housing",
+          "checked_at": "2026-10-26T09:00:00+09:00",
+          "document_version": "fictional-v1"
+        },
+        "amount_text": "[가상] 12개월 동안 월 20만 원",
+        "virtual_data": true
+      }
+    },
+    "youth:example:P3": {
+      "title": "[가상] 구직활동 지원금"
+    },
+    "youth:example:P6": {
+      "title": "[가상] 청년 전세대출 이자 지원"
+    },
+    "youth:example:P5": {
+      "title": "[가상] 청년 취업 준비 지원"
+    },
+    "youth:example:P120": {
+      "title": "[가상] 청년 주거 이전 지원"
+    },
+    "youth:example:P9": {
+      "title": "[가상] 청년 직업 훈련 지원"
+    }
+  },
   "results": {
     "1y": {
       "pv_off": {

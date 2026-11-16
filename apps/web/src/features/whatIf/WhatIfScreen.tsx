@@ -8,8 +8,9 @@ import { SiteFooter } from '../../shared/ui/SiteFooter.tsx';
 import { TopBar } from '../../shared/ui/TopBar.tsx';
 import { useAnalysis } from '../benefits/analysisStore.ts';
 import { AmountBreakdown } from '../benefits/AmountBreakdown.tsx';
-import { formatManWon, shortPolicyId } from '../benefits/format.ts';
-import { usePolicyInfo } from '../benefits/policyInfo.ts';
+import { formatManWon } from '../benefits/format.ts';
+import { policyName, policySummaries } from '../benefits/resultModel.ts';
+import type { PolicySummaries } from '../benefits/resultModel.ts';
 import { readResultBasis, withResultBasis } from '../benefits/resultBasis.ts';
 import { devSampleBenefit } from '../policy/devSampleBenefits.ts';
 import { missingSteps } from '../profile/answerRules.ts';
@@ -115,7 +116,8 @@ export function WhatIfScreen(): JSX.Element {
               </section>
             ) : null}
             {!alreadyAlone && state.status === 'ok' ? (
-              <SimulationResult result={state.result} isSample={state.isSample} presentValue={basis.present_value} />
+              <SimulationResult result={state.result} isSample={state.isSample} presentValue={basis.present_value}
+                info={policySummaries(analysis.status === 'done' ? analysis.result : null)} />
             ) : null}
           </>
         )}
@@ -130,12 +132,12 @@ interface SimulationResultProps {
   result: ChangeSimulationResult;
   isSample: boolean;
   presentValue: boolean;
+  info?: PolicySummaries;
 }
 
-export function SimulationResult({ result, isSample, presentValue }: SimulationResultProps): JSX.Element {
+export function SimulationResult({ result, isSample, presentValue, info = new Map() }: SimulationResultProps): JSX.Element {
   const lost = result.lost ?? [];
   const gained = result.gained ?? [];
-  const info = usePolicyInfo(isSample ? [] : [...lost, ...gained].map((item) => item.policy_id));
   const diff = result.after_total_won - result.before_total_won;
   const net = netChange(result);
   const rate = result.effective_marginal_rate;
@@ -143,7 +145,7 @@ export function SimulationResult({ result, isSample, presentValue }: SimulationR
   const detailBasis = { period: result.basis_period, present_value: !isSample && presentValue };
 
   function name(id: string): string {
-    return (isSample ? devSampleBenefit(id)?.title : info.get(id)?.title) ?? `정책 ${shortPolicyId(id)}`;
+    return (isSample ? devSampleBenefit(id)?.title : undefined) ?? policyName(id, info);
   }
 
   return (

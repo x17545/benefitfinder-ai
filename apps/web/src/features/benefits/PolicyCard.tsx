@@ -1,17 +1,16 @@
 import type { JSX } from 'react';
 import { conditionLabel } from '../../domains/youth/conditionLabels.ts';
-import type { NormalizedBenefit } from '../../shared/api/benefits.ts';
 import { trackEvent } from '../../shared/analytics/events.ts';
 import { StatusChip } from '../../shared/ui/StatusChip.tsx';
 import { AmountBreakdown } from './AmountBreakdown.tsx';
 import { formatManWon, isStale, monthDay, recruitTag, recruitmentState, sourceName } from './format.ts';
 import { PolicyExplanation } from './PolicyExplanation.tsx';
 import { policyName } from './resultModel.ts';
-import type { PortfolioPolicy } from './resultModel.ts';
+import type { PolicySummaries, PortfolioPolicy } from './resultModel.ts';
 
 interface PolicyCardProps {
   policy: PortfolioPolicy;
-  info: ReadonlyMap<string, NormalizedBenefit>;
+  info: PolicySummaries;
   /** 지금 펼친 결과 조합의 서버 순위(1~3) */
   rank: number;
   detailHref: string;
@@ -44,7 +43,7 @@ function PolicyIcon({ categories }: { categories: readonly string[] }): JSX.Elem
 
 /** 지원금 행 (S3 9 ~ 12번) */
 export function PolicyCard({ policy, info, rank, aiGenerated, detailHref, virtualData }: PolicyCardProps): JSX.Element {
-  const benefit = info.get(policy.policy_id);
+  const benefit = info.get(policy.policy_id)?.card;
   const matchingBenefit = benefit?.source.url === policy.source.url &&
     benefit.source.document_version === policy.source.document_version ? benefit : undefined;
   const now = new Date();
@@ -71,8 +70,8 @@ export function PolicyCard({ policy, info, rank, aiGenerated, detailHref, virtua
             <span className="s3-policy__name">
               {policyName(policy.policy_id, info)}&nbsp;<span aria-hidden="true">›</span>
             </span>
-            {matchingBenefit?.benefit_amount?.amount_text ? (
-              <span className="s3-policy__summary">{matchingBenefit.benefit_amount.amount_text}</span>
+            {matchingBenefit?.amount_text ? (
+              <span className="s3-policy__summary">{matchingBenefit.amount_text}</span>
             ) : null}
           </span>
           <span className="s3-policy__amount">

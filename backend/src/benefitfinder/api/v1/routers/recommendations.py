@@ -70,6 +70,7 @@ async def create_recommendations(
             services=service_catalog,
             explainer=recommendation_explainer,
             progress=progress,
+            example_details=http_request.app.state.example_benefits,
         )
 
     return await analysis_response(

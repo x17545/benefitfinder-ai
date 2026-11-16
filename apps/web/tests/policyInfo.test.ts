@@ -1,52 +1,52 @@
+import { createElement } from 'react';
 import type { EffectCallback } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, expect, it, vi } from 'vitest';
-import type { NormalizedBenefit } from '../src/shared/api/benefits.ts';
+import type { PolicyDetailState } from '../src/features/policy/usePolicyDetail.ts';
 import { isNormalizedBenefit } from '../src/shared/api/benefits.ts';
 import fixtureText from '../../../contracts/fixtures/youth-benefit.json?raw';
 
-const hook = vi.hoisted(() => ({
-  info: new Map<string, NormalizedBenefit>() as ReadonlyMap<string, NormalizedBenefit>,
-  effects: [] as EffectCallback[],
-  changes: 0,
-}));
-vi.mock('react', () => ({
-  useState: () => [hook.info, (value: ReadonlyMap<string, NormalizedBenefit>) => {
-    hook.info = value;
-    hook.changes += 1;
+const detail = vi.hoisted(() => ({ seen: [] as PolicyDetailState[], effects: [] as EffectCallback[] }));
+vi.mock('react', async (load) => ({
+  ...await load<typeof import('react')>(),
+  useCallback: (fn: unknown) => fn,
+  useState: (initial: unknown) => [initial, (value: { state?: PolicyDetailState }) => {
+    if (value.state !== undefined) detail.seen.push(value.state);
   }],
-  useEffect: (effect: EffectCallback) => { hook.effects.push(effect); },
+  useEffect: (effect: EffectCallback) => { detail.effects.push(effect); },
 }));
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  hook.info = new Map();
-  hook.changes = 0;
-  hook.effects = [];
+  detail.seen = [];
+  detail.effects = [];
 });
 
-it('leaves malformed public details out of the UI map and allows a later valid retry', async () => {
-  vi.resetModules();
+it('fetches only the selected detail on open and preserves malformed, retry and withdrawal handling', async () => {
   const benefit: unknown = JSON.parse(fixtureText);
-  if (!isNormalizedBenefit(benefit)) { throw new Error('invalid fixture'); }
+  if (!isNormalizedBenefit(benefit)) throw new Error('invalid fixture');
   const fetchFn = vi.fn()
     .mockResolvedValueOnce(new Response(JSON.stringify({ ...benefit, conflicts: {} })))
     .mockResolvedValueOnce(new Response(fixtureText))
     .mockResolvedValueOnce(new Response(null, { status: 404 }));
   vi.stubGlobal('fetch', fetchFn);
-  const { usePolicyInfo } = await import('../src/features/benefits/policyInfo.ts');
+  vi.stubGlobal('window', { setTimeout, clearTimeout });
+  const { usePolicyDetail } = await import('../src/features/policy/usePolicyDetail.ts');
 
-  usePolicyInfo([benefit.id]);
-  hook.effects.pop()?.();
-  await vi.waitFor(() => expect(hook.changes).toBe(1));
-  expect(hook.info.size).toBe(0);
+  function DetailRequest(): null {
+    usePolicyDetail(benefitId);
+    return null;
+  }
+  const benefitId = benefit.id;
 
-  // 같은 페이지를 다시 열 때 복구된 상세를 받고, 이후 게시 취소도 반영한다.
-  usePolicyInfo([benefit.id]);
-  hook.effects.pop()?.();
-  await vi.waitFor(() => expect(hook.info.get(benefit.id)).toEqual(benefit));
-  usePolicyInfo([benefit.id]);
-  hook.effects.pop()?.();
-  await vi.waitFor(() => expect(hook.changes).toBe(3));
-  expect(fetchFn).toHaveBeenCalledTimes(3);
-  expect(hook.info.has(benefit.id)).toBe(false);
+  for (const [index, expected] of ['error', 'ok', 'notFound'].entries()) {
+    renderToStaticMarkup(createElement(DetailRequest));
+    const cleanup = detail.effects.pop()?.();
+    await vi.waitFor(() => expect(detail.seen[index]?.status).toBe(expected));
+    if (typeof cleanup === 'function') cleanup();
+    expect(fetchFn).toHaveBeenCalledTimes(index + 1);
+    expect(fetchFn).toHaveBeenLastCalledWith(
+      '/api/v1/benefits/' + encodeURIComponent(benefit.id), expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+  }
 });

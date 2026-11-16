@@ -178,6 +178,18 @@ function isPeriodResult(value: unknown): boolean {
   return isRecord(value) && isResultView(value.pv_off) && isResultView(value.pv_on);
 }
 
+function isPolicySummary(value: unknown): boolean {
+  if (!isRecord(value) || !isNonEmptyString(value.title)) return false;
+  return optional(value.card, (card) =>
+    isRecord(card) && arrayOf(card.categories, isNonEmptyString) &&
+    new Set(card.categories).size === card.categories.length &&
+    isApplication(card.application) && isSource(card.source) && isNullableString(card.amount_text) &&
+    optional(card.virtual_data, (item) => typeof item === 'boolean'),
+  ) && optional(value.conflicts, (conflicts) => conflicts === null || arrayOf(conflicts, (item) =>
+    isRecord(item) && isNonEmptyString(item.policy_id) && arrayOf(item.evidence, isEvidence, 1),
+  ));
+}
+
 function isRecommendedService(value: unknown): value is RecommendedService {
   return isRecord(value) && isNonEmptyString(value.policy_id) && isNonEmptyString(value.title) &&
     arrayOf(value.categories, isNonEmptyString) && new Set(value.categories).size === value.categories.length &&
@@ -219,5 +231,7 @@ export function isRecommendationResponse(value: unknown): value is Recommendatio
       Number.isFinite(value.discount_rate) && value.discount_rate >= 0)) &&
     (value.discount_rate_status === 'verified' || value.discount_rate_status === 'unknown') &&
     isPeriodResult(value.results['1y']) && isPeriodResult(value.results['2y']) && isPeriodResult(value.results.all) &&
-    hasValidServices(value);
+    optional(value.policy_summaries, (summaries) =>
+      isRecord(summaries) && Object.entries(summaries).every(([id, entry]) => id !== '' && isPolicySummary(entry)),
+    ) && hasValidServices(value);
 }

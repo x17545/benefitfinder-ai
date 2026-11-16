@@ -9,7 +9,7 @@ import {
   shortPolicyId,
   withJosa,
 } from '../src/features/benefits/format.ts';
-import { allPolicyIds, pickView, portfolioLabel } from '../src/features/benefits/resultModel.ts';
+import { pickView, policyName, policySummaries, portfolioLabel } from '../src/features/benefits/resultModel.ts';
 import { isRecommendationResponse } from '../src/shared/api/recommendations.ts';
 import fixtureText from '../../../contracts/fixtures/recommendation-response.json?raw';
 
@@ -82,15 +82,16 @@ describe('S3 result model', () => {
       throw new Error('fixture does not match the contract');
     }
     expect(pickView(result, '2y', true).portfolios[0]?.total_won).toBe(5_869_626);
-    expect(allPolicyIds(result)).toContain('youth:example:P6');
+    expect(policyName('youth:example:P6', policySummaries(result))).toBe('[가상] 청년 전세대출 이자 지원');
     expect(portfolioLabel(1)).toBe('추천 조합');
     expect(portfolioLabel(3)).toBe('대안 2');
   });
 
-  it('only enumerates the three supported periods even if an internal caller supplies extra keys', () => {
+  it('keeps an ID label for cached responses without summaries', () => {
     if (!isRecommendationResponse(result)) { throw new Error('invalid fixture'); }
-    const extended = structuredClone(result);
-    Reflect.set(extended.results, 'extra', null);
-    expect(allPolicyIds(extended)).toEqual(allPolicyIds(result));
+    const legacy = structuredClone(result);
+    delete legacy.policy_summaries;
+    expect(isRecommendationResponse(legacy)).toBe(true);
+    expect(policyName('youth:example:P6', policySummaries(legacy))).toBe('정책 P6');
   });
 });

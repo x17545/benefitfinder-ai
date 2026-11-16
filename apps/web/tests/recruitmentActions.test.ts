@@ -4,31 +4,28 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FallbackList } from '../src/features/benefits/FallbackList.tsx';
 import { PolicyCard } from '../src/features/benefits/PolicyCard.tsx';
 import type { PortfolioPolicy } from '../src/features/benefits/resultModel.ts';
-import type { NormalizedBenefit } from '../src/shared/api/benefits.ts';
+import type { PolicySummary } from '../src/shared/api/generated/recommendation-response.ts';
 
-type Application = NormalizedBenefit['application'];
+type Application = NonNullable<PolicySummary['card']>['application'];
 
 const APPLICATION_URL = 'https://apply.example.test/P1';
 const SOURCE_URL = 'https://source.example.test/P1';
 
-function benefit(application: Application, virtualData = false): NormalizedBenefit {
+function summary(application: Application, virtualData = false) {
   return {
-    id: 'youth:test:P1',
-    domain: 'youth',
     title: '가상 청년 정책',
-    summary: '회귀 테스트용 가상 정책',
-    provider: '가상 기관',
-    categories: ['housing'],
-    application,
-    eligibility_conditions: [],
-    source: {
-      url: SOURCE_URL,
-      checked_at: '2026-11-01T09:00:00+09:00',
-      document_version: 'test-v1',
+    card: {
+      categories: ['housing'],
+      application,
+      source: {
+        url: SOURCE_URL,
+        checked_at: '2026-11-01T09:00:00+09:00',
+        document_version: 'test-v1',
+      },
+      virtual_data: virtualData,
+      amount_text: null,
     },
-    domain_data: {},
-    virtual_data: virtualData,
-  };
+  } satisfies PolicySummary;
 }
 
 const policy: PortfolioPolicy = {
@@ -46,10 +43,10 @@ const policy: PortfolioPolicy = {
   },
 };
 
-function renderPolicyCard(current: NormalizedBenefit | undefined, virtualData = false): string {
+function renderPolicyCard(current: PolicySummary | undefined, virtualData = false): string {
   return renderToStaticMarkup(createElement(PolicyCard, {
     policy,
-    info: current === undefined ? new Map() : new Map([[current.id, current]]),
+    info: current === undefined ? new Map() : new Map([[policy.policy_id, current]]),
     detailHref: '/policy/youth:test:P1',
     virtualData,
     aiGenerated: false,
@@ -57,10 +54,10 @@ function renderPolicyCard(current: NormalizedBenefit | undefined, virtualData = 
   }));
 }
 
-function renderFallback(current: NormalizedBenefit | undefined): string {
+function renderFallback(current: PolicySummary | undefined): string {
   return renderToStaticMarkup(createElement(FallbackList, {
     items: [{ policy_id: policy.policy_id, amount_in_period_won: policy.amount_in_period_won }],
-    info: current === undefined ? new Map() : new Map([[current.id, current]]),
+    info: current === undefined ? new Map() : new Map([[policy.policy_id, current]]),
     virtualData: false,
   }));
 }
@@ -79,7 +76,7 @@ describe.each([
   ['FallbackList', renderFallback],
 ] as const)('%s recruitment action', (_name, render) => {
   it('offers the application link only while recruitment is open', () => {
-    const html = render(benefit({
+    const html = render(summary({
       status: 'open', starts_on: '2026-11-13', ends_on: '2026-11-27', url: APPLICATION_URL,
     }));
     expect(html).toContain('신청하러 가기 ↗');
@@ -101,7 +98,7 @@ describe.each([
       status: 'unknown', starts_on: null, ends_on: null, url: APPLICATION_URL,
     }],
   ] satisfies [string, Application][])('shows the official page for %s', (_case, application) => {
-    const html = render(benefit(application));
+    const html = render(summary(application));
     expect(html).toContain('공식 페이지 보기 ↗');
     expect(html).toContain(`href="${SOURCE_URL}"`);
     expect(html).not.toContain('신청하러 가기');
@@ -115,7 +112,7 @@ describe.each([
   });
 
   it('keeps virtual policy action hidden', () => {
-    const html = render(benefit({
+    const html = render(summary({
       status: 'open', starts_on: '2026-11-13', ends_on: '2026-11-27', url: APPLICATION_URL,
     }, true));
     expect(html).not.toContain('신청하러 가기');
@@ -126,8 +123,8 @@ describe.each([
 it.each(['url', 'document_version'] as const)(
   'does not attach a direct application link to a result from a different %s',
   (field) => {
-    const current = benefit({ status: 'open', starts_on: null, ends_on: null, url: APPLICATION_URL });
-    current.source[field] = field === 'url' ? 'https://new-source.example.test/P1' : 'test-v2';
+    const current = summary({ status: 'open', starts_on: null, ends_on: null, url: APPLICATION_URL });
+    current.card.source[field] = field === 'url' ? 'https://new-source.example.test/P1' : 'test-v2';
     const html = renderPolicyCard(current);
     expect(html).toContain('자세히 보기');
     expect(html).not.toContain('신청하러 가기');

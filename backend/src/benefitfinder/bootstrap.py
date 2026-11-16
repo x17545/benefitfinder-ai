@@ -308,6 +308,7 @@ def create_app(
 
     app.state.read_discount_rate = read_discount_rate
     cash_benefits = example_benefits(policies)
+    app.state.example_benefits = cash_benefits
     services = (
         PublishedServices(service_repository, evaluate_condition) if service_repository is not None
         else service_catalog if service_catalog is not None else ServiceCatalog(

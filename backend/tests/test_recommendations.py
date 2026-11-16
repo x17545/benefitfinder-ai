@@ -74,6 +74,11 @@ class RecommendationApiTest(unittest.TestCase):
 
         first = data["results"]["1y"]["pv_off"]["portfolios"][0]
         self.assertEqual(first["total_won"], 5_400_000)
+        for policy in first["policies"]:
+            summary = data["policy_summaries"][policy["policy_id"]]
+            self.assertTrue(summary["title"])
+            self.assertEqual(summary["card"]["source"], policy["source"])
+            self.assertTrue(summary["card"]["virtual_data"])
 
     def test_unsupported_domain_is_rejected(self):
         payload = copy.deepcopy(self.payload)

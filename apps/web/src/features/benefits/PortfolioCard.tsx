@@ -1,9 +1,8 @@
 import type { JSX } from 'react';
-import type { NormalizedBenefit } from '../../shared/api/benefits.ts';
 import { AmountBreakdown } from './AmountBreakdown.tsx';
 import { formatManWon } from './format.ts';
 import { policyName, portfolioLabel } from './resultModel.ts';
-import type { Portfolio } from './resultModel.ts';
+import type { PolicySummaries, Portfolio } from './resultModel.ts';
 
 const BAR_COLORS = ['var(--color-bar-1)', 'var(--color-bar-2)', 'var(--color-bar-3)'];
 
@@ -13,7 +12,7 @@ interface PortfolioCardProps {
   topTotal: number;
   selected: boolean;
   onSelect: () => void;
-  info: ReadonlyMap<string, NormalizedBenefit>;
+  info: PolicySummaries;
 }
 
 /** 조합 카드 (S3 5 ~ 7번): 배지 + 총액 + 구성 + 포기하는 지원금 + 금액 비율 막대 */

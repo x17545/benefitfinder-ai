@@ -30,7 +30,6 @@ vi.mock('../src/features/benefits/analysisStore.ts', async (load) => ({
   ...await load<typeof import('../src/features/benefits/analysisStore.ts')>(),
   useAnalysis: () => screen.result === null ? { status: 'idle' } : { status: 'done', result: screen.result, isSample: false },
 }));
-vi.mock('../src/features/benefits/policyInfo.ts', () => ({ usePolicyInfo: () => new Map() }));
 vi.mock('../src/features/profile/regionOptions.ts', () => ({
   useRegionOptions: () => ({ state: { status: 'loading' }, retry: vi.fn() }),
 }));
@@ -95,6 +94,40 @@ describe('remember choice on S1', () => {
     const { StartScreen } = await import('../src/features/profile/StartScreen.tsx');
     const html = renderToStaticMarkup(createElement(StartScreen));
     expect(html.match(/<input[^>]*id="s1-remember"[^>]*>/)?.[0]).toContain('checked');
+  });
+});
+
+describe('result metadata requests', () => {
+  it('shows summary titles with no detail requests even when hundreds of rows are folded', async () => {
+    const fetchFn = vi.fn();
+    vi.stubGlobal('fetch', fetchFn);
+    const snapshot = fixture(fixtureText);
+    const summaries = snapshot.policy_summaries ?? {};
+    for (let index = 0; index < 500; index += 1) {
+      const id = `youth:example:list-${index}`;
+      (snapshot.results['1y'].pv_off.closed_now ??= []).push({ policy_id: id, last_period: null });
+      summaries[id] = { title: `[가상] 마감 정책 ${index}` };
+    }
+    screen.result = { ...snapshot, policy_summaries: summaries };
+    const html = await renderResult();
+    const cleanups = screen.effects.map((effect) => effect());
+
+    expect(html).toContain('[가상] 청년 월세 지원');
+    expect(html).toContain('[가상] 마감 정책 499');
+    expect(html).toContain('/policy/youth%3Aexample%3AP1');
+    expect(fetchFn).not.toHaveBeenCalled();
+    cleanups.forEach((cleanup) => { if (typeof cleanup === 'function') cleanup(); });
+  });
+
+  it('keeps legacy results from triggering detail requests', async () => {
+    const fetchFn = vi.fn();
+    vi.stubGlobal('fetch', fetchFn);
+    screen.result = fixture(fixtureText);
+    delete screen.result.policy_summaries;
+    const html = await renderResult();
+    screen.effects.forEach((effect) => effect());
+    expect(html).toContain('정책 P1');
+    expect(fetchFn).not.toHaveBeenCalled();
   });
 });
 

@@ -2,6 +2,18 @@
 
 export type Categories = string[];
 /**
+ * 선택 가능한 조합에서 포기하는 정책의 근거 표시용 제한 목록.
+ */
+export type Conflicts =
+  | {
+      policy_id: string;
+      /**
+       * @minItems 1
+       */
+      evidence: [Evidence, ...Evidence[]];
+    }[]
+  | null;
+/**
  * 선택 탭의 계산 결과. 6.3 예시 위치에 fallback_list를 둔다.
  */
 export type ResultView = {
@@ -362,6 +374,12 @@ export interface RecommendationResponse {
    */
   virtual_data?: boolean;
   /**
+   * 추천에 사용한 게시본의 정책 ID별 이름과 카드 표시 정보. 이전 응답에서는 생략될 수 있다.
+   */
+  policy_summaries?: {
+    [k: string]: PolicySummary;
+  };
+  /**
    * F14 비현금 서비스. 생략은 서비스 미지원, 빈 배열은 조회했지만 후보 없음. 기간·현재가치와 별도.
    */
   services?: RecommendedService[];
@@ -389,14 +407,16 @@ export interface RecommendationResponse {
   discount_rate: number | null;
   discount_rate_status: 'verified' | 'unknown';
 }
-export interface RecommendedService {
-  policy_id: string;
+export interface PolicySummary {
   title: string;
-  categories: Categories;
-  application: Application;
-  source: Source;
-  service: InKindService;
-  eligibility: ConditionResult[];
+  card?: {
+    categories: Categories;
+    application: Application;
+    source: Source;
+    amount_text: string | null;
+    virtual_data?: boolean;
+  };
+  conflicts?: Conflicts;
 }
 export interface Application {
   status: 'open' | 'closed' | 'upcoming' | 'unknown';
@@ -408,6 +428,20 @@ export interface Source {
   url: string;
   checked_at: string;
   document_version: string;
+}
+export interface Evidence {
+  quote: string;
+  location?: string;
+  source: Source;
+}
+export interface RecommendedService {
+  policy_id: string;
+  title: string;
+  categories: Categories;
+  application: Application;
+  source: Source;
+  service: InKindService;
+  eligibility: ConditionResult[];
 }
 /**
  * F14 공개 서비스 내용과 서버 환산 결과. estimated_value_won은 근거 확인 단가 × 횟수이며 현금 조합에는 포함하지 않는다. 검증하지 못한 단가와 환산 근거는 모두 null.
@@ -428,11 +462,6 @@ export interface ConditionResult {
   status: 'met' | 'not_met' | 'needs_review';
   reason: string;
   evidence: Evidence[];
-}
-export interface Evidence {
-  quote: string;
-  location?: string;
-  source: Source;
 }
 export interface PeriodResult {
   pv_off: ResultView;
