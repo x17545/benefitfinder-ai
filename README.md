@@ -152,7 +152,7 @@ F11 이용 통계는 명세의 17개 이벤트를 기존 백엔드를 통해 GA4
 | --- | --- | --- | --- |
 | 양승현 (조장) | 통합·배포 / 백엔드 | 백엔드 아키텍처 의존성 오류 해결, LLM 제공자 연동 및 F08 Windows 호환성 개선, Vercel·Render 배포 연동 설정, 통합 테스트 오류 수정 및 PR 병합 관리 | [PR #12](https://github.com/x17545/benefitfinder-ai/pull/12), [PR #21](https://github.com/x17545/benefitfinder-ai/pull/21), [PR #56](https://github.com/x17545/benefitfinder-ai/pull/56), [커밋 a6f70c9](https://github.com/x17545/benefitfinder-ai/commit/a6f70c9) |
 | 이현서 | 기획 / 화면 설계 | | |
-| 김하정 | 디자인 / 프론트엔드 | | |
+| 김하정 | 디자인 / 프론트엔드 | 화면 디자인과 웹 화면 구현(시작·조건 입력·결과·상세·상황 변화·서비스·안내 페이지), 배포 사이트 PC·모바일 점검 및 보완 | [#7](https://github.com/x17545/benefitfinder-ai/pull/7) · [#22](https://github.com/x17545/benefitfinder-ai/pull/22) · [#28](https://github.com/x17545/benefitfinder-ai/pull/28) · [#31](https://github.com/x17545/benefitfinder-ai/pull/31) · [#54](https://github.com/x17545/benefitfinder-ai/pull/54) |
 | 윤정찬 | 원천 데이터 수집·적재 | 온통청년 청년정책 API 수집·원본 보관·버전 비교 구현, 공고 HTML·PDF 텍스트 변환(notice-text-v1) 추가, 실제 수집본 비교로 키워드 순서 변경에 따른 재검수 오탐을 찾아 수정(취업·주거 해시 변경 296→8건), 수집·적재·DB PR(#39~#49) 직접 실행 리뷰, ECOS 기준금리·온통청년 3,957건·보조금24 82건 실제 수집→PostgreSQL 적재 검증, 보조금24 10,942건 조사로 취업·주거 분류값과 수집 대상 매핑 정리 | [PR #8](https://github.com/x17545/benefitfinder-ai/pull/8), [PR #33](https://github.com/x17545/benefitfinder-ai/pull/33), [PR #52](https://github.com/x17545/benefitfinder-ai/pull/52), [PR #53](https://github.com/x17545/benefitfinder-ai/pull/53), [수집 문서](backend/src/benefitfinder/ingestion/README.md) |
 | 탁서윤 | 데이터 정제·AI / 자동화 | | |
 
