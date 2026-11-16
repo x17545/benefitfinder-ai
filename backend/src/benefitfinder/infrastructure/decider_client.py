@@ -102,8 +102,12 @@ def verified_checkpoint(path: Path) -> None:
 
 class LocalDecider:
     def __init__(self, checkpoint: Path, *, max_length: int = 3072,
-                 batch_tokens: int = 2048) -> None:
-        if not 256 <= max_length <= 32768 or not 256 <= batch_tokens <= 65536:
+                 batch_tokens: int = 2048, mode: str = "separate",
+                 locate_threshold: float = 0.5) -> None:
+        if (not 256 <= max_length <= 32768 or not 256 <= batch_tokens <= 65536
+            or mode not in {"separate", "isolated"}
+            or type(locate_threshold) not in (float, int)
+            or not 0 < locate_threshold <= 1):
             raise ValueError("decider_invalid_memory_limits")
         verified_checkpoint(checkpoint)
         import torch
@@ -115,14 +119,24 @@ class LocalDecider:
 
         self.torch = torch
         self.model = Decider.from_pretrained(checkpoint, device="cuda", fast=False, locate=True,
-                                             mode="separate", max_length=max_length,
+                                             mode=mode, max_length=max_length,
                                              batch_tokens=batch_tokens)
+        from pplx_decider.locate import LocateAdapter
+
+        self.model.locate = LocateAdapter(self.model, checkpoint / "locate-span")
+        self.model.locate.cutoff = locate_threshold
+        self.locate_threshold = locate_threshold
+        self.initial_max_length = max_length
+        self.initial_batch_tokens = batch_tokens
         self.metrics: list[dict] = []
 
     @property
     def identity(self) -> dict[str, str]:
         return {"id": MODEL_ID, "revision": MODEL_REVISION, "questions": QUESTION_VERSION,
-                "provider": "local", "mode": "separate", "fast": "false"}
+                "provider": "local", "mode": self.model.mode, "fast": "false",
+                "locate_threshold": str(self.locate_threshold),
+                "max_length": str(self.initial_max_length),
+                "batch_tokens": str(self.initial_batch_tokens)}
 
     def decide(self, requests: list[dict]) -> list[dict]:
         if not requests:

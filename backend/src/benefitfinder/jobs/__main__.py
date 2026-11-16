@@ -25,115 +25,206 @@ from pathlib import Path
 from time import monotonic
 from zoneinfo import ZoneInfo
 
-from benefitfinder.ai.chunked_evidence import extract_chunked_evidence
-from benefitfinder.ai.policy_facts_agent import extract_policy_facts
-from benefitfinder.ai.policy_rule_agent import extract_rule_batch
-from benefitfinder.application.f12_review import F12ReviewDecision
-from benefitfinder.infrastructure.collection_files import read_collection_file
-from benefitfinder.infrastructure.database.repositories.collected_policies import (
-    PostgresCollectedPolicies,
-)
-from benefitfinder.ingestion.collected_generations import load_youthcenter_generation
-from benefitfinder.infrastructure.ecos_base_rate import EcosBaseRate
-from benefitfinder.infrastructure.database.repositories.base_rates import PostgresBaseRates
-from benefitfinder.application.policy_rules import RuleReviewSnapshot
-from benefitfinder.infrastructure.chunk_e4b import LocalE4BChat
-from benefitfinder.infrastructure.chunk_evidence_files import write_chunk_checkpoint, write_chunked_run
-from benefitfinder.infrastructure.discord_webhook import DiscordWebhook, DiscordWebhookError
-from benefitfinder.infrastructure.local_files import (
-    JsonFileSnapshotStore,
-    JsonFileVersionStore,
-    write_field_summary_csv,
-    write_records_csv,
-)
-from benefitfinder.infrastructure.f12_evaluation_files import (
-    EvaluationFileError,
-    evaluate_manifest,
-    write_evaluation_report,
-)
-from benefitfinder.infrastructure.f12_catalog_files import prepare_f12_release, write_f12_catalog
-from benefitfinder.infrastructure.ai_catalog_review import AIReview, publish_ai_batch, retire_ai_batch, validate_ai_review
-from benefitfinder.infrastructure.unreviewed_catalog import publish_unreviewed, retire_unreviewed, validate_unreviewed
-from benefitfinder.infrastructure.ollama_chat import OllamaChat
-from benefitfinder.infrastructure.compatible_llm import (
-    CompatibleChat,
-    CompatibleExplanationCompletion,
-)
-from benefitfinder.infrastructure.llm_settings import LLMSettings
-from benefitfinder.application.source_chunks import evidence_schema
-from benefitfinder.infrastructure.policy_rule_files import (
-    RULE_REVIEW_OUTPUT_EXISTS,
-    RuleReviewFileError,
-    load_f12_decisions,
-    load_f12_review_pair,
-    load_rule_batch,
-    load_rule_snapshot,
-    write_f12_approved_export,
-    write_f12_decisions,
-    write_f12_review_pair,
-    write_policy_facts,
-    write_rule_batch,
-    write_rule_snapshot,
-)
-from benefitfinder.infrastructure.youthcenter_http import YouthcenterHttpFetcher
-from benefitfinder.ingestion.collect import CollectionResult, collect_youthcenter
-from benefitfinder.ingestion.rule_review_workflow import (
-    RuleReviewWorkflowError,
-    approve_snapshot,
-    inspect_snapshot,
-    prepare_snapshot,
-    refresh_snapshot,
-)
-from benefitfinder.ingestion.youthcenter import SOURCE_NAME, YOUTHCENTER_POLICY_LIST
-from benefitfinder.jobs.f12_review_display import format_f12_review
-from benefitfinder.jobs.daily_refresh import DailyRefreshError, run_daily_refresh
-from benefitfinder.jobs.rule_review_example import example_rule_batch
-from benefitfinder.jobs.youthcenter_refresh import (
-    STATUS_FILE,
-    RefreshError,
-    refresh_notification,
-    run_youthcenter_refresh,
-)
+# The source-only CLI must not load model clients or AI quality gates.
+if sys.argv[1:3] != ['decider-batch', 'import-source']:
+    from benefitfinder.ai.chunked_evidence import extract_chunked_evidence
+    from benefitfinder.ai.policy_facts_agent import extract_policy_facts
+    from benefitfinder.ai.policy_rule_agent import extract_rule_batch
+    from benefitfinder.application.f12_review import F12ReviewDecision
+    from benefitfinder.infrastructure.collection_files import read_collection_file
+    from benefitfinder.infrastructure.database.repositories.collected_policies import (
+        PostgresCollectedPolicies,
+    )
+    from benefitfinder.ingestion.collected_generations import load_youthcenter_generation
+    from benefitfinder.infrastructure.ecos_base_rate import EcosBaseRate
+    from benefitfinder.infrastructure.database.repositories.base_rates import PostgresBaseRates
+    from benefitfinder.application.policy_rules import RuleReviewSnapshot
+    from benefitfinder.infrastructure.chunk_e4b import LocalE4BChat
+    from benefitfinder.infrastructure.chunk_evidence_files import write_chunk_checkpoint, write_chunked_run
+    from benefitfinder.infrastructure.discord_webhook import DiscordWebhook, DiscordWebhookError
+    from benefitfinder.infrastructure.local_files import (
+        JsonFileSnapshotStore,
+        JsonFileVersionStore,
+        write_field_summary_csv,
+        write_records_csv,
+    )
+    from benefitfinder.infrastructure.f12_evaluation_files import (
+        EvaluationFileError,
+        evaluate_manifest,
+        write_evaluation_report,
+    )
+    from benefitfinder.infrastructure.f12_catalog_files import prepare_f12_release, write_f12_catalog
+    from benefitfinder.infrastructure.ai_catalog_review import AIReview, publish_ai_batch, retire_ai_batch, validate_ai_review
+    from benefitfinder.infrastructure.unreviewed_catalog import publish_unreviewed, retire_unreviewed, validate_unreviewed
+    from benefitfinder.infrastructure.ollama_chat import OllamaChat
+    from benefitfinder.infrastructure.compatible_llm import (
+        CompatibleChat,
+        CompatibleExplanationCompletion,
+    )
+    from benefitfinder.infrastructure.llm_settings import LLMSettings
+    from benefitfinder.application.source_chunks import evidence_schema
+    from benefitfinder.infrastructure.policy_rule_files import (
+        RULE_REVIEW_OUTPUT_EXISTS,
+        RuleReviewFileError,
+        load_f12_decisions,
+        load_f12_review_pair,
+        load_rule_batch,
+        load_rule_snapshot,
+        write_f12_approved_export,
+        write_f12_decisions,
+        write_f12_review_pair,
+        write_policy_facts,
+        write_rule_batch,
+        write_rule_snapshot,
+    )
+    from benefitfinder.infrastructure.youthcenter_http import YouthcenterHttpFetcher
+    from benefitfinder.ingestion.collect import CollectionResult, collect_youthcenter
+    from benefitfinder.ingestion.rule_review_workflow import (
+        RuleReviewWorkflowError,
+        approve_snapshot,
+        inspect_snapshot,
+        prepare_snapshot,
+        refresh_snapshot,
+    )
+    from benefitfinder.ingestion.youthcenter import SOURCE_NAME, YOUTHCENTER_POLICY_LIST
+    from benefitfinder.jobs.f12_review_display import format_f12_review
+    from benefitfinder.jobs.daily_refresh import DailyRefreshError, run_daily_refresh
+    from benefitfinder.jobs.rule_review_example import example_rule_batch
+    from benefitfinder.jobs.youthcenter_refresh import (
+        STATUS_FILE,
+        RefreshError,
+        refresh_notification,
+        run_youthcenter_refresh,
+    )
 
-from benefitfinder.ai.policy_explanation import GroundedPolicyExplainer
-from benefitfinder.application.policy_explanations import explain_policy
-from benefitfinder.infrastructure.ollama_explanations import OllamaExplanationCompletion
-from benefitfinder.infrastructure.published_clauses import InMemoryPublishedClauses
-from benefitfinder.jobs.explanation_example import explanation_example
-from benefitfinder.application.policy_analysis import AnalysisClaim, PolicyAnalysisInput, PolicyAnalysisStoreError
-from benefitfinder.application.policy_rules import PolicyReference, RuleReviewBatch
-from benefitfinder.application.run_policy_analysis import run_pending_analysis
-from benefitfinder.infrastructure.database.repositories.policy_analysis import PostgresPolicyAnalysisTasks
-from benefitfinder.infrastructure.policy_analysis_files import PolicyAnalysisFiles
-from benefitfinder.infrastructure.policy_analysis_inputs import load_policy_analysis_input
-from benefitfinder.infrastructure.policy_catalog_records import CatalogRecord, record_hash, validate_source_text
-from benefitfinder.infrastructure.database.repositories.published_policies import publish_policy
-from benefitfinder.infrastructure.database.repositories.policy_rechecks import list_policy_rechecks
-from benefitfinder.infrastructure.policy_recheck_files import write_recheck_page
-from benefitfinder.infrastructure.service_catalog_records import (
-    ServiceCatalogRecord, service_record_hash, validate_service_sources,
-)
-from benefitfinder.infrastructure.database.repositories.published_services import publish_service
-from benefitfinder.application.prepare_policy_analysis import prepare_analysis_inputs
-from benefitfinder.infrastructure.policy_preparation_plans import load_preparation_plan
-from benefitfinder.infrastructure.database.repositories.analysis_sources import PostgresAnalysisSources
-from benefitfinder.ingestion.versioning import record_sha256
-from benefitfinder.ingestion.youthcenter import hashed_fields
+    from benefitfinder.ai.policy_explanation import GroundedPolicyExplainer
+    from benefitfinder.application.policy_explanations import explain_policy
+    from benefitfinder.infrastructure.ollama_explanations import OllamaExplanationCompletion
+    from benefitfinder.infrastructure.published_clauses import InMemoryPublishedClauses
+    from benefitfinder.jobs.explanation_example import explanation_example
+    from benefitfinder.application.policy_analysis import AnalysisClaim, PolicyAnalysisInput, PolicyAnalysisStoreError
+    from benefitfinder.application.policy_rules import PolicyReference, RuleReviewBatch
+    from benefitfinder.application.run_policy_analysis import run_pending_analysis
+    from benefitfinder.infrastructure.database.repositories.policy_analysis import PostgresPolicyAnalysisTasks
+    from benefitfinder.infrastructure.policy_analysis_files import PolicyAnalysisFiles
+    from benefitfinder.infrastructure.policy_analysis_inputs import load_policy_analysis_input
+    from benefitfinder.infrastructure.policy_catalog_records import CatalogRecord, record_hash, validate_source_text
+    from benefitfinder.infrastructure.database.repositories.published_policies import publish_policy
+    from benefitfinder.infrastructure.database.repositories.policy_rechecks import list_policy_rechecks
+    from benefitfinder.infrastructure.policy_recheck_files import write_recheck_page
+    from benefitfinder.infrastructure.service_catalog_records import (
+        ServiceCatalogRecord, service_record_hash, validate_service_sources,
+    )
+    from benefitfinder.infrastructure.database.repositories.published_services import publish_service
+    from benefitfinder.application.prepare_policy_analysis import prepare_analysis_inputs
+    from benefitfinder.infrastructure.policy_preparation_plans import load_preparation_plan
+    from benefitfinder.infrastructure.database.repositories.analysis_sources import PostgresAnalysisSources
+    from benefitfinder.ingestion.versioning import record_sha256
+    from benefitfinder.ingestion.youthcenter import hashed_fields
 
-from benefitfinder.ai.decider_extraction import analyze_batch as analyze_decider_batch
-from benefitfinder.application.decider import Compilation, Decisions, DocumentExtraction, canonical_hash
-from benefitfinder.application.decider_evaluation import evaluate_report, require_evaluation
-from benefitfinder.infrastructure.decider_client import (
-    CheckpointDecider, HostedDecider, LocalDecider, private_json,
-)
-from benefitfinder.jobs.decider_batch import run_batch as run_decider_batch
-from benefitfinder.jobs.refresh_lock import acquire_refresh_lock
-from benefitfinder.infrastructure.database.repositories.decider_inputs import load_decider_corpus
+    from benefitfinder.ai.decider_extraction import analyze_batch as analyze_decider_batch
+    from benefitfinder.ingestion.decider_source_fields import prepare_source_fields
+    from benefitfinder.application.decider import Compilation, Decisions, DocumentExtraction, canonical_hash
+    from benefitfinder.application.decider_evaluation import evaluate_report, require_evaluation
+    from benefitfinder.infrastructure.decider_client import (
+        CheckpointDecider, HostedDecider, LocalDecider, private_json,
+    )
+    from benefitfinder.jobs.decider_batch import run_batch as run_decider_batch
+    from benefitfinder.jobs.refresh_lock import acquire_refresh_lock
+    from benefitfinder.infrastructure.database.repositories.decider_inputs import load_decider_corpus
 
 API_KEY_ENV = "YOUTHCENTER_API_KEY"
 KST = ZoneInfo("Asia/Seoul")
 
-DECIDER_ANALYSIS_VERSION = 5
+DECIDER_ANALYSIS_VERSION = 7
+
+
+def _add_source_import_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--publish', action='store_true', help='새 원문만 미검수 상태로 적재')
+
+
+def import_source_command(args: argparse.Namespace) -> int:
+    """Assemble source-only import without constructing or loading model clients."""
+    from tempfile import NamedTemporaryFile
+
+    from benefitfinder.infrastructure.database.repositories.decider_inputs import load_decider_corpus
+    from benefitfinder.infrastructure.database.repositories.source_catalog_import import (
+        load_source_inventory, load_source_release_identities,
+    )
+    from benefitfinder.infrastructure.policy_catalog_records import CatalogRecord
+    from benefitfinder.infrastructure.unreviewed_catalog import publish_unreviewed, validate_unreviewed
+    from benefitfinder.ingestion.decider_pending import compile_pending_source
+    from benefitfinder.jobs.refresh_lock import acquire_refresh_lock
+    from benefitfinder.jobs.source_catalog_import import run_source_catalog_import
+
+    def save(path: Path, value: object) -> None:
+        path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        temporary = None
+        try:
+            with NamedTemporaryFile(mode='w', encoding='utf-8', dir=path.parent,
+                                    prefix='.source-import-', delete=False) as handle:
+                temporary = Path(handle.name)
+                json.dump(value, handle, ensure_ascii=False, sort_keys=True, allow_nan=False)
+                handle.write('\n')
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temporary, path)
+        finally:
+            if temporary is not None and temporary.exists():
+                temporary.unlink()
+
+    def load(path: Path) -> dict | None:
+        if not path.exists():
+            return None
+        with path.open('rb') as handle:
+            encoded = handle.read(2 * 1024 * 1024 + 1)
+        if len(encoded) > 2 * 1024 * 1024:
+            raise ValueError('source_import_checkpoint_size_exceeded')
+        value = json.loads(encoded)
+        if not isinstance(value, dict):
+            raise ValueError('source_import_checkpoint_invalid')
+        return value
+
+    def validate(payload: dict, source: str) -> tuple[CatalogRecord, str]:
+        record = CatalogRecord.model_validate(payload)
+        return record, validate_unreviewed(record, source)
+
+    try:
+        publish_url = os.environ.get('POLICY_PUBLISH_DATABASE_URL', '').strip()
+        read_url = publish_url or os.environ.get('F12_WRITE_DATABASE_URL', '').strip()
+        if args.publish and not publish_url:
+            raise ValueError('source_import_publish_database_required')
+        if not read_url:
+            raise ValueError('source_import_read_database_required')
+        args.output.mkdir(mode=0o700, parents=True, exist_ok=True)
+        descriptor = os.open(args.output / '.source-import-lock',
+                             os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+        try:
+            acquire_refresh_lock(descriptor)
+            inventory = load_source_inventory(read_url)
+            values, selection = load_decider_corpus(read_url)
+            today = datetime.now(KST).date()
+            report = run_source_catalog_import(
+                values, root=args.output, inventory=inventory, selection=selection,
+                compile_source=lambda value: compile_pending_source(value, as_of=today),
+                validate=validate,
+                load_existing=lambda ids, external: load_source_release_identities(read_url, ids, external),
+                save=save, load=load,
+                publish=(lambda entries: publish_unreviewed(publish_url, entries)) if args.publish else None,
+            )
+        finally:
+            os.close(descriptor)
+    except Exception as error:
+        code = str(error)
+        if not code.startswith('source_import_') or not code.replace('_', '').isalnum():
+            code = 'source_import_failed'
+        print(code, file=sys.stderr)
+        return 2
+    print(json.dumps({'mode': 'source_only', 'model_analysis': 'not_run',
+                      'counts': report['counts'], 'reason_counts': report['reason_counts']},
+                     ensure_ascii=False, sort_keys=True))
+    return 1 if report['counts']['failed'] or report['counts']['held'] else 0
 
 
 def _analysis_version() -> int:
@@ -159,7 +250,9 @@ def _decider_client(root: Path) -> tuple[LocalDecider | HostedDecider, Checkpoin
     if provider == 'local':
         raw = LocalDecider(Path(os.environ.get('DECIDER_CHECKPOINT', 'data/local/decider/checkpoint')),
             max_length=int(os.environ.get('DECIDER_MAX_LENGTH', '3072')),
-            batch_tokens=int(os.environ.get('DECIDER_BATCH_TOKENS', '2048')))
+            batch_tokens=int(os.environ.get('DECIDER_BATCH_TOKENS', '2048')),
+            mode=os.environ.get('DECIDER_MODE', 'separate'),
+            locate_threshold=float(os.environ.get('DECIDER_LOCATE_THRESHOLD', '0.5')))
     elif provider == 'external_api':
         raw = HostedDecider(os.environ.get('DECIDER_ENDPOINT_URL', ''),
             os.environ.get('DECIDER_API_KEY', ''), budget_path=root / 'api-budget.json',
@@ -209,8 +302,14 @@ def _compile_decider(value: PolicyAnalysisInput, extracted: tuple[DocumentExtrac
 
 def _run_decider_values(values: Sequence[PolicyAnalysisInput], client: Decisions, root: Path, *,
                        publish: Callable[[dict, PolicyAnalysisInput], str] | None = None) -> dict:
+    def analyze(values, client, **settings):
+        return analyze_decider_batch(values, client, prepare_source=prepare_source_fields,
+            max_policy_requests=int(os.environ.get('DECIDER_MAX_POLICY_REQUESTS', '32')),
+            max_policy_characters=int(os.environ.get('DECIDER_MAX_POLICY_CHARACTERS', '40000')),
+            **settings)
+
     return run_decider_batch(tuple(values), client, root=root,
-        analyze=analyze_decider_batch, compile_policy=_compile_decider, save=private_json,
+        analyze=analyze, compile_policy=_compile_decider, save=private_json,
         publish=publish, batch_size=int(os.environ.get('DECIDER_BATCH_SIZE', '4')),
         window_chars=int(os.environ.get('DECIDER_WINDOW_CHARS', '900')))
 
@@ -1210,10 +1309,17 @@ def extract_chunked_command(source: Path, output: Path) -> int:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    arguments = list(argv) if argv is not None else sys.argv[1:]
+    if arguments[:2] == ['decider-batch', 'import-source']:
+        parser = argparse.ArgumentParser(prog='python -m benefitfinder.jobs decider-batch import-source')
+        _add_source_import_arguments(parser)
+        return import_source_command(parser.parse_args(arguments[2:]))
     parser = argparse.ArgumentParser(prog="python -m benefitfinder.jobs")
     commands = parser.add_subparsers(dest="command", required=True)
     decider = commands.add_parser('decider-batch', help='공식 Decider 일괄 추출·검증·명시적 게시')
     decider_actions = decider.add_subparsers(dest='decider_action', required=True)
+    source_import = decider_actions.add_parser('import-source', help='모델 없이 API 원문을 미검수 상태로 준비')
+    _add_source_import_arguments(source_import)
     decider_export = decider_actions.add_parser('export', help='공식 취업·주거 분류 전체를 읽기 전용으로 준비')
     decider_export.add_argument('--output', type=Path, required=True)
     decider_export.add_argument('--register', action='store_true', help='F12 v5 큐에도 멱등 등록')

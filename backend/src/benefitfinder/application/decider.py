@@ -18,7 +18,7 @@ METADATA_FILES = {
     "README.md": {"bytes": 12031, "sha256": "c2f942dddef22da9a50429c03a3a4c2f36f14882e53aea20acd833796ab8daea"},
     "NOTICE": {"bytes": 132, "sha256": "7cb7e9b7b26e8dc334c64c5926de55e16c28ea181d4d10f02d58e9a6632bd3ed"},
 }
-QUESTION_VERSION = "youth-decider-v2"
+QUESTION_VERSION = "youth-decider-v5-structured-first"
 KINDS = ("amount", "duration", "eligibility", "application", "overlap", "exceptions", "timing")
 
 
@@ -39,6 +39,23 @@ class LocatedSpan:
     end: int
     text: str
     score: float
+    method: str = 'locate'
+
+
+@dataclass(frozen=True)
+class SourceField:
+    name: str
+    start: int
+    end: int
+    text: str
+
+
+@dataclass(frozen=True)
+class PreparedSource:
+    spans: tuple[LocatedSpan, ...]
+    structured: dict[str, dict]
+    body: tuple[SourceField, ...]
+    issues: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -46,6 +63,8 @@ class DocumentExtraction:
     document: SourceDocument
     spans: tuple[LocatedSpan, ...]
     decisions: dict[str, object]
+    raw_spans: tuple[LocatedSpan, ...] | None = None
+    preparation: dict | None = None
 
 
 @dataclass(frozen=True)

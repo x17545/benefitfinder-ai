@@ -42,6 +42,15 @@ AI 독립 검수는 [별도 카탈로그 배치 경로](../backend/src/benefitfi
 
 2026-11-16 기준이다. 배포 완료를 뜻하지 않는다.
 
+초기 운영 데이터 적재는 모델 검수 없는 [source-only 배치](development/DECIDER_PIPELINE.md#모델-검수-없는-초기-원천-적재)로 진행했다.
+온통청년 원천 4,029건을 분류하고 신규 미검수 현금 카탈로그 443건을 운영 DB에 추가했다.
+이 배치의 AI 호출·실패는 0건이다. 금액 미확인 항목과 계산 가능한 원공고 기반 항목은
+구분하며, 미검수 적재 수를 계산용 게시 수로 보고하지 않는다. 코드 배포와 일일 예약은
+이번 데이터 적재에 포함되지 않는다.
+원공고에서 금액·지급 시점을 확인한 2건은 계산용으로 게시했고, 실제 배포 API에서
+기장군 예시 조건의 조건부 조합 1개·160만원을 확인했다. 미확인 자격·동시 수급 관계는
+확인이 필요한 상태이며 수급 확정 결과가 아니다.
+
 > **확인 범위:** 기본 개발 환경은 가상 정책으로 동작한다. 게시 정책 DB와 로컬 모델은 별도 설정으로 검증했다. 실제 정책 게시, 운영 배포, 평가 결과는 각 환경에서 따로 확인한다. 11월 14일 점검에서는 온통청년 오류가 반복돼 전체 갱신을 완료하지 못했다.
 
 | 먼저 확인할 것 | 기본 개발 환경 | 설정해 확인할 것 |
@@ -52,10 +61,10 @@ AI 독립 검수는 [별도 카탈로그 배치 경로](../backend/src/benefitfi
 | F13 설명 | 기본 문구 | `DATABASE_URL`: 게시 원문 조항 조회. 모델을 설정하면 선택적으로 설명 생성 |
 | 분석 횟수 | 단일 프로세스 메모리 | `ANALYSIS_USAGE_DATABASE_URL`: PostgreSQL 공유 집계 |
 
-2026-11-16 현재 native Decider v2 경로는 선택 의존성 그룹과 `F12_ANALYSIS_ENGINE=decider`로
-구현했지만 설정한 자동 게시 기준을 통과하지 못했다. 실제 정책 10건은 모두 검증 보류였고, 대량
-1,944건 중 완료·게시는 0이다. 상세 명령·측정·금지 조건은
-[Decider 파이프라인](development/DECIDER_PIPELINE.md)을 따른다.
+2026-11-16 현재 native Decider 정형 우선 경로는 정형값을 먼저 코드로 처리하고 본문
+3종만 모델에 전달한다. 전체 4,029건의 필드 전달 감사와 실제 2건의 로컬 비교를 수행했으며,
+본문 후보는 검수 대기로 보존한다. 이전 v2의 실제 10건·대량 1,944건 보류 기록은 새 경로의
+성능·검수 결과와 구분한다. [구현·실측·한계](development/DECIDER_PIPELINE.md)를 따른다.
 
 ### 화면과 정책 계산
 
@@ -76,7 +85,7 @@ AI 독립 검수는 [별도 카탈로그 배치 경로](../backend/src/benefitfi
 - **[F12 분석 큐](../backend/src/benefitfinder/infrastructure/database/F12_ANALYSIS.md):** `F12_WRITE_DATABASE_URL` 설정 시 준비된 취업·주거 공식 문서를 6개 도구로 분석하고 누락을 다시 찾아 검수 대기 결과를 남긴다.
 - **[F12 추출·검수](../backend/src/benefitfinder/jobs/README.md#승인-항목만-로컬-파일로-내보내기):** 공식 공고 한 건에서 중복 제한과 자격·금액·지급 시점 후보를 두 검수 대기 파일로 만든다. 항목별 승인·반려·사유를 기록하고 사람이 승인한 항목만 원문 근거와 함께 내보낸다.
 - **[F12 긴 문서 추출](../backend/src/benefitfinder/jobs/README.md#긴-공식-지침의-문맥-분할-추출) · [품질 평가](../backend/src/benefitfinder/jobs/README.md#f12-추출-품질-평가):** 문서를 페이지·문단으로 나눠 앞뒤 문맥과 함께 로컬 E4B로 근거를 고른다. 로컬 검수 자료·승인 내보내기와 추출 결과를 비교해 누락과 원문의 차이를 확인한다.
-- **[Decider F12 v5](development/DECIDER_PIPELINE.md):** `locate` 뒤 별도 `choice`·`noul`·`score`를 실행하고 코드 정규화·full gold 평가 뒤에만 AI release한다. 현재 v2 10건 평가는 `eligible=false`이며 운영 쓰기·외부 연결·스케줄 등록은 0이다.
+- **[Decider F12 v6](development/DECIDER_PIPELINE.md):** 정형 API 필드를 모델 호출 전에 코드로 처리하고 본문의 추가 자격·예외·중복수혜 3종만 분석한다. 전문 재판단 호출을 없애고 정책별 사전 입력/요청 상한을 둔다. 전체 4,029건의 투영 필드 전달 누락은 0이며, 모델 원선택·문맥 보강·전체 본문 검수 보존을 구분한다. 본문 후보는 검수 전 계산 규칙으로 승인하지 않는다. 이전 v2 평가는 새 경로의 평가가 아니다.
 - **[F13 로컬 설명 코어](#f13-로컬-설명-코어):** 추천 API·결과 화면에 게시 조항과 원문 위치·확인일을 연결했다. PostgreSQL 또는 가상 메모리에서 조항을 조회한다. DB 중단에는 기본 안내를 표시하고 계산을 보존한다.
 
 <details>
@@ -117,7 +126,7 @@ F12 자동 준비는 명시적으로 등록한 공식 보충 문서와 확인 �
 - **서비스 카탈로그:** 공식 서비스 내용과 별도 가격 근거를 전체 검수 해시에 묶어 저장한다. 같은 원천이 바뀌면 승인 해제·재검수를 적용한다. DB 모드의 추천·공개 상세·메타 조회를 지원한다. 실제 사람 검수·자료 공개와 가격 변경 자동 탐지는 후속이다.
 - **실제 승인 근거:** 별도 로컬 `_test` DB에 승인 내보내기만 `draft`로 적재한다. 원본 ID·해시·검수자·사유·범위를 보존한다. #19를 결합한 검증 서버에서 실제 지역 입력부터 E4B 안내·원문 표시까지 확인했다. 자격 확인 전·금액 `null`·조합 없음 상태를 유지한다.
 - **모델 실행:** 개발용 [llama.cpp](development/LOCAL_LLM.md)는 로컬 GPU에서 F12 도구 호출·문맥별 추출과 F13 설명을 같은 설정으로 연결한다. 운영은 외부 API의 HTTPS 주소·모델·키를 명시한다. 기존 Ollama는 명시적 호환 경로다. 외부 공급자 평가는 별도다.
-- **Decider 검증:** 공식 model snapshot hash·source/model/question identity·private checkpoint를 유지한다. 12GB에서 v2 실제 10건은 ready 0·held 10·failed 0·published 0이었고 critical recall 37.889%로 평가 미달이다. 격리 PostgreSQL 189건은 31.366초에 통과했다. 공통 PR 검사 결과는 PR에 별도로 기록한다.
+- **Decider 검증:** 정형 우선 경로의 실제 4,029건 필드 전달 감사와 로컬 표본 검증은 [파이프라인](development/DECIDER_PIPELINE.md#정형-우선-경로-재현-검증)을 따른다. 이전 경로는 공식 model snapshot hash·source/model/question identity·private checkpoint를 유지한다. 12GB에서 v2 실제 10건은 ready 0·held 10·failed 0·published 0이었고 critical recall 37.889%로 평가 미달이다. 격리 PostgreSQL 189건은 31.366초에 통과했다. 공통 PR 검사 결과는 PR에 별도로 기록한다.
 
 ### 서비스 운영과 배포
 
@@ -166,3 +175,10 @@ F12 자동 준비는 명시적으로 등록한 공식 보충 문서와 확인 �
 ## F13 로컬 설명 코어
 
 [로컬 설명 명령](../backend/src/benefitfinder/ai/README.md#f13-맞춤-설명-로컬-검증), [추천 API 연결](../backend/src/benefitfinder/api/README.md#f13-설명-실행), [결과 화면의 설명·원문 근거](../apps/web/README.md#f13-결과-설명과-원문-근거)를 제공한다. 정책·버전별 게시 조항 검색, 일반 판정·코드 계산값만 전달, 인용 검사, 검색을 포함한 5초 제한과 기본 문구 전환을 구현했다. `DATABASE_URL` 설정 시 [PostgreSQL 게시 조항](../backend/src/benefitfinder/infrastructure/database/README.md)을 조회한다. 검증은 실제 PostgreSQL 17·가상 취업/주거 조항·로컬 E4B 범위이며 실제 정책 자료의 게시·신청 사실 검증 완료를 뜻하지 않는다. 기본 공통 검사와 [별도 PostgreSQL 검사](../backend/integration/README.md)를 구분한다.
+
+
+월세지원의 가구별 소득·재산·원가구 예외·주거급여 차감은
+[실행 규칙·실제 데이터 재생 안내](development/RENT_SUPPORT.md)에 따라
+미승인 후보 생성과 게시 후 신청자별 판정·계산 경로를 지원한다.
+실제 정책의 경계 재생과 운영 DB 승인·게시는 구분하며, 기존 선택지에 없는 심사 사실은
+선택 입력이 없을 때 확인 필요로 처리한다.

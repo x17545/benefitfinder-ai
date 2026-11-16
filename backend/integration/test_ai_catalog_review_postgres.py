@@ -53,9 +53,15 @@ class AICatalogPostgresTest(unittest.TestCase):
                                "public.policy_catalog_releases, public.f13_clauses, public.f13_policy_documents CASCADE")
         self.store = PostgresCollectedPolicies(self.url)
         self.store.save(batch({"src-A": "original-A", "src-B": "original-B"}, AT))
+        self._next_generation_at = AT + timedelta(seconds=2)
         self.a = record("A", {"src-A": "original-A"})
         self.b = record("B", {"src-B": "original-B"})
         self.reader = PostgresPublishedPolicies(self.url)
+
+    def next_generation_at(self):
+        completed_at = self._next_generation_at
+        self._next_generation_at += timedelta(seconds=1)
+        return completed_at
 
     def review(self, item, **kwargs):
         values = {"writer_agent": "fictional-writer", "reviewer_agent": "fictional-reviewer",
@@ -75,14 +81,14 @@ class AICatalogPostgresTest(unittest.TestCase):
                 (policy_id,),
             ).fetchone()[0]
 
-    def real_policy(self, external_id, policy_id, key="C"):
+    def real_policy(self, external_id, policy_id, key="C", version_suffix=""):
         fields = {"plcyNo": external_id, "plcyNm": f"[가상] 정책 {key}", "plcySprtCn": source_text()}
         material = hashlib.sha256(f"fictional-original-{key}".encode()).hexdigest()
         item = CollectedRecord(
             "youthcenter", external_id, material, f"fictional-snapshot/{key}", AT, fields
         )
         self.store.save(
-            CollectedPolicyBatch("youthcenter", uuid4().hex, AT + timedelta(seconds=2), (item,))
+            CollectedPolicyBatch("youthcenter", uuid4().hex, self.next_generation_at(), (item,))
         )
         official = project_youthcenter_source(fields)
         data = release_data(key)
@@ -98,54 +104,64 @@ class AICatalogPostgresTest(unittest.TestCase):
         new = {
             "url": "https://www.youthcenter.go.kr/youthPolicy/ythPlcyTotalSearch/ythPlcyDetail/"
             + external_id,
-            "document_version": "sha256:" + material,
+            "document_version": "sha256:" + material + version_suffix,
             "checked_at": old["checked_at"],
         }
         data = json.loads(json.dumps(data).replace(json.dumps(old), json.dumps(new)))
         return official, CatalogRecord.model_validate(data)
 
-    def unreviewed_policy(self, external_id):
-        fields = {
-            "plcyNo": external_id,
-            "plcyNm": "[가상] 미검수 준비 큐 정책",
-            "plcySprtCn": source_text(),
-            "aplyPrdSeCd": "0057002",
-            "plcyAplyMthdCn": "가상 신청 방법",
-        }
-        material = hashlib.sha256(b"fictional-unreviewed").hexdigest()
-        item = CollectedRecord(
-            "youthcenter", external_id, material, "fictional-snapshot/unreviewed", AT, fields
-        )
+    def unreviewed_policies(self, *external_ids):
+        collected = []
+        policies = []
+        for external_id in external_ids:
+            fields = {
+                "plcyNo": external_id,
+                "plcyNm": "[가상] 미검수 준비 큐 정책",
+                "plcySprtCn": source_text(),
+                "aplyPrdSeCd": "0057002",
+                "plcyAplyMthdCn": "가상 신청 방법",
+            }
+            material = hashlib.sha256(b"fictional-unreviewed").hexdigest()
+            item = CollectedRecord(
+                "youthcenter", external_id, material, "fictional-snapshot/unreviewed", AT, fields
+            )
+            collected.append(item)
+            source = project_youthcenter_source(fields)
+            data = release_data("unreviewed")
+            data["benefit"].update({
+                "id": "youth:youthcenter:" + external_id,
+                "title": fields["plcyNm"],
+                "virtual_data": False,
+                "reviewed": False,
+                "benefit_amount": None,
+            })
+            data["payments"] = None
+            data["payment_evidence"] = []
+            data["unresolved_combination_rules"] = True
+            data["source_sha256"] = hashlib.sha256(source.encode()).hexdigest()
+            data["collection_sources"] = [{
+                "source": "youthcenter",
+                "external_id": external_id,
+                "material_sha256": material,
+            }]
+            old = data["benefit"]["source"]
+            new = {
+                "url": "https://www.youthcenter.go.kr/youthPolicy/ythPlcyTotalSearch/ythPlcyDetail/"
+                + external_id,
+                "document_version": "sha256:" + material,
+                "checked_at": old["checked_at"],
+            }
+            data = json.loads(json.dumps(data).replace(json.dumps(old), json.dumps(new)))
+            policies.append((CatalogRecord.model_validate(data), source))
         self.store.save(
-            CollectedPolicyBatch("youthcenter", uuid4().hex, AT + timedelta(seconds=2), (item,))
+            CollectedPolicyBatch(
+                "youthcenter", uuid4().hex, self.next_generation_at(), tuple(collected)
+            )
         )
-        source = project_youthcenter_source(fields)
-        data = release_data("unreviewed")
-        data["benefit"].update({
-            "id": "youth:youthcenter:" + external_id,
-            "title": fields["plcyNm"],
-            "virtual_data": False,
-            "reviewed": False,
-            "benefit_amount": None,
-        })
-        data["payments"] = None
-        data["payment_evidence"] = []
-        data["unresolved_combination_rules"] = True
-        data["source_sha256"] = hashlib.sha256(source.encode()).hexdigest()
-        data["collection_sources"] = [{
-            "source": "youthcenter",
-            "external_id": external_id,
-            "material_sha256": material,
-        }]
-        old = data["benefit"]["source"]
-        new = {
-            "url": "https://www.youthcenter.go.kr/youthPolicy/ythPlcyTotalSearch/ythPlcyDetail/"
-            + external_id,
-            "document_version": "sha256:" + material,
-            "checked_at": old["checked_at"],
-        }
-        data = json.loads(json.dumps(data).replace(json.dumps(old), json.dumps(new)))
-        return CatalogRecord.model_validate(data), source
+        return policies
+
+    def unreviewed_policy(self, external_id):
+        return self.unreviewed_policies(external_id)[0]
 
     def ai_record_for(self, policy_id, version="fictional-ai-v2"):
         data = release_data("replacement")
@@ -228,6 +244,27 @@ class AICatalogPostgresTest(unittest.TestCase):
             {"published": 1, "replayed": 0, "replaced": 0},
         )
         self.assertIsNotNone(self.reader.get_published(policy.benefit.id))
+
+    def test_real_source_accepts_decider_v3_and_rejects_forged_version_suffix(self):
+        official, policy = self.real_policy(
+            "20260101000000000005", "youth:20260101000000000005", key="E",
+            version_suffix=":decider-v3",
+        )
+        review = self.review(policy, reviewed_at=AT + timedelta(seconds=3))
+        self.assertEqual(
+            publish_ai_batch(self.url, [(policy, review, official, None)]),
+            {"published": 1, "replayed": 0, "replaced": 0},
+        )
+
+        forged_official, forged_policy = self.real_policy(
+            "20260101000000000006", "youth:20260101000000000006", key="F",
+            version_suffix=":decider-v4",
+        )
+        forged_review = self.review(forged_policy, reviewed_at=AT + timedelta(seconds=3))
+        with self.assertRaisesRegex(ValueError, "ai_catalog_source_projection_mismatch"):
+            publish_ai_batch(
+                self.url, [(forged_policy, forged_review, forged_official, None)]
+            )
 
     def test_replay_is_noop_and_same_version_hash_change_is_rejected(self):
         expected = {"published": 1, "replayed": 0, "replaced": 0}
@@ -365,6 +402,7 @@ class AICatalogPostgresTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "ai_catalog_existing_release"):
             publish_ai_batch(
                 self.url, [self.entry(updated)], allow_replace_ai=True,
+                allow_replace_unreviewed=True,
                 expected_previous={self.a.benefit.id: record_hash(self.a)},
             )
         with psycopg.connect(self.url) as connection:
@@ -390,6 +428,106 @@ class AICatalogPostgresTest(unittest.TestCase):
                     "SELECT review_type,publication_status FROM public.policy_catalog_releases"
                 ).fetchall(),
                 [("unreviewed", "published")],
+            )
+
+    def test_allow_replace_unreviewed_uses_exact_cas_and_preserves_replay(self):
+        item, source = self.unreviewed_policy("20260101000000000007")
+        publish_unreviewed(self.url, [(item, source)])
+        previous = record_hash(item)
+        updated = self.ai_record_for(item.benefit.id)
+        updated_entry = self.entry(updated, reviewed_at=AT + timedelta(seconds=3))
+        with self.assertRaisesRegex(ValueError, "ai_catalog_existing_release"):
+            publish_ai_batch(
+                self.url, [updated_entry], allow_replace_ai=True,
+                expected_previous={item.benefit.id: previous},
+            )
+        with self.assertRaisesRegex(ValueError, "ai_catalog_replacement_requires_expected_previous"):
+            publish_ai_batch(
+                self.url, [updated_entry], allow_replace_unreviewed=True
+            )
+        with self.assertRaisesRegex(ValueError, "ai_catalog_replacement_conflict"):
+            publish_ai_batch(
+                self.url, [updated_entry], allow_replace_unreviewed=True,
+                expected_previous={item.benefit.id: "0" * 64},
+            )
+        self.assertEqual(
+            publish_ai_batch(
+                self.url, [updated_entry], allow_replace_unreviewed=True,
+                expected_previous={item.benefit.id: previous},
+            ),
+            {"published": 0, "replayed": 0, "replaced": 1},
+        )
+        self.assertEqual(self.published_version(item.benefit.id), "fictional-ai-v2")
+        with psycopg.connect(self.url) as connection:
+            self.assertEqual(
+                connection.execute(
+                    "SELECT document_version,review_type,publication_status "
+                    "FROM public.policy_catalog_releases WHERE policy_id=%s "
+                    "ORDER BY document_version",
+                    (item.benefit.id,),
+                ).fetchall(),
+                [
+                    ("fictional-ai-v2", "ai", "published"),
+                    (item.benefit.source.document_version, "unreviewed", "retired"),
+                ],
+            )
+        self.assertEqual(
+            publish_ai_batch(
+                self.url, [updated_entry], allow_replace_unreviewed=True,
+                expected_previous={item.benefit.id: previous},
+            ),
+            {"published": 0, "replayed": 1, "replaced": 0},
+        )
+
+    def test_unreviewed_same_version_digest_change_is_rejected(self):
+        item, source = self.unreviewed_policy("20260101000000000008")
+        publish_unreviewed(self.url, [(item, source)])
+        same_version = self.ai_record_for(
+            item.benefit.id, version=item.benefit.source.document_version
+        )
+        with self.assertRaisesRegex(ValueError, "ai_catalog_version_hash_conflict"):
+            publish_ai_batch(
+                self.url, [self.entry(same_version)], allow_replace_unreviewed=True,
+                expected_previous={item.benefit.id: record_hash(item)},
+            )
+        with psycopg.connect(self.url) as connection:
+            self.assertEqual(
+                connection.execute(
+                    "SELECT document_version,review_type,publication_status "
+                    "FROM public.policy_catalog_releases WHERE policy_id=%s",
+                    (item.benefit.id,),
+                ).fetchall(),
+                [(item.benefit.source.document_version, "unreviewed", "published")],
+            )
+
+    def test_unreviewed_replacement_failure_rolls_back_prior_promotion(self):
+        (first, first_source), (second, second_source) = self.unreviewed_policies(
+            "20260101000000000009", "20260101000000000010"
+        )
+        publish_unreviewed(self.url, [(first, first_source), (second, second_source)])
+        updated_first = self.ai_record_for(first.benefit.id)
+        updated_second = self.ai_record_for(second.benefit.id)
+        first_entry = self.entry(updated_first, reviewed_at=AT + timedelta(seconds=3))
+        second_entry = self.entry(updated_second, reviewed_at=AT + timedelta(seconds=3))
+        with self.assertRaisesRegex(ValueError, "ai_catalog_replacement_requires_expected_previous"):
+            publish_ai_batch(
+                self.url,
+                [first_entry, second_entry],
+                allow_replace_unreviewed=True,
+                expected_previous={first.benefit.id: record_hash(first)},
+            )
+        with psycopg.connect(self.url) as connection:
+            self.assertEqual(
+                connection.execute(
+                    "SELECT policy_id,document_version,review_type,publication_status "
+                    "FROM public.policy_catalog_releases ORDER BY policy_id"
+                ).fetchall(),
+                [
+                    (first.benefit.id, first.benefit.source.document_version,
+                     "unreviewed", "published"),
+                    (second.benefit.id, second.benefit.source.document_version,
+                     "unreviewed", "published"),
+                ],
             )
 
     def test_service_source_and_price_are_verified(self):

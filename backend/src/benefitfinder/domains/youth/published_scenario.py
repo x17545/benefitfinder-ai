@@ -84,6 +84,17 @@ def change_published_profile(
             )
             after.domain_data = data
             note = "독립 후 월세 계약(보증금 5천만 원 미만, 월세 40~60만 원)을 가정했어요."
+    # A change in salary or household composition invalidates assessed household
+    # ratios; personal annual income cannot determine the reviewed median ratio.
+    rent = getattr(getattr(getattr(after, 'domain_data', None), 'cash_facts', None), 'rent_support', None)
+    if rent is not None and scenario in {'income_up', 'employed', 'independent'}:
+        rent.youth_income_ratio_bps = None
+        rent.original_income_ratio_bps = None
+        if scenario == 'independent':
+            rent.youth_assets_won = None
+            rent.monthly_rent_won = None
+            rent.housing_benefit_rent_won = None
+        note += ' 가구 소득·재산과 주거급여 재심사가 필요한 월세지원은 확인 필요로 표시해요.'
     return before, after, income, note
 
 

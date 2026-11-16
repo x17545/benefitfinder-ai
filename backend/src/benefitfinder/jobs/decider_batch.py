@@ -25,6 +25,24 @@ def run_batch(
         raise ValueError("decider_invalid_policy_batch")
     entries = []
     started = monotonic()
+
+    def report_snapshot(*, complete: bool) -> dict:
+        counts = dict.fromkeys(("targets", "published", "replayed", "replaced", "dry_run_ready",
+                               "held", "failed"), 0)
+        counts['targets'] = len(values)
+        counts.update(Counter(entry['status'] for entry in entries))
+        report = {'format_version': 1, 'model': client.identity, 'counts': counts,
+                  'processed_count': len(entries), 'complete': complete,
+                  'reason_counts': dict(Counter(reason for entry in entries for reason in entry['reasons'])),
+                  'finished_at': datetime.now(timezone.utc).isoformat() if complete else None,
+                  'elapsed_seconds': round(monotonic() - started, 3), 'entries': entries,
+                  'analysis_usage': {key: sum(entry.get('analysis_usage', {}).get(key, 0)
+                                              for entry in entries)
+                                     for key in ('source_characters', 'body_characters',
+                                                 'model_requests', 'followup_requests')}}
+        save(root / 'report.json', report)
+        return report
+
     for index in range(0, len(values), batch_size):
         group = values[index:index + batch_size]
         outputs, failures = analyze(group, client, batch_size=batch_size,
@@ -38,15 +56,21 @@ def run_batch(
             status = {**identity, "policy_id": value.policy_id, "status": "running", "reasons": []}
             save(directory / "status.json", status)
             if value.policy_id in failures:
-                status.update(status="failed", reasons=[failures[value.policy_id]])
+                reason = failures[value.policy_id]
+                status.update(status=("held" if reason == "decider_source_preparation_requires_review"
+                                      else "failed"), reasons=[reason])
             else:
                 extracted = outputs[value.policy_id]
                 save(directory / "extraction.json", {
                     **identity, "documents": [{"document_id": item.document.id,
                         "source_sha256": item.document.content_sha256,
                         "spans": [asdict(span) for span in item.spans],
-                        "decisions": item.decisions} for item in extracted],
+                        "raw_spans": [asdict(span) for span in (item.raw_spans if item.raw_spans is not None else item.spans)],
+                        "decisions": item.decisions, "preparation": item.preparation} for item in extracted],
                 })
+                status['analysis_usage'] = {
+                    key: sum((item.preparation or {}).get(key, 0) for item in extracted)
+                    for key in ('source_characters', 'body_characters', 'model_requests', 'followup_requests')}
                 try:
                     compilation = compile_policy(value, extracted)
                     save(directory / "normalized.json", compilation.normalized)
@@ -73,13 +97,5 @@ def run_batch(
                         status.update(status="failed", reasons=["decider_validation_or_publication_failed"])
             save(directory / "status.json", status)
             entries.append({**status, "artifact": str(directory)})
-    counts = dict.fromkeys(("targets", "published", "replayed", "replaced", "dry_run_ready",
-                           "held", "failed"), 0)
-    counts["targets"] = len(values)
-    counts.update(Counter(entry["status"] for entry in entries))
-    report = {"format_version": 1, "model": client.identity, "counts": counts,
-              "reason_counts": dict(Counter(reason for entry in entries for reason in entry["reasons"])),
-              "finished_at": datetime.now(timezone.utc).isoformat(),
-              "elapsed_seconds": round(monotonic() - started, 3), "entries": entries}
-    save(root / "report.json", report)
-    return report
+        report_snapshot(complete=False)
+    return report_snapshot(complete=True)

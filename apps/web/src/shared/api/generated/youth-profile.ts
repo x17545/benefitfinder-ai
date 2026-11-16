@@ -70,7 +70,7 @@ export type YouthDomainData = {
   } | null;
 } | null;
 /**
- * 로컬 현금 정책 모드에서만 판정에 사용하는 선택 입력. 기간 목록 누락/null은 미확인, 빈 배열은 해당하는 사업 참여 이력 없음. 저장·외부 전달하지 않는다.
+ * 선택적 로컬/게시된 현금 정책 판정 입력. 기간 목록 누락/null은 미확인, 빈 배열은 해당하는 사업 참여 이력 없음. 모든 누락/null은 미상으로 보수적으로 처리하며 서버에 저장하거나 LLM·임베딩·GA·외부 서비스로 전달하지 않는다.
  */
 export type CashFacts = {
   birth_date?: string | null;
@@ -101,6 +101,36 @@ export type CashFacts = {
           amount_won: number;
         }[]
       | null;
+  } | null;
+  /**
+   * 선택적 로컬/게시된 월세지원 판정 입력. 누락/null은 0, false, 미충족으로 바꾸지 않으며, 서버 저장과 LLM·임베딩·GA·외부 서비스 전송을 금지한다.
+   */
+  rent_support?: {
+    /**
+     * 공식 심사 기준중위소득 대비 청년가구 비율(bps). 10000=100%이며 개인 연봉 구간으로 추정하지 않는다.
+     */
+    youth_income_ratio_bps?: number | null;
+    /**
+     * 공식 심사 기준중위소득 대비 원가구 비율(bps). 10000=100%이며 개인 연봉 구간으로 추정하지 않는다.
+     */
+    original_income_ratio_bps?: number | null;
+    youth_assets_won?: LocalNullableWon;
+    original_assets_won?: LocalNullableWon;
+    monthly_rent_won?: LocalNullableWon;
+    housing_benefit_rent_won?: LocalNullableWon;
+    /**
+     * 나이·혼인 외 사유로 기관이 원가구 미고려를 인정했는지. 별도 사유 없음은 false, 미상은 null이다. 나이·혼인은 공통 age와 domain_data.marital을 쓴다.
+     */
+    original_household_exempt?: boolean | null;
+    subscription_account?: boolean | null;
+    independent_from_parents?: boolean | null;
+    other_exclusions_clear?: boolean | null;
+    requested_months?: number | null;
+    prior_supported_months?: number | null;
+    /**
+     * 첫 지급예정월(YYYY-MM). 미상이면 계산을 확인 필요로 두며 미래예정월은 그 예정월로 판정한다. 게시 규칙의 실제 지급기간(현재 연결 대상 2024-03~2026-12)과 as_of 기준 상대 월 검사는 domain이 수행하고 요청기간을 임의로 바꾸지 않는다.
+     */
+    first_payment_month?: string | null;
   } | null;
   /**
    * @maxItems 50

@@ -10,7 +10,8 @@ CatalogRecord shape without guesswork.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Sequence
+from dataclasses import asdict, dataclass
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 import hashlib
@@ -28,6 +29,17 @@ from benefitfinder.application.decider import (
 )
 from benefitfinder.application.policy_analysis import PolicyAnalysisInput
 from benefitfinder.application.policy_rules import SourceDocument
+from benefitfinder.application.region_options import RegionOption
+from benefitfinder.ingestion.decider_source_fields import prepare_source_fields
+from benefitfinder.ingestion.rent_support import rent_support_candidate, rent_support_record
+from benefitfinder.ingestion.youthcenter_codes import (
+    CodeState,
+    InvalidRegionCatalogError,
+    YouthcenterCodeError,
+    decode_code,
+    decode_code_list,
+    decode_zip_codes,
+)
 
 MAX_WON = 2**53 - 1
 _MIN_CONSISTENCY = 0.95
@@ -58,6 +70,46 @@ _ALLOWED_AMOUNT = {"fixed", "cap", "variable", "none", "uncertain"}
 _ALLOWED_ELIGIBILITY = {"simple", "complex", "uncertain"}
 _ALLOWED_OVERLAP = {"none_explicit", "restricted", "uncertain"}
 _ALLOWED_SCOPE = {"youth_employment_or_housing", "business", "other", "uncertain"}
+_SPAN_METHODS = frozenset({"locate", "source_field", "source_context"})
+_JOB_SELECTION_VALUES = frozenset(
+    {
+        "high_school",
+        "student",
+        "grad_student",
+        "job_seeker",
+        "employed",
+        "short_term_worker",
+        "self_employed",
+        "freelancer",
+        "founder",
+        "farmer",
+        "other",
+    }
+)
+_SCHOOL_SELECTION_VALUES = frozenset(
+    {
+        "high_school_below",
+        "high_school_enrolled",
+        "high_school_graduate",
+        "university_enrolled",
+        "university_expected",
+        "university_graduate",
+        "masters_doctorate",
+    }
+)
+_MARITAL_SELECTION_VALUES = frozenset({"single", "married", "marrying_soon"})
+_SPECIAL_SELECTION_VALUES = frozenset(
+    {
+        "basic_livelihood",
+        "near_poverty",
+        "single_parent",
+        "disabled",
+        "sme_employee",
+        "farmer_fisher",
+        "soldier",
+        "none",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -162,16 +214,27 @@ def _evidence_record(span: LocatedSpan, document: SourceDocument) -> dict[str, o
         "text": span.text,
         "sha256": _sha256(span.text),
         "score": span.score,
+        "method": span.method,
     }
 
 
 def _valid_spans(extraction: DocumentExtraction, issues: list[str]) -> tuple[LocatedSpan, ...]:
     text = extraction.document.text
     valid: list[LocatedSpan] = []
-    seen: set[tuple[str, int, int]] = set()
+    seen: set[tuple[str, int, int, str]] = set()
     for span in extraction.spans:
-        key = (getattr(span, "kind", ""), getattr(span, "start", -1), getattr(span, "end", -1))
-        if not isinstance(span, LocatedSpan) or span.kind not in KINDS:
+        method = getattr(span, "method", "locate")
+        key = (
+            getattr(span, "kind", ""),
+            getattr(span, "start", -1),
+            getattr(span, "end", -1),
+            method if isinstance(method, str) else "",
+        )
+        if (
+            not isinstance(span, LocatedSpan)
+            or span.kind not in KINDS
+            or span.method not in _SPAN_METHODS
+        ):
             _issue(issues, "evidence_span_invalid")
             continue
         if (
@@ -533,6 +596,8 @@ def _parse_eligibility(
     source: dict[str, str],
     issues: list[str],
     normalized: dict,
+    text: str,
+    regions: Sequence[RegionOption],
 ) -> tuple[list[dict], list[dict]]:
     if not spans:
         _issue(issues, "eligibility_evidence_missing")
@@ -541,6 +606,8 @@ def _parse_eligibility(
     income: dict[tuple[int, bool], tuple[str, set[tuple[int, int]]]] = {}
     selected: dict[str, dict[str, object]] = {}
     for span in spans:
+        if span.method == "source_field":
+            continue
         body = _span_body(span)
         if not body:
             _issue(issues, "eligibility_evidence_empty")
@@ -612,6 +679,227 @@ def _parse_eligibility(
         )
         executable.append({"condition_id": condition_id, **rule})
 
+    def add_field_range(*names: str) -> tuple[int, int] | None:
+        present = [
+            fields[name]
+            for name in names
+            if name in fields and fields[name].value.strip()
+        ]
+        if not present:
+            return None
+        start = min(field.start for field in present)
+        end = max(field.end for field in present)
+        location = (start, end)
+        span_by_range[location] = LocatedSpan(
+            kind="eligibility",
+            start=start,
+            end=end,
+            text=text[start:end],
+            score=0.0,
+        )
+        return location
+
+    def merge_selection(
+        field: str,
+        values: Sequence[str],
+        fragment: str,
+        location: tuple[int, int],
+    ) -> None:
+        existing = selected.get(field)
+        if existing is not None:
+            if set(existing["values"]) != set(values):
+                _issue(issues, "source_coded_eligibility_contradictory")
+                return
+            if fragment not in existing["fragments"]:
+                existing["fragments"].append(fragment)
+            existing["ranges"].add(location)
+            return
+        selected[field] = {
+            "values": list(dict.fromkeys(values)),
+            "fragments": [fragment],
+            "ranges": {location},
+        }
+
+    # The official API flag is inverted from its field name: Y means no age
+    # restriction; N means the min/max metadata describes an age restriction.
+    age_flag = fields.get("sprtTrgtAgeLmtYn")
+    if age_flag is not None and age_flag.value.strip():
+        marker = age_flag.value.strip().upper()
+        if marker not in {"Y", "N"}:
+            _issue(issues, "source_age_flag_invalid")
+        elif marker == "Y":
+            if age:
+                _issue(issues, "source_age_flag_contradictory")
+        else:
+            try:
+                minimum = int(fields["sprtTrgtMinAge"].value.strip())
+                maximum = int(fields["sprtTrgtMaxAge"].value.strip())
+                if not 0 <= minimum <= maximum <= 120 or minimum == maximum == 0:
+                    raise ValueError("invalid_age_range")
+            except (KeyError, ValueError):
+                _issue(issues, "eligibility_age_missing")
+            else:
+                expected = (minimum, maximum)
+                if age and set(age) != {expected}:
+                    _issue(issues, "eligibility_age_contradictory")
+                elif not age:
+                    location = add_field_range("sprtTrgtMinAge", "sprtTrgtMaxAge")
+                    if location is None:
+                        _issue(issues, "eligibility_age_missing")
+                    else:
+                        age[expected] = (
+                            f"만 {minimum}세 이상 {maximum}세 이하",
+                            {location},
+                        )
+    elif any(
+        field is not None and field.value.strip() not in {"", "0"}
+        for field in (
+            fields.get("sprtTrgtMinAge"),
+            fields.get("sprtTrgtMaxAge"),
+        )
+    ):
+        _issue(issues, "source_age_flag_missing")
+
+    def income_amount(name: str, *, default: int | None = None) -> int | None:
+        field = fields.get(name)
+        if field is None or not field.value.strip():
+            return default
+        if not re.fullmatch(r"[0-9]+", field.value.strip()):
+            raise ValueError("invalid_income")
+        return int(field.value.strip())
+
+    earn_code = fields.get("earnCndSeCd")
+    if earn_code is not None and earn_code.value.strip():
+        try:
+            decoded_income = decode_code("earnCndSeCd", earn_code.value)
+        except YouthcenterCodeError:
+            _issue(issues, "source_coded_eligibility_requires_mapping")
+        else:
+            try:
+                minimum = income_amount("earnMinAmt", default=0)
+                maximum = income_amount("earnMaxAmt", default=0)
+            except ValueError:
+                _issue(issues, "eligibility_income_invalid")
+            else:
+                if decoded_income.state is CodeState.UNRESTRICTED:
+                    if income or minimum != 0 or maximum != 0:
+                        _issue(issues, "source_coded_eligibility_contradictory")
+                elif decoded_income.normalized == "annual_income":
+                    if (
+                        minimum is None
+                        or maximum is None
+                        or minimum != 0
+                        or not 0 < maximum <= MAX_WON
+                    ):
+                        _issue(issues, "eligibility_income_invalid")
+                    elif income and set(income) != {(maximum, True)}:
+                        _issue(issues, "eligibility_income_contradictory")
+                    elif not income:
+                        location = add_field_range("earnMinAmt", "earnMaxAmt")
+                        if location is None:
+                            _issue(issues, "eligibility_income_missing")
+                        else:
+                            income[(maximum, True)] = (
+                                f"연 소득 {maximum:,}원 이하",
+                                {location},
+                            )
+                else:
+                    _issue(issues, "source_coded_eligibility_requires_mapping")
+    elif any(
+        field is not None and field.value.strip() not in {"", "0"}
+        for field in (fields.get("earnMinAmt"), fields.get("earnMaxAmt"))
+    ):
+        _issue(issues, "source_coded_eligibility_requires_mapping")
+
+    major = fields.get("plcyMajorCd")
+    if major is not None and major.value.strip():
+        try:
+            decoded_major = decode_code_list("plcyMajorCd", major.value)
+        except YouthcenterCodeError:
+            _issue(issues, "source_major_requirement_unknown")
+        else:
+            # The current profile has no verified major taxonomy. Preserve this
+            # official restriction rather than treating omitted major rules as met.
+            if decoded_major.state is not CodeState.UNRESTRICTED:
+                _issue(issues, "source_major_requirement_requires_review")
+
+    code_fields = (
+        ("jobCd", "employment_status", _JOB_SELECTION_VALUES),
+        ("schoolCd", "domain_data.school", _SCHOOL_SELECTION_VALUES),
+        ("mrgSttsCd", "domain_data.marital", _MARITAL_SELECTION_VALUES),
+        ("sbizCd", "domain_data.special", _SPECIAL_SELECTION_VALUES),
+    )
+    for source_field, target_field, allowed_values in code_fields:
+        field = fields.get(source_field)
+        if field is None or not field.value.strip():
+            continue
+        try:
+            decoded = decode_code_list(source_field, field.value)
+        except YouthcenterCodeError:
+            _issue(issues, "source_coded_eligibility_requires_mapping")
+            continue
+        if decoded.contradictory:
+            _issue(issues, "source_coded_eligibility_contradictory")
+            continue
+        if decoded.state is CodeState.UNRESTRICTED:
+            if selected.get(target_field) is not None:
+                _issue(issues, "source_coded_eligibility_contradictory")
+            continue
+        values = [code.normalized for code in decoded.codes]
+        if any(value is None or value not in allowed_values for value in values):
+            _issue(issues, "source_coded_eligibility_requires_mapping")
+            continue
+        location = add_field_range(source_field)
+        if location is None:
+            _issue(issues, "eligibility_evidence_missing")
+            continue
+        fragment = f"{source_field}: " + ", ".join(
+            f"{code.code}({code.label})" for code in decoded.codes
+        )
+        merge_selection(
+            target_field,
+            [str(value) for value in values],
+            fragment,
+            location,
+        )
+
+    zip_field = fields.get("zipCd")
+    if zip_field is not None and zip_field.value.strip():
+        try:
+            coverage = decode_zip_codes(zip_field.value, regions)
+        except (InvalidRegionCatalogError, YouthcenterCodeError):
+            _issue(issues, "source_coded_eligibility_requires_mapping")
+        else:
+            if not coverage.nationwide:
+                markers = {
+                    "36110" if region.sido_code == "36" else region.sido_code + "000": region
+                    for region in regions
+                }
+                if not coverage.groups:
+                    _issue(issues, "source_coded_eligibility_requires_mapping")
+                elif all(group.code in markers for group in coverage.groups):
+                    target = "domain_data.region.sido_code"
+                    values = [markers[group.code].sido_code for group in coverage.groups]
+                else:
+                    target = "region_code"
+                    values = []
+                    for group in coverage.groups:
+                        region = markers.get(group.code)
+                        if region is None:
+                            values.append(group.code)
+                        else:
+                            values.extend(district.code for district in region.sigungu)
+                location = add_field_range("zipCd")
+                if location is None:
+                    _issue(issues, "eligibility_evidence_missing")
+                else:
+                    merge_selection(
+                        target,
+                        list(dict.fromkeys(values)),
+                        "zipCd: " + ", ".join(group.name for group in coverage.groups),
+                        location,
+                    )
+
     for index, (minimum, maximum) in enumerate(sorted(age), start=1):
         description, ranges = age[(minimum, maximum)]
         add_condition(
@@ -643,31 +931,6 @@ def _parse_eligibility(
             set(item["ranges"]),
             {"kind": "selection", "field": field, "values": list(item["values"])},
         )
-
-    age_limited = fields.get("sprtTrgtAgeLmtYn")
-    structured_min = fields.get("sprtTrgtMinAge")
-    structured_max = fields.get("sprtTrgtMaxAge")
-    if age_limited is not None and age_limited.value.strip().upper() == "Y":
-        try:
-            expected = (int(structured_min.value), int(structured_max.value))
-        except (AttributeError, TypeError, ValueError):
-            _issue(issues, "eligibility_age_missing")
-        else:
-            if expected not in age:
-                _issue(issues, "eligibility_age_missing")
-    income_max_field = fields.get("earnMaxAmt")
-    income_min_field = fields.get("earnMinAmt")
-    if income_max_field is not None and income_max_field.value.strip():
-        try:
-            maximum = int(income_max_field.value.strip())
-            minimum = int(income_min_field.value.strip()) if income_min_field else 0
-        except (TypeError, ValueError):
-            _issue(issues, "eligibility_income_invalid")
-        else:
-            if minimum > 0:
-                _issue(issues, "eligibility_income_min_unsupported")
-            elif not any(key[0] == maximum for key in income):
-                _issue(issues, "eligibility_income_missing")
 
     normalized["conditions"] = executable
     return benefit_conditions, executable
@@ -912,7 +1175,12 @@ def _payload(
     return payload
 
 
-def _compile(value: PolicyAnalysisInput, extracted: tuple[DocumentExtraction, ...]) -> Compilation:
+def _compile(
+    value: PolicyAnalysisInput,
+    extracted: tuple[DocumentExtraction, ...],
+    *,
+    regions: Sequence[RegionOption] = (),
+) -> Compilation:
     issues: list[str] = []
     normalized: dict = {
         "policy_id": getattr(value, "policy_id", None),
@@ -1013,44 +1281,91 @@ def _compile(value: PolicyAnalysisInput, extracted: tuple[DocumentExtraction, ..
         normalized["source"] = canonical_source.copy()
 
     decisions = extraction.decisions if isinstance(extraction.decisions, dict) else {}
-    allowed = {
-        "coverage": _ALLOWED_COVERAGE,
-        "amount_kind": _ALLOWED_AMOUNT,
-        "eligibility_kind": _ALLOWED_ELIGIBILITY,
-        "overlap_kind": _ALLOWED_OVERLAP,
-        "scope": _ALLOWED_SCOPE,
-    }
-    for key, choices in allowed.items():
-        answer = decisions.get(key)
-        if answer in choices:
-            normalized[key] = answer
-        else:
-            _issue(issues, f"{key}_missing")
-    if normalized["coverage"] not in {"complete", None}:
-        _issue(issues, f"coverage_{normalized['coverage']}")
-    if normalized["amount_kind"] not in {"fixed", None}:
-        _issue(issues, f"amount_{normalized['amount_kind']}")
-    if normalized["eligibility_kind"] not in {"simple", None}:
-        _issue(issues, f"eligibility_{normalized['eligibility_kind']}")
-    if normalized["overlap_kind"] not in {"none_explicit", None}:
-        _issue(issues, f"overlap_{normalized['overlap_kind']}")
-    if normalized["scope"] not in {"youth_employment_or_housing", None}:
-        _issue(issues, f"scope_{normalized['scope']}")
+    structured_first = decisions.get("analysis_mode") == "structured_first"
+    if structured_first:
+        # Routing completeness is not a model's confidence or semantic approval.
+        # Recompute the plan from the immutable original, never from AI answers.
+        prepared = prepare_source_fields(document.text)
+        audit = extraction.preparation or {}
+        expected_body = [asdict(field) for field in prepared.body]
+        if (audit.get("structured") != prepared.structured
+                or audit.get("body_fields") != expected_body):
+            _issue(issues, "source_preparation_mismatch")
+        for issue in prepared.issues:
+            _issue(issues, issue)
+        normalized.update(analysis_mode="structured_first", structured_fields=prepared.structured,
+                          body_fields=expected_body, semantic_review_required=bool(prepared.body),
+                          analysis_usage={key: audit.get(key) for key in (
+                              "source_characters", "body_characters", "model_requests",
+                              "question_count", "followup_requests")})
+        # Retain the entire residual source even when locate misses a condition.
+        # These candidates cannot be auto-published as verified executable rules.
+        if prepared.body:
+            _issue(issues, "body_rules_require_review")
+        income = prepared.structured.get("earnCndSeCd", {})
+        if "annual_income" in income.get("values", []):
+            _issue(issues, "source_income_unit_unverified")
+        fields_for_kind = _field_values(document.text, issues)
+        labels = set(fields_for_kind.get("lclsfNm", _FieldValue("", 0, 0)).value.split(","))
+        normalized["scope"] = ("youth_employment_or_housing"
+                               if labels and labels <= {"일자리", "주거"} else "uncertain")
+        if normalized["scope"] == "uncertain":
+            _issue(issues, "scope_uncertain")
+        support_body = fields_for_kind.get("plcySprtCn", _FieldValue("", 0, 0)).value
+        try:
+            money = _parse_money(support_body)
+            normalized["amount_kind"] = ("fixed" if not _amount_is_ambiguous(support_body, money)
+                                         else "variable" if money else "uncertain")
+        except ValueError:
+            normalized["amount_kind"] = "uncertain"
+        # Existing full-source overlap validation still checks any apparent grant.
+        overlap_spans = tuple(span for span in extraction.spans if span.kind == "overlap")
+        statements = []
+        for span in overlap_spans:
+            left = document.text.rfind("\n", 0, span.start) + 1
+            right = document.text.find("\n", span.end)
+            statements.append(document.text[left:len(document.text) if right < 0 else right].strip())
+        normalized["overlap_kind"] = ("none_explicit" if statements and all(
+            _EXPLICIT_NO_OVERLAP.fullmatch(statement) for statement in statements) else "uncertain")
+    else:
+        allowed = {
+            "coverage": _ALLOWED_COVERAGE,
+            "amount_kind": _ALLOWED_AMOUNT,
+            "eligibility_kind": _ALLOWED_ELIGIBILITY,
+            "overlap_kind": _ALLOWED_OVERLAP,
+            "scope": _ALLOWED_SCOPE,
+        }
+        for key, choices in allowed.items():
+            answer = decisions.get(key)
+            if answer in choices:
+                normalized[key] = answer
+            else:
+                _issue(issues, f"{key}_missing")
+        if normalized["coverage"] not in {"complete", None}:
+            _issue(issues, f"coverage_{normalized['coverage']}")
+        if normalized["amount_kind"] not in {"fixed", None}:
+            _issue(issues, f"amount_{normalized['amount_kind']}")
+        if normalized["eligibility_kind"] not in {"simple", None}:
+            _issue(issues, f"eligibility_{normalized['eligibility_kind']}")
+        if normalized["overlap_kind"] not in {"none_explicit", None}:
+            _issue(issues, f"overlap_{normalized['overlap_kind']}")
+        if normalized["scope"] not in {"youth_employment_or_housing", None}:
+            _issue(issues, f"scope_{normalized['scope']}")
 
-    consistency = _number(decisions.get("consistent"))
-    if consistency is None or not 0 <= consistency <= 1:
-        _issue(issues, "consistent_missing")
-    else:
-        normalized["consistent"] = consistency
-        if consistency < _MIN_CONSISTENCY:
-            _issue(issues, "consistent_below_threshold")
-    readiness = _number(decisions.get("readiness"))
-    if readiness is None or not 0 <= readiness <= 2:
-        _issue(issues, "readiness_missing")
-    else:
-        normalized["readiness"] = readiness
-        if readiness < _MIN_READINESS:
-            _issue(issues, "readiness_below_threshold")
+        consistency = _number(decisions.get("consistent"))
+        if consistency is None or not 0 <= consistency <= 1:
+            _issue(issues, "consistent_missing")
+        else:
+            normalized["consistent"] = consistency
+            if consistency < _MIN_CONSISTENCY:
+                _issue(issues, "consistent_below_threshold")
+        readiness = _number(decisions.get("readiness"))
+        if readiness is None or not 0 <= readiness <= 2:
+            _issue(issues, "readiness_missing")
+        else:
+            normalized["readiness"] = readiness
+            if readiness < _MIN_READINESS:
+                _issue(issues, "readiness_below_threshold")
 
     spans = _valid_spans(extraction, issues)
     normalized["evidence"] = [_evidence_record(span, document) for span in spans]
@@ -1074,16 +1389,13 @@ def _compile(value: PolicyAnalysisInput, extracted: tuple[DocumentExtraction, ..
                 _issue(issues, "source_lifetime_or_count_limit_unsupported")
             if _OVERLAP_RESTRICTION.search(text):
                 _issue(issues, "source_overlap_restriction_present")
-    for name in ('schoolCd', 'jobCd', 'zipCd'):
-        field = fields.get(name)
-        if field is not None and field.value.strip():
-            _issue(issues, 'source_coded_eligibility_requires_mapping')
-
     footer = (
         "The 0.95 consistency and 1.95 readiness gates are pre-calibration release "
         "thresholds, not a guarantee of factual truth."
     )
-    normalized["threshold_notice"] = footer
+    normalized["threshold_notice"] = (
+        "Structured facts are code-read; body candidates remain unreviewed. No model confidence authorizes publication."
+        if structured_first else footer)
 
     title = ""
     summary = ""
@@ -1142,6 +1454,8 @@ def _compile(value: PolicyAnalysisInput, extracted: tuple[DocumentExtraction, ..
             canonical_source,
             issues,
             normalized,
+            document.text,
+            regions,
         )
     else:
         _issue(issues, "source_binding_invalid")
@@ -1181,10 +1495,18 @@ def _compile(value: PolicyAnalysisInput, extracted: tuple[DocumentExtraction, ..
 
 
 def compile_policy(
-    value: PolicyAnalysisInput, extracted: tuple[DocumentExtraction, ...]
+    value: PolicyAnalysisInput,
+    extracted: tuple[DocumentExtraction, ...],
+    *,
+    regions: Sequence[RegionOption] = (),
 ) -> Compilation:
-    """Return a reviewed catalogue-shaped payload only after all safety gates pass."""
+    """Compile only after all safety gates pass using the injected official regions."""
     try:
-        return _compile(value, extracted)
+        compilation = _compile(value, extracted, regions=regions)
+        candidate = rent_support_candidate(value, extracted)
+        if candidate is not None:
+            candidate['catalog_record'] = rent_support_record(value, candidate)
+            compilation.normalized['executable_rent_support_candidate'] = candidate
+        return compilation
     except (AttributeError, ArithmeticError, KeyError, OverflowError, TypeError, ValueError):
         return Compilation(None, ("compilation_failed",), {})

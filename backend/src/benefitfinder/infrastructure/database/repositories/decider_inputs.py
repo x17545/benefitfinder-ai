@@ -1,6 +1,7 @@
 """Read-only bulk selection by official youthcenter categories, retaining supplements."""
 
 from collections import Counter
+from dataclasses import replace
 
 import psycopg
 from psycopg.rows import dict_row
@@ -11,6 +12,19 @@ from benefitfinder.application.policy_analysis import (
 from benefitfinder.application.policy_rules import SourceDocument
 from benefitfinder.infrastructure.ai_catalog_review import project_youthcenter_source
 from benefitfinder.infrastructure.policy_analysis_inputs import analysis_input_from_payload
+
+
+def _with_policy_id(value: PolicyAnalysisInput, policy_id: str) -> PolicyAnalysisInput:
+    if value.policy_id == policy_id:
+        return value
+    return PolicyAnalysisInput(
+        policy_id,
+        tuple(replace(document, policy_id=policy_id) for document in value.documents),
+        tuple(replace(policy, id=policy_id) if policy.id == value.policy_id else policy
+              for policy in value.policies),
+        value.collection_sources,
+        value.document_sources,
+    )
 
 
 def load_decider_corpus(database_url: str) -> tuple[tuple[PolicyAnalysisInput, ...], dict]:
@@ -31,6 +45,18 @@ def load_decider_corpus(database_url: str) -> tuple[tuple[PolicyAnalysisInput, .
             ORDER BY external_id''').fetchmany(5001)
         if len(rows) > 5000:
             raise ValueError('decider_corpus_size_exceeded')
+        catalog_aliases: dict[str, set[str]] = {}
+        external_ids = [row['external_id'] for row in rows]
+        if external_ids:
+            for alias in c.execute('''SELECT DISTINCT link.external_id,release.policy_id
+                FROM public.policy_catalog_source_links link
+                JOIN public.policy_catalog_releases release
+                  ON release.policy_id=link.policy_id
+                 AND release.document_version=link.document_version
+                WHERE link.source='youthcenter' AND link.external_id=ANY(%s)
+                  AND release.publication_status IN ('published','retired')''',
+                (external_ids,)).fetchall():
+                catalog_aliases.setdefault(alias['external_id'], set()).add(alias['policy_id'])
         previous = {row['policy_id']: row['input_payload'] for row in c.execute('''
             SELECT DISTINCT ON (policy_id) policy_id,input_payload FROM public.f12_analysis_tasks
             ORDER BY policy_id,task_id DESC''').fetchall()}
@@ -53,13 +79,28 @@ def load_decider_corpus(database_url: str) -> tuple[tuple[PolicyAnalysisInput, .
                     reasons['employment_subcategory_needs_scope_review'] += 1
                     continue
             external_id = row['external_id']
-            policy_id = 'youth:youthcenter:' + external_id
+            generated_policy_id = 'youth:youthcenter:' + external_id
+            policy_id = generated_policy_id
             try:
                 if not external_id.isascii() or not external_id.isdigit() or row['accepted_at'] is None:
                     raise ValueError
+                aliases = catalog_aliases.get(external_id, set())
+                if len(aliases) > 1:
+                    counts['held'] += 1
+                    reasons['catalog_policy_alias_conflict'] += 1
+                    continue
+                if aliases:
+                    candidate = next(iter(aliases))
+                    numeric_alias = (candidate.startswith('youth:')
+                                     and candidate.removeprefix('youth:').isdigit())
+                    if candidate != generated_policy_id and not numeric_alias:
+                        raise ValueError
+                    policy_id = candidate
                 old = previous.get(policy_id)
+                if old is None and policy_id != generated_policy_id:
+                    old = previous.get(generated_policy_id)
                 if old is not None:
-                    old = analysis_input_from_payload(old)
+                    old = _with_policy_id(analysis_input_from_payload(old), policy_id)
                     # Supplements must go through the existing F12 preparation plan
                     # on change; API-only bulk discovery never removes them.
                     if len(old.documents) > 1 or len(old.collection_sources) > 1:

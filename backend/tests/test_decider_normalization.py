@@ -17,6 +17,7 @@ from benefitfinder.application.policy_analysis import (
     PolicyAnalysisInput,
 )
 from benefitfinder.application.policy_rules import SourceDocument
+from benefitfinder.application.region_options import DistrictOption, RegionOption
 from benefitfinder.infrastructure.policy_catalog_records import (
     CatalogRecord,
     validate_source_text,
@@ -28,11 +29,38 @@ EXTERNAL_ID = "1001"
 POLICY_ID = "youth:youthcenter:" + EXTERNAL_ID
 MATERIAL_SHA256 = "a" * 64
 COLLECTED_AT = datetime(2026, 11, 16, 1, tzinfo=timezone.utc)
+REGIONS = (
+    RegionOption(
+        "11",
+        "가상광역시",
+        (
+            DistrictOption("11110", "가상시"),
+            DistrictOption("11200", "가상군"),
+        ),
+    ),
+    RegionOption("41", "가상도", (DistrictOption("41200", "가상읍"),)),
+)
 
 
 def _span(document: SourceDocument, kind: str, text: str) -> LocatedSpan:
     start = document.text.index(text)
     return LocatedSpan(kind=kind, start=start, end=start + len(text), text=text, score=0.99)
+
+
+def _source_field_span(document: SourceDocument, name: str) -> LocatedSpan:
+    marker = f"[{name}]\n"
+    start = document.text.index(marker) + len(marker)
+    line_end = document.text.find("\n", start)
+    end = len(document.text) if line_end < 0 else line_end
+    value = document.text[start:end].strip()
+    return LocatedSpan(
+        kind="eligibility",
+        start=start,
+        end=start + len(value),
+        text=value,
+        score=1.0,
+        method="source_field",
+    )
 
 
 def case(
@@ -49,6 +77,7 @@ def case(
     timing: str | None = None,
     decisions: dict[str, object] | None = None,
     bindings: tuple[AnalysisSource, ...] | None = None,
+    coded_fields: dict[str, str] | None = None,
 ) -> tuple[PolicyAnalysisInput, tuple[DocumentExtraction, ...], SourceDocument]:
     sections = [
         "[plcyNm]",
@@ -74,6 +103,8 @@ def case(
         sections.extend(("", timing))
     if exception is not None:
         sections.extend(("", exception))
+    for name, value in (coded_fields or {}).items():
+        sections.extend(("", f"[{name}]", value))
     text = "\n".join(sections)
     document = SourceDocument(
         id="youthcenter:" + EXTERNAL_ID,
@@ -132,6 +163,71 @@ class DeciderNormalizationTest(unittest.TestCase):
         validate_source_text(record, document.text)
         self.assertTrue(record.benefit.reviewed)
         return result.payload
+
+    def test_located_span_method_defaults_and_remains_distinct(self) -> None:
+        span = LocatedSpan("eligibility", 0, 1, "1", 1.0)
+        self.assertEqual(span.method, "locate")
+        source = replace(span, method="source_field")
+        self.assertNotEqual(span, source)
+
+    def test_source_field_spans_are_audited_but_not_parsed_as_free_text(self) -> None:
+        value, extracted, document = case(
+            eligibility=("연 소득 3천만 원 이하",),
+            coded_fields={
+                "jobCd": "0013010",
+                "sprtTrgtAgeLmtYn": "N",
+                "sprtTrgtMinAge": "19",
+                "sprtTrgtMaxAge": "39",
+            },
+        )
+        native = extracted[0].spans
+        source_fields = tuple(
+            _source_field_span(document, name)
+            for name in ("jobCd", "sprtTrgtMinAge", "sprtTrgtMaxAge")
+        )
+        combined = replace(
+            extracted[0],
+            spans=(*native, *source_fields),
+            raw_spans=native,
+        )
+        result = compile_policy(value, (combined,))
+        payload = self.assert_catalog_payload(result, document)
+        self.assertNotIn("eligibility_rule_unsupported", result.reasons)
+        age = next(rule for rule in payload["conditions"] if rule["kind"] == "age")
+        self.assertEqual((age["minimum"], age["maximum"]), (19, 39))
+        methods = {item["method"] for item in result.normalized["evidence"]}
+        self.assertEqual(methods, {"locate", "source_field"})
+        self.assertEqual(combined.raw_spans, native)
+
+        unknown, extracted, document = case(
+            eligibility=("연 소득 3천만 원 이하",),
+            coded_fields={"jobCd": "9999999"},
+        )
+        unknown_span = _source_field_span(document, "jobCd")
+        result = compile_policy(
+            unknown,
+            (replace(extracted[0], spans=(*extracted[0].spans, unknown_span)),),
+        )
+        self.assertIsNone(result.payload)
+        self.assertIn("source_coded_eligibility_requires_mapping", result.reasons)
+
+    def test_identical_coordinates_with_different_methods_are_both_retained(self) -> None:
+        value, extracted, document = case(eligibility=("미취업자",))
+        native = extracted[0].spans
+        duplicate = replace(
+            next(span for span in native if span.kind == "eligibility"),
+            method="source_field",
+        )
+        combined = replace(extracted[0], spans=(*native, duplicate), raw_spans=native)
+        result = compile_policy(value, (combined,))
+        payload = self.assert_catalog_payload(result, document)
+        matching = [
+            item
+            for item in result.normalized["evidence"]
+            if (item["start"], item["end"]) == (duplicate.start, duplicate.end)
+        ]
+        self.assertEqual({item["method"] for item in matching}, {"locate", "source_field"})
+        self.assertTrue(payload["conditions"])
 
     def test_complete_fixed_monthly_compiles_with_exact_provenance_and_evidence(self) -> None:
         value, extracted, document = case()
@@ -373,6 +469,231 @@ class DeciderNormalizationTest(unittest.TestCase):
                 for value in rule["values"]
             },
         )
+
+    def test_known_unrestricted_code_fields_add_no_restrictions(self) -> None:
+        value, extracted, document = case(
+            eligibility=("만 19세 이상 34세 이하",),
+            coded_fields={
+                "jobCd": "0013010",
+                "schoolCd": "0049010",
+                "mrgSttsCd": "0055003",
+                "sbizCd": "0014010",
+                "earnCndSeCd": "0043001",
+                "earnMinAmt": "0",
+                "earnMaxAmt": "0",
+            },
+        )
+        result = compile_policy(value, extracted)
+        payload = self.assert_catalog_payload(result, document)
+        self.assertEqual(len(payload["conditions"]), 1)
+        self.assertEqual(payload["conditions"][0]["kind"], "age")
+
+    def test_mapped_code_lists_create_contract_selection_conditions(self) -> None:
+        value, extracted, document = case(
+            coded_fields={
+                "jobCd": "0013001,0013003",
+                "schoolCd": "0049005,0049006",
+                "mrgSttsCd": "0055002",
+                "sbizCd": "0014005",
+            }
+        )
+        result = compile_policy(value, extracted)
+        payload = self.assert_catalog_payload(result, document)
+        rules = {
+            rule["field"]: rule["values"]
+            for rule in payload["conditions"]
+            if rule["kind"] == "selection"
+        }
+        self.assertEqual(rules["employment_status"], ["employed", "job_seeker"])
+        self.assertEqual(
+            rules["domain_data.school"],
+            ["university_enrolled", "university_expected"],
+        )
+        self.assertEqual(rules["domain_data.marital"], ["single"])
+        self.assertEqual(rules["domain_data.special"], ["disabled"])
+        evidence = {
+            condition["id"]: condition["evidence"][0]["quote"]
+            for condition in payload["benefit"]["eligibility_conditions"]
+        }
+        self.assertEqual(evidence["selection_employment_status"], "0013001,0013003")
+        self.assertEqual(evidence["selection_domain_data_school"], "0049005,0049006")
+
+    def test_unsupported_or_contradictory_scalar_codes_are_held(self) -> None:
+        cases = (
+            ({"jobCd": "0013005"}, "source_coded_eligibility_requires_mapping"),
+            ({"schoolCd": "0049003"}, "source_coded_eligibility_requires_mapping"),
+            ({"sbizCd": "0014001"}, "source_coded_eligibility_requires_mapping"),
+            ({"jobCd": "9999999"}, "source_coded_eligibility_requires_mapping"),
+            ({"earnCndSeCd": "0043999"}, "source_coded_eligibility_requires_mapping"),
+            ({"earnCndSeCd": "0043003"}, "source_coded_eligibility_requires_mapping"),
+            (
+                {"jobCd": "0013010,0013003"},
+                "source_coded_eligibility_contradictory",
+            ),
+        )
+        for coded_fields, reason in cases:
+            with self.subTest(coded_fields=coded_fields):
+                value, extracted, _ = case(coded_fields=coded_fields)
+                result = compile_policy(value, extracted)
+                self.assertIsNone(result.payload)
+                self.assertIn(reason, result.reasons)
+
+    def test_body_and_code_selection_contradiction_is_held(self) -> None:
+        value, extracted, _ = case(
+            eligibility=("미취업자",),
+            coded_fields={"jobCd": "0013001"},
+        )
+        result = compile_policy(value, extracted)
+        self.assertIsNone(result.payload)
+        self.assertIn("source_coded_eligibility_contradictory", result.reasons)
+
+    def test_zip_nationwide_province_and_partial_conditions(self) -> None:
+        nationwide, extracted, document = case(
+            coded_fields={"zipCd": "11110,11200,41200"}
+        )
+        result = compile_policy(nationwide, extracted, regions=REGIONS)
+        payload = self.assert_catalog_payload(result, document)
+        self.assertFalse(any(rule["kind"] == "selection" for rule in payload["conditions"]))
+
+        province, extracted, document = case(coded_fields={"zipCd": "11110,11200"})
+        result = compile_policy(province, extracted, regions=REGIONS)
+        payload = self.assert_catalog_payload(result, document)
+        province_rule = next(
+            rule
+            for rule in payload["conditions"]
+            if rule["kind"] == "selection"
+        )
+        self.assertEqual(province_rule["field"], "domain_data.region.sido_code")
+        self.assertEqual(province_rule["values"], ["11"])
+
+        partial, extracted, document = case(coded_fields={"zipCd": "11110,41200"})
+        result = compile_policy(partial, extracted, regions=REGIONS)
+        payload = self.assert_catalog_payload(result, document)
+        region_rule = next(
+            rule
+            for rule in payload["conditions"]
+            if rule["kind"] == "selection"
+        )
+        self.assertEqual(region_rule["field"], "region_code")
+        self.assertEqual(region_rule["values"], ["11110", "41200"])
+
+    def test_zip_without_full_region_catalog_or_known_codes_is_held(self) -> None:
+        value, extracted, _ = case(coded_fields={"zipCd": "11110"})
+        result = compile_policy(value, extracted)
+        self.assertIsNone(result.payload)
+        self.assertIn("source_coded_eligibility_requires_mapping", result.reasons)
+
+        value, extracted, _ = case(coded_fields={"zipCd": "99999"})
+        result = compile_policy(value, extracted, regions=REGIONS)
+        self.assertIsNone(result.payload)
+        self.assertIn("source_coded_eligibility_requires_mapping", result.reasons)
+
+    def test_income_unrestricted_sentinel_is_not_a_zero_income_condition(self) -> None:
+        value, extracted, document = case(
+            eligibility=("미취업자",),
+            coded_fields={
+                "earnCndSeCd": "0043001",
+                "earnMinAmt": "0",
+                "earnMaxAmt": "0",
+            },
+        )
+        result = compile_policy(value, extracted)
+        payload = self.assert_catalog_payload(result, document)
+        self.assertFalse(any(rule["kind"] == "income_max" for rule in payload["conditions"]))
+
+        value, extracted, _ = case(
+            coded_fields={
+                "earnCndSeCd": "0043001",
+                "earnMinAmt": "0",
+                "earnMaxAmt": "0",
+            }
+        )
+        result = compile_policy(value, extracted)
+        self.assertIsNone(result.payload)
+        self.assertIn("source_coded_eligibility_contradictory", result.reasons)
+
+    def test_income_metadata_adds_or_validates_income_condition(self) -> None:
+        value, extracted, document = case(
+            eligibility=("미취업자",),
+            coded_fields={
+                "earnCndSeCd": "0043002",
+                "earnMinAmt": "0",
+                "earnMaxAmt": "30000000",
+            },
+        )
+        result = compile_policy(value, extracted)
+        payload = self.assert_catalog_payload(result, document)
+        income = next(rule for rule in payload["conditions"] if rule["kind"] == "income_max")
+        self.assertEqual(income["maximum"], 30_000_000)
+        self.assertTrue(income["inclusive"])
+
+        value, extracted, _ = case(
+            coded_fields={
+                "earnCndSeCd": "0043002",
+                "earnMinAmt": "0",
+                "earnMaxAmt": "50000000",
+            }
+        )
+        result = compile_policy(value, extracted)
+        self.assertIsNone(result.payload)
+        self.assertIn("eligibility_income_contradictory", result.reasons)
+
+    def test_age_flag_uses_official_inverted_y_and_n_semantics(self) -> None:
+        unrestricted, extracted, document = case(
+            eligibility=("미취업자",),
+            coded_fields={
+                "sprtTrgtAgeLmtYn": "Y",
+                "sprtTrgtMinAge": "19",
+                "sprtTrgtMaxAge": "39",
+            },
+        )
+        result = compile_policy(unrestricted, extracted)
+        payload = self.assert_catalog_payload(result, document)
+        self.assertFalse(any(rule["kind"] == "age" for rule in payload["conditions"]))
+
+        restricted, extracted, document = case(
+            eligibility=("미취업자",),
+            coded_fields={
+                "sprtTrgtAgeLmtYn": "N",
+                "sprtTrgtMinAge": "19",
+                "sprtTrgtMaxAge": "39",
+            },
+        )
+        result = compile_policy(restricted, extracted)
+        payload = self.assert_catalog_payload(result, document)
+        age = next(rule for rule in payload["conditions"] if rule["kind"] == "age")
+        self.assertEqual((age["minimum"], age["maximum"]), (19, 39))
+
+    def test_age_flag_and_source_range_contradictions_are_held(self) -> None:
+        for coded_fields, reason in (
+            ({"sprtTrgtAgeLmtYn": "Y"}, "source_age_flag_contradictory"),
+            (
+                {
+                    "sprtTrgtAgeLmtYn": "N",
+                    "sprtTrgtMinAge": "19",
+                    "sprtTrgtMaxAge": "39",
+                },
+                "eligibility_age_contradictory",
+            ),
+            (
+                {"sprtTrgtMinAge": "19", "sprtTrgtMaxAge": "39"},
+                "source_age_flag_missing",
+            ),
+            (
+                {
+                    "sprtTrgtAgeLmtYn": "N",
+                    "sprtTrgtMinAge": "0",
+                    "sprtTrgtMaxAge": "0",
+                },
+                "eligibility_age_missing",
+            ),
+            ({"sprtTrgtAgeLmtYn": "X"}, "source_age_flag_invalid"),
+        ):
+            with self.subTest(coded_fields=coded_fields):
+                value, extracted, _ = case(coded_fields=coded_fields)
+                result = compile_policy(value, extracted)
+                self.assertIsNone(result.payload)
+                self.assertIn(reason, result.reasons)
 
     def test_tampered_span_is_rejected_even_when_text_looks_identical(self) -> None:
         value, extracted, _ = case()

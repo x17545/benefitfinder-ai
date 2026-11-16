@@ -11,13 +11,13 @@ LLM이 자격·금액·조합 순위를 덮어쓰는 경로가 아니다.
   Apache-2.0 공개 모델이다. 현재 코드는 revision
   `d06fb3f2d97e0a52325a0d463c450cf0338f44fe`의 manifest·파일 크기·SHA-256을 확인한
   snapshot만 로드한다. 내려받은 코드를 검증 전에 실행하지 않는다.
-- 로컬·호스팅 공통 경로는 native Decider의 `locate`와 후속 `choice`·`noul`·`score`를
-  분리한다. 로컬 모델은 `fast=False`, `locate=True`, `mode="separate"`로 고정한다.
-  문서별 locate 결과를 만든 뒤 그 결과와 전문을 후속 판단 요청에 넣는다.
-- `youth-decider-v2`가 현재 공용 질문 버전이다. 한글·영문 병기 locate 질문과 후속
-  metadata 중복 제거를 반영했다. 이전 `v1` 측정 기록은 아래에 별도로 보존한다.
-- F12의 기본 엔진은 기존 `tools`다. `F12_ANALYSIS_ENGINE=decider`를 명시할 때
-  analysis version 5와 Decider 경로를 쓴다.
+- 로컬·호스팅 공통 경로는 정형 필드 코드 처리 → 본문 3종 `locate` 한 번으로 바뀌었다.
+  전문을 다시 보내는 `choice`·`noul`·`score` 후속 호출은 없다. 로컬 모델은
+  `fast=False`, `locate=True`, `mode="separate"`를 유지한다.
+- 공용 질문 버전은 `youth-decider-v5-structured-first`, F12 분석 버전은 7이다. 월세지원 실행 규칙 후보가 추가되어 큐를 구분하며 질문·모델 응답 캐시는 유지한다.
+  기존 질문·응답 캐시와 v5 큐 결과를 새 결과로 재사용하지 않는다.
+- F12 기본 엔진은 기존 `tools`다. 이 개선은 `F12_ANALYSIS_ENGINE=decider` 및
+  `decider-batch run` 경로에 적용하며, 기존 도구형 분석을 자동 전환하지 않는다.
 - Decider 의존성은 선택 그룹 `decider`에 있다. 기본 API·웹 설치를 무겁게 만들지 않으며,
   로컬 실행은 `uv run --locked --group decider ...`로 격리한다.
 - 현재 코드는 배포되지 않았다. 운영 DB 쓰기, 외부 API 연결, 운영 스케줄 등록도 없다.
@@ -25,22 +25,89 @@ LLM이 자격·금액·조합 순위를 덮어쓰는 경로가 아니다.
 
 ## 처리 흐름
 
-1. 공식 온통청년 취업·주거 원문만 읽기 전용으로 내보낸다. 공식 분류가 혼합됐거나
-   취업 하위 분류가 확인되지 않으면 추론하지 않고 보류한다.
-2. 문서를 codepoint 손실 없이 겹치는 window로 나눈다. 각 window에서 7종
-   `locate` 질문을 실행한다. window 경계는 원문 좌표로 다시 결합하고 인용문이 원문과
-   정확히 일치하는지 확인한다.
-3. 전문과 unique `(kind, text)` evidence로 dependency 있는 판단을 한 번 더 요청한다.
-   v2의 후속 요청은 반복 offset·score metadata를 줄이지만 전문과 모든 unique
-   evidence text는 보존한다. 정확한 offset·score는 추출 artifact에 원본대로 남긴다.
-4. 코드가 scope·coverage·amount kind·eligibility·overlap·정확한 지급 일정·신청 기간을
-   검증하고 catalogue 형태로 정규화한다. 해석이 필요한 항목은 게시 대상에서 보류한다.
-5. 평가 gate와 source freshness를 통과한 항목만 명시적인 AI release 경로로 게시한다.
+1. 공식 취업·주거 범위를 코드로 선별하고 원천·보충 문서·버전을 보존한다.
+2. **모델 호출 전** `prepare_source_fields()`가 연령·지역 코드·소득 원시값·취업/학력/
+   혼인/특화 코드·명확한 신청 날짜를 읽는다. 코드 의미·누락·0을 구분한다.
+   소득 숫자의 통화 단위가 확인되지 않으면 원화 상한으로 확정하지 않는다.
+   전공 코드도 공식 코드정의서로 읽으며, 현재 프로필이 표현하지 못하는 전공 제한은
+   모델 추측으로 풀지 않고 호출 전에 검수 보류한다.
+3. 설명·지원 내용·추가 자격·소득 설명·참여 제한·기타 사항·신청 안내 등 본문을
+   빠짐없이 별도 view로 만든다. 새로 들어온 알 수 없는 필드와 보충 문서 전문도 포함한다.
+   정형값·지역 코드 나열·기관/URL metadata를 모델에 다시 보내지 않는다.
+4. 본문 view만 겹치는 window로 나눠 `eligibility`·`exceptions`·`overlap` 3종을 찾는다.
+   금액·기간·지급 시점과 신청 날짜는 코드 파서가 처리하고, 불명확하면 보류한다.
+   새 view 좌표는 원본 문서 좌표로 복원한다. 원 모델 선택은 `raw_spans`, 코드가
+   가구·단서 문맥을 보강한 근거는 `method=source_context`로 구분한다.
+5. 모든 본문 필드를 `preparation.body_fields`와 정규화 결과에 보존한다. 모델이
+   아무것도 찾지 않아도 본문이 사라지지 않는다. 본문 후보에는
+   `body_rules_require_review`를 남겨 검수 없이 실행 규칙으로 승인하지 않는다.
+   기존 원문·해시·신청 기간·금액/일정·중복 검증을 그대로 적용한다.
 
-`LOCATE_QUESTIONS`의 7종은 `amount`, `duration`, `eligibility`, `application`,
-`overlap`, `exceptions`, `timing`이다. 후속 판단은 `scope`, `coverage`,
-`amount_kind`, `eligibility_kind`, `overlap_kind`, `consistent`, `readiness`를
-구분해 저장한다.
+정형 필드만 있는 문서는 모델 호출 0회다. `DECIDER_MAX_POLICY_REQUESTS` 기본값 32,
+`DECIDER_MAX_POLICY_CHARACTERS` 기본값 40000을 **정책의 모든 문서에 합산**해 호출 전에
+검사한다. 초과하면 `decider_policy_analysis_budget_exceeded`로 전체 정책을 실패 처리하며
+일부만 잘라 성공 처리하지 않는다. 미지 코드·중복 헤더·잘못된 숫자도 유료 분석 전에
+검수 대상으로 분리한다. 공급자 오류·예산 초과를 batch 분할 재시도로 증폭하지 않는다.
+호스팅 어댑터의 기존 일일 실제 API 호출 예산은 별도로 유지한다. 논리 요청 상한은
+공급자별 청구 금액/토큰 상한을 뜻하지 않는다.
+
+추출 artifact의 `preparation`은 정형 원시값/코드 해석, 전체 본문 필드/원문 좌표,
+원문·본문 글자 수, 논리 요청 수, 질문 수 3, 후속 요청 수 0을 기록한다.
+평가에는 `raw_spans`만 모델 성능으로 세며 빈 배열을 코드 근거로 대체하지 않는다.
+과거 7종/5종 판단 기준의 평가 통과를 새 3종 모델의 검증으로 재사용하지 않는다.
+아래 v1·v2·기존 대량 처리 수치는 이전 경로의 기록이다.
+
+## 정형 우선 경로 재현 검증
+
+실제 자료는 Git 제외 `data/local/structured-first-verification/`에만 둔다.
+`records.json`은 담당자·연락처 필드를 제외한 실제 API 저장 필드, `manifest.json`은
+기존 읽기 전용 공식 범위 선택기로 만든 분석 입력이다. 전체 분야 routing 감사는
+MVP 범위를 확대하거나 정책의 게시·수급 가능 여부를 승인하는 작업이 아니다.
+
+```bash
+uv run --locked python scripts/verify_structured_analysis.py \
+  --records data/local/structured-first-verification/records.json \
+  --output data/local/structured-first-verification/audit.json
+
+# 로컬 GPU만 사용. gold는 실제 원문에서 확인한 조항과 종류를 담는 비공개 파일이다.
+uv run --locked --group decider python scripts/verify_structured_analysis.py \
+  --manifest data/local/structured-first-verification/manifest.json \
+  --gold data/local/structured-first-verification/gold.json --model-limit 2 \
+  --checkpoint data/local/decider/checkpoint \
+  --output data/local/structured-first-verification/model.json
+```
+
+모델의 전체 조항 추출에 누락이 있으면 검증 도구는 exit 2를 반환한다. 원문 전체 보존,
+코드의 문맥 보강, 모델 자체의 완전한 추출은 각각 별도 지표다. 원문이 남아 있다는
+이유로 모델 정확도 검사를 통과 처리하지 않는다. 표본 검증은 전체 정책 사실의 검수가 아니다.
+
+2026-11-16 공용 투영에 전공·사업기간 코드를 추가한 뒤, 전체 실제 수집본 4,029건의
+126,261개 투영 필드와 원본 JSON의 명시 조건 필드 88,576개 모두 전달 누락 0이었다.
+확인할 전공 제한이 있는 187건은 모델 호출 전에 보류한다. 동일 window 900 기준
+사전 계수에서 논리 요청은 13,225 → 4,340, 질문 평가는 92,575 → 13,020,
+입력 state 글자 수는 기존 하한 12,470,199 → 1,817,513이었다. 이는 전체 원천을
+대상으로 한 계수이며 MVP 범위에 전부 편입한 것이 아니다. 실제 API 청구액·토큰·처리 시간
+측정도 아니다.
+
+원본 JSON과 투영을 별도로 대조하는 `raw_condition_fields` 감사를 추가했다.
+기존 투영에서 빠졌던 `plcyMajorCd`(전공 제한)와 `bizPrdSeCd`는 공용 투영 담당이
+추가했으며, 새 corpus 1,435건과 hash를 `data/local/structured-first-verification-v6/`에
+재생성했다. 이전 입력·실제 모델 응답·실측 비교는 원래 폴더에 보존했다.
+전공 코드 정의서 SHA-256은 기존 검증값과 일치했다. 신규 코드/필드는 공식 자료와
+대조하고, 모델에 코드 의미를 추측시키지 않는다.
+
+실제 월세·면접 정책 2건을 같은 로컬 GPU/model/최대 길이 3072/batch 1에서
+보존한 변경 전 코드와 새 경로로 각각 실행했다. 모델 로딩을 제외한 단일 진단 비교는
+논리 요청 6 → 3, 질문 42 → 9, 모델 보고 input tokens 19,053 → 1,379,
+분석 wall time 11.926 → 1.330초였다. 외부 유료 API 비용 측정이나 반복 성능 benchmark는
+아니며 다른 정책·공급자에서도 같은 절감률이라고 보장하지 않는다.
+
+실제 참조는 청년/원가구 소득·재산, 부모 가구 확인 예외, 주거급여 차감, 지역 구직 조건
+4개 조항이다. raw Locate는 2/4 조항만 전체를 선택했고 나머지는 부분 선택·누락했다.
+명시적 필드 후보와 문맥을 코드로 보강한 근거·최종 정규화 본문에는 4/4를 보존했다.
+새 투영에서도 같은 모델 입력 hash의 실제 GPU 응답 캐시를 검증해 추가 모델 호출 0으로
+원문 좌표·최종 근거·정규화 보존을 재확인했다. 모델 원선택과 코드 보강은 별도 기록한다.
+이 결과를 모델의 무누락 판정이나 검수 완료·운영 게시로 보고하지 않는다.
 
 ## Snapshot, identity, 비공개 artifact
 
@@ -181,7 +248,7 @@ catalogue payload를 만든다.
 
 ## Gold와 평가 gate
 
-평가 gold는 `format_version: 1`, `coverage: "full"`, 최소 10개의 고유 policy case를
+기본 `strict` 모드의 평가 gold는 `format_version: 1`, `coverage: "full"`, 최소 10개의 고유 policy case를
 가져야 한다. 각 case의 `input_sha256`은 실행 report와 같아야 하며, gold 문서의 span은
 원문 좌표를 쓴다. 다음은 구조 예시다. 실제 값은 Git 제외 경로에 둔다.
 
@@ -209,30 +276,49 @@ catalogue payload를 만든다.
 }
 ```
 
-각 case의 `reviewed_fields`는 7개 `KINDS` 전체를 포함해야 한다. 해당 kind의 span이 없어도
+`strict`에서 각 case의 `reviewed_fields`는 7개 `KINDS` 전체를 포함해야 한다. 해당 kind의 span이 없어도
 부재를 사람이 검토했다는 뜻으로 전 종류를 명시한다. 필수 판단 키 5개
 (`scope`, `coverage`, `amount_kind`, `eligibility_kind`, `overlap_kind`)는 모든 case에서
 평가돼야 한다. 하나라도 빠져 검사 수가 case 수보다 적으면 게시할 수 없다.
 
-게시 가능 조건은 다음과 같다.
+평가 산출물은 `criteria_version: "decider-evaluation-v3"`와 `thresholds`에 character
+precision 0.95, recall 0.20, 전체 decision accuracy 0.40을 기록한다. 2026-11-16 사용자
+승인에 따라 전체 판단 정확도 하한을 0.40으로 변경하고 개별 판단 키 정확도의 차단 기준을
+제거했다. 개별 키의 `checks`, `correct`, `accuracy`는 진단 통계로 보존한다.
+`require_evaluation`의 기본 `strict` 모드는 버전·임계값 불일치와 점수·필수 조건 미달을 거부한다.
+
+`strict`의 평가 통과 조건은 다음과 같다.
 
 - report의 model id·revision·question version이 실제 실행 client identity와 같고 provider가
   `local` 또는 `external_api`다. mock provider는 통과하지 않는다.
 - gold coverage가 `full`이고 모든 case의 `reviewed_fields`가 완전하며, 고유 case 수가
   10 이상이고 여섯 feature(`fixed`, `cap`, `exceptions`, `missing`, `contradiction`,
   `overlap`)가 gold 전체에 있다.
-- failed policy가 0이고 character precision·recall·decision accuracy와 각 판단 키
-  accuracy가 모두 0.95 이상이다.
+- failed policy가 0이고 character precision 0.95, recall 0.20, 전체 decision accuracy 0.40 이상이다.
 - 필수 5개 판단 키는 각 case마다 검사됐고 `require_evaluation`이 같은 조건을 다시 확인한다.
 
-`coverage=critical_evidence_only` 같은 partial gold는 diagnostic만 가능하다. 완전한
-정답으로도, 자동 게시 승인으로도 사용할 수 없다. 정답 누락을 높은 점수로 상쇄하지 않는다.
+`coverage=critical_evidence_only` 같은 partial gold는 진단용이며 `strict` 통과 근거가 아니다.
+정답 누락을 높은 점수로 상쇄하지 않는다.
+
+초기 API 대량 적재는 메인의 source-only bulk → direct pending 경로로 진행하며 모델 추론·
+평가를 호출하거나 모델 품질 gate 통과를 기다리지 않는다. 모델 품질 지표는 진단용이다.
+원문 일치·금액과 지급 사실 확인·DB 형식 검증은 정책 단위에서 계속 수행한다.
+
+모델 평가를 사용하는 경로에서 `require_evaluation(value, model, mode="mvp")`는 실행 client와
+평가의 실제 model id·revision·provider·question identity 일치만 확인한다. mock·다른 identity는
+거부한다. 전역 점수 3종, full gold·7필드 참조·5판단 키와 사례 수 완전성, 최소 10건,
+feature 충족, 평가 실패 0 조건은 MVP에서 차단하지 않는다. 실패한 정책 자체는 보류한다.
+호출부에서 `DECIDER_VALIDATION_MODE`를 읽어 명시적으로 전달하며 기본값은 `strict`다.
+`evaluate_report(..., mode="mvp")`는 `mode: "mvp"`, `model_quality_gate: "diagnostic"`,
+`relaxed_global_gates`에 완화한 전역 조건을 기록한다. 점수와 `eligible_for_publication`은 계속
+strict 기준으로 계산되므로 이 값이 false여도 명시적인 MVP 확인은 통과할 수 있다. 산출물에
+기록된 mode만으로 기본 strict 검사가 완화되지는 않는다.
 
 현재 진단은 게시 기준이 아니다. v2 critical reference는 expected 995,
 predicted 807, matched 377 characters로 recall 37.889%였다. 여기서 참조 overlap
 precision 46.716%는 불완전한 critical reference에만 해당하며 전체 추출 정확도가 아니다.
-범주 판단은 29/30(96.667%), amount 9/10, scope 10/10, overlap 10/10이지만 필수
-recall·precision 95%를 통과하지 못해 `eligible_for_publication=false`다.
+범주 판단은 29/30(96.667%), amount 9/10, scope 10/10, overlap 10/10이지만 full gold와
+character precision 95% 조건을 충족하지 못해 strict의 `eligible_for_publication=false`다.
 
 v1의 critical-only 진단도 보존한다. 10 cases에서 matched 372/expected 995,
 recall 0.3738693, 범주 26/30(0.8666667), amount_kind 8/10, scope 9/10,
@@ -263,12 +349,68 @@ verdict, source/record hash를 `AIReview`에 남긴다. 같은 모델의 별도 
 - AI 자동 게시에는 0006·0013 migration이 필요하다. 정책 원문 projection·F12 최신
   판단·catalogue source text가 다르면 게시하지 않는다.
 
-## 2026-11-16 현재 상태
+## 모델 검수 없는 초기 원천 적재
+
+초기 MVP 적재에는 `decider-batch import-source`를 사용한다. 모델 client를 만들거나
+전역 평가 결과를 요구하지 않고 저장된 공식 API 필드로 카탈로그를 준비한다.
+`POLICY_PUBLISH_DATABASE_URL`은 비공개 환경 파일에서 읽는다.
+
+```bash
+uv run --locked --env-file data/local/decider/production.env \
+  python -m benefitfinder.jobs decider-batch import-source \
+  --output data/local/decider/source-only-dry-run
+
+uv run --locked --env-file data/local/decider/production.env \
+  python -m benefitfinder.jobs decider-batch import-source --publish \
+  --output data/local/decider/source-only-production
+```
+
+금액과 지급 시점을 확인하지 못한 항목은 `reviewed=false`, `payments=null`로 적재한다.
+빈 금액을 0원으로 바꾸지 않는다. 이 상태는 계산용 게시 성공이 아니다.
+원문 위치·조건 코드는 수동 확인 조건으로 보존하며, 범위 밖 정책은 원천 DB에 남긴다.
+보고서는 전체 원천, 범위 보류, 준비, 신규 미검수 적재, 재실행, 기존 보호, 실패와
+계산용 게시를 각각 집계한다.
+
+배치는 10건씩 트랜잭션으로 적재한다. 실패한 묶음은 기존 release를 다시 조회한 뒤
+개별 재시도한다. 원자적으로 저장한 비공개 checkpoint와 현재 DB의 해시를 함께 사용해
+중단 후 재개하며, 동일 ID의 기존 승인·다른 버전·retired 이력을 자동으로 덮어쓰지 않는다.
+
+고정 지급을 원공고에서 확인한 항목은 별도 순수 코드 컴파일러로 준비한다. 공식 원문
+전체 조건·근거와 API/원공고 해시를 연결하고 기존 카탈로그 형식으로 게시한다.
+검수 provenance에는 `deterministic-code:no-model-review`를 기록한다. 추가 AI 검수 호출과
+사람의 개별 승인 절차는 없다. 원문에 없는 지급일·수혜 횟수·동시 수급 허용은 만들지 않는다.
+지원 자격의 미지원 조건은 `needs_review`, 정책 쌍의 미확인 관계는 기존 계산기의 조건부
+조합으로 남으며, 실제 수급 확정을 의미하지 않는다.
+
+2026-11-16 source-only 실운영 배치는 원천 4,029건을 분류하고 취업·주거 1,435건을
+처리했다. 신규 미검수 적재 443건, 동일 release 30건, 기존 보호 51건, 실패 0건이다.
+범위 확인 509건과 컴파일 보류 911건은 성공에 포함하지 않았다. 나머지 2,085건은 MVP
+범위 밖 원천이다. 이 배치의 모델·AI 검수 호출은 모두 0회다. 실제 원문과 DB 백업,
+checkpoint, 실행 결과는 Git 제외 `data/local/decider/` 아래에 보존한다.
+
+동일 자료 재실행에서는 미검수 release 473건을 재사용했고 추가 적재·실패는 0건이었다.
+현재 정상 release와 원문을 보존한 채, 공식 원공고 기반 계산 정책 2건을 별도로 게시했다.
+운영 카탈로그는 현금 572건(계산 가능 2, 미검수 570)과 기존 서비스 15건이며 원공고
+원천은 43건이다. 현재 게시된 같은 정책 ID의 중복은 0건이다.
+
+실제 배포 추천 API에 공개 fixture를 바탕으로 한 기장군 25세 구직 조건을 넣어
+HTTP 200, `virtual_data=false`, `ai_generated=false`, 1년/PV off 조합 1개와
+1,600,000원을 확인했다. 이는 주거지원 1,550,000원과 면접수당 1회 신청분 50,000원이다.
+연간 면접수당 상한을 확정액으로 사용하지 않았으며, 일반 자격과 동시 수급 관계는
+확인이 필요한 조건부 결과다. 다른 부산 구 조건에서는 지역이 맞는 주거지원만
+개별 정책으로 반환됐다. 개별 수혜 이력을 정책 ID로 전달하는 입력은 현재 배포
+프로필의 선택 계약에서 지원하지 않으며 원문에 보존한 생애 1회 조건을 확인해야 한다.
+
+실제 PostgreSQL 격리 통합 검사 36건은 원천 변경·멱등 게시·트랜잭션 복구·기존 사람
+승인 보호를 확인했다. 가상 모델 응답 테스트와 실제 GPU 실행 기록은 이 결과와
+구분한다. 외부 API 연결, 운영 예약 등록, 코드 배포와 main 병합은 수행하지 않았다.
+
+## 이전 경로의 2026-11-16 실행 기록
 
 | 항목 | 확인된 상태 |
 | --- | --- |
 | 공용 코드 | Decider v2, 선택 의존성 그룹, 기본 3072/2048, window 900, batch 4 |
-| 모델 평가 | v2 10건 `eligible=false`; 95% gate 미달 |
+| 모델 평가 | v2 10건 `eligible=false`; 기준 v2에서 precision·amount_kind accuracy 미달 |
 | 대량 처리 | 1,944 targets = 509 범위 보류 + 10 검증 보류 + 1,425 미처리. 완료 0 |
 | v2 10건 | ready 0, held 10, failed 0, published 0; v1 length failure 이력은 보존 |
 | 운영 DB | 실제 운영 정책 쓰기 0 |
@@ -335,3 +477,12 @@ Unicode codepoint offset, `fast=false`, 네 task와 양의 `max_requests` 한도
 예산이다. compute 시간이나 USD 지출 상한이 아니다. native Decider와 동등한 범용
 chat/completions API는 확인하지 못했다. Perplexity Sonar나 OpenRouter가 이 native
 protocol을 지원한다고 가정하지 않는다.
+
+
+### 월세지원의 실행 규칙 연결
+
+2차 청년월세의 명시적 가구별 소득·재산·원가구 예외·주거급여 차감은
+원문 보존 외에 실행 규칙 후보와 미승인 카탈로그 레코드로 정규화한다.
+API 기본값의 수정은 전후 값·원문 위치·모델 근거·검수 상태를 보존한다.
+검수 후 게시된 동적 규칙은 사용자별 지급액으로 기존 추천 계산에 연결된다.
+범위·입력·수정 승인 경계·실제 정책 경계검증 재현은 [월세지원 실행 안내](RENT_SUPPORT.md)를 따른다.
