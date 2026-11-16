@@ -10,6 +10,7 @@ import unittest
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from pathlib import Path
+from unittest.mock import patch
 from uuid import uuid4
 from fastapi.testclient import TestClient
 
@@ -121,6 +122,49 @@ class PostgresAnalysisUsageTests(unittest.TestCase):
                 connection.execute("SELECT used FROM public.analysis_daily_usage").fetchall(),
                 [(DAILY_ANALYSIS_LIMIT,)],
             )
+
+    def test_pending_client_after_update_does_not_block_another_analysis(self) -> None:
+        root = Path(__file__).resolve().parents[2]
+        payload = json.loads(
+            (root / "contracts/fixtures/recommendation-request.json").read_text()
+        )
+        first_update = threading.Event()
+        release_first = threading.Event()
+        execute = psycopg.Connection.execute
+
+        def delay_first_client(connection, query, params=None, **kwargs):
+            cursor = execute(connection, query, params, **kwargs)
+            if (
+                isinstance(query, str)
+                and query.lstrip().startswith("INSERT INTO public.analysis_daily_usage AS usage")
+                and not first_update.is_set()
+            ):
+                first_update.set()
+                if not release_first.wait(timeout=5):
+                    raise AssertionError("test did not release the first client")
+            return cursor
+
+        with (
+            TestClient(create_app(analysis_usage_database_url=self.url)) as first,
+            TestClient(create_app(analysis_usage_database_url=self.url)) as second,
+            patch.object(psycopg.Connection, "execute", delay_first_client),
+            ThreadPoolExecutor(max_workers=1) as executor,
+        ):
+            pending = executor.submit(first.post, "/api/v1/recommendations", json=payload)
+            try:
+                self.assertTrue(first_update.wait(timeout=5))
+                # Keep the first client paused even while this request returns.
+                second_response = second.post("/api/v1/recommendations", json=payload)
+            finally:
+                release_first.set()
+            first_response = pending.result(timeout=5)
+
+        self.assertEqual(first_response.status_code, 200)
+        self.assertEqual(second_response.status_code, 200, second_response.text)
+        self.assertNotEqual(
+            first_response.json()["request_id"], second_response.json()["request_id"],
+        )
+        self.assertEqual(PostgresAnalysisUsage(self.url).remaining(), DAILY_ANALYSIS_LIMIT - 2)
 
     def test_restart_persistence_and_remaining_does_not_consume(self) -> None:
         before = PostgresAnalysisUsage(self.url)
