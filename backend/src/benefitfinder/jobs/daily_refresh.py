@@ -19,6 +19,7 @@ _MAX_STATE_BYTES = 65_536
 _PREPARATION_COUNTS = ('targets', 'registered', 'replayed', 'failed')
 _ANALYSIS_COUNTS = ('attempted', 'needs_review', 'stale', 'failed',
                     'source_records_awaiting_scope_or_documents')
+_DECIDER_COUNTS = ('targets', 'published', 'replayed', 'replaced', 'dry_run_ready', 'held', 'failed')
 
 
 class DailyRefreshError(ValueError):
@@ -104,6 +105,9 @@ def _notification(attempt: dict[str, object], *, state_failed: bool) -> str:
         lines.append(f"F12 준비된 문서 분석: {'성공' if stage['exit_code'] == 0 else '실패'}")
         for name, label in (('needs_review', '검수 대기 생성'), ('stale', '변경으로 무효화'),
                             ('failed', '분석 실패'),
+                            ('targets', '분석 대상'), ('published', '게시'), ('replayed', '게시 재사용'),
+                            ('replaced', '새 버전 교체'), ('dry_run_ready', '게시 전 검증 통과'),
+                            ('held', '보류'),
                             ('source_records_awaiting_scope_or_documents', '분류·문서 준비 대기 원천')):
             if name in stage.get('counts', {}):
                 lines.append(f"F12 {label}: {stage['counts'][name]}건")
@@ -238,12 +242,12 @@ def _run_locked(
         try:
             result = analyze_pending()
             if isinstance(result, dict):
-                if set(result) != set(_ANALYSIS_COUNTS) or any(
+                if set(result) not in (set(_ANALYSIS_COUNTS), set(_DECIDER_COUNTS)) or any(
                     type(value) is not int or not 0 <= value < 2**63 for value in result.values()
                 ):
                     raise ValueError
-                stages['f12']['counts'] = {key: result[key] for key in _ANALYSIS_COUNTS}
-                code = 1 if result['failed'] else 0
+                stages['f12']['counts'] = result
+                code = 1 if result['failed'] or result.get('held', 0) else 0
             else:
                 code = result if type(result) is int and result in (0, 1, 2) else 1
         except Exception:

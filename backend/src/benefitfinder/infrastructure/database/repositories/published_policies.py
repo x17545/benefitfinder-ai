@@ -24,9 +24,10 @@ from benefitfinder.infrastructure.policy_catalog_records import (
 READ_SQL = """
 SELECT payload, approved_sha256, published_at
 FROM public.policy_catalog_releases
-WHERE review_status = 'approved' AND publication_status = 'published'
-  AND reviewed_by IS NOT NULL AND length(btrim(reviewed_by)) > 0
-  AND reviewed_at IS NOT NULL AND published_at >= reviewed_at
+WHERE publication_status = 'published' AND (
+  (review_status = 'approved' AND reviewed_by IS NOT NULL AND length(btrim(reviewed_by)) > 0
+   AND reviewed_at IS NOT NULL AND published_at >= reviewed_at)
+  OR (review_status = 'unreviewed' AND reviewed_by IS NULL AND reviewed_at IS NULL))
   AND (payload ->> 'kind') IS DISTINCT FROM 'service'
 """
 

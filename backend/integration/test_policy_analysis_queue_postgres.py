@@ -109,6 +109,52 @@ class PolicyAnalysisQueuePostgresTest(unittest.TestCase):
             self.complete(first)
         self.assertEqual(self.complete(second), 'needs_review')
 
+    def test_renew_extends_only_live_unchanged_current_token(self):
+        self.tasks.register(self.value)
+        claim = self.tasks.claim()
+        with psycopg.connect(self.url) as connection:
+            connection.execute("UPDATE public.f12_analysis_tasks "
+                               "SET lease_until=clock_timestamp()+interval '1 minute'")
+            before = connection.execute(
+                'SELECT lease_until FROM public.f12_analysis_tasks WHERE task_id=%s',
+                (claim.task_id,),
+            ).fetchone()[0]
+        self.assertTrue(self.tasks.renew(claim))
+        with psycopg.connect(self.url) as connection:
+            after = connection.execute(
+                'SELECT lease_until FROM public.f12_analysis_tasks WHERE task_id=%s',
+                (claim.task_id,),
+            ).fetchone()[0]
+        self.assertGreater(after - before, timedelta(minutes=8))
+
+        for state in ('expired', 'different_token', 'source_changed'):
+            with self.subTest(state=state):
+                self.setUp()
+                self.tasks.register(self.value)
+                claim = self.tasks.claim()
+                if state == 'expired':
+                    with psycopg.connect(self.url) as connection:
+                        connection.execute("UPDATE public.f12_analysis_tasks "
+                                           "SET lease_until=clock_timestamp()-interval '1 second'")
+                elif state == 'different_token':
+                    self.assertNotEqual(claim.token, '0' * 32)
+                    claim = replace(claim, token='0' * 32)
+                else:
+                    self.collected.save(batch({'A': 'fictional changed'}, AT + timedelta(seconds=10)))
+                    self.assertEqual(self.tasks.get_task(claim.task_id)['status'], 'stale')
+                with psycopg.connect(self.url) as connection:
+                    before = connection.execute(
+                        'SELECT lease_until FROM public.f12_analysis_tasks WHERE task_id=%s',
+                        (claim.task_id,),
+                    ).fetchone()[0]
+                self.assertFalse(self.tasks.renew(claim))
+                with psycopg.connect(self.url) as connection:
+                    after = connection.execute(
+                        'SELECT lease_until FROM public.f12_analysis_tasks WHERE task_id=%s',
+                        (claim.task_id,),
+                    ).fetchone()[0]
+                self.assertEqual(after, before)
+
     def test_three_failures_terminal_with_one_minute_backoff(self):
         registered = self.tasks.register(self.value)
         for attempt in range(1, 4):

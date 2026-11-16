@@ -1,6 +1,6 @@
 # 정책 데이터 분석·정제와 Agent 활용
 
-2026-10-28 사용자의 제품 설명과 2026-10-29 역할 갱신을 반영한 설계 작업본이다. 현재 온통청년 목록 수집, 공고 한 건의 중복 제한 후보 로컬 모델 추출, 근거 검사·명시적 검수·원문 변경 시 승인 해제가 구현돼 있다. 전체 흐름의 목표 설계와 로컬 구현 상태는 [문서 지도](../README.md#구현-상태), 검수 함수의 기준은 [ingestion 안내](../../backend/src/benefitfinder/ingestion/README.md#규칙-후보의-근거-검사와-검수), 실행 명령·파일 보존과 한계는 [jobs 안내](../../backend/src/benefitfinder/jobs/README.md#로컬-모델로-후보-만들기)를 따른다. 기능·계산 규칙은 [요구 명세](../product/REQUIREMENTS.md), 모듈 경계는 [아키텍처](ARCHITECTURE.md), 교환 형식은 [공용 계약](../../contracts/README.md)을 따른다.
+2026-10-28 사용자의 제품 설명과 2026-10-29 역할 갱신을 반영한 설계 작업본이다. 현재 온통청년 목록 수집, 공고 한 건의 중복 제한 후보 로컬 모델 추출, 근거 검사·명시적 검수·원문 변경 시 승인 해제가 구현돼 있다. 2026-11-16에는 opt-in native Decider v2 추출·평가·AI release 경로를 추가했지만 설정한 자동 게시 기준을 통과하지 못해 운영 게시는 0이다. 전체 흐름의 목표 설계와 로컬 구현 상태는 [문서 지도](../README.md#구현-상태), [Decider 명령·측정·제한](../development/DECIDER_PIPELINE.md), 검수 함수의 기준은 [ingestion 안내](../../backend/src/benefitfinder/ingestion/README.md#규칙-후보의-근거-검사와-검수), 실행 명령·파일 보존과 한계는 [jobs 안내](../../backend/src/benefitfinder/jobs/README.md#로컬-모델로-후보-만들기)를 따른다. 기능·계산 규칙은 [요구 명세](../product/REQUIREMENTS.md), 모듈 경계는 [아키텍처](ARCHITECTURE.md), 교환 형식은 [공용 계약](../../contracts/README.md)을 따른다.
 
 ## 1. 핵심 과제
 
@@ -20,8 +20,15 @@
 | [원천 연결·재검수](../../backend/src/benefitfinder/infrastructure/database/POLICY_SOURCE_RECHECKS.md) | 0006 적용 시 승인에 연결된 원천이 변경·누락되면 게시 정책·F13을 내리고 기존 승인·재검수 이력을 보존한다. 동일 내용은 승인 유지, 재등장은 자동 재승인하지 않는다 |
 | [F12 분석 큐](../../backend/src/benefitfinder/infrastructure/database/F12_ANALYSIS.md) | 확인된 공식 문서·분류·원천을 등록받아 도구 6개로 누락을 재탐색하고 검수 대기 파일을 남긴다. 원천 변경 시 실행 중이거나 완료된 분석을 무효화한다. F08이 준비된 작업을 실행할 수 있다 |
 | [F12 입력 자동 준비](../../backend/src/benefitfinder/infrastructure/database/F12_PREPARATION.md) | 확인된 매핑의 API·보충 문서를 현재 원천 해시·본문·확인 시각을 검증해 등록한다. 원천 연결이 없는 수동 문서는 변경 이후 재확인이 필요하다 |
+| [native Decider v2](../development/DECIDER_PIPELINE.md) | `F12_ANALYSIS_ENGINE=decider`일 때 analysis version 5로 native locate→별도 choice·noul·score를 실행한다. 코드 정규화와 full gold·실제 provider gate를 통과한 항목만 AI release하며 사람의 대량 검수로 표시하지 않는다. 선택 의존성 그룹이며 기본 실행은 기존 tools다 |
 
 실제 대상 확대, 사람 검수, 운영 게시는 후속이다.
+
+Decider의 자동 AI release는 사용자가 명시한 현재 구현 경로다. 위 목표 흐름의 사람 검수 기준을
+제품 요구사항에서 삭제하거나 완료로 대체하지 않는다. 2026-11-16 실제 10건은 held 10,
+failed 0, ready 0, published 0이고 recall이 95% 미만이어서 대량 적재도 시작하지 않았다.
+source freshness·중복 게시 방지·평가 조건은 [Decider 문서](../development/DECIDER_PIPELINE.md)를
+따른다.
 
 아래는 목표 흐름이다. **승인된 버전**이 준비와 계산을 이어 준다.
 
@@ -74,6 +81,8 @@ Agent는 허용된 공식 자료 조회, 연결 문서 확인, 조항 추출, �
 단순한 `A ↔ B` 금지 쌍은 무조건적인 동시 수급 금지에만 사용한다. 수급 순서·기간·조건·예외가 있는 규칙을 영구적인 양방향 금지로 축약하지 않는다. 금액 차감·상한도 전체 배제로 바꾸지 않는다. 현재 `conflicts` 계약은 단순 금지 쌍만 표현하므로 복잡한 규칙의 표현·평가 범위는 다음 회의의 계약 검토 항목이다. 실행 코드로 지원하지 못하는 조건은 원문·미해결 사유와 함께 검수 대기로 남기며, 지원한 것으로 표시하지 않는다.
 
 ## 4. 검수·게시 기준
+
+명시적으로 AI 독립 검수 게시를 요청받은 배치에는 기존 사람 검수 경로와 분리된 [AI 배치 경로](../../backend/src/benefitfinder/infrastructure/database/POLICY_CATALOG.md#ai-독립-검수-배치-0013)를 사용할 수 있다. 요청 이유는 사람 명의 승인 없이 작성과 검수를 분리하고 검수 모델·판정과 원천·레코드 해시를 보존하기 위함이다. 원문과 인용·원천 변경 검사 및 계산 불가 조건은 그대로 유지한다. 개별 사람 승인을 허위 생성하지 않는다. 기존 사람 검수 흐름도 유지한다.
 
 - Agent의 출력은 규칙 후보이며 곧바로 운영 규칙이나 최종 자격 판정이 되지 않는다. 형식 검사만으로 의미가 검증됐다고 보지 않는다.
 - 인용이 해당 버전 원문에 존재하는지와 인용이 규칙·예외·금액을 뒷받침하는지를 확인한다. API 설명과 공고가 상충하면 임의로 한쪽을 선택하지 않고 검수로 넘긴다.
