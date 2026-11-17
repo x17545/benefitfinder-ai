@@ -73,7 +73,16 @@ HTTP 403과 `errorCode: e001`을 확인했다. 정상 응답의 `resultCode`만 
 `canceling statement due to statement timeout`과
 `INSERT INTO collected_policy_incoming`을 확인했다. 적재 어댑터의
 `statement_timeout=8000`에 걸린 별도 장애이며 앞선 HTTP 400의 원인을 설명하지
-않는다. 이 진단 보완은 DB 제한 시간이나 적재 SQL을 바꾸지 않는다.
+않는다. 응답 진단 보완 자체는 DB 제한 시간이나 적재 SQL을 바꾸지 않았다.
+후속 적재 수정은 [수집 성공본의 PostgreSQL 인계](../infrastructure/database/COLLECTED_POLICIES.md#2026-11-17-적재-시간-초과-조사)의 제한 크기 분할과 검증을 따른다.
+
+11:09 KST 운영 실행은 31페이지에서 HTTP 403으로 실패했고, 당시 임시 운영 명령이
+남긴 마지막 응답은 `errorCode: e001`, `errorMsg: invalid api key.`였다. 이는
+가상 무효 키 대조 요청과 별개인 운영 실패다. 같은 수집기 인스턴스가 1~30페이지에
+사용한 키를 31페이지에도 사용한다. 이어진 11:14 실행은 4,027건 수집과 DB 적재를
+성공했다. 따라서 고정적인 키 오입력만으로는 관찰 결과를 설명할 수 없다. 제공기관의
+인증 처리·승인 상태·호출 제한 중 무엇인지 이 기록만으로 확정하지 않으며,
+`e001`을 호출 제한으로 단정하거나 인증 오류를 자동 반복 호출하지 않는다.
 
 ## 실행 기록
 
