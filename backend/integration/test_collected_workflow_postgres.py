@@ -141,7 +141,7 @@ class CollectedWorkflowPostgresTests(unittest.TestCase):
             self.assertEqual(self.count("collected_policy_changes"), 3)
             self.assertEqual(notify.call_count, 4)
             for call in notify.call_args_list:
-                self.assertIn("ECOS 기준금리: 성공", call.args[0])
+                self.assertIn("ECOS 기준금리: ✅ 성공", call.args[0])
                 self.assertNotIn("PRIVATE", call.args[0])
             self.assertNotIn("PRIVATE", output.getvalue())
 

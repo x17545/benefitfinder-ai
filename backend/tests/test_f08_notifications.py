@@ -12,11 +12,53 @@ from unittest.mock import Mock, patch
 
 from benefitfinder.infrastructure.discord_webhook import DiscordWebhook, DiscordWebhookError
 from benefitfinder.jobs.__main__ import refresh_youthcenter_command
+from benefitfinder.jobs.daily_refresh import _notification
 from benefitfinder.jobs.youthcenter_refresh import refresh_notification
 
 AT = datetime(2026, 11, 7, tzinfo=timezone.utc)
 WEBHOOK = "https://discord.com/api/webhooks/123456/virtual-token-not-real"
 
+
+class NotificationFormatTests(TestCase):
+    def test_success_notification_format(self) -> None:
+        attempt = {
+            "started_at": "2026-11-17T00:46:39+00:00",
+            "stages": {
+                "youthcenter": {"exit_code": 0},
+                "ecos": {"exit_code": 0},
+            },
+        }
+
+        message = _notification(attempt, state_failed=False)
+
+        self.assertIn(
+            "2026년 11월 17일 (화) 오전 9시 46분",
+            message,
+        )
+        self.assertIn("온통청년: ✅ 성공", message)
+        self.assertIn("ECOS 기준금리: ✅ 성공", message)
+        self.assertIn("✅ 전체 결과: 성공", message)
+        self.assertNotIn("dashboard.render.com", message)
+
+    def test_failure_notification_format(self) -> None:
+        attempt = {
+            "started_at": "2026-11-17T00:46:39+00:00",
+            "stages": {
+                "youthcenter": {"exit_code": 1},
+                "ecos": {"exit_code": 0},
+            },
+        }
+
+        message = _notification(attempt, state_failed=False)
+
+        self.assertIn("온통청년: ❌ 실패", message)
+        self.assertIn("ECOS 기준금리: ✅ 성공", message)
+        self.assertIn("⚠️ 전체 결과: 일부 실패", message)
+        self.assertIn(
+            "https://dashboard.render.com/cron/"
+            "crn-dbtcs45ckfvc73eftm2g/logs",
+            message,
+        )
 
 class DiscordWebhookTests(TestCase):
     def test_uses_confirmed_delivery_and_disables_mentions(self) -> None:

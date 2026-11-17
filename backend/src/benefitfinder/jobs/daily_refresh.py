@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
+from zoneinfo import ZoneInfo
 import errno
 import json
 import os
@@ -82,7 +83,23 @@ def _write_status(path: Path, state: dict[str, object]) -> None:
 def _notification(attempt: dict[str, object], *, state_failed: bool) -> str:
     stages = attempt["stages"]
     assert isinstance(stages, dict)
-    lines = ["[F08] 정책·기준금리 갱신", f"실행 시각: {attempt['started_at']}"]
+    started_at = datetime.fromisoformat(attempt["started_at"])
+    started_at = started_at.astimezone(ZoneInfo("Asia/Seoul"))
+
+    weekdays = ("월", "화", "수", "목", "금", "토", "일")
+    weekday = weekdays[started_at.weekday()]
+    period = "오전" if started_at.hour < 12 else "오후"
+    hour = started_at.hour % 12 or 12
+
+    formatted_time = (
+        f"{started_at.year}년 {started_at.month}월 {started_at.day}일 "
+        f"({weekday}) {period} {hour}시 {started_at.minute:02d}분"
+    )
+
+    lines = [
+        "📊 [F08] 정책·기준금리 자동 갱신",
+        f"🕒 실행 시각: {formatted_time}",
+    ]
     for name, label in (("youthcenter", "온통청년"), ("gov24", "보조금24"),
                         ("official_documents", "공식 첨부 문서"), ("ecos", "ECOS 기준금리")):
         if name not in stages:
@@ -90,7 +107,8 @@ def _notification(attempt: dict[str, object], *, state_failed: bool) -> str:
         stage = stages[name]
         assert isinstance(stage, dict)
         # Stage names and codes are constructed in this process, never from raw data.
-        lines.append(f"{label}: {'성공' if stage['exit_code'] == 0 else '실패'}")
+        status = "✅ 성공" if stage["exit_code"] == 0 else "❌ 실패"
+        lines.append(f"{label}: {status}")
     if 'f12_preparation' in stages:
         stage = stages['f12_preparation']
         assert isinstance(stage, dict)
@@ -112,9 +130,32 @@ def _notification(attempt: dict[str, object], *, state_failed: bool) -> str:
             if name in stage.get('counts', {}):
                 lines.append(f"F12 {label}: {stage['counts'][name]}건")
     if state_failed:
-        lines.append("실행 기록 저장 실패: daily_refresh_io_error")
-    return "\n".join(lines)
+       lines.append("실행 기록 저장 실패: daily_refresh_io_error")
 
+    all_success = (
+        not state_failed
+        and all(
+            stage["exit_code"] == 0
+            for stage in stages.values()
+        )
+    )
+
+    lines.append("")
+    lines.append(
+        "✅ 전체 결과: 성공"
+        if all_success
+        else "⚠️ 전체 결과: 일부 실패"
+    )
+
+    if not all_success:
+        lines.append("")
+        lines.append("🔍 실패 원인 및 상세 로그 확인")
+        lines.append(
+            "https://dashboard.render.com/cron/"
+            "crn-dbtcs45ckfvc73eftm2g/logs"
+        )
+
+    return "\n".join(lines)
 
 def _run_locked(
     root: Path,

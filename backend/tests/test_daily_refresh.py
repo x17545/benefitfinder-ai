@@ -59,12 +59,12 @@ class DailyRefreshTest(unittest.TestCase):
         previous = self.state()['last_success']
         self.assertEqual(set(calls), {'youth', 'ecos', 'gov24'})
         self.assertEqual(len(sent), 1)
-        self.assertIn('보조금24: 성공', sent[0])
+        self.assertIn('보조금24: ✅ 성공', sent[0])
         self.assertEqual(run_daily_refresh(self.root, refresh_policies=lambda: 0,
             refresh_rate=lambda: 0, refresh_gov24=lambda: 1, clock=lambda: AT,
             notify=sent.append), 1)
         self.assertEqual(self.state()['last_success'], previous)
-        self.assertIn('보조금24: 실패', sent[1])
+        self.assertIn('보조금24: ❌ 실패', sent[1])
         self.assertEqual(self.state()['last_attempt']['stages']['ecos']['status'], 'success')
 
     def test_cli_prepares_both_sources_and_rejects_duplicate_canonical_policy(self) -> None:
@@ -106,8 +106,8 @@ class DailyRefreshTest(unittest.TestCase):
         self.assertEqual(state["last_success"]["run_id"], attempt["run_id"])
         self.assertEqual(set(attempt["stages"]), {"youthcenter", "ecos"})
         self.assertEqual(len(sent), 1)
-        self.assertIn("온통청년: 성공", sent[0])
-        self.assertIn("ECOS 기준금리: 성공", sent[0])
+        self.assertIn("온통청년: ✅ 성공", sent[0])
+        self.assertIn("ECOS 기준금리: ✅ 성공", sent[0])
         if os.name != "nt":
             self.assertEqual((self.root / "status.json").stat().st_mode & 0o777, 0o600)
 
@@ -272,7 +272,22 @@ class DailyRefreshTest(unittest.TestCase):
         self.assertNotIn("counts", stage)
         self.assertEqual(state["last_success"], previous)
         self.assertEqual(len(sent), 1)
-        combined = (self.root / "status.json").read_text() + sent[0]
+        trusted_log_url = (
+            "https://dashboard.render.com/cron/"
+            "crn-dbtcs45ckfvc73eftm2g/logs"
+        )
+
+        self.assertIn(trusted_log_url, sent[0])
+
+        notification_without_trusted_url = sent[0].replace(
+            trusted_log_url, ""
+        )
+
+        combined = (
+            (self.root / "status.json").read_text()
+            + notification_without_trusted_url
+        )
+
         for secret in ("PRIVATE", "https://", "원문"):
             self.assertNotIn(secret, combined)
 
@@ -358,7 +373,22 @@ class DailyRefreshTest(unittest.TestCase):
                 self.assertNotIn("counts", stage)
                 self.assertEqual(state["last_success"], previous)
                 self.assertEqual(len(sent), 1)
-                combined = (self.root / "status.json").read_text() + sent[0]
+                trusted_log_url = (
+                    "https://dashboard.render.com/cron/"
+                    "crn-dbtcs45ckfvc73eftm2g/logs"
+                )
+
+                self.assertIn(trusted_log_url, sent[0])
+
+                notification_without_trusted_url = sent[0].replace(
+                    trusted_log_url, ""
+                )
+
+                combined = (
+                    (self.root / "status.json").read_text()
+                    + notification_without_trusted_url
+                )
+
                 for secret in ("PRIVATE", "https://", "원문"):
                     self.assertNotIn(secret, combined)
 
@@ -487,7 +517,7 @@ class DailyRefreshTest(unittest.TestCase):
         rates.assert_called_once_with()
         webhook.return_value.send.assert_called_once()
         message = webhook.return_value.send.call_args.args[0]
-        self.assertIn("ECOS 기준금리: 실패", message)
+        self.assertIn("ECOS 기준금리: ❌ 실패", message)
         self.assertNotIn("PRIVATE", message + output.getvalue())
 
     def test_cli_notification_is_optional_and_missing_webhook_is_an_explicit_failure(self) -> None:
