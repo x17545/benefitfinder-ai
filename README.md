@@ -4,16 +4,18 @@
 
 > 코디세이 AI 네이티브 Final Project · 5인 팀
 
-[프로젝트 흐름](#프로젝트-흐름-한눈에-보기) · [로컬 실행](#로컬-실행) · [팀 역할](#팀원-역할과-기여) · [결과](#결과) · [평가자 안내](#평가자-안내) · [문서 지도](docs/README.md)
+[서비스 체험](https://benefitfinder-ai.vercel.app/) · [프로젝트 흐름](#프로젝트-흐름-한눈에-보기) · [로컬 실행](#로컬-실행) · [팀 역할](#팀원-역할과-기여) · [결과](#결과) · [평가자 안내](#평가자-안내) · [문서 지도](docs/README.md)
 
 ## 프로젝트 흐름 한눈에 보기
 
 ```mermaid
 flowchart TB
     accTitle: 정책 준비에서 사용자 결과까지
-    accDescr: 공식 자료를 수집해 AI로 후보를 추출하고 사람이 검수한 뒤 게시한다. 사용자 조건과 게시 자료를 코드가 판정하고 계산해 비교 결과를 보여 준다.
-    Source["공식 API·정책 원문"] --> Review["수집 → AI 후보 추출 → 사람 검수"]
-    Review -->|"승인 후 게시"| Catalog[("정책·규칙·근거")]
+    accDescr: 공식 자료의 정형값을 코드로 처리하고 본문의 추가 조건은 AI로 추출한다. 근거와 실행 규칙을 검증해 게시하며 미확인 내용은 검수 대상으로 남긴다. 사용자 조건과 게시 자료를 코드가 판정하고 계산한다.
+    Source["공식 API·정책 원문"] --> Prepare["정형값 코드 처리 · 본문 AI 분석(선택)"]
+    Prepare --> Review["근거·금액·지급 규칙 검증"]
+    Review -->|"실행 규칙 확인"| Catalog[("정책·규칙·근거")]
+    Review -->|"미확인 내용"| Pending["검수 대기 · 확인 필요"]
     Catalog --> Compute["코드 · 자격 판정과 조합 계산"]
     Profile["사용자 · 조건 13단계 선택"] --> Compute
     Compute --> Result["조합 비교 · 상황 변화 · 상세"]
@@ -21,17 +23,17 @@ flowchart TB
     classDef data fill:#F2E9FF,stroke:#7251A3,color:#3E2869;
     classDef published fill:#DDF7ED,stroke:#137A60,color:#073F33;
     classDef app fill:#E8F1FF,stroke:#3863A3,color:#152F56;
-    class Review data;
+    class Prepare,Review,Pending data;
     class Catalog published;
     class Compute,Result app;
 ```
 
-- **정책 준비:** 공식 자료에서 AI가 규칙 후보와 근거를 찾고, 사람이 검수한 정책·규칙·근거만 게시한다. [데이터 준비 흐름](docs/architecture/POLICY_DATA_PIPELINE.md)
+- **정책 준비:** API의 정형 필드는 코드로 처리하고 본문의 추가 조건·예외·중복수혜는 AI 분석으로 선택적으로 보완한다. 원문·해시·금액·지급 규칙을 검증하며, 실행하지 못하는 조건은 확인 필요로 남긴다. 코드 기반 원천 적재와 검수·게시 경로는 [데이터 준비 흐름](docs/architecture/POLICY_DATA_PIPELINE.md), [실행·운영 기록](docs/development/DECIDER_PIPELINE.md)을 따른다.
 - **사용자 요청:** 코드는 13단계 선택값과 정책을 비교해 자격·중복 제한·총액을 계산한다. 사용자는 조합과 상황 변화를 비교하고, 상세에서 근거와 공식 신청 안내를 확인한다. AI 설명은 선택 사항이다. [화면 흐름](docs/product/REQUIREMENTS.md#41-화면-목록과-흐름)
 
-**지금 체험할 수 있는 범위:** 기본 로컬 실행은 공식 지역 목록과 가상 정책을 사용한다. 실제 정책의 검수·운영 게시와 제출 성과는 [현재 개발 상태](#현재-개발-상태)와 [결과](#결과)에서 구분한다.
+**지금 체험할 수 있는 범위:** [배포 서비스](https://benefitfinder-ai.vercel.app/)는 실제 게시 정책을 기반으로 조합·상황 변화·상세를 제공한다. 미확인 자격과 동시 수급 관계는 확인 필요로 표시한다. 기본 로컬 실행은 공식 지역 목록과 가상 정책을 사용하며, 가상 결과에는 표시가 붙는다. 확인한 운영 결과와 로컬 검증은 [현재 개발 상태](#현재-개발-상태)와 [결과](#결과)에서 구분한다.
 
-단계별 문서는 [Markdown 문서 지도](docs/README.md)에서 찾을 수 있다. [HTML 문서 지도](docs/document-map.html)는 공고 세 건이 추천 조합으로 이어지는 예시를 장면별로 보여 준다. 파일을 내려받아 브라우저에서 열면 되고, 각 문서 링크는 GitHub로 연결된다.
+단계별 문서는 GitHub에서 바로 읽을 수 있는 [문서 지도](docs/README.md)에서 찾을 수 있다.
 
 ## 해결하려는 문제
 
@@ -67,7 +69,7 @@ flowchart LR
 
 개별 금액은 A가 가장 크지만, B와 C를 함께 받으면 **1년 총액이 130만 원 더 커진다.**
 
-[HTML 조합 실험실](docs/benefit-combination-lab.html)에서 A·B·C를 직접 골라 보세요. 파일을 내려받아 브라우저에서 열면 서버 없이 동작합니다.
+실제 조건 입력과 조합 비교는 [배포 서비스](https://benefitfinder-ai.vercel.app/)에서 체험할 수 있다.
 
 ## 목표하는 사용 경험
 
@@ -78,7 +80,7 @@ flowchart LR
 
 확인된 금액·조건을 기준으로 비교하고, 불명확한 자격·중복 조건은 ‘확인 필요’로 표시한다. 실제 수급 가능 여부는 신청 기관의 확인을 거친다.
 
-이를 위해 공식 API에서 충분히 확인되지 않는 제한·예외는 공고·지침·FAQ를 데이터 Agent로 분석·정제하고 사람이 검수하는 흐름을 설계한다. 사용자 요청의 자격 판정·금액·조합 순위는 게시된 규칙과 코드가 계산한다. 상세한 문제 정의는 [기획서](docs/product/PROJECT_PLAN.md#1-문제-정의), 기능·계산 기준은 [기능 명세 v3.0](docs/product/REQUIREMENTS.md)을 따른다.
+이를 위해 공식 API의 정형 필드를 먼저 처리하고, 충분히 확인되지 않는 제한·예외는 공고·지침·FAQ에서 분석해 검수 대상으로 남긴다. 사용자 요청의 자격 판정·금액·조합 순위는 게시된 규칙과 코드가 계산한다. 상세한 문제 정의는 [기획서](docs/product/PROJECT_PLAN.md#1-문제-정의), 기능·계산 기준은 [기능 명세 v3.0](docs/product/REQUIREMENTS.md)을 따른다.
 
 선택 입력 13단계와 F01~F14를 취업·주거에 적용하며, 생활·자산형성·교육·장학과 다른 대상의 혜택은 확장 단계에서 추가한다.
 
@@ -86,9 +88,9 @@ flowchart LR
 
 | 영역 | 지금 확인할 수 있는 것 | 별도 검증·후속 |
 | --- | --- | --- |
-| 웹과 API | 공식 지역 선택 → 13단계 입력 → 가상 정책의 조합·상황 변화(S4)·상세(S5)·서비스(S6). 입력·결과 탭 복원, 조건 기억하기·삭제, PNG 저장. 가상 결과는 화면과 이미지에 표시 | 실제 서비스 정책·환산 단가 자료의 검수·게시 |
-| 정책 계산·설명 | `POLICY_DATABASE_URL` 설정 시 [게시 현금 정책 카탈로그](backend/src/benefitfinder/infrastructure/database/POLICY_CATALOG.md)로 계산. F13은 [게시 조항과 선택적 로컬 모델](backend/src/benefitfinder/api/README.md#f13-설명-실행) 사용. [게시 서비스 카탈로그](backend/src/benefitfinder/infrastructure/database/SERVICE_CATALOG.md)의 환산액은 현금 조합과 분리 | 실제 정책 검수·운영 게시와 정책 사실 검증 |
-| 수집·검수 도구 | [F08 정책·금리 통합 갱신](backend/src/benefitfinder/jobs/DAILY_REFRESH.md), [수집 성공본 DB 인계](backend/src/benefitfinder/infrastructure/database/COLLECTED_POLICIES.md), [F12 문서 분석 큐](backend/src/benefitfinder/infrastructure/database/F12_ANALYSIS.md)와 [확인된 API·공식 HTML/PDF의 입력 자동 준비](backend/src/benefitfinder/infrastructure/database/F12_PREPARATION.md) | 실제 대상 확대와 사람 검수·게시, 운영 스케줄·알림 도착 확인 |
+| 웹과 API | 공식 지역 선택 → 13단계 입력 → 조합·상황 변화(S4)·상세(S5)·서비스(S6). 입력·결과 탭 복원, 조건 기억하기·삭제, PNG 저장. 기본 로컬 실행의 가상 결과는 화면과 이미지에 표시 | 실제 사용자 테스트와 환경별 동작 확인 |
+| 정책 계산·설명 | 배포 환경은 [게시 현금 정책 카탈로그](backend/src/benefitfinder/infrastructure/database/POLICY_CATALOG.md)로 계산. F13은 [게시 조항과 선택적 모델](backend/src/benefitfinder/api/README.md#f13-설명-실행) 사용. [게시 서비스 카탈로그](backend/src/benefitfinder/infrastructure/database/SERVICE_CATALOG.md)의 환산액은 현금 조합과 분리 | 미확인 자격·중복수혜·지급 조건 검수와 계산 가능 정책 확대 |
+| 수집·검수 도구 | [F08 통합 갱신](backend/src/benefitfinder/jobs/DAILY_REFRESH.md), [수집본 DB 인계](backend/src/benefitfinder/infrastructure/database/COLLECTED_POLICIES.md), [F12 분석 큐](backend/src/benefitfinder/infrastructure/database/F12_ANALYSIS.md)와 [입력 자동 준비](backend/src/benefitfinder/infrastructure/database/F12_PREPARATION.md). 정형 우선 분석·모델 없는 원천 적재·코드 기반 계산용 게시 구현 | 일일 운영 스케줄·알림 도착 확인, 남은 미검수·보류 자료 처리 |
 
 F11 이용 통계는 명세의 17개 이벤트를 기존 백엔드를 통해 GA4로 전달하도록 연결했다. 사용자 조건·URL 원문은 제외하고 통계용 쿠키·브라우저 저장소 없이 임시 식별자를 사용한다. 기본 설정은 꺼짐이며, 실제 조장 계정 수신과 팀원 보기 권한은 [통계 설정 안내](backend/src/benefitfinder/infrastructure/ANALYTICS.md)에 따라 별도 확인한다.
 
@@ -96,19 +98,19 @@ F11 이용 통계는 명세의 17개 이벤트를 기존 백엔드를 통해 GA4
 
 ## 평가자 안내
 
-이 절은 제출 준비 양식이다. 배포 주소·운영 실행 기록·실사용자 결과가 비어 있으면 검증 완료로 보지 않는다. 목표 기능과 현재 구현은 [현재 개발 상태](#현재-개발-상태)와 [문서 지도](docs/README.md#구현-상태)에서 구분한다. 클릭 시안의 S4·S5·S6은 실제 앱 구현과 별개다.
+아래 주소에서 배포된 앱을 확인할 수 있다. 목표 기능과 현재 구현·운영 검증은 [현재 개발 상태](#현재-개발-상태)와 [문서 지도](docs/README.md#구현-상태)에서 구분한다. 시연 영상·발표 자료는 등록 여부를 따로 표시하며, 클릭 시안은 실제 앱의 기능 검증과 구분한다.
 
 | 항목 | 내용 |
 | --- | --- |
 | 배포 URL | [**benefitfinder-ai.vercel.app**](https://benefitfinder-ai.vercel.app/) |
 | 접속 방법 | 로그인·회원가입 없이 위 주소로 바로 접속한다. 평가 전용 계정은 필요 없다 |
 | 서비스 유지 | 결과 안내를 받을 때까지 유지한다 |
-| 시연 영상 (3분 이내) | (촬영 후 링크 기입) |
+| 시연 영상 (3분 이내) | 미등록 |
 | 기획서 | [docs/product/PROJECT_PLAN.md](docs/product/PROJECT_PLAN.md) |
 | 기능 요구 명세서 | [docs/product/REQUIREMENTS.md](docs/product/REQUIREMENTS.md) (12장 시스템 아키텍처, 13장 AI 활용 명세, 14장 구현 현황 표) |
 | 사용자 피드백 기록 | [docs/product/USER_TEST.md](docs/product/USER_TEST.md) 5장·6장 |
-| 발표 자료 | (완성 후 `docs/` PDF 링크 기입) |
-| 프로젝트 진행 기록 | (기입: 회의록·결정 기록 위치) |
+| 발표 자료 | 미등록 |
+| 프로젝트 진행 기록 | [기능 명세 변경 이력](docs/product/REQUIREMENTS.md#115-변경-이력) |
 
 ### 평가자 테스트 방법
 
@@ -135,13 +137,13 @@ F11 이용 통계는 명세의 17개 이벤트를 기존 백엔드를 통해 GA4
 
 </details>
 
-**자동 갱신 확인** (F08, 목표 03:00 KST): [정책·금리 통합 실행·스케줄 안내](backend/src/benefitfinder/jobs/DAILY_REFRESH.md)를 따른다. 현재 CI는 매일 수집하는 스케줄러가 아니다. 실제 API 수집 성공·디스코드 도착·운영 스케줄 등록은 후속 검증이며, 해당 환경에서 확인한 요약·기록 위치를 제출 전에 기입한다.
+**자동 갱신 확인** (F08, 목표 03:00 KST): [정책·금리 통합 실행·스케줄 안내](backend/src/benefitfinder/jobs/DAILY_REFRESH.md)를 따른다. 현재 CI는 매일 수집하는 스케줄러가 아니다. 마지막 수집 성공본과 실패 이력은 실행 문서에 기록하며, 알림 도착·운영 스케줄 등록은 별도 확인한다.
 
 **AI Agent 실행 기록 확인** (F12): [추출·검수·평가 CLI](backend/src/benefitfinder/jobs/README.md)를 따른다. 공유 가상 회귀와 실제 E4B 검증 요약은 관련 PR에 남기며, 실제 공고·검수·결과·로그는 로컬 `data/`에만 둔다. 제출용으로는 원문/개인정보를 제거한 실행 순서와 성공·실패 요약을 따로 확인한다.
 
 ### AI 사용 표시
 
-- 서비스 목표: 생성된 설명에는 [AI] 표시와 근거를 붙이고, 기본 문구는 AI 생성으로 표시하지 않는다. 현재 앱은 결과 화면의 정책별 설명/근거와 이용 안내·개인정보 페이지를 제공하며 상세·서비스 화면은 서버의 가상 정책으로 연결했다. 클릭 시안의 설명은 가상 예시다.
+- 서비스 목표: 생성된 설명에는 [AI] 표시와 근거를 붙이고, 기본 문구는 AI 생성으로 표시하지 않는다. 현재 앱은 결과 화면의 정책별 설명/근거와 이용 안내·개인정보 페이지를 제공한다. 배포 환경의 상세는 게시 정책을 조회하며 기본 로컬 환경은 가상 정책을 사용한다. 클릭 시안의 설명은 가상 예시다.
 - 개발: AI 도구(Claude, Codex 등)를 사용한 커밋·PR은 [협업 절차](CONTRIBUTING.md#ai-사용-표시)에 따라 PR 본문과 커밋 트레일러에 표시했다.
 
 ## 팀원 역할과 기여
@@ -164,12 +166,12 @@ F11 이용 통계는 명세의 17개 이벤트를 기존 백엔드를 통해 GA4
 | --- | --- |
 | 화면 | React, TypeScript, Vite |
 | 서버 | Python 3.12, FastAPI, Pydantic |
-| DB | PostgreSQL. F13 게시 조항·검수 정책 카탈로그 조회와 계산 연결 구현. 실제 정책 게시·벡터/임베딩 검색은 후속 |
-| AI | [로컬 llama.cpp](docs/development/LOCAL_LLM.md)로 추출·설명 검증. 실패 시 기본 문구로 복귀. Ollama는 호환 경로이며 운영 모델·예산은 확정 전 |
+| DB | PostgreSQL. 게시 정책·규칙·근거 조회, 코드 판정·계산과 F13 조항 조회에 사용 |
+| AI | 정형값은 코드 처리, [Decider 본문 추출](docs/development/DECIDER_PIPELINE.md)은 로컬 검증. 자격·금액 계산은 코드가 수행하며 [선택적 설명 모델](backend/src/benefitfinder/api/README.md#f13-설명-실행) 실패 시 기본 문구로 복귀 |
 | 자동화 | F08 정책·금리 통합 실행·재시도·웹훅과 03:00 KST Linux systemd/macOS launchd 설정 생성. 운영 등록·실제 API/알림 도착은 후속 |
 | 데이터 | 온통청년 수집·ECOS 기준금리 수동 갱신/DB 조회 구현. 보조금24 선택 ID의 API·DB·F12 연결 구현. 실제 매핑·운영 갱신은 후속 |
 | 개발 도구 | uv, pnpm, GitHub Actions CI |
-| 배포 | Vercel/Render 실행 설정 있음. 운영 API·배포 주소의 전체 흐름 검증은 별도 |
+| 배포 | Vercel 웹·Render API 연동. [배포 서비스](https://benefitfinder-ai.vercel.app/)와 운영 DB의 실제 정책 응답 확인 기록 제공 |
 
 ## 로컬 실행
 
@@ -189,13 +191,15 @@ DB·LLM 키 없이 실행한다. `pip`·`npm`·`npx` 대신 uv·pnpm을 사용�
 
 ## 결과
 
-기본 로컬 환경에서는 **공식 지역 선택 → 13단계 조건 입력 → 가상 조합 결과 → 상황 변화·상세·서비스 확인**을 시험할 수 있다. 검수한 규칙과 설명 근거를 같은 버전으로 게시하는 경로는 가상 자료로 검증했다. 실제 원문의 분석 결과는 검수 대기이며 운영 정책 게시와는 구분한다. [검증과 운영 현황](docs/README.md#구현-상태)
+배포 서비스는 실제 게시 정책을 사용하며, 기본 로컬 실행은 가상 정책으로 같은 입력·조합·상황 변화·상세 흐름을 제공한다. 2026-11-16 운영 기록에서는 계산용 정책 35건(당시 접수 10건·종료 25건)을 게시하고 실제 배포 API의 조건부 조합을 확인했다. 미확인 자격과 동시 수급 관계가 남아 있어 수급 확정을 뜻하지 않는다. 집계 기준·검증 조건·잔여 제약은 [운영 게시 기록](docs/development/DECIDER_PIPELINE.md#모델-없이-계산용-금액-추가-게시)과 [구현 상태](docs/README.md#구현-상태)를 따른다.
 
-다음 제출 결과는 확인한 뒤 기입한다.
+정형 우선 분석은 실제 정책 2건의 동일 로컬 실행 비교에서 입력 토큰 19,053 → 1,379(92.8% 감소), 분석 시간 11.926초 → 1.330초를 기록했다. 전체 정책의 성능이나 유료 API 청구액 측정과 구분하며, [비교 조건·재현 방법](docs/development/DECIDER_PIPELINE.md#코드와-모델의-역할-분리로-줄인-분석량)을 함께 제공한다.
 
-- 구현 결과: [구현 현황 표](docs/product/REQUIREMENTS.md#14-구현-현황-표) 기준 Must 기능 (기입)개 중 (기입)개 동작
-- 사용자 테스트: 실사용자 (기입)명, 주요 지표와 개선 내용은 [사용자 테스트 결과](docs/product/USER_TEST.md#6-피드백과-반영-기록-제출용)
-- 대표 화면: (기입: 결과 화면·S6 캡처)
+실사용자 평가와 제출 자료는 운영 데이터·자동 검사 결과와 별도로 기록한다.
+
+- 기능별 구현·확인 방법: [구현 현황 표](docs/product/REQUIREMENTS.md#14-구현-현황-표)
+- 사용자 테스트: 제출용 참여 인원·지표는 미등록. [관찰·피드백 기록 양식](docs/product/USER_TEST.md#6-피드백과-반영-기록-제출용)
+- 대표 화면: 제출용 캡처 미등록
 
 ## 개발 시작점
 
@@ -217,7 +221,6 @@ backend/        FastAPI, 공통 판정·분야별 규칙·데이터 준비 경�
 contracts/      공용 JSON Schema와 가상 예제
 docs/
   README.md     문서 지도와 구현 상태
-  document-map.html  흐름별 문서 탐색 (브라우저)
   product/      기획 개요·기능 명세·사용자 테스트
   architecture/ 기술 설계·정책 데이터 준비
   development/  설치·컨벤션·Git·저장소 운영
