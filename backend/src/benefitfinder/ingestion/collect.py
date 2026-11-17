@@ -8,6 +8,9 @@
 
 from __future__ import annotations
 
+import json
+import re
+
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
@@ -43,6 +46,25 @@ class CollectionError:
     detail: str
     snapshot_ref: str | None = None
     external_id: str | None = None
+    http_status: int | None = None
+    api_code: str | None = None
+
+
+def _api_result_code(config: YouthcenterApiConfig, body: bytes) -> str | None:
+    """Extract only the bounded youth API result code, never source text."""
+    if config.result_code_path is None:
+        return None
+    try:
+        value = json.loads(body)
+        for key in config.result_code_path:
+            value = value[key]
+    except (ValueError, KeyError, TypeError, RecursionError):
+        return None
+    if type(value) is int and 100 <= value <= 999:
+        return str(value)
+    if isinstance(value, str) and re.fullmatch(r"(?:e[0-9]{3}|[0-9]{3})", value):
+        return value
+    return None
 
 
 @dataclass(frozen=True)
@@ -100,22 +122,30 @@ def collect_youthcenter(
             body=response.body,
         )
         snapshot_ref = snapshot_store.save(snapshot)
-        if not 200 <= response.status_code < 300:
-            errors.append(
-                CollectionError(page, "http_status", str(response.status_code), snapshot_ref)
+
+        def response_error(
+            code: str, detail: str, external_id: str | None = None,
+        ) -> CollectionError:
+            return CollectionError(
+                page, code, detail, snapshot_ref, external_id,
+                http_status=response.status_code,
+                api_code=_api_result_code(config, response.body),
             )
+
+        if not 200 <= response.status_code < 300:
+            errors.append(response_error("http_status", str(response.status_code)))
             break
         try:
             page_records, total = parse_page(config, response.body)
         except PageParseError as exc:
-            errors.append(CollectionError(page, "parse_failed", str(exc), snapshot_ref))
+            errors.append(response_error("parse_failed", str(exc)))
             break
 
         for fields in page_records:
             external_id = external_id_of(config, fields)
             if external_id is None:
                 errors.append(
-                    CollectionError(page, "missing_external_id", "정책 ID 없음", snapshot_ref)
+                    response_error("missing_external_id", "정책 ID 없음")
                 )
                 continue
             record = CollectedRecord(
@@ -133,10 +163,7 @@ def collect_youthcenter(
                 del records[external_id]
                 conflicted.add(external_id)
                 errors.append(
-                    CollectionError(
-                        page, "conflicting_duplicate", "같은 ID의 다른 내용",
-                        snapshot_ref, external_id,
-                    )
+                    response_error("conflicting_duplicate", "같은 ID의 다른 내용", external_id)
                 )
 
         if total is not None:
@@ -144,7 +171,7 @@ def collect_youthcenter(
                 expected_total = total
             elif total != expected_total:
                 errors.append(
-                    CollectionError(page, "total_changed", "수집 중 전체 건수가 바뀜", snapshot_ref)
+                    response_error("total_changed", "수집 중 전체 건수가 바뀜")
                 )
                 break
             expected_count = min(
@@ -152,27 +179,23 @@ def collect_youthcenter(
             )
             if not page_records and expected_count:
                 errors.append(
-                    CollectionError(page, "unexpected_empty_page", "전체 건수보다 일찍 끝남",
-                                    snapshot_ref)
+                    response_error("unexpected_empty_page", "전체 건수보다 일찍 끝남")
                 )
                 break
             if len(page_records) < expected_count:
                 errors.append(
-                    CollectionError(page, "short_page", "요청보다 적은 건수, 페이지 크기 확인 필요",
-                                    snapshot_ref)
+                    response_error("short_page", "요청보다 적은 건수, 페이지 크기 확인 필요")
                 )
                 break
             if len(page_records) > expected_count:
                 errors.append(
-                    CollectionError(page, "page_count_mismatch", "예상보다 많은 페이지 건수",
-                                    snapshot_ref)
+                    response_error("page_count_mismatch", "예상보다 많은 페이지 건수")
                 )
                 break
             if page * config.page_size >= total:
                 if len(records) != total:
                     errors.append(
-                        CollectionError(page, "record_count_mismatch", "전체 건수와 고유 ID 수 불일치",
-                                        snapshot_ref)
+                        response_error("record_count_mismatch", "전체 건수와 고유 ID 수 불일치")
                     )
                 finished = True
                 break

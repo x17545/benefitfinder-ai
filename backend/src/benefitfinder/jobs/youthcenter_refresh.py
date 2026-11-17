@@ -7,6 +7,7 @@ import json
 import os
 import re
 import shutil
+import sys
 
 from collections import Counter
 from collections.abc import Callable
@@ -16,13 +17,29 @@ from tempfile import NamedTemporaryFile, TemporaryDirectory
 from time import sleep
 from uuid import uuid4
 
-from benefitfinder.ingestion.collect import CollectionResult
+from benefitfinder.ingestion.collect import CollectionError, CollectionResult
 from benefitfinder.jobs.refresh_lock import acquire_refresh_lock
 
 STATUS_FILE = "status.json"
 _RUNS_DIR = "runs"
 _LOCK_FILE = ".refresh-lock"
 _RETRY_DELAY_SECONDS = 5
+_ERROR_CODES = {
+    "fetch_failed",
+    "unsafe_response",
+    "http_status",
+    "parse_failed",
+    "missing_external_id",
+    "conflicting_duplicate",
+    "total_changed",
+    "unexpected_empty_page",
+    "short_page",
+    "page_count_mismatch",
+    "record_count_mismatch",
+    "page_limit",
+    "refresh_attempt_failed",
+    "refresh_incomplete",
+}
 
 
 class RefreshError(ValueError):
@@ -57,32 +74,34 @@ def refresh_notification(root: Path, code: int, started_at: datetime) -> str:
                 if type(count) is int and count >= 0:
                     lines.append(f"{label}: {count}건")
         else:
-            allowed = {
-                "fetch_failed",
-                "unsafe_response",
-                "http_status",
-                "parse_failed",
-                "missing_external_id",
-                "conflicting_duplicate",
-                "total_changed",
-                "unexpected_empty_page",
-                "short_page",
-                "page_count_mismatch",
-                "record_count_mismatch",
-                "page_limit",
-                "refresh_attempt_failed",
-                "refresh_incomplete",
-            }
             errors = attempt.get("error_codes", [])
             if isinstance(errors, list):
                 codes = sorted(
-                    {item for item in errors if isinstance(item, str) and item in allowed}
+                    {item for item in errors if isinstance(item, str) and item in _ERROR_CODES}
                 )
                 if codes:
                     lines.append("오류 코드: " + ", ".join(codes))
     except (OSError, ValueError, KeyError, TypeError, AttributeError):
         pass
     return "\n".join(lines)
+
+
+def _failure_diagnostic(error: CollectionError, attempt: int) -> dict[str, object]:
+    """Allowlist metadata before writing to stderr or the local status file."""
+    api_code = error.api_code
+    return {
+        "attempt": attempt,
+        "page": error.page if type(error.page) is int and error.page > 0 else None,
+        "error_code": error.code if error.code in _ERROR_CODES else "unknown",
+        "http_status": (
+            error.http_status
+            if type(error.http_status) is int and 100 <= error.http_status <= 599 else None
+        ),
+        "api_code": (
+            api_code if isinstance(api_code, str)
+            and re.fullmatch(r"(?:e[0-9]{3}|[0-9]{3})", api_code) else None
+        ),
+    }
 
 
 def _last_success(root: Path) -> tuple[dict[str, object] | None, Path | None]:
@@ -160,6 +179,7 @@ def _run_locked(
     started_at = clock().isoformat()
     changes: dict[str, int] = {}
     error_codes: list[str] = []
+    failures: list[dict[str, object]] = []
     complete = False
     generation: Path | None = None
 
@@ -174,6 +194,10 @@ def _run_locked(
         except (OSError, ValueError, KeyError, TypeError):
             error_codes = ["refresh_attempt_failed"]
             break
+        for error in result.errors:
+            diagnostic = _failure_diagnostic(error, attempts)
+            failures.append(diagnostic)
+            print("온통청년 수집 오류: " + json.dumps(diagnostic), file=sys.stderr, flush=True)
         if result.complete:
             last_success = {
                 "run_id": run_id,
@@ -202,6 +226,7 @@ def _run_locked(
                     "finished_at": clock().isoformat(),
                     "attempts": attempts,
                     "error_codes": error_codes,
+                    "errors": failures,
                     "changes": changes,
                 },
             },
