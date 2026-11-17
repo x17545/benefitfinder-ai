@@ -35,6 +35,7 @@ from benefitfinder.infrastructure.database.repositories.decider_updates import (
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--publish", action="store_true")
+parser.add_argument("--catalog-updates", action="store_true")
 parser.add_argument("--once", action="store_true")
 parser.add_argument("--limit", type=int, default=0)
 parser.add_argument("--output", type=Path, required=True)
@@ -313,6 +314,19 @@ while time.time() < deadline:
                     state[key]["reasons"] = list(compiled.reasons)
                     continue
                 record = CatalogRecord.model_validate(compiled.payload)
+                if args.publish and not args.catalog_updates:
+                    # Full native outputs already live in F12. Do not copy the
+                    # entire analysis corpus into every online catalog read.
+                    private_json(
+                        phase / "catalog-candidates" / (key + ".json"),
+                        {
+                            "catalog": record.model_dump(mode="json"),
+                            "source_text": text,
+                            "expected_previous": previous["approved_sha256"] if previous else None,
+                        },
+                    )
+                    state[key]["catalog_status"] = "stored_candidate"
+                    continue
                 catalog.append(
                     (key, record, text, previous["approved_sha256"] if previous else None)
                 )
