@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import timezone
+from itertools import batched
 import json
 
 import psycopg
@@ -20,12 +21,21 @@ _LOCK_NAMESPACE = "benefitfinder:collected_policy_generations:"
 _UNAVAILABLE = "collected_policy_storage_unavailable"
 _CONFLICT = "collected_policy_run_conflict"
 _REGRESSED = "collected_policy_generation_regressed"
+_STAGING_MAX_RECORDS = 200
+_STAGING_MAX_BYTES = 1024 * 1024
 
 
-def _incoming_records_json(batch: CollectedPolicyBatch) -> str:
-    records = []
+def _incoming_record_chunks(batch: CollectedPolicyBatch) -> tuple[str, ...]:
+    """Bound each staging statement; prepare all JSON before taking DB locks.
+
+    A single large record is kept intact. The existing batch validation still
+    enforces the 64 MiB total limit; records are never truncated or skipped.
+    """
+    chunks: list[str] = []
+    records: list[str] = []
+    size = 2  # JSON array brackets, counted as UTF-8 bytes.
     for record in batch.records:
-        records.append(
+        encoded = json.dumps(
             {
                 "source_name": record.source_name,
                 "external_id": record.external_id,
@@ -33,14 +43,24 @@ def _incoming_records_json(batch: CollectedPolicyBatch) -> str:
                 "snapshot_ref": record.snapshot_ref,
                 "fetched_at": record.fetched_at.astimezone(timezone.utc).isoformat(),
                 "fields": record.fields,
-            }
+            },
+            ensure_ascii=False,
+            separators=(",", ":"),
+            allow_nan=False,
         )
-    return json.dumps(
-        records,
-        ensure_ascii=False,
-        separators=(",", ":"),
-        allow_nan=False,
-    )
+        record_bytes = len(encoded.encode("utf-8"))
+        if records and (
+            len(records) >= _STAGING_MAX_RECORDS
+            or size + 1 + record_bytes > _STAGING_MAX_BYTES
+        ):
+            chunks.append("[" + ",".join(records) + "]")
+            records = []
+            size = 2
+        size += record_bytes + bool(records)
+        records.append(encoded)
+    if records:
+        chunks.append("[" + ",".join(records) + "]")
+    return tuple(chunks)
 
 
 class PostgresCollectedPolicies:
@@ -57,7 +77,12 @@ class PostgresCollectedPolicies:
     def save(self, batch: CollectedPolicyBatch) -> CollectionImportResult:
         try:
             fingerprint = batch.fingerprint()
-            incoming_json = _incoming_records_json(batch)
+            incoming_chunks = _incoming_record_chunks(batch)
+            incoming_id_chunks = tuple(
+                list(ids) for ids in batched(
+                    (record.external_id for record in batch.records), _STAGING_MAX_RECORDS
+                )
+            )
             with psycopg.connect(
                 self._database_url,
                 connect_timeout=2,
@@ -125,24 +150,30 @@ class PostgresCollectedPolicies:
                     ) ON COMMIT DROP
                     """
                 )
-                connection.execute(
-                    """
-                    INSERT INTO collected_policy_incoming
-                        (source, external_id, material_sha256, snapshot_ref,
-                         fetched_at, fields, payload)
-                    SELECT record.source_name, record.external_id,
-                           record.record_sha256, record.snapshot_ref,
-                           record.fetched_at, record.fields, to_jsonb(record)
-                    FROM jsonb_to_recordset(%s::jsonb) AS record(
-                        source_name text,
-                        external_id text,
-                        record_sha256 text,
-                        snapshot_ref text,
-                        fetched_at timestamptz,
-                        fields jsonb
+                for incoming_json in incoming_chunks:
+                    connection.execute(
+                        """
+                        INSERT INTO collected_policy_incoming
+                            (source, external_id, material_sha256, snapshot_ref,
+                             fetched_at, fields, payload)
+                        SELECT record.source_name, record.external_id,
+                               record.record_sha256, record.snapshot_ref,
+                               record.fetched_at, record.fields, to_jsonb(record)
+                        FROM jsonb_to_recordset(%s::jsonb) AS record(
+                            source_name text,
+                            external_id text,
+                            record_sha256 text,
+                            snapshot_ref text,
+                            fetched_at timestamptz,
+                            fields jsonb
+                        )
+                        """,
+                        (incoming_json,),
                     )
-                    """,
-                    (incoming_json,),
+                # Autovacuum cannot analyze temporary tables. Without statistics,
+                # the event join can probe every input row for each ID chunk.
+                connection.execute(
+                    "ANALYZE collected_policy_incoming (source, external_id, material_sha256)"
                 )
 
                 connection.execute(
@@ -183,6 +214,8 @@ class PostgresCollectedPolicies:
                     """,
                     (batch.source_name,),
                 )
+                connection.execute("ANALYZE collected_policy_incoming_kind (external_id, kind)")
+                connection.execute("ANALYZE collected_policy_missing (source, external_id)")
 
                 counts = connection.execute(
                     """
@@ -195,6 +228,23 @@ class PostgresCollectedPolicies:
                 ).fetchone()
                 new_count, changed_count, unchanged_count, missing_count = (
                     int(value) for value in counts
+                )
+                missing_rows = connection.execute(
+                    "SELECT external_id FROM collected_policy_missing ORDER BY external_id"
+                ).fetchall()
+                missing_id_chunks = tuple(
+                    [row[0] for row in rows]
+                    for rows in batched(missing_rows, _STAGING_MAX_RECORDS)
+                )
+                changed_rows = connection.execute(
+                    """
+                    SELECT external_id FROM collected_policy_incoming_kind
+                    WHERE kind IN ('new', 'changed') ORDER BY external_id
+                    """
+                ).fetchall() if new_count or changed_count else ()
+                changed_id_chunks = tuple(
+                    [row[0] for row in rows]
+                    for rows in batched(changed_rows, _STAGING_MAX_RECORDS)
                 )
 
                 connection.execute(
@@ -218,65 +268,80 @@ class PostgresCollectedPolicies:
                 )
 
                 # Unchanged material still refreshes source metadata and raw fields.
-                connection.execute(
-                    """
-                    INSERT INTO public.collected_policies AS policy
-                        (source, external_id, material_sha256, snapshot_ref,
-                         fetched_at, fields, last_run_id, missing_detected_at)
-                    SELECT source, external_id, material_sha256, snapshot_ref,
-                           fetched_at, fields, %s, NULL
-                    FROM collected_policy_incoming
-                    ON CONFLICT (source, external_id) DO UPDATE SET
-                        material_sha256 = EXCLUDED.material_sha256,
-                        snapshot_ref = EXCLUDED.snapshot_ref,
-                        fetched_at = EXCLUDED.fetched_at,
-                        fields = EXCLUDED.fields,
-                        last_run_id = EXCLUDED.last_run_id,
-                        missing_detected_at = NULL
-                    """,
-                    (batch.run_id,),
-                )
+                for external_ids in incoming_id_chunks:
+                    connection.execute(
+                        """
+                        INSERT INTO public.collected_policies AS policy
+                            (source, external_id, material_sha256, snapshot_ref,
+                             fetched_at, fields, last_run_id, missing_detected_at)
+                        SELECT source, external_id, material_sha256, snapshot_ref,
+                               fetched_at, fields, %s, NULL
+                        FROM collected_policy_incoming
+                        WHERE external_id = ANY(%s)
+                        ON CONFLICT (source, external_id) DO UPDATE SET
+                            material_sha256 = EXCLUDED.material_sha256,
+                            snapshot_ref = EXCLUDED.snapshot_ref,
+                            fetched_at = EXCLUDED.fetched_at,
+                            fields = EXCLUDED.fields,
+                            last_run_id = EXCLUDED.last_run_id,
+                            missing_detected_at = NULL
+                        """,
+                        (batch.run_id, external_ids),
+                    )
 
-                connection.execute(
-                    """
-                    UPDATE public.collected_policies AS policy
-                    SET missing_detected_at = %s
-                    FROM collected_policy_missing AS missing
-                    WHERE policy.source = missing.source
-                      AND policy.external_id = missing.external_id
-                      AND policy.missing_detected_at IS NULL
-                    """,
-                    (batch.completed_at,),
-                )
+                for external_ids in missing_id_chunks:
+                    connection.execute(
+                        """
+                        UPDATE public.collected_policies AS policy
+                        SET missing_detected_at = %s
+                        FROM collected_policy_missing AS missing
+                        WHERE policy.source = missing.source
+                          AND policy.external_id = missing.external_id
+                          AND policy.missing_detected_at IS NULL
+                          AND missing.external_id = ANY(%s)
+                        """,
+                        (batch.completed_at, external_ids),
+                    )
 
-                connection.execute(
-                    """
-                    INSERT INTO public.collected_policy_changes
-                        (source, run_id, external_id, kind, previous_sha256,
-                         current_sha256, record_payload)
-                    SELECT incoming.source, %s, incoming.external_id, kind.kind,
-                           CASE WHEN kind.kind = 'changed'
-                                THEN kind.previous_sha256 ELSE NULL END,
-                           incoming.material_sha256, incoming.payload
-                    FROM collected_policy_incoming_kind AS kind
-                    JOIN collected_policy_incoming AS incoming
-                      ON incoming.external_id = kind.external_id
-                    WHERE kind.kind IN ('new', 'changed')
-                    UNION ALL
-                    SELECT missing.source, %s, missing.external_id, 'missing',
-                           missing.material_sha256, NULL,
-                           jsonb_build_object(
-                               'source_name', missing.source,
-                               'external_id', missing.external_id,
-                               'record_sha256', missing.material_sha256,
-                               'snapshot_ref', missing.snapshot_ref,
-                               'fetched_at', missing.fetched_at,
-                               'fields', missing.fields
-                           )
-                    FROM collected_policy_missing AS missing
-                    """,
-                    (batch.run_id, batch.run_id),
-                )
+                for external_ids in changed_id_chunks:
+                    connection.execute(
+                        """
+                        INSERT INTO public.collected_policy_changes
+                            (source, run_id, external_id, kind, previous_sha256,
+                             current_sha256, record_payload)
+                        SELECT incoming.source, %s, incoming.external_id, kind.kind,
+                               CASE WHEN kind.kind = 'changed'
+                                    THEN kind.previous_sha256 ELSE NULL END,
+                               incoming.material_sha256, incoming.payload
+                        FROM collected_policy_incoming_kind AS kind
+                        JOIN collected_policy_incoming AS incoming
+                          ON incoming.external_id = kind.external_id
+                        WHERE kind.kind IN ('new', 'changed')
+                          AND incoming.external_id = ANY(%s)
+                        """,
+                        (batch.run_id, external_ids),
+                    )
+                for external_ids in missing_id_chunks:
+                    connection.execute(
+                        """
+                        INSERT INTO public.collected_policy_changes
+                            (source, run_id, external_id, kind, previous_sha256,
+                             current_sha256, record_payload)
+                        SELECT missing.source, %s, missing.external_id, 'missing',
+                               missing.material_sha256, NULL,
+                               jsonb_build_object(
+                                   'source_name', missing.source,
+                                   'external_id', missing.external_id,
+                                   'record_sha256', missing.material_sha256,
+                                   'snapshot_ref', missing.snapshot_ref,
+                                   'fetched_at', missing.fetched_at,
+                                   'fields', missing.fields
+                               )
+                        FROM collected_policy_missing AS missing
+                        WHERE missing.external_id = ANY(%s)
+                        """,
+                        (batch.run_id, external_ids),
+                    )
 
             return CollectionImportResult(
                 new_count,

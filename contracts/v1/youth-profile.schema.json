@@ -163,6 +163,38 @@
             }
           }
         },
+        "source_cash": {
+          "type": ["array", "null"],
+          "description": "게시된 source_cash 정책별 신청 사실. 정책 ID 하나에 사실 객체 하나만 사용하며 다른 정책의 사실을 재사용하지 않는다. 누락/null은 미확인이며 서버에 저장하거나 외부 서비스로 전달하지 않는다.",
+          "maxItems": 100,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["policy_id"],
+            "properties": {
+              "policy_id": {
+                "type": "string",
+                "pattern": "^youth:[A-Za-z0-9:_-]{1,100}$"
+              },
+              "payment_month": {
+                "type": ["string", "null"],
+                "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"
+              },
+              "eligible_cost_won": {
+                "$ref": "#/$defs/local_nullable_won"
+              },
+              "prior_support_won": {
+                "$ref": "#/$defs/local_nullable_won"
+              },
+              "other_reimbursement_won": {
+                "$ref": "#/$defs/local_nullable_won"
+              },
+              "other_exclusions_clear": {
+                "type": ["boolean", "null"]
+              }
+            }
+          }
+        },
         "program_periods": {
           "type": ["array", "null"],
           "maxItems": 50,

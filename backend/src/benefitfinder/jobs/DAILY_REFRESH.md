@@ -27,27 +27,62 @@ uv run --locked --env-file data/local/f08.env python -m benefitfinder.jobs \
 ## 온통청년 수집 실패 로그
 
 `refresh-youthcenter`와 `refresh-data`는 온통청년 수집 시도에서 실패를 확인할 때마다
-`stderr`에 `온통청년 수집 오류: ` 접두어와 JSON 한 줄을 출력한다. JSON은 `attempt`,
-`page`, `error_code`, `http_status`, `api_code`만 포함한다.
+`stderr`에 `온통청년 수집 오류: ` 접두어와 JSON 한 줄을 출력한다. JSON에는 `attempt`,
+`page`, `error_code`, `http_status`, `api_code`와 아래 응답 진단 필드가 포함된다.
 확인하지 못한 값은 `null`이고, 수집기가 분류하지 못한 `error_code`는
 `unknown`으로 제한한다.
 
-`api_code`는 원천 `resultCode`에서 `e`와 ASCII 숫자 3자리, 또는
-ASCII 숫자 3자리인 값만 허용하며 다른 값은 `null`이다. 응답 본문·URL·예외 원문·
-API 키·`snapshot_ref`·정책 ID는 로그와 상태 파일에서 제외한다. 다음은 실제 장애
-기록이 아닌 가상 예시다.
+`api_code`는 JSON의 `errorCode`를 먼저 확인하고, 없거나 허용 형식이 아니면 설정된
+`resultCode` 경로를 확인한다. `e`와 ASCII 숫자 3자리 또는 ASCII 숫자 3자리만
+허용하며 다른 값은 `null`이다. 2026-11-17 가상 무효 키를 쓴 공개 대조 요청에서
+HTTP 403과 `errorCode: e001`을 확인했다. 정상 응답의 `resultCode`만 읽던 이전
+진단은 실제 오류 응답의 코드를 놓칠 수 있었다.
+
+| 필드 | 내용 |
+| --- | --- |
+| `response_format` | 본문으로 판별한 `json`, `html`, `xml`, `text`, `empty`, `binary` |
+| `content_type` | JSON·HTML·XML·일반 텍스트·바이너리의 허용 MIME 값만 기록. 매개변수 제거, 그 외 `other`, 미제공 `null` |
+| `response_bytes` | 본문 바이트 수 |
+| `response_sha256` | 동일 실패 응답 비교용 SHA-256 |
+| `error_identifier` | JSON의 짧은 코드 또는 HTML 제목·`id="error-code"` 요소의 텍스트 전체가 짧은 코드인 경우만 기록 |
+| `error_identifier_source` | `errorCode`, `resultCode`, `html` 중 식별자를 읽은 위치 |
+
+진단 파싱은 최대 64 KiB 본문으로 제한한다. 이보다 큰 본문의 JSON 코드는 읽지 않고
+해시·크기를 남긴다. HTML의 스크립트·링크·자유 문장에서 코드를 검색하지 않으며
+서로 다른 식별자가 발견되면 `null`이다. XML에서는 오류 코드를 추출하지 않는다.
+전송 실패나 인증정보 포함 응답 차단 시에는 응답 진단을 모두 `null`로 둔다.
+`errorMsg` 등 응답 원문·URL·예외 원문·API 키·`snapshot_ref`·정책 ID는 로그와
+상태 파일에서 제외한다. 다음은 실제 장애 기록이 아닌 가상 예시다.
 
 ```text
-온통청년 수집 오류: {"attempt": 2, "page": 4, "error_code": "http_status", "http_status": 429, "api_code": null}
+온통청년 수집 오류: {"attempt": 1, "page": 4, "error_code": "http_status", "http_status": 400, "api_code": "e003", "response_format": "json", "content_type": "application/json", "response_bytes": 21, "response_sha256": "가상 예시: 실제 로그에는 64자리 해시", "error_identifier": "e003", "error_identifier_source": "errorCode"}
 ```
 
 재시도로 나중에 성공해도 앞선 시도의 실패 로그는 유지한다. 단독·통합 실행 모두
-`data/processed/f08-youthcenter/status.json`의 `last_attempt.errors`에 같은 다섯
+`data/processed/f08-youthcenter/status.json`의 `last_attempt.errors`에 같은
 필드의 시도별 실패 목록을 남기며, 기존 `last_attempt.error_codes`와 재시도·성공본
 보존 동작은 유지한다. Discord 알림에는 이 JSON을 넣지 않는다.
 
-이 진단 로그 변경은 아직 운영에 배포하지 않았다. 실제 API·DB 장애 원인을 확인한
-기록이 아니며 상태 필드만으로 원인을 단정하지 않는다.
+기본 다섯 필드의 진단은 2026-11-17 Render Cron에 배포하여 10:55 KST 실행의
+12페이지 HTTP 400을 확인했다. 당시 `api_code`는 `null`이어서 세부 원인은
+확정하지 못했다. 이번 응답 형식·식별자 보완의 배포 및 실제 실행 확인은 별도로
+기록한다. HTTP 400 또는 `e003`만으로 호출 제한·키 만료·제공기관 장애를 단정하지 않는다.
+
+2026-11-17 11:05 KST의 추가 Render 실행은 API 수집 4,027건과 생성본 로딩까지
+성공하고 DB 적재에서 실패했다. 같은 실행의 PostgreSQL 로그 02:07:08 UTC에
+`canceling statement due to statement timeout`과
+`INSERT INTO collected_policy_incoming`을 확인했다. 적재 어댑터의
+`statement_timeout=8000`에 걸린 별도 장애이며 앞선 HTTP 400의 원인을 설명하지
+않는다. 응답 진단 보완 자체는 DB 제한 시간이나 적재 SQL을 바꾸지 않았다.
+후속 적재 수정은 [수집 성공본의 PostgreSQL 인계](../infrastructure/database/COLLECTED_POLICIES.md#2026-11-17-적재-시간-초과-조사)의 제한 크기 분할과 검증을 따른다.
+
+11:09 KST 운영 실행은 31페이지에서 HTTP 403으로 실패했고, 당시 임시 운영 명령이
+남긴 마지막 응답은 `errorCode: e001`, `errorMsg: invalid api key.`였다. 이는
+가상 무효 키 대조 요청과 별개인 운영 실패다. 같은 수집기 인스턴스가 1~30페이지에
+사용한 키를 31페이지에도 사용한다. 이어진 11:14 실행은 4,027건 수집과 DB 적재를
+성공했다. 따라서 고정적인 키 오입력만으로는 관찰 결과를 설명할 수 없다. 제공기관의
+인증 처리·승인 상태·호출 제한 중 무엇인지 이 기록만으로 확정하지 않으며,
+`e001`을 호출 제한으로 단정하거나 인증 오류를 자동 반복 호출하지 않는다.
 
 ## 실행 기록
 

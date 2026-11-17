@@ -18,6 +18,12 @@ from time import sleep
 from uuid import uuid4
 
 from benefitfinder.ingestion.collect import CollectionError, CollectionResult
+from benefitfinder.ingestion.response_diagnostics import (
+    CONTENT_TYPES,
+    IDENTIFIER_SOURCES,
+    RESPONSE_FORMATS,
+    bounded_code,
+)
 from benefitfinder.jobs.refresh_lock import acquire_refresh_lock
 
 STATUS_FILE = "status.json"
@@ -88,7 +94,6 @@ def refresh_notification(root: Path, code: int, started_at: datetime) -> str:
 
 def _failure_diagnostic(error: CollectionError, attempt: int) -> dict[str, object]:
     """Allowlist metadata before writing to stderr or the local status file."""
-    api_code = error.api_code
     return {
         "attempt": attempt,
         "page": error.page if type(error.page) is int and error.page > 0 else None,
@@ -97,9 +102,27 @@ def _failure_diagnostic(error: CollectionError, attempt: int) -> dict[str, objec
             error.http_status
             if type(error.http_status) is int and 100 <= error.http_status <= 599 else None
         ),
-        "api_code": (
-            api_code if isinstance(api_code, str)
-            and re.fullmatch(r"(?:e[0-9]{3}|[0-9]{3})", api_code) else None
+        "api_code": bounded_code(error.api_code),
+        "response_format": (
+            error.response_format if isinstance(error.response_format, str)
+            and error.response_format in RESPONSE_FORMATS else None
+        ),
+        "content_type": (
+            error.content_type if isinstance(error.content_type, str)
+            and error.content_type in CONTENT_TYPES else None
+        ),
+        "response_bytes": (
+            error.response_bytes if type(error.response_bytes) is int
+            and 0 <= error.response_bytes < 2**63 else None
+        ),
+        "response_sha256": (
+            error.response_sha256 if isinstance(error.response_sha256, str)
+            and re.fullmatch(r"[0-9a-f]{64}", error.response_sha256) else None
+        ),
+        "error_identifier": bounded_code(error.error_identifier),
+        "error_identifier_source": (
+            error.error_identifier_source if isinstance(error.error_identifier_source, str)
+            and error.error_identifier_source in IDENTIFIER_SOURCES else None
         ),
     }
 

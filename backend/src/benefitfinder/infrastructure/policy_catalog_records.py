@@ -19,6 +19,7 @@ from benefitfinder.application.published_policies import PublishedPolicy
 from benefitfinder.application.policy_explanations import SAFE_CONDITIONS
 
 from benefitfinder.infrastructure.rent_support_records import RentSupportRule
+from benefitfinder.infrastructure.source_cash_records import SourceCashRule
 
 MAX_WON = 2**53 - 1
 
@@ -187,9 +188,20 @@ SELECTION_FIELDS = {
 }
 
 
+ConditionKind = Literal[
+    "manual",
+    "age",
+    "income_max",
+    "selection",
+    "none_of",
+    "rent_support",
+    "source_cash",
+]
+
+
 class ExecutableCondition(Record):
     condition_id: str = Field(min_length=1)
-    kind: Literal["manual", "age", "income_max", "selection", "none_of", "rent_support"]
+    kind: ConditionKind
     minimum: int | None = Field(default=None, ge=0)
     maximum: int | None = Field(default=None, ge=0, le=MAX_WON)
     military_extension_years: int | None = Field(default=None, ge=0, le=3)
@@ -197,6 +209,9 @@ class ExecutableCondition(Record):
     field: str | None = None
     values: list[str] | None = None
     rent_support: RentSupportRule | None = Field(default=None, exclude_if=lambda value: value is None)
+    source_cash: SourceCashRule | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
     @model_validator(mode="after")
     def validate_operation(self):
@@ -208,6 +223,7 @@ class ExecutableCondition(Record):
         expected = {
             "manual": set(),
             "rent_support": {"rent_support"},
+            "source_cash": {"source_cash"},
             "age": {"minimum", "maximum", "military_extension_years"},
             "income_max": {"maximum", "inclusive"},
             "selection": {"field", "values"},
@@ -302,6 +318,11 @@ class CatalogRecord(Record):
             raise ValueError("duplicate_category")
         if len({c.policy_id for c in benefit.conflicts}) != len(benefit.conflicts):
             raise ValueError("duplicate_conflict")
+        source_cash_rules = [
+            r.source_cash for r in self.conditions if r.kind == "source_cash"
+        ]
+        if any(rule.policy_id != benefit.id for rule in source_cash_rules):
+            raise ValueError("source_cash_policy_id_mismatch")
         evidence = [
             item for condition in benefit.eligibility_conditions for item in condition.evidence
         ]
@@ -322,11 +343,12 @@ class CatalogRecord(Record):
             amount is None or amount.type != "maturity" or amount.pay_timing != "at_maturity"
         ):
             raise ValueError("accruals_require_maturity_amount")
+        rent_rules = [r.rent_support for r in self.conditions if r.kind == "rent_support"]
         if benefit.reviewed:
             amount = benefit.benefit_amount
             if (
                 self.unresolved_combination_rules
-                or (not self.payments and not any(r.kind == "rent_support" for r in self.conditions))
+                or (not self.payments and not rent_rules and not source_cash_rules)
                 or not self.payment_evidence
                 or amount is None
                 or amount.amount_status != "verified"
@@ -338,7 +360,30 @@ class CatalogRecord(Record):
                 for rule in self.conditions
             ):
                 raise ValueError("lifetime_policy_requires_received_rule")
-            rent_rules = [r.rent_support for r in self.conditions if r.kind == "rent_support"]
+            if source_cash_rules:
+                if len(source_cash_rules) != 1:
+                    raise ValueError("one_source_cash_rule_required")
+                if rent_rules:
+                    raise ValueError("source_cash_rent_dynamic_conflict")
+                if self.payments is not None:
+                    raise ValueError("source_cash_requires_no_stored_payments")
+                if self.maturity_accruals is not None or self.maturity_accrual_evidence is not None:
+                    raise ValueError("source_cash_requires_no_maturity_accruals")
+                rule = source_cash_rules[0]
+                if (
+                    amount.type != "lump_sum"
+                    or amount.pay_timing != "once"
+                    or amount.period_months != 1
+                    or amount.amount_won != rule.amount_won
+                    or amount.max_total_won != rule.amount_won
+                ):
+                    raise ValueError("source_cash_requires_dynamic_amount_metadata")
+                if rule.mode == "expense" and (
+                    amount.amount_text is None
+                    or not any(token in amount.amount_text for token in ("최대", "한도", "상한"))
+                ):
+                    raise ValueError("expense_source_cash_requires_cap_label")
+                return self
             if rent_rules:
                 if len(rent_rules) != 1:
                     raise ValueError("duplicate_rent_support_rule")

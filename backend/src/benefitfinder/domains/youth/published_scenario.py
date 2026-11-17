@@ -95,6 +95,13 @@ def change_published_profile(
             rent.monthly_rent_won = None
             rent.housing_benefit_rent_won = None
         note += ' 가구 소득·재산과 주거급여 재심사가 필요한 월세지원은 확인 필요로 표시해요.'
+    facts = getattr(getattr(after.domain_data, 'cash_facts', None), 'source_cash', None)
+    if facts and scenario in {'income_up', 'employed', 'independent', 'age_plus_one'}:
+        for claim in facts:
+            claim.other_exclusions_clear = None
+            if scenario == 'independent':
+                claim.eligible_cost_won = None
+        note += ' 상황이 바뀐 단건 지원금은 추가 자격과 적격 지출을 다시 확인해요.'
     return before, after, income, note
 
 

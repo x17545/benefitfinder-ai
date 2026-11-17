@@ -49,12 +49,15 @@ class RecordingHandler(BaseHTTPRequestHandler):
     seen: list[tuple[str, dict[str, list[str]], str | None]] = []
     status = 200
     failures_before_success = 0
+    statuses: list[int] = []
 
     def do_GET(self) -> None:  # noqa: N802 - http.server 규약
         query = parse_qs(urlparse(self.path).query)
         RecordingHandler.seen.append((self.path, query, self.headers.get("Accept")))
         status = self.status
-        if RecordingHandler.failures_before_success > 0:
+        if RecordingHandler.statuses:
+            status = RecordingHandler.statuses.pop(0)
+        elif RecordingHandler.failures_before_success > 0:
             RecordingHandler.failures_before_success -= 1
             status = 500
         body = b'{"resultCode": 200}' if status == 200 else b"busy"
@@ -73,6 +76,7 @@ class FetcherTests(unittest.TestCase):
         RecordingHandler.seen = []
         RecordingHandler.status = 200
         RecordingHandler.failures_before_success = 0
+        RecordingHandler.statuses = []
         self.server = HTTPServer(("127.0.0.1", 0), RecordingHandler)
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
         self.url = f"http://127.0.0.1:{self.server.server_port}/getPlcy"
@@ -146,6 +150,51 @@ class FetcherTests(unittest.TestCase):
         fetcher.fetch(SourceRequest(self.url, {}))
         self.assertEqual(len(waits), 1)
         self.assertAlmostEqual(waits[0], 0.9)
+
+    def test_default_interval_is_two_seconds(self) -> None:
+        clock = iter([10.0, 10.1, 10.2])
+        waits: list[float] = []
+        fetcher = YouthcenterHttpFetcher(
+            FAKE_KEY, require_https=False, sleep=waits.append, monotonic=lambda: next(clock),
+        )
+        fetcher.fetch(SourceRequest(self.url, {}))
+        fetcher.fetch(SourceRequest(self.url, {}))
+        self.assertEqual(len(waits), 1)
+        self.assertAlmostEqual(waits[0], 1.9)
+
+    def test_later_page_rejection_waits_and_retries_same_page(self) -> None:
+        for status in (400, 403):
+            with self.subTest(status=status):
+                RecordingHandler.seen = []
+                RecordingHandler.statuses = [status, 200]
+                waits: list[float] = []
+                response = self.fetcher(sleep=waits.append).fetch(
+                    SourceRequest(self.url, {"pageNum": "12"})
+                )
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(waits, [45.0])
+                self.assertEqual([query["pageNum"] for _, query, _ in RecordingHandler.seen],
+                                 [["12"], ["12"]])
+
+    def test_later_page_rejection_retries_at_most_twice(self) -> None:
+        RecordingHandler.status = 403
+        waits: list[float] = []
+        response = self.fetcher(sleep=waits.append).fetch(
+            SourceRequest(self.url, {"pageNum": "31"})
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(waits, [45.0, 45.0])
+        self.assertEqual(len(RecordingHandler.seen), 3)
+
+    def test_first_page_rejection_is_returned_without_waiting(self) -> None:
+        RecordingHandler.status = 403
+        waits: list[float] = []
+        response = self.fetcher(sleep=waits.append).fetch(
+            SourceRequest(self.url, {"pageNum": "1"})
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(waits, [])
+        self.assertEqual(len(RecordingHandler.seen), 1)
 
 
 def record(external_id: str, digest: str, name: str = "가상 정책") -> CollectedRecord:
