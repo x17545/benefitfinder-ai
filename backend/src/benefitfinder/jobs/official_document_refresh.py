@@ -47,9 +47,12 @@ def refresh_official_documents(data_dir: Path, targets: tuple[OfficialDocumentTa
         if previous is not None:
             shutil.copyfile(previous/SOURCE_NAME/'records.json',record_path)
 
-        def save_manifest(value: dict[str,object]) -> None:
+        def save_manifest(value: dict[str, object]) -> None:
             path = staging/'observations.json'
-            path.write_text(json.dumps(value,ensure_ascii=False,indent=2)+'\n')
+            path.write_text(
+                json.dumps(value, ensure_ascii=False, indent=2) + '\n',
+                encoding='utf-8',
+            )
             path.chmod(0o600)
 
         result = collect_official_documents(targets,fetcher,snapshots,versions_factory(staging),

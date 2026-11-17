@@ -60,7 +60,11 @@ class OfficialDocumentsTest(unittest.TestCase):
         self.assertEqual(record.fields['text_status'],'ready')
         self.assertEqual((self.root/'raw/f08-official-documents'/record.snapshot_ref).read_bytes(),HTML)
         self.assertEqual(self.load().fingerprint(),batch.fingerprint())
-        self.assertEqual((self.root/'raw/f08-official-documents'/record.snapshot_ref).stat().st_mode & 0o777,0o600)
+        if os.name != "nt":
+            self.assertEqual(
+                 (self.root / 'raw/f08-official-documents' / record.snapshot_ref).stat().st_mode & 0o777,
+                 0o600,
+            )
 
     def test_unchanged_bytes_keep_material_hash_changed_body_changes_hash(self) -> None:
         self.refresh()
@@ -182,7 +186,7 @@ class OfficialDocumentsTest(unittest.TestCase):
         self.assertEqual(run_daily_refresh(self.root/'daily',refresh_policies=lambda:0,
             refresh_rate=lambda:0,refresh_documents=documents,prepare_analysis=prepare,
             clock=lambda:AT,notify=sent.append),1)
-        self.assertIn('공식 첨부 문서: 실패',sent[0])
+        self.assertIn('공식 첨부 문서: ❌ 실패',sent[0])
 
     def test_cli_uses_only_configured_plan_without_api_or_model_credentials(self) -> None:
         from benefitfinder.jobs.__main__ import main
