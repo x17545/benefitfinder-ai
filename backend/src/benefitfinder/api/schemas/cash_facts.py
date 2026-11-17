@@ -10,6 +10,7 @@ Won = Annotated[int, Field(ge=0, le=2**53 - 1, strict=True)]
 Month = Annotated[str, Field(pattern=r"^[0-9]{4}-(0[1-9]|1[0-2])$")]
 IncomeRatioBps = Annotated[int, Field(ge=0, le=1_000_000, strict=True)]
 ProgramId = Annotated[str, Field(pattern=r"^[a-z][a-z0-9_:-]{0,79}$")]
+SourceCashPolicyId = Annotated[str, Field(pattern=r"^youth:[A-Za-z0-9:_-]{1,100}$")]
 
 
 def parse_local_date(value) -> date:
@@ -115,6 +116,17 @@ class RentSupportFacts(Facts):
     )
 
 
+class SourceCashFacts(Facts):
+    """Applicant facts for one published source-cash policy."""
+
+    policy_id: SourceCashPolicyId
+    payment_month: Month | None = None
+    eligible_cost_won: Won | None = None
+    prior_support_won: Won | None = None
+    other_reimbursement_won: Won | None = None
+    other_exclusions_clear: StrictBool | None = None
+
+
 class CashFacts(Facts):
     """Optional assessment facts; missing or null values remain unknown."""
 
@@ -122,4 +134,12 @@ class CashFacts(Facts):
     exam: ExamFacts | None = None
     rent: RentFacts | None = None
     rent_support: RentSupportFacts | None = None
+    source_cash: Annotated[list[SourceCashFacts], Field(max_length=100)] | None = None
     program_periods: Annotated[list[ProgramPeriod], Field(max_length=50)] | None = None
+
+    @model_validator(mode="after")
+    def validate_source_cash_policy_ids(self):
+        policy_ids = [facts.policy_id for facts in self.source_cash or ()]
+        if len(policy_ids) != len(set(policy_ids)):
+            raise ValueError("duplicate_source_cash_policy_id")
+        return self

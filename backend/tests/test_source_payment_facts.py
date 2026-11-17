@@ -40,6 +40,184 @@ class SourcePaymentFactsTest(unittest.TestCase):
         self.assertIsNone(facts.lifetime_once)
         self.assertEqual(result.reasons, facts.reasons)
 
+    def test_separated_monthly_amount_labels_keep_monthly_frequency(self):
+        cases = {
+            "가상 지원금은 월 지원액 5만원씩 3개월간 지급. 신청일 기준 익월부터 지급": (
+                50_000,
+                3,
+            ),
+            "가상 지원금은 월 지원금액 50천원씩 2개월간 지급. 신청일 기준 익월부터 지급": (
+                50_000,
+                2,
+            ),
+            "가상 지원금은 매월 금액 5만 5천원씩 2개월간 지급. 신청일 기준 익월부터 지급": (
+                55_000,
+                2,
+            ),
+            "가상 지원금은 월 단위로 5만원씩 3개월간 지급. 신청일 기준 익월부터 지급": (
+                50_000,
+                3,
+            ),
+        }
+        for text, (amount, period) in cases.items():
+            with self.subTest(text=text):
+                _, facts = self.assert_payment(text)
+                self.assertEqual(facts.amount_won, amount)
+                self.assertEqual(facts.amount_type, "monthly")
+                self.assertEqual(facts.period_months, period)
+                self.assertEqual(
+                    facts.payments,
+                    tuple((month, amount) for month in range(1, period + 1)),
+                )
+
+    def test_exact_won_units_are_parsed_but_denominations_are_not_amounts(self):
+        cases = {
+            "가상 면접수당 50천원 지원. 접수일 기준 다음달 20일 지급": 50_000,
+            "가상 면접수당 5만 5천원 지원. 접수일 기준 다음달 20일 지급": 55_000,
+            "가상 면접수당 50,000원 지원. 접수일 기준 다음달 20일 지급": 50_000,
+        }
+        for text, amount in cases.items():
+            with self.subTest(text=text):
+                _, facts = self.assert_payment(text)
+                self.assertEqual(facts.amount_won, amount)
+
+        for text in (
+            "가상 지원금 월 1천원 단위로 지급. 신청일 기준 익월부터 지급",
+            "가상 지원금 5만원 단위 지급. 접수일 기준 다음달 지급",
+        ):
+            with self.subTest(text=text):
+                result = parse_source_payment(text)
+                self.assertIsNone(result.amountfact)
+                self.assertIn("cash_amount_not_fixed", result.reasons)
+
+    def test_explicit_payment_count_can_drive_monthly_schedule(self):
+        for text in (
+            "가상 지원금 매월 금액 50천원씩 총 12회 지급. 신청일 기준 익월부터 지급",
+            "가상 지원금 월 5만원씩 12회분 지급. 신청일 기준 익월부터 지급",
+        ):
+            with self.subTest(text=text):
+                _, facts = self.assert_payment(text)
+                self.assertEqual(facts.period_months, 12)
+                self.assertEqual(
+                    facts.payments, tuple((month, 50_000) for month in range(1, 13))
+                )
+
+    def test_conflicting_periods_keep_only_one_confirmed_month(self):
+        _, facts = self.assert_payment(
+            "가상 지원금 월 5만원씩 6개월간 지급, 총 12회. "
+            "신청일 기준 익월부터 지급"
+        )
+
+        self.assertEqual(facts.period_months, 1)
+        self.assertEqual(facts.payments, ((1, 50_000),))
+        self.assertIn("payment_period_ambiguous", facts.reasons)
+
+    def test_annual_limit_is_not_reused_as_a_monthly_payment_count(self):
+        _, facts = self.assert_payment(
+            "가상 지원금 월 5만원, 연 최대 12회. 신청일 기준 익월부터 지급"
+        )
+
+        self.assertEqual(facts.period_months, 1)
+        self.assertEqual(facts.payments, ((1, 50_000),))
+        self.assertIn("annual_limit_not_multiplied", facts.reasons)
+
+    def test_total_amount_is_not_selected_as_the_monthly_component(self):
+        texts = (
+            "가상 지원금 월 5만원씩 1년간 지원, 총 60만원. "
+            "신청일 기준 익월부터 지급",
+            "가상 지원금 총 지원 금액 60만원, 월 5만원씩 1년간 지급. "
+            "신청일 기준 익월부터 지급",
+        )
+        for text in texts:
+            with self.subTest(text=text):
+                _, facts = self.assert_payment(text)
+                self.assertEqual(facts.amount_won, 50_000)
+                self.assertEqual(facts.period_months, 12)
+
+        result = parse_source_payment("가상 지원금 총 60만원")
+        self.assertIsNone(result.amountfact)
+        self.assertIn("cash_amount_not_fixed", result.reasons)
+
+    def test_explicit_request_month_wording_confirms_next_month(self):
+        for text in (
+            "가상 면접수당 5만원 지원. 지급은 신청 제출월 익월 지급됩니다. "
+            "(예: 8월 신청 -> 9월 중순 지급)",
+            "가상 면접수당 5만원 지원. 지급은 신청한 달의 다음 달 중순에 지급",
+            "가상 면접수당 5만원 지원. 신청서 제출월의 다음 달에 지급",
+        ):
+            with self.subTest(text=text):
+                _, facts = self.assert_payment(text)
+                self.assertEqual(facts.payments, ((1, 50_000),))
+                self.assertEqual(facts.pay_timing, "once")
+
+    def test_monthly_application_deadline_arrow_confirms_next_month(self):
+        for text, period in (
+            (
+                "가상 지원금은 월 5만원씩 6개월간 지급. "
+                "매월 말일까지 접수 → 다음달 20일 이내 지급",
+                6,
+            ),
+            (
+                "가상 지원금은 월 5만원씩 3개월간 지급. "
+                "지급은 신청한 달의 다음 달 20일 이내에 지급됩니다",
+                3,
+            ),
+            (
+                "가상 지원금은 월 5만원씩 3개월간 지급. "
+                "지급은 신청 제출월 익월에 지급됩니다",
+                3,
+            ),
+        ):
+            with self.subTest(text=text):
+                _, facts = self.assert_payment(text)
+                self.assertEqual(facts.period_months, period)
+                self.assertEqual(
+                    facts.payments,
+                    tuple((month, 50_000) for month in range(1, period + 1)),
+                )
+                self.assertIn("monthly_payment_start_confirmed", facts.reasons)
+
+    def test_request_document_collection_confirms_next_month_payment(self):
+        _, facts = self.assert_payment(
+            "가상 지원금 20만원은 신청서 등 취합 후 다음 달 초에 입금 처리"
+        )
+        self.assertEqual(facts.payments, ((1, 200_000),))
+        self.assertEqual(facts.pay_timing, "once")
+
+        _, facts = self.assert_payment(
+            "가상 지원금은 월 20만원씩 3개월간 지급. "
+            "월 단위로 신청서 등 취합 후 다음 달 초에 입금 처리"
+        )
+        self.assertEqual(facts.period_months, 3)
+        self.assertEqual(facts.payments, tuple((month, 200_000) for month in range(1, 4)))
+        self.assertIn("monthly_payment_start_confirmed", facts.reasons)
+
+        result = parse_source_payment(
+            "가상 지원금 20만원은 내부 취합 후 다음 달 초에 입금 처리"
+        )
+        self.assertIsNone(result.amountfact)
+        self.assertIn("one_time_payment_timing_unknown", result.reasons)
+
+    def test_next_month_without_request_anchor_does_not_create_schedule(self):
+        _, facts = self.assert_payment(
+            "가상 지원금은 월 5만원씩 6개월간 지급. "
+            "매월 말일 마감 → 다음달 20일 이내 지급"
+        )
+
+        self.assertEqual(facts.payments, ())
+        self.assertIn("payment_start_unknown_or_unsupported", facts.reasons)
+
+    def test_semester_and_round_cadences_remain_unsupported(self):
+        for text in (
+            "가상 지원금 매학기 50만원씩 2회 지급. 신청일 기준 익월부터 지급",
+            "가상 지원금 학기당 50만원 지급. 신청일 기준 익월부터 지급",
+            "가상 지원금 차수별 50만원 지급. 신청일 기준 익월부터 지급",
+        ):
+            with self.subTest(text=text):
+                result = parse_source_payment(text)
+                self.assertIsNone(result.amountfact)
+                self.assertIn("payment_frequency_not_monthly_or_once", result.reasons)
+
     def test_maximum_period_keeps_only_one_fixed_month(self):
         text = "가상 월세 지원은 월 50만원, 최대 6개월 지급"
         _, facts = self.assert_payment(text)

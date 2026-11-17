@@ -133,6 +133,21 @@ export type CashFacts = {
     first_payment_month?: string | null;
   } | null;
   /**
+   * 게시된 source_cash 정책별 신청 사실. 정책 ID 하나에 사실 객체 하나만 사용하며 다른 정책의 사실을 재사용하지 않는다. 누락/null은 미확인이며 서버에 저장하거나 외부 서비스로 전달하지 않는다.
+   *
+   * @maxItems 100
+   */
+  source_cash?:
+    | {
+        policy_id: string;
+        payment_month?: string | null;
+        eligible_cost_won?: LocalNullableWon;
+        prior_support_won?: LocalNullableWon;
+        other_reimbursement_won?: LocalNullableWon;
+        other_exclusions_clear?: boolean | null;
+      }[]
+    | null;
+  /**
    * @maxItems 50
    */
   program_periods?:

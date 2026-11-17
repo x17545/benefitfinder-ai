@@ -87,6 +87,11 @@ _CAP_AFTER_RE = re.compile(
 _MAX_AMOUNT_AFTER_RE = re.compile(
     r"^\s*\(?\s*(?:최대|최장)\s*(?:지원액|지원금|금액|한도|상한)"
 )
+_TOTAL_AMOUNT_BEFORE_RE = re.compile(
+    r"(?:총계|총)\s*(?:액|지원\s*금액|지원\s*금|지원\s*액|지급\s*액|지원\s*비|금액)?"
+    r"(?:\s*[:：])?\s*$|합계(?:액)?\s*[:：]?\s*$"
+)
+_DENOMINATION_AFTER_RE = re.compile(r"^\s*(?:단위(?:로|씩|당)?|당\s*단위)")
 _RANGE_AFTER_RE = re.compile(r"^\s*[~∼～]\s*\d")
 _RANGE_BEFORE_RE = re.compile(r"\d\s*[~∼～]\s*$")
 
@@ -125,12 +130,20 @@ _SUPPORT_AFTER_RE = re.compile(
     r"지원(?:금|액|비)?|지급|지급액|보조|수당|장려금|인센티브|현금|계좌이체|입금"
 )
 _MONTHLY_RE = re.compile(r"매월|매달|월마다|월별|월\s*1\s*회|1\s*개월\s*(?:당|지급액)")
-_MONTHLY_PREFIX_RE = re.compile(r"(?<![가-힣])월\s*$")
+_MONTHLY_PREFIX_RE = re.compile(
+    r"(?<![가-힣])(?:매월|매달|월)\s*"
+    r"(?:(?:지원금액|지원금|지원액|지급액|지원비|지원내용|금액|수당|정액)\s*"
+    r"(?:은|는|이|가)?\s*)?"
+    r"(?:단위(?:로)?\s*)?[:：]?\s*$"
+)
 _ANNUAL_PREFIX_RE = re.compile(r"(?<![가-힣])(?:매년|연간|연)\s*$")
 _ANNUAL_ONE_RE = re.compile(r"(?<![가-힣])(?:매년|연간|연)\s*1\s*회\s*$")
 _ANNUAL_AFTER_RE = re.compile(r"^\s*(?:씩\s*)?(?:매년|연간|연\s*1\s*회)")
 _ANNUAL_LIMIT_RE = re.compile(r"(?:매년|연간|연)\s*(?:최대\s*)?\d+\s*회")
-_QUARTERLY_RE = re.compile(r"분기별|반기별|격월|두\s*달에\s*한\s*번")
+_ANNUAL_LIMIT_COUNT_BEFORE_RE = re.compile(r"(?:매년|연간|연)\s*(?:최대\s*)?$")
+_UNSUPPORTED_PERIODIC_RE = re.compile(
+    r"분기별|반기별|격월|두\s*달에\s*한\s*번|매학기|학기(?:당|별|마다)|차수(?:별|당|마다)"
+)
 
 _DURATION_RE = re.compile(
     r"(?P<prefix>최대|최장|최소|약)?\s*(?P<number>\d+)\s*"
@@ -163,10 +176,28 @@ _DAY_DELAY_RE = re.compile(
 )
 _LIFETIME_RE = re.compile(r"생애\s*(?:1\s*회|한\s*번)|평생\s*1\s*회")
 _MONTHLY_START_RE = re.compile(
-    r"(?:신청|접수|제출)(?:일|월)?\s*기준\s*(?:익월|다음\s*달)\s*부터\s*"
-    r"(?:매월\s*|매달\s*)?(?:지급|입금)"
+    r"(?:(?:신청(?:서)?\s*(?:을|를)?\s*)?(?:제출|접수)(?:일|월)?\s*"
+    r"|(?:신청|접수|제출)(?:일|월)?\s*"
+    r"|(?:신청(?:서)?\s*(?:을|를)?\s*)?(?:제출|접수)\s*(?:한\s*)?(?:달|월)(?:의)?\s*"
+    r"|(?:신청|접수|제출)\s*(?:한\s*)?(?:달|월)(?:의)?\s*"
+    r"|(?:신청(?:서|서류)?|접수(?:서|서류)?|제출(?:서|서류)?)\s*"
+    r"(?:등\s*)?(?:을|를)?\s*취합\s*(?:한\s*)?후\s*)"
+    r"(?:(?:기준(?:으로)?|후|이후|부터|→|->|⇒|➡)\s*)?"
+    r"(?:익월|다음\s*달|다음달)(?:\s*\d+\s*일)?\s*"
+    r"(?:초순|중순|하순|말일|초|말)?\s*(?:까지|이내|이후|뒤|부터)?\s*"
+    r"(?:에\s*)?"
+    r"(?:(?:매월|매달)\s*)?(?:지급|입금)"
 )
-_REQUEST_ANCHOR_RE = re.compile(r"(?:신청|접수|제출)(?:일|월)?\s*(?:기준(?:으로)?|후|이후|부터)\s*$")
+_REQUEST_ANCHOR_RE = re.compile(
+    r"(?:신청(?:서)?\s*(?:을|를)?\s*)?(?:제출|접수)(?:일|월)?\s*"
+    r"(?:기준(?:으로)?|후|이후|부터|→|->|⇒|➡)\s*$"
+    r"|(?:신청|접수|제출)(?:일|월)?\s*"
+    r"(?:기준(?:으로)?|후|이후|부터|→|->|⇒|➡)\s*$"
+    r"|(?:신청(?:서)?\s*(?:을|를)?\s*)?(?:제출|접수)\s*(?:한\s*)?(?:달|월)(?:의)?\s*$"
+    r"|(?:신청|접수|제출)\s*(?:한\s*)?(?:달|월)(?:의)?\s*$"
+    r"|(?:신청(?:서|서류)?|접수(?:서|서류)?|제출(?:서|서류)?)\s*"
+    r"(?:등\s*)?(?:을|를)?\s*취합\s*(?:한\s*)?후\s*$"
+)
 
 
 def _dedupe(values: tuple[str, ...]) -> tuple[str, ...]:
@@ -228,6 +259,8 @@ def _amount_rejection(text: str, money: _Money) -> str | None:
         _CAP_BEFORE_RE.search(before_24)
         or _CAP_AFTER_RE.search(after_24)
         or _MAX_AMOUNT_AFTER_RE.search(after_24)
+        or _TOTAL_AMOUNT_BEFORE_RE.search(before_24)
+        or _DENOMINATION_AFTER_RE.search(after_24)
         or _RANGE_AFTER_RE.search(after_24)
         or _RANGE_BEFORE_RE.search(before_24)
     ):
@@ -360,15 +393,18 @@ def _duration_is_exact_context(text: str, match: re.Match[str]) -> bool:
     return True
 
 
-def _find_duration(text: str, money: _Money, *, monthly: bool) -> _Duration | None:
+def _find_duration(
+    text: str, money: _Money, *, monthly: bool
+) -> tuple[_Duration | None, bool]:
     candidates: list[_Duration] = []
     start = max(0, money.start - 90)
     end = min(len(text), money.end + 190)
     for match in _DURATION_RE.finditer(text, start, end):
         unit = match.group("unit")
-        if unit == "회" and not monthly:
-            continue
         if not monthly and unit == "회":
+            continue
+        before = text[max(0, match.start() - 20) : match.start()]
+        if unit == "회" and _ANNUAL_LIMIT_COUNT_BEFORE_RE.search(before):
             continue
         if not _duration_is_exact_context(text, match):
             continue
@@ -383,10 +419,15 @@ def _find_duration(text: str, money: _Money, *, monthly: bool) -> _Duration | No
         candidates.append(_Duration(months, labeled.start(), labeled.end(), False))
 
     if not candidates:
-        return None
+        return None, False
+    if len({candidate.months for candidate in candidates}) > 1:
+        return None, True
+
+    exact_candidates = [candidate for candidate in candidates if not candidate.maximum]
+    selectable = exact_candidates or candidates
     distances = [min(abs(candidate.start - money.end), abs(money.start - candidate.end))
-                 for candidate in candidates]
-    return candidates[distances.index(min(distances))]
+                 for candidate in selectable]
+    return selectable[distances.index(min(distances))], False
 
 
 def _segment_bounds(text: str, start: int, end: int) -> tuple[int, int]:
@@ -445,6 +486,10 @@ def _find_offset(text: str, *, require_request_anchor: bool = False) -> tuple[_T
     exact = ordered[0] if len(months) == 1 and ordered else None
     day_delay = any(
         _near_payment_label(text, match.start(), match.end())
+        and not re.search(
+            r"(?:당월|당해\s*월|신청월|접수월|제출월|익월|다음\s*달|다음달|차월|명월)\s*$",
+            text[max(0, match.start() - 20) : match.start()],
+        )
         for match in _DAY_DELAY_RE.finditer(text)
     )
     event_anchor = bool(_EVENT_ANCHOR_RE.search(text)) and not bool(_PAYMENT_WORD_RE.search(text))
@@ -513,9 +558,9 @@ def parse_source_payment(text: str) -> PaymentParseResult:
 
     local_start, local_end = _local_span(text, amount.start, amount.end, before=180, after=240)
     local = text[local_start:local_end]
-    if _QUARTERLY_RE.search(local) or any(
+    if _UNSUPPORTED_PERIODIC_RE.search(local) or any(
         _near_payment_label(text, match.start(), match.end())
-        for match in _QUARTERLY_RE.finditer(text)
+        for match in _UNSUPPORTED_PERIODIC_RE.finditer(text)
     ):
         return _hold("payment_frequency_not_monthly_or_once")
 
@@ -526,16 +571,26 @@ def parse_source_payment(text: str) -> PaymentParseResult:
     if lifetime_once is True:
         base_reasons.append("lifetime_once_explicit")
 
-    duration = _find_duration(text, amount, monthly=bool(monthly_span))
+    duration, duration_ambiguous = _find_duration(
+        text, amount, monthly=bool(monthly_span)
+    )
     monthly = monthly_span is not None
     annual = annual_span is not None
 
     if monthly:
-        exact_duration = duration if duration and not duration.maximum else None
+        exact_duration = (
+            duration
+            if duration and not duration.maximum and not duration_ambiguous
+            else None
+        )
         period = exact_duration.months if exact_duration else 1
         if period > _MAX_PERIOD_MONTHS:
             return _hold("payment_period_exceeds_limit")
-        if exact_duration is None:
+        if duration_ambiguous:
+            base_reasons.extend(
+                ("conservative_one_month_component", "payment_period_ambiguous")
+            )
+        elif exact_duration is None:
             base_reasons.extend(
                 (
                     "conservative_one_month_component",
@@ -579,11 +634,19 @@ def parse_source_payment(text: str) -> PaymentParseResult:
         return PaymentParseResult(facts, facts.reasons)
 
     if annual:
-        exact_duration = duration if duration and not duration.maximum else None
+        exact_duration = (
+            duration
+            if duration and not duration.maximum and not duration_ambiguous
+            else None
+        )
         years = 1
         if exact_duration and exact_duration.months % 12 == 0:
             years = exact_duration.months // 12
-        if exact_duration is None:
+        if duration_ambiguous:
+            base_reasons.extend(
+                ("conservative_one_year_component", "payment_period_ambiguous")
+            )
+        elif exact_duration is None:
             base_reasons.extend(
                 (
                     "conservative_one_year_component",
