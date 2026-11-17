@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Any
 
 from benefitfinder.domains.youth.rent_support import assess_rent_support
+from benefitfinder.domains.youth.source_cash import assess_source_cash
 
 INCOME_BANDS = {
     "none": (0, 0),
@@ -15,8 +17,27 @@ INCOME_BANDS = {
 }
 
 
-def evaluate_condition(profile: Any, rule: dict[str, Any]) -> str:
+def evaluate_condition(
+    profile: Any, rule: dict[str, Any], *, today: date | None = None
+) -> str:
     kind = rule["kind"]
+    if kind == "source_cash":
+        source_cash = rule.get("source_cash")
+        policy_id = source_cash.get("policy_id") if isinstance(source_cash, dict) else None
+        if not isinstance(source_cash, dict) or not isinstance(policy_id, str):
+            return "needs_review"
+        statuses = set(
+            assess_source_cash(
+                profile, policy_id, source_cash, today or date.today()
+            ).values()
+        )
+        return (
+            "not_met"
+            if "not_met" in statuses
+            else "needs_review"
+            if "needs_review" in statuses
+            else "met"
+        )
     if kind == "rent_support":
         statuses = set(assess_rent_support(profile, rule["rent_support"]).values())
         return "not_met" if "not_met" in statuses else "needs_review" if "needs_review" in statuses else "met"
