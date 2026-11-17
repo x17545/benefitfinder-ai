@@ -8,9 +8,6 @@
 
 from __future__ import annotations
 
-import json
-import re
-
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
@@ -24,6 +21,7 @@ from benefitfinder.application.collection import (
     SourceFetcher,
     UnsafeSourceResponse,
 )
+from benefitfinder.ingestion.response_diagnostics import response_diagnostic
 from benefitfinder.ingestion.versioning import diff_records, record_sha256, sha256_hex
 from benefitfinder.ingestion.youthcenter import (
     SOURCE_NAME,
@@ -48,23 +46,12 @@ class CollectionError:
     external_id: str | None = None
     http_status: int | None = None
     api_code: str | None = None
-
-
-def _api_result_code(config: YouthcenterApiConfig, body: bytes) -> str | None:
-    """Extract only the bounded youth API result code, never source text."""
-    if config.result_code_path is None:
-        return None
-    try:
-        value = json.loads(body)
-        for key in config.result_code_path:
-            value = value[key]
-    except (ValueError, KeyError, TypeError, RecursionError):
-        return None
-    if type(value) is int and 100 <= value <= 999:
-        return str(value)
-    if isinstance(value, str) and re.fullmatch(r"(?:e[0-9]{3}|[0-9]{3})", value):
-        return value
-    return None
+    response_format: str | None = None
+    content_type: str | None = None
+    response_bytes: int | None = None
+    response_sha256: str | None = None
+    error_identifier: str | None = None
+    error_identifier_source: str | None = None
 
 
 @dataclass(frozen=True)
@@ -129,7 +116,7 @@ def collect_youthcenter(
             return CollectionError(
                 page, code, detail, snapshot_ref, external_id,
                 http_status=response.status_code,
-                api_code=_api_result_code(config, response.body),
+                **response_diagnostic(config, response),
             )
 
         if not 200 <= response.status_code < 300:
