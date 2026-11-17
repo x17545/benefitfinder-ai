@@ -746,7 +746,7 @@ class PostgresCollectedPolicyTests(unittest.TestCase):
         )
         with patch(
             "benefitfinder.infrastructure.database.repositories."
-            "collected_policies._incoming_records_json",
+            "collected_policies._incoming_record_chunks",
             side_effect=RecursionError,
         ), self.assertRaises(CollectedPolicyStoreError) as raised:
             self.repository.save(recursion_batch)
