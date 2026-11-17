@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+from hashlib import sha256
 from collections import deque
 from contextlib import ExitStack, redirect_stderr, redirect_stdout
 from dataclasses import replace
@@ -33,6 +34,17 @@ KEY = "fictional-diagnostic-key"
 PRIVATE_URL = "https://private.invalid/path?token=private-token"
 PRIVATE_DETAIL = "private upstream detail"
 DIAGNOSTIC_PREFIX = "온통청년 수집 오류: "
+
+
+def _metadata(body: bytes | None = None, code: str | None = None) -> dict[str, object]:
+    return {
+        "response_format": "json" if body is not None else None,
+        "content_type": "application/json" if body is not None else None,
+        "response_bytes": len(body) if body is not None else None,
+        "response_sha256": sha256(body).hexdigest() if body is not None else None,
+        "error_identifier": code,
+        "error_identifier_source": "resultCode" if code is not None else None,
+    }
 
 
 class _Fetcher:
@@ -321,6 +333,7 @@ class JobDiagnosticTests(TestCase):
                 "error_code": "conflicting_duplicate",
                 "http_status": 418,
                 "api_code": None,
+                **_metadata(),
             },
             {
                 "attempt": 1,
@@ -328,6 +341,7 @@ class JobDiagnosticTests(TestCase):
                 "error_code": "parse_failed",
                 "http_status": 200,
                 "api_code": "e403",
+                **_metadata(),
             },
         ]
         self.assertEqual(_diagnostics(stderr.getvalue()), expected)
@@ -343,7 +357,7 @@ class JobDiagnosticTests(TestCase):
             self.assertNotIn(private, serialized)
         self.assertEqual(
             set(status["last_attempt"]["errors"][0]),
-            {"attempt", "page", "error_code", "http_status", "api_code"},
+            {"attempt", "page", "error_code", "http_status", "api_code", *_metadata()},
         )
 
     def test_retry_after_503_then_success_keeps_first_failure_and_old_generation(
@@ -382,6 +396,7 @@ class JobDiagnosticTests(TestCase):
                 "error_code": "http_status",
                 "http_status": 503,
                 "api_code": "e503",
+                **_metadata(_page("V-UNUSED", status=503, result_code="e503").body, "e503"),
             }
         ]
         self.assertEqual(_diagnostics(stderr), expected)
@@ -425,6 +440,7 @@ class JobDiagnosticTests(TestCase):
                 "error_code": "http_status",
                 "http_status": 503,
                 "api_code": "e503",
+                **_metadata(_page("V-UNUSED", status=503, result_code="e503").body, "e503"),
             },
             {
                 "attempt": 2,
@@ -432,6 +448,7 @@ class JobDiagnosticTests(TestCase):
                 "error_code": "http_status",
                 "http_status": 503,
                 "api_code": "e503",
+                **_metadata(_page("V-UNUSED", status=503, result_code="e503").body, "e503"),
             },
         ]
         self.assertEqual(_diagnostics(stderr), expected)
@@ -472,6 +489,7 @@ class JobDiagnosticTests(TestCase):
                     "error_code": "unsafe_response",
                     "http_status": None,
                     "api_code": None,
+                    **_metadata(),
                 }
             ],
         )
@@ -499,6 +517,7 @@ class JobDiagnosticTests(TestCase):
                 "error_code": "fetch_failed",
                 "http_status": None,
                 "api_code": None,
+                **_metadata(),
             },
             {
                 "attempt": 2,
@@ -506,6 +525,7 @@ class JobDiagnosticTests(TestCase):
                 "error_code": "fetch_failed",
                 "http_status": None,
                 "api_code": None,
+                **_metadata(),
             },
         ]
         self.assertEqual(_diagnostics(stderr), expected)
@@ -535,6 +555,7 @@ class JobDiagnosticTests(TestCase):
                 "error_code": "http_status",
                 "http_status": 400,
                 "api_code": "e003",
+                **_metadata(b'{"resultCode":"e003","private":"never logged"}', "e003"),
             }
         ]
         self.assertEqual(_diagnostics(stderr), expected)
