@@ -24,6 +24,31 @@ uv run --locked --env-file data/local/f08.env python -m benefitfinder.jobs \
 
 종료 코드 0은 두 소스·실행 기록·요청한 알림이 성공했다는 뜻이다. 1은 소스·실행 기록·알림 실패 또는 다른 통합 실행이 진행 중임을 뜻한다. 잘못된 CLI 인자는 2다. 정책 수집의 일시 실패 재시도는 기존 실행기가 담당하며 전체 통합 작업을 자동으로 다시 돌리지 않는다.
 
+## 온통청년 수집 실패 로그
+
+`refresh-youthcenter`와 `refresh-data`는 온통청년 수집 시도에서 실패를 확인할 때마다
+`stderr`에 `온통청년 수집 오류: ` 접두어와 JSON 한 줄을 출력한다. JSON은 `attempt`,
+`page`, `error_code`, `http_status`, `api_code`만 포함한다.
+확인하지 못한 값은 `null`이고, 수집기가 분류하지 못한 `error_code`는
+`unknown`으로 제한한다.
+
+`api_code`는 원천 `resultCode`에서 `e`와 ASCII 숫자 3자리, 또는
+ASCII 숫자 3자리인 값만 허용하며 다른 값은 `null`이다. 응답 본문·URL·예외 원문·
+API 키·`snapshot_ref`·정책 ID는 로그와 상태 파일에서 제외한다. 다음은 실제 장애
+기록이 아닌 가상 예시다.
+
+```text
+온통청년 수집 오류: {"attempt": 2, "page": 4, "error_code": "http_status", "http_status": 429, "api_code": null}
+```
+
+재시도로 나중에 성공해도 앞선 시도의 실패 로그는 유지한다. 단독·통합 실행 모두
+`data/processed/f08-youthcenter/status.json`의 `last_attempt.errors`에 같은 다섯
+필드의 시도별 실패 목록을 남기며, 기존 `last_attempt.error_codes`와 재시도·성공본
+보존 동작은 유지한다. Discord 알림에는 이 JSON을 넣지 않는다.
+
+이 진단 로그 변경은 아직 운영에 배포하지 않았다. 실제 API·DB 장애 원인을 확인한
+기록이 아니며 상태 필드만으로 원인을 단정하지 않는다.
+
 ## 실행 기록
 
 `data/processed/f08/status.json`에는 실행 ID·시각·소스별 고정 상태와 종료 코드만 저장한다. 원문과 비밀값은 들어가지 않는다. 파일은 임시 파일을 만든 뒤 원자적으로 교체한다.
