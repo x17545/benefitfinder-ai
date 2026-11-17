@@ -10,6 +10,7 @@ from benefitfinder.application.policy_analysis import PolicyAnalysisInput
 from benefitfinder.application.region_options import RegionOption
 from benefitfinder.ingestion.api_decider_update import compile_api_decider_update
 from benefitfinder.ingestion.decider_pending import _fields
+from benefitfinder.ingestion.decider_cash_common import reimbursement_rates
 from benefitfinder.ingestion.source_application import source_application
 from benefitfinder.ingestion.source_eligibility import compile_source_eligibility
 from benefitfinder.ingestion.source_overlap import overlap_spans
@@ -83,22 +84,20 @@ def compile_decider_expense_cash(
     if len(candidates) != 1:
         return hold("decider_expense_single_located_cap_required")
     amount, positions = next(iter(candidates.items()))
-    rates = {
-        int(number)
-        for number in re.findall(
-            rf"(?:{_EXPENSE}|지원\s*비율|지원\s*금액)[^%\n]{{0,35}}?(\d+)\s*%",
-            support.text,
-        )
-    }
+    try:
+        rates_bps = reimbursement_rates(support.text, _EXPENSE)
+    except ValueError:
+        return hold("decider_expense_reimbursement_rate_ambiguous")
+    rates = {value / 100 for value in rates_bps}
     if rates:
         if len(rates) != 1 or not 0 < next(iter(rates)) <= 100:
             return hold("decider_expense_reimbursement_rate_ambiguous")
-        bps = next(iter(rates)) * 100
+        bps = next(iter(rates_bps))
     elif re.search(r"실비|전액|100\s*%", support.text):
         bps = 10000
     else:
         return hold("decider_expense_reimbursement_rate_missing")
-    version = "sha256:" + binding.material_sha256 + ":decider-v3"
+    version = "sha256:" + binding.material_sha256 + ":decider-expense-v2"
     source = dict(base.payload["benefit"]["source"], document_version=version)
 
     def versions(item):

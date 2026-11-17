@@ -46,6 +46,7 @@ class DeciderExpenseCashTest(unittest.TestCase):
         self.assertIn("상한", record.benefit.benefit_amount.amount_text)
         self.assertTrue(result.normalized["calculation_ready"])
         self.assertEqual(result.normalized["ai_review_calls"], 0)
+        self.assertTrue(record.benefit.source.document_version.endswith(":decider-expense-v2"))
 
     def test_cap_without_stated_reimbursement_rate_remains_incomplete(self):
         value, summary = expense_case("응시료 최대 20만원 지원")

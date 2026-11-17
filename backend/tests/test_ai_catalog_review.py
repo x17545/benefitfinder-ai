@@ -321,6 +321,10 @@ class AIReviewTest(unittest.TestCase):
             for document_version in (
                 "sha256:" + material,
                 "sha256:" + material + ":decider-v3",
+                "sha256:" + material + ":decider-expense-v2",
+                "sha256:" + material + ":decider-compact-v1",
+                "sha256:" + material + ":decider-reimburse-v1",
+                "sha256:" + material + ":decider-fixed-v1",
                 "sha256:" + material + ":source-facts-v1",
             ):
                 with self.subTest(policy_id=policy_id, document_version=document_version):

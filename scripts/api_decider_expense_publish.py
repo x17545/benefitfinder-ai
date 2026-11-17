@@ -15,6 +15,7 @@ from benefitfinder.infrastructure.policy_catalog_records import CatalogRecord, r
 p = argparse.ArgumentParser()
 p.add_argument("--publish", action="store_true")
 p.add_argument("--output", type=Path, required=True)
+p.add_argument("--replace-owned", type=Path)
 args = p.parse_args()
 root = args.output
 phase = root / ("expense-production" if args.publish else "expense-isolated")
@@ -72,20 +73,33 @@ with psycopg.connect(
         "SELECT DISTINCT r.policy_id,r.document_version,r.approved_sha256,r.review_type,r.payload,l.external_id FROM public.policy_catalog_releases r JOIN public.policy_catalog_source_links l USING(policy_id,document_version) WHERE l.source='youthcenter' AND r.publication_status='published'"
     ).fetchall()
 by_external = {r["external_id"]: r for r in current}
+if args.replace_owned:
+    replacements = json.loads(args.replace_owned.read_text())
+    for key, digest in replacements.items():
+        previous = by_external.get(key)
+        if previous and previous["review_type"] == "ai" and previous["approved_sha256"] == digest:
+            own.add(key)
 if not (phase / "before-releases.json").exists():
     private_json(phase / "before-releases.json", current)
 for item in items:
     key = item["external_id"]
     record = CatalogRecord.model_validate(item["catalog"])
     previous = by_external.get(key)
-    if previous and previous["review_type"] != "unreviewed" and key not in own:
-        states[key] = {"status": "protected_existing", "policy_id": previous["policy_id"]}
-        continue
     if previous:
         record = CatalogRecord.model_validate(
             remap(record.model_dump(mode="json"), record.benefit.id, previous["policy_id"])
         )
         expected[record.benefit.id] = previous["approved_sha256"]
+    if (
+        previous
+        and previous["review_type"] != "unreviewed"
+        and (
+            previous["review_type"] != "ai"
+            or (key not in own and previous["approved_sha256"] != record_hash(record))
+        )
+    ):
+        states[key] = {"status": "protected_existing", "policy_id": previous["policy_id"]}
+        continue
     review = AIReview(
         writer_agent="local-decider:api-first-locate-decide-v2",
         reviewer_agent="code-normalization:explicit-expense-v1",
@@ -173,7 +187,15 @@ for start in range(0, len(entries), 16):
                         "SELECT approved_sha256,review_type FROM public.policy_catalog_releases WHERE policy_id=%s AND publication_status='published'",
                         (record.benefit.id,),
                     ).fetchone()
-                if old and old[1] != "unreviewed" and key not in own:
+                if (
+                    old
+                    and old[1] != "unreviewed"
+                    and (
+                        old[1] != "ai"
+                        or key not in own
+                        or old[0] not in {expected.get(record.benefit.id), record_hash(record)}
+                    )
+                ):
                     states[key] = {"status": "protected_existing", "policy_id": record.benefit.id}
                     continue
                 result = publish_ai_batch(

@@ -5,13 +5,20 @@ import hashlib
 import json
 from typing import Any
 
-from benefitfinder.application.decider import Compilation, MODEL_ID, MODEL_REVISION
+from benefitfinder.application.decider import (
+    Compilation,
+    MODEL_ID,
+    MODEL_REVISION,
+    canonical_hash,
+)
 from benefitfinder.application.policy_analysis import PolicyAnalysisInput
 from benefitfinder.ingestion.decider_pending import _application, _fields, _manual_conditions
 
 
 QUESTION_VERSION = "api-first-locate-decide-v2"
 _KINDS = {"amount", "period", "eligibility", "application", "overlap", "exceptions"}
+_DOCUMENT_VERSION_SUFFIX = ":decider-compact-v1"
+_MAX_ARTIFACT_REF_LENGTH = 2048
 
 
 def decider_update_summary(artifact: dict[str, Any], *, artifact_ref: str) -> dict[str, Any]:
@@ -66,6 +73,54 @@ def decider_update_summary(artifact: dict[str, Any], *, artifact_ref: str) -> di
     if len(json.dumps(summary, ensure_ascii=False).encode()) > 65_000:
         raise ValueError("api_decider_result_summary_too_large")
     return summary
+
+
+def _compact_decider_analysis(summary: dict[str, Any]) -> dict[str, Any]:
+    """Return bounded public provenance for a private full Decider summary."""
+    model = summary.get("model")
+    artifact_ref = summary.get("artifact_ref")
+    evidence = summary.get("evidence")
+    decisions = summary.get("decisions")
+    if (
+        not isinstance(model, dict)
+        or model.get("id") != MODEL_ID
+        or model.get("revision") != MODEL_REVISION
+        or model.get("provider") != "local"
+        or model.get("fast") != "false"
+        or summary.get("format_version") != 1
+        or summary.get("mode") != "api_first_model_update"
+        or summary.get("question_version") != QUESTION_VERSION
+        or not isinstance(artifact_ref, str)
+        or not artifact_ref
+        or not artifact_ref.isprintable()
+        or len(artifact_ref) > _MAX_ARTIFACT_REF_LENGTH
+        or not isinstance(evidence, list)
+        or not isinstance(decisions, list)
+        or summary.get("analysis_complete") is not True
+        or summary.get("ai_review_calls") != 0
+        or summary.get("calculation_ready") is not False
+    ):
+        raise ValueError("api_decider_summary_invalid")
+    return {
+        "format_version": 1,
+        "mode": "api_first_model_update",
+        "model": {
+            "id": MODEL_ID,
+            "revision": MODEL_REVISION,
+            "provider": "local",
+            "fast": "false",
+        },
+        "question_version": QUESTION_VERSION,
+        "artifact_ref": artifact_ref,
+        "source_sha256": summary["source_sha256"],
+        "material_sha256": summary["material_sha256"],
+        "evidence_count": len(evidence),
+        "decision_count": len(decisions),
+        "analysis_complete": True,
+        "ai_review_calls": 0,
+        "calculation_ready": False,
+        "summary_sha256": canonical_hash(summary),
+    }
 
 
 def compile_api_decider_update(
@@ -124,17 +179,21 @@ def compile_api_decider_update(
         return hold("api_decider_provider_missing")
     source = {
         "url": document.source_url,
-        "document_version": "sha256:" + binding.material_sha256 + ":decider-v3",
+        "document_version": "sha256:" + binding.material_sha256 + _DOCUMENT_VERSION_SUFFIX,
         "checked_at": document.collected_at.isoformat(),
     }
     conditions, rules = _manual_conditions(fields, source)
     application, application_reason = _application(fields, as_of)
     support = raw.get("plcySprtCn") or raw.get("plcyExplnCn") or target.name
+    try:
+        decider_analysis = _compact_decider_analysis(summary)
+    except (KeyError, TypeError, ValueError, RecursionError, OverflowError):
+        return hold("api_decider_summary_invalid")
     payload = {
         "benefit": {
             "id": value.policy_id,
             "domain": "youth",
-            "title": target.name,
+            "title": fields["plcyNm"].text,
             "summary": support,
             "provider": provider,
             "categories": [
@@ -145,7 +204,7 @@ def compile_api_decider_update(
             "application": application,
             "eligibility_conditions": conditions,
             "source": source,
-            "domain_data": {"decider_analysis": summary},
+            "domain_data": {"decider_analysis": decider_analysis},
             "benefit_amount": {
                 "type": None,
                 "amount_won": None,

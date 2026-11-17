@@ -52,14 +52,78 @@ Git 제외 경로에 보존한다. 중단 후 같은 디렉터리로 재개하�
 조용히 자르지 않으며 모델 결과가 없다는 이유로 원본을 지우지 않는다. 분석 완료 수와
 계산용 게시 수는 다르다. AI 정확도 평가로 이 수치를 사용하지 않는다.
 
-`decider_expense_cash.compile_decider_expense_cash()`는 실제 locate와 후속 의미 판단에
-연결된 API 문구에서 명시적 지원율·상한만 읽는다. 50% 실비는 비용의 절반과 상한 중
-작은 금액으로 기존 계산기가 계산하며, 지출·청구월이 없으면 금액을 만들지 않는다.
-계산 가능한 16건을 추가해 기존 63건에서 79건으로 늘렸고 실제 배포 API에서
-65,000원 지출 → 32,500원, 250,000원 지출 → 상한 100,000원을 확인했다.
-이는 가상 신청자 조건의 계산 결과이며 지급 확정이 아니다. 현재 웹의 기본 질문 흐름은
-이 실비 입력을 수집하지 않으므로 해당 확인은 배포 HTTP API 직접 호출로 수행했다.
-외부 API 연결과 일일 스케줄은 사용자 요청으로 보류한다.
+첫 실비 배치는 16건을 추가해 계산용 63→79건을 만들었다. 후속 원문 대조에서
+외부 기관의 선행 할인율을 이 사업의 지원율로 읽어 실제 결제액에서 다시 차감하는
+문제를 발견해 아래 배치에서 수정했다. 이 사업 자체가 50%를 지급하는 규칙과,
+선행 할인을 받은 뒤 실제 결제액을 보전하는 규칙을 구분한다. 현재 웹의 기본 질문은
+실비 입력을 수집하지 않으므로 배포 HTTP API 직접 호출로 확인한다. 외부 API 연결과
+일일 스케줄은 사용자 요청으로 보류한다.
+
+## 잔여 draft 전체 재처리와 운영 반영
+
+2026-11-17 후속 실행은 운영 draft 1,338건 전체와 기존 실비 16건을 처리했다.
+앞서 실제 RTX 3060에서 생성한 native locate/후속 판단 artifact를 재사용하며,
+모델을 다시 실행하거나 AI 검수를 추가하지 않았다. 코드가 원문의 단위·금액·비용
+지원율·상한을 읽고 기존 계산기에 전달한다. 모델 정확도 평가 통과를 뜻하지 않는다.
+
+| 구분 | 실제 결과 |
+| --- | ---: |
+| 이번 draft 처리 대상 | 1,338건 |
+| draft에서 계산용 신규 게시 | 56건 |
+| 기존 실비 갱신 | 16건 |
+| 운영 게시/갱신 및 멱등 재실행 확인 | 72건 |
+| 남은 draft | 1,282건 |
+| 최종 준비/게시 실패 | 0건 |
+| 전체 계산용 정책 | 79→135건 |
+| 계산용 중 접수 상태 / 종료 | 47건 / 88건 |
+| AI 검수 호출 | 0회 |
+
+잔여 draft는 금액 없는 서비스, 대출·임금·기업 지원, 복수 금액/단계별 지급,
+불명확한 실비 비율·중복 조건·지역 매핑 등 사유를 항목별로 보존했다. 여러 컴파일러가
+각각 남긴 사유는 중복 집계이므로 사유 건수를 더해 정책 수로 보고하지 않는다.
+잔여 1,282건을 계산용 성공으로 세지 않는다. 원공고/FAQ를 새로 수집한 실행도 아니다.
+
+`decider_reimbursement_cash`는 명시된 실제 비용의 지원율과 상한을 한 지급 구성요소로
+게시한다. 월세 전체 기간·최대 신청 횟수를 임의로 곱하지 않는다. 거래금액·소득 한도는
+급여 상한과 구분하고 외부 할인 후 실제 결제액을 이중 차감하지 않는다.
+`decider_fixed_cash`는 단일 개인 정액 또는 명시된 월 지급액 한 달분을 처리한다.
+지급예정월·실제 비용·다른 지원 확인은 기존 `source_cash` 신청자 입력을 사용한다.
+입력 누락, 미확인 조건, 상한만 있는 금액을 확정 수급액으로 바꾸지 않는다.
+
+조회용 `decider_analysis`에는 모델/질문/원천 버전, 전체 요약 해시, artifact 참조와
+근거/판단 개수만 담는다. 인용문과 모델 응답 전체는 F12/비공개 artifact에 보존한다.
+중복된 수동 근거는 한 번만 보존하고 실행 조건은 유지한다. 새 버전은
+`decider-compact-v1`, `decider-reimburse-v1`, `decider-fixed-v1`이며 기존 실비 컴파일러도
+지원율 해석 변경을 `decider-expense-v2`로 구분한다. 원천 material hash와 공식 전체
+투영의 일치 검사는 유지한다. 1,338건의 큰 분석 후보 전체를 온라인 조회에 올리지 않는다.
+
+```bash
+# 실제 원문·모델 응답·운영 연결은 Git 제외 경로/실행 환경에서 제공한다.
+uv run --locked python scripts/api_decider_cash_prepare.py \
+  --output data/local/cash-expansion \
+  --model-results data/local/api-decider-run/model-results \
+  --regions data/local/regions.json
+# F13_TEST_DATABASE_URL은 localhost의 *_test PostgreSQL이어야 한다.
+uv run --locked python scripts/api_decider_expense_publish.py --output data/local/cash-expansion
+uv run --locked python scripts/api_decider_expense_publish.py --output data/local/cash-expansion --publish
+# 기본은 읽기 전용 확인. 정확한 대체 게시 해시가 확인된 이전 draft만 retire한다.
+uv run --locked python scripts/api_decider_cash_finalize.py --output data/local/cash-expansion
+uv run --locked python scripts/api_decider_cash_finalize.py --output data/local/cash-expansion --publish
+```
+
+기존에 이 작업으로 게시한 항목을 교정할 때만 prepare의 `--corrections`에 대상 목록을,
+publish의 `--replace-owned`에 `external_id: 기존 승인 해시` JSON을 지정한다. 운영 반영은
+16건 단위 트랜잭션, 현재 원천/기존 승인 해시 비교, 멱등 재실행으로 보호한다. 기존 정상
+승인 자료의 해시 변경은 0건이다. 완료된 이전 draft 56건은 payload를 유지한 이력으로
+전환했고 미완료 draft·전체 원문·F12는 지우지 않았다. 운영 마이그레이션·코드 배포는 없다.
+
+실제 PostgreSQL 17의 격리 DB에 실제 API 원천 4,027건을 보존하고 72건 게시와 재실행을
+확인한 뒤 운영에 반영했다. 배포 서비스의 가상 신청자 HTTP 5건은 모두 200이었다.
+새 면접 정액 50,000원, 새/교정 응시료 실제 결제액 65,000원, 250,000원 비용에 상한
+100,000원, 비용 누락 시 해당 정책 금액 없음과 조건부 조합을 확인했다. 해당 조합은
+3,650,000원·3,665,000원·3,700,000원이며 지급 확정이 아니다. 첫 HTTP 요청 약 40초,
+후속 9~10초였으므로 응답 지연 개선은 남아 있다. 이 표본이 전체 정책 사실 검수나
+웹 기본 질문만으로 새 실비를 계산하는 검증은 아니다.
 
 ## 기존 정형 우선 경로의 구현과 경계
 
