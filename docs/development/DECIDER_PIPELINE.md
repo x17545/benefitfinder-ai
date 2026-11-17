@@ -5,7 +5,54 @@
 Decider는 데이터 준비 단계의 오프라인 추출기다. 사용자 추천 요청에서 호출하거나
 LLM이 자격·금액·조합 순위를 덮어쓰는 경로가 아니다.
 
-## 현재 구현과 경계
+## API 1차 적재와 로컬 모델 2차 갱신
+
+사용자 요청에 따라 초기 적재에서는 AI 검수를 호출하지 않는다. 공식 API 원본을
+먼저 보존하고 로컬 Decider의 추출·의미 판단 결과를 후속 갱신한다. 이 경로는 기존
+정형 우선 분석기와 별도인 `api-first-locate-decide-v2`이며 F12 분석 버전은 8이다.
+금액·기간·자격·모집·중복·예외 6종 locate 뒤 추출 결과에 의존하는 choice/noul/score를
+별도 요청한다. `fast=False`를 유지하며 정책 사이 문맥은 합치지 않는다.
+
+```bash
+# 각 명령의 --output은 같은 비공개 실행 디렉터리다.
+# POLICY_PUBLISH_DATABASE_URL은 비공개 실행 환경에서 설정한다.
+uv run --locked python scripts/api_decider_snapshot.py --output data/local/api-decider-run
+uv run --locked --group decider python scripts/api_decider_batch.py \
+  --output data/local/api-decider-run --batch-size 16 --max-seconds 3600
+# 기본은 로컬 *_test PostgreSQL에 기록한다. 확인한 후 --publish로 운영에 반영한다.
+uv run --locked python scripts/api_decider_update.py --output data/local/api-decider-run --once
+uv run --locked python scripts/api_decider_update.py --output data/local/api-decider-run --publish --once
+# 공식 지역 목록 JSON을 제공하고 원문에 명시된 실비 규칙을 별도 게시한다.
+uv run --locked python scripts/api_decider_expense_prepare.py \
+  --output data/local/api-decider-run --regions data/local/regions.json
+# 먼저 F13_TEST_DATABASE_URL의 격리 DB에서 실행하고, 운영에는 --publish를 추가한다.
+uv run --locked python scripts/api_decider_expense_publish.py --output data/local/api-decider-run
+```
+
+snapshot 명령은 DB에 보관된 완전한 공식 API 세대를 멱등 재적재한다. 새 API 조회가
+필요하면 기존 F08 수집을 먼저 실행한다. 원본·모델 응답·좌표·질문/모델 버전·실행 상태는
+Git 제외 경로에 보존한다. 중단 후 같은 디렉터리로 재개하며 실패는 최대 3회 시도한다.
+반영은 16건 단위 트랜잭션과 원천 해시/기존 버전 비교로 보호한다. 기존 승인 정책과
+서비스는 자동 덮어쓰지 않는다. F12의 기존 상태명 `needs_review`는 저장 형식이며,
+이 실행에서 별도 AI 검수나 개별 사람 승인을 요청한다는 뜻은 아니다.
+
+2026-11-17 실제 운영 원천 4,027건은 2분 45초에 재적재했다. 신규·변경 0건이며
+기존과 같은 4,027건이다. 이 중 넓은 취업·주거 대상 1,944건을 실제 RTX 3060 12GB에서
+약 26분 6초에 모두 분석했다. 나머지 2,083건도 원천 DB에는 보존한다. 본문 9개 필드는
+겹치는 window로 모두 처리하고 정형 API 코드·날짜는 별도로 보존한다. 긴 문서를
+조용히 자르지 않으며 모델 결과가 없다는 이유로 원본을 지우지 않는다. 분석 완료 수와
+계산용 게시 수는 다르다. AI 정확도 평가로 이 수치를 사용하지 않는다.
+
+`decider_expense_cash.compile_decider_expense_cash()`는 실제 locate와 후속 의미 판단에
+연결된 API 문구에서 명시적 지원율·상한만 읽는다. 50% 실비는 비용의 절반과 상한 중
+작은 금액으로 기존 계산기가 계산하며, 지출·청구월이 없으면 금액을 만들지 않는다.
+계산 가능한 16건을 추가해 기존 63건에서 79건으로 늘렸고 실제 배포 API에서
+65,000원 지출 → 32,500원, 250,000원 지출 → 상한 100,000원을 확인했다.
+이는 가상 신청자 조건의 계산 결과이며 지급 확정이 아니다. 현재 웹의 기본 질문 흐름은
+이 실비 입력을 수집하지 않으므로 해당 확인은 배포 HTTP API 직접 호출로 수행했다.
+외부 API 연결과 일일 스케줄은 사용자 요청으로 보류한다.
+
+## 기존 정형 우선 경로의 구현과 경계
 
 - [pplx-decider-flash-v1.3](https://huggingface.co/perplexity-ai/pplx-decider-flash-v1.3)은
   Apache-2.0 공개 모델이다. 현재 코드는 revision
