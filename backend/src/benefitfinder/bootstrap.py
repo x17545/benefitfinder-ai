@@ -10,7 +10,7 @@ from __future__ import annotations
 import uuid
 import math
 from collections.abc import Mapping
-from datetime import datetime
+from datetime import date, datetime
 from functools import partial
 from typing import Any
 from time import monotonic
@@ -41,7 +41,7 @@ from benefitfinder.application.recommendation_service import (
 )
 from benefitfinder.application.region_options import RegionCatalog
 from benefitfinder.application.published_policies import PolicyCatalogUnavailable, PublishedPolicyRepository
-from benefitfinder.application.published_recommendations import PublishedRecommendations
+from benefitfinder.application.published_recommendations import PublishedRecommendations, korea_today
 from benefitfinder.application.service_catalog import ServiceCatalog
 from benefitfinder.application.published_services import PublishedServiceRepository, PublishedServices
 from benefitfinder.application.service_meta import ReadServiceMetadata
@@ -57,6 +57,7 @@ from benefitfinder.domains.youth.local_cash import assess_cash
 from benefitfinder.domains.youth.policy_evaluator import evaluate_policies
 from benefitfinder.domains.youth.published_eligibility import evaluate_condition
 from benefitfinder.domains.youth.rent_support import rent_support_payments
+from benefitfinder.domains.youth.source_cash import source_cash_payments
 from benefitfinder.domains.youth.published_scenario import change_published_profile, published_next_threshold
 from benefitfinder.domains.youth.scenario import change_profile, next_threshold
 from benefitfinder.infrastructure.database.repositories.published_clauses import (
@@ -90,6 +91,21 @@ HTTP_ERROR_RESPONSES: dict[int, tuple[ErrorCode, str]] = {
     500: ("internal_error", INTERNAL_ERROR_MESSAGE),
     503: ("dependency_unavailable", "서비스를 일시적으로 사용할 수 없습니다."),
 }
+
+
+def _evaluate_published_condition(profile: Any, rule: dict[str, Any]) -> str:
+    return evaluate_condition(profile, rule, today=korea_today())
+
+
+def _resolve_published_payments(
+    profile: Any, policy: Any, today: date
+) -> tuple[tuple[int, int], ...] | None:
+    if any(
+        isinstance(condition, dict) and condition.get("kind") == "source_cash"
+        for condition in policy.conditions
+    ):
+        return source_cash_payments(profile, policy, today)
+    return rent_support_payments(profile, policy, today)
 
 
 def error_body(code: ErrorCode, message: str) -> dict[str, Any]:
@@ -333,7 +349,9 @@ def create_app(
 
     if policy_repository is not None:
         catalog = PublishedRecommendations(
-            policy_repository, evaluate_condition, resolve_payments=rent_support_payments,
+            policy_repository,
+            _evaluate_published_condition,
+            resolve_payments=_resolve_published_payments,
         )
         app.state.recommendation_service = catalog
         app.state.benefit_lookup = lambda policy_id: catalog.detail(policy_id) or services.detail(policy_id)

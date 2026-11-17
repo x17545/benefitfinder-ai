@@ -240,10 +240,13 @@ def source_cash_command(args: argparse.Namespace) -> int:
     )
     from benefitfinder.infrastructure.region_codes import OfficialRegionCatalog
     from benefitfinder.ingestion.source_cash import compile_source_cash
+    from benefitfinder.ingestion.source_cash_dynamic import compile_source_cash_dynamic
+    from benefitfinder.ingestion.source_rent_cash import compile_source_rent_cash
     from benefitfinder.jobs.refresh_lock import acquire_refresh_lock
     from benefitfinder.jobs.source_cash_batch import (
         PreparedSourceCash, SOURCE_CASH_REVIEWER_AGENT, SOURCE_CASH_REVIEW_METADATA,
-        SOURCE_CASH_WRITER_AGENT, restore_checked_at_only, run_source_cash_batch,
+        SOURCE_CASH_SOURCE_VERSION, SOURCE_CASH_WRITER_AGENT,
+        restore_checked_at_only, run_source_cash_batch,
         source_cash_review_timestamp,
     )
 
@@ -274,7 +277,13 @@ def source_cash_command(args: argparse.Namespace) -> int:
             as_of = args.as_of or datetime.now(KST).date()
 
             def compile_source(value):
-                return compile_source_cash(value, as_of=as_of, regions=regions)
+                target = next(policy for policy in value.policies if policy.id == value.policy_id)
+                if "청년월세" in target.name.replace(" ", "") and "2차" in target.name:
+                    return compile_source_rent_cash(value, as_of=as_of, regions=regions)
+                result = compile_source_cash(value, as_of=as_of, regions=regions)
+                if result.payload is None and args.applicant_cash_facts:
+                    return compile_source_cash_dynamic(value, as_of=as_of, regions=regions)
+                return result
 
             def prepare(compiled, source_text, local_date) -> PreparedSourceCash:
                 record = CatalogRecord.model_validate(compiled.payload)
@@ -294,8 +303,8 @@ def source_cash_command(args: argparse.Namespace) -> int:
                     source_sha256=record.source_sha256,
                     record_sha256=digest,
                 )
-                source_version = compiled.normalized.get("mode")
-                if type(source_version) is not str:
+                source_version = record.benefit.source.document_version.rsplit(":", 1)[-1]
+                if source_version != SOURCE_CASH_SOURCE_VERSION:
                     raise ValueError("source_cash_batch_source_version_invalid")
                 return PreparedSourceCash(
                     record.benefit.id, record.benefit.source.document_version, digest,
@@ -1506,6 +1515,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     source_cash.add_argument('--publish', action='store_true', help='검증된 항목만 새 버전으로 게시')
     source_cash.add_argument('--batch-size', type=int, default=10)
     source_cash.add_argument('--as-of', type=date.fromisoformat)
+    source_cash.add_argument(
+        '--applicant-cash-facts', action='store_true',
+        help='대응 reader 배포 후에만 사용: 실제 지출액·지급예정월 입력을 받는 1건 계산 경로 포함',
+    )
     commands.add_parser("refresh-ecos-rate", help="ECOS 기준금리의 마지막 성공값을 DB에 갱신")
     daily = commands.add_parser("refresh-data", help="정책·기준금리 통합 갱신과 단일 결과 보고")
     daily.add_argument("--data-dir", type=Path, default=Path("data"))
