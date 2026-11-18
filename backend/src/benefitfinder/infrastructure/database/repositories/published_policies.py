@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import logging
+from time import perf_counter
 from typing import Any
 
 import psycopg
@@ -42,31 +44,57 @@ class PostgresPublishedPolicies:
         self._database_url = database_url
 
     def _read(self, policy_id: str | None = None) -> tuple[PublishedPolicy, ...]:
+        logger = logging.getLogger("benefitfinder.catalog")
+        started = perf_counter()
+        stage = "connect"
+        connect_ms = 0.0
+        query_ms = 0.0
+        validation_ms = 0.0
+        row_count = 0
         try:
             with psycopg.connect(
                 self._database_url,
                 connect_timeout=2,
-                options="-c default_transaction_read_only=on -c statement_timeout=2000 "
+                options="-c default_transaction_read_only=on -c statement_timeout=5000 "
                 "-c lock_timeout=500 -c timezone=UTC",
                 application_name="benefitfinder-policy-catalog",
                 row_factory=dict_row,
             ) as connection:
+                connect_ms = (perf_counter() - started) * 1000
+                stage = "query"
+                query_started = perf_counter()
                 sql = READ_SQL + (" AND policy_id = %s" if policy_id is not None else "")
                 cursor = connection.execute(
                     sql + " ORDER BY policy_id", (policy_id,) if policy_id is not None else ()
                 )
                 # A safety limit fails the request; it never truncates the solver candidates.
                 rows = cursor.fetchmany(5001)
-                if len(rows) > 5000:
+                query_ms = (perf_counter() - query_started) * 1000
+                row_count = len(rows)
+                if row_count > 5000:
                     raise PolicyCatalogUnavailable("policy_catalog_size_limit")
+            stage = "validation"
+            validation_started = perf_counter()
             policies = []
             for row in rows:
                 record = CatalogRecord.model_validate(row["payload"])
                 if record_hash(record) != row["approved_sha256"]:
                     raise PolicyCatalogUnavailable("policy_catalog_approval_mismatch")
                 policies.append(record.published(row["published_at"]))
+            validation_ms = (perf_counter() - validation_started) * 1000
+            logger.warning(
+                "catalog_read status=success stage=complete connect_ms=%.1f "
+                "query_ms=%.1f validation_ms=%.1f row_count=%d",
+                connect_ms, query_ms, validation_ms, row_count,
+            )
             return tuple(policies)
-        except (psycopg.Error, OSError, ValidationError, ValueError, TypeError, KeyError):
+        except (psycopg.Error, OSError, ValidationError, ValueError, TypeError, KeyError) as error:
+            logger.warning(
+                "catalog_read status=failed stage=%s error_type=%s "
+                "elapsed_ms=%.1f row_count=%d",
+                stage, type(error).__name__,
+                (perf_counter() - started) * 1000, row_count,
+            )
             raise PolicyCatalogUnavailable("policy_catalog_lookup_failed") from None
 
     def list_published(self) -> tuple[PublishedPolicy, ...]:
