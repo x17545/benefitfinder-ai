@@ -62,9 +62,17 @@ class PublishedCatalogDiagnosticsTests(unittest.TestCase):
 
         connection = MagicMock()
         connection.__enter__.return_value = connection
-        connection.execute.side_effect = psycopg.errors.QueryCanceled(
-            "PRIVATE statement timeout detail"
-        )
+        def execute(sql, params=()):
+            if "SELECT payload, approved_sha256, published_at" in str(sql):
+                raise psycopg.errors.QueryCanceled(
+                    "PRIVATE statement timeout detail"
+                )
+            cursor = MagicMock()
+            if "policy_catalog_revision" in str(sql):
+                cursor.fetchone.return_value = {"revision": 1}
+            return cursor
+
+        connection.execute.side_effect = execute
 
         with patch("psycopg.connect", return_value=connection):
             with self.assertLogs("benefitfinder.catalog", level="WARNING") as captured:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from threading import Lock
 import logging
 from time import perf_counter
 from typing import Any
@@ -34,6 +35,12 @@ WHERE publication_status = 'published' AND (
 """
 
 
+REVISION_SQL = """
+SELECT revision
+FROM public.policy_catalog_revision
+WHERE singleton = true
+"""
+
 class PostgresPublishedPolicies:
     def __init__(self, database_url: str) -> None:
         try:
@@ -42,6 +49,9 @@ class PostgresPublishedPolicies:
         except (psycopg.Error, ValueError):
             raise ValueError("invalid_policy_database_url") from None
         self._database_url = database_url
+        self._cache_lock = Lock()
+        self._cache_revision: int | None = None
+        self._cache_policies: tuple[PublishedPolicy, ...] | None = None
 
     def _read(self, policy_id: str | None = None) -> tuple[PublishedPolicy, ...]:
         logger = logging.getLogger("benefitfinder.catalog")
@@ -98,7 +108,123 @@ class PostgresPublishedPolicies:
             raise PolicyCatalogUnavailable("policy_catalog_lookup_failed") from None
 
     def list_published(self) -> tuple[PublishedPolicy, ...]:
-        return self._read()
+        logger = logging.getLogger("benefitfinder.catalog")
+        started = perf_counter()
+        stage = "connect"
+        connect_ms = 0.0
+        query_ms = 0.0
+        validation_ms = 0.0
+        row_count = 0
+
+        with self._cache_lock:
+            try:
+                with psycopg.connect(
+                    self._database_url,
+                    connect_timeout=2,
+                    options="-c default_transaction_read_only=on "
+                    "-c statement_timeout=5000 "
+                    "-c lock_timeout=500 -c timezone=UTC",
+                    application_name="benefitfinder-policy-catalog",
+                    row_factory=dict_row,
+                ) as connection:
+                    connect_ms = (perf_counter() - started) * 1000
+
+                    # Revision and policies must share one DB snapshot.
+                    connection.execute(
+                        "SET TRANSACTION ISOLATION LEVEL "
+                        "REPEATABLE READ READ ONLY"
+                    )
+
+                    stage = "revision"
+                    revision_row = connection.execute(
+                        REVISION_SQL
+                    ).fetchone()
+
+                    if revision_row is None:
+                        raise PolicyCatalogUnavailable(
+                            "policy_catalog_revision_missing"
+                        )
+
+                    revision = revision_row["revision"]
+
+                    if (
+                        self._cache_revision == revision
+                        and self._cache_policies is not None
+                    ):
+                        logger.info(
+                            "catalog_read status=success stage=cache "
+                            "connect_ms=%.1f revision=%s",
+                            connect_ms, revision,
+                        )
+                        return self._cache_policies
+
+                    stage = "query"
+                    query_started = perf_counter()
+
+                    rows = connection.execute(
+                        READ_SQL + " ORDER BY policy_id"
+                    ).fetchmany(5001)
+
+                    query_ms = (
+                        perf_counter() - query_started
+                    ) * 1000
+                    row_count = len(rows)
+
+                    if row_count > 5000:
+                        raise PolicyCatalogUnavailable(
+                            "policy_catalog_size_limit"
+                        )
+
+                stage = "validation"
+                validation_started = perf_counter()
+                policies = []
+
+                for row in rows:
+                    record = CatalogRecord.model_validate(
+                        row["payload"]
+                    )
+                    if record_hash(record) != row["approved_sha256"]:
+                        raise PolicyCatalogUnavailable(
+                            "policy_catalog_approval_mismatch"
+                        )
+
+                    policies.append(
+                        record.published(row["published_at"])
+                    )
+
+                validation_ms = (
+                    perf_counter() - validation_started
+                ) * 1000
+
+                snapshot = tuple(policies)
+
+                # Publish only a completely validated snapshot.
+                self._cache_revision = revision
+                self._cache_policies = snapshot
+
+                logger.info(
+                            "catalog_read status=success stage=complete "
+                    "connect_ms=%.1f query_ms=%.1f "
+                    "validation_ms=%.1f row_count=%d",
+                    connect_ms, query_ms,
+                    validation_ms, row_count,
+                )
+                return snapshot
+
+            except (
+                psycopg.Error, OSError, ValidationError,
+                ValueError, TypeError, KeyError,
+            ) as error:
+                logger.warning(
+                    "catalog_read status=failed stage=%s "
+                    "error_type=%s elapsed_ms=%.1f row_count=%d",
+                    stage, type(error).__name__,
+                    (perf_counter() - started) * 1000,
+                    row_count,
+                )
+                raise PolicyCatalogUnavailable(
+                    "policy_catalog_lookup_failed"
+                ) from None
 
     def get_published(self, policy_id: str) -> PublishedPolicy | None:
         rows = self._read(policy_id)
