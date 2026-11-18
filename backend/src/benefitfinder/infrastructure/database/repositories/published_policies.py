@@ -46,7 +46,7 @@ class PostgresPublishedPolicies:
             with psycopg.connect(
                 self._database_url,
                 connect_timeout=2,
-                options="-c default_transaction_read_only=on -c statement_timeout=2000 "
+                options="-c default_transaction_read_only=on -c statement_timeout=5000 "
                 "-c lock_timeout=500 -c timezone=UTC",
                 application_name="benefitfinder-policy-catalog",
                 row_factory=dict_row,
