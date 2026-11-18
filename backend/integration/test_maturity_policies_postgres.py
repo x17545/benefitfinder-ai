@@ -18,7 +18,6 @@ from backend.tests.catalog_fixtures import release_data, source_text
 from backend.tests.maturity_fixtures import maturity_release
 from backend.tests.test_published_catalog import validator
 from benefitfinder.application.base_rates import BaseRateObservation
-from benefitfinder.application.published_policies import PolicyCatalogUnavailable
 from benefitfinder.bootstrap import create_app
 from benefitfinder.infrastructure.database.repositories.published_policies import (
     PostgresPublishedPolicies,
