@@ -1,6 +1,6 @@
 # Decider 정책 추출·게시 파이프라인
 
-2026-11-17 현재 코드와 실행 기록을 정리한다. 이 문서는 구현·검증 상태를 설명하며
+2026-11-18 현재 코드와 실행 기록을 정리한다. 이 문서는 구현·검증 상태를 설명하며
 [기능 명세](../product/REQUIREMENTS.md)의 수락 조건이나 사람 검수 목표를 바꾸지 않는다.
 Decider는 데이터 준비 단계의 오프라인 추출기다. 사용자 추천 요청에서 호출하거나
 LLM이 자격·금액·조합 순위를 덮어쓰는 경로가 아니다.
@@ -124,6 +124,69 @@ publish의 `--replace-owned`에 `external_id: 기존 승인 해시` JSON을 지�
 3,650,000원·3,665,000원·3,700,000원이며 지급 확정이 아니다. 첫 HTTP 요청 약 40초,
 후속 9~10초였으므로 응답 지연 개선은 남아 있다. 이 표본이 전체 정책 사실 검수나
 웹 기본 질문만으로 새 실비를 계산하는 검증은 아니다.
+
+## 확인불가 게시와 GPT 직접 파싱
+
+2026-11-18 사용자 지시에 따라 금액 확인과 계산 가능 여부를 게시의 공통 전제에서
+분리했다. 금액을 잡지 못한 정책도 `amount_status=unknown`, `amount_won=null`,
+`amount_text=금액 확인불가`로 운영에 게시한다. 0원으로 만들거나 현금 총액에 더하지
+않는다. 금액 검증·정확도 점수·별도 AI 검수·개별 사람 승인을 새로 요구하지 않는다.
+
+금액 표현이 있는 270건은 공개 정책 필드만 45건씩 나눠 GPT-6 Astra 서브에이전트 6개가
+직접 파싱했다. 요청된 GPT-6 Luna는 당시 실행 가능 목록에 없었으며 대체 모델 사용을
+알리고 진행했다. 프롬프트 버전은 `youth-cash-parse-v1`이다. 로컬 Decider를 새로
+실행한 결과가 아니며 이전 native 결과는 원문·질문·버전 연결에 재사용한다.
+
+| 대상 | DB 반영 결과 |
+| --- | --- |
+| 금액 표현 미탐지 1,012건 | 확인불가 1,009건 게시, 원천 목록 누락 3건 확인불가 이력 저장 |
+| 금액 표현 있는 270건 | 전부 게시: 계산 구성요소 145건, 금액 확인불가 125건 |
+| 이번 전체 1,282건 | 1,279건 게시, 원천 누락 3건 DB 이력 보존 |
+| 기존 계산용 135건 | 해시 변경 0건, 추가 145건으로 총 280건 |
+| 별도 AI 검수 | 0회 |
+
+원천 누락 3건은 같은 material hash의 원문이 DB에 남아 있지만 현재 수집 목록에는
+없다. 기존 DB의 `catalog_source_is_stale` 제약 때문에 게시할 수 없어
+`source_presence.status=missing`과 확인불가 금액을 담은 비공개 draft 이력으로 저장했다.
+제약을 바꾸거나 누락 플래그를 지우지 않았다. 이 3건을 게시 성공으로 세지 않는다.
+기존 처리 대상 draft 1,338건은 정확한 새 레코드 해시를 연결한 뒤 payload를 유지하는
+retired 이력으로 전환했다. 원천 누락 3건의 새 이력과 미처리 항목을 혼동하지 않는다.
+
+`mvp_cash_import`는 모델의 `money_facts`, 원문 근거, 선택한 `claim`, 수신자·단계 조건을
+`domain_data.gpt6_analysis.result`에 보존한다. 실행 가능한 개인 정액 또는 실비 한
+구성요소만 기존 `source_cash` 계산기로 전달한다. 월별·연차별·여러 급여는 선택한
+구성요소와 그 조건을 표시하고, 미확인 전체 기간·지급월을 임의 생성하지 않는다.
+대출·예산·임금·현물·기준금액 등은 파싱 내용을 보존하되 계산할 지급액이 없으면
+확인불가로 게시한다. 숫자·지원율·청구월의 계산은 기존 코드가 담당한다.
+
+실행 진입점은 `scripts/mvp_catalog_publish.py`다. `--selection unknown`은 금액 표현
+미탐지 대상을, `--selection parsed`는 `--output/parsed/batch-*.json`의 직접 파싱 결과를
+처리한다. `--mode prepare`는 DB를 읽고 비공개 결과만 저장한다. `--mode isolated`는
+공식 수집본을 넣은 localhost의 `F13_TEST_DATABASE_URL=.../*_test`에 게시한다.
+`--mode publish`는 승인된 운영 반영이며 `POLICY_PUBLISH_DATABASE_URL`을 사용한다.
+
+```bash
+uv run --locked python scripts/mvp_catalog_publish.py \
+  --selection unknown --mode publish --batch-size 32 \
+  --output data/local/mvp-publish \
+  --input-run data/local/cash-expansion \
+  --model-results data/local/api-decider-run/model-results \
+  --regions data/local/regions.json
+# 같은 인자에서 --selection parsed로 금액 파싱 결과를 반영한다.
+```
+
+배치 크기는 1~32건이며 체크포인트·최초 게시 전 스냅숏·준비 레코드·게시 결과를 비공개
+경로에 보존한다. 같은 실행을 재개하면 이미 같은 해시로 게시한 항목은 건너뛰며,
+실패한 배치는 개별 항목으로 재시도한다. 원문 버전은 `decider-unknown-v1`,
+`gpt6-parsed-v1`, 누락 원천 이력은 `mvp-missing-source-v1`로 구분한다. 원천 해시·DB 형식·
+현재 승인 해시 비교는 저장 일관성을 위한 것으로 별도 AI 검수 단계가 아니다.
+
+실제 운영 카탈로그는 1,443건이며 계산용 280건의 API 접수 상태는 open 58, closed 153,
+unknown 68, upcoming 1이었다. 실제 배포 상세 API는 확인불가 문구와 null 금액을
+반환했다. GPT 파싱 게시분의 가상 신청자 추천 API 2건도 HTTP 200으로 응시료 65,000원·
+면접수당 50,000원과 조건부 조합 3,665,000원·3,650,000원을 반환했다. 지원금 지급
+확정 결과가 아니다. 추천 응답은 약 29~32초여서 응답 지연 개선은 후속으로 남긴다.
+운영 스키마 변경·main 병합·코드 배포·일일 스케줄 등록은 이번 반영에 포함하지 않았다.
 
 ## 기존 정형 우선 경로의 구현과 경계
 

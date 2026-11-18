@@ -325,6 +325,8 @@ class AIReviewTest(unittest.TestCase):
                 "sha256:" + material + ":decider-compact-v1",
                 "sha256:" + material + ":decider-reimburse-v1",
                 "sha256:" + material + ":decider-fixed-v1",
+                "sha256:" + material + ":decider-unknown-v1",
+                "sha256:" + material + ":gpt6-parsed-v1",
                 "sha256:" + material + ":source-facts-v1",
             ):
                 with self.subTest(policy_id=policy_id, document_version=document_version):

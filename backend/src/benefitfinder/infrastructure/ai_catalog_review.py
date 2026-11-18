@@ -212,6 +212,8 @@ def _verify_real_source(
             "sha256:" + binding.material_sha256 + ":decider-compact-v1",
             "sha256:" + binding.material_sha256 + ":decider-reimburse-v1",
             "sha256:" + binding.material_sha256 + ":decider-fixed-v1",
+            "sha256:" + binding.material_sha256 + ":decider-unknown-v1",
+            "sha256:" + binding.material_sha256 + ":gpt6-parsed-v1",
             "sha256:" + binding.material_sha256 + ":source-facts-v1",
         }
         or source_text != project_youthcenter_source(fields)):
