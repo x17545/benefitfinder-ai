@@ -1,5 +1,6 @@
 import type { JSX } from 'react';
 import { ASSET_CHOICES, INCOME_CHOICES } from '../../../domains/youth/conditionOptions.ts';
+import { TERM_HELP } from '../../../domains/youth/termHelp.ts';
 import { ConditionStepLayout } from '../ConditionStepLayout.tsx';
 import { updateAnswers, useFlowState } from '../flowStore.ts';
 import { ChipQuestion } from './ChipQuestion.tsx';
@@ -15,9 +16,15 @@ export function IncomeStep(): JSX.Element {
       title="본인 소득과 재산은요?"
       description="구간만 골라요. 몰라도 괜찮아요"
       canNext={incomeBand !== null && assetBand !== null}
+      questions={[
+        { id: 'income', answered: incomeBand !== null },
+        { id: 'asset', answered: assetBand !== null },
+      ]}
     >
       <ChipQuestion
         title="연 소득 (세전)"
+        questionId="income"
+        help={TERM_HELP.income}
         choices={INCOME_CHOICES}
         value={incomeBand}
         onChange={(value) => {
@@ -27,6 +34,8 @@ export function IncomeStep(): JSX.Element {
       <ChipQuestion
         title="재산"
         description="예금·보증금·자동차 등을 더하고 대출은 빼요"
+        questionId="asset"
+        help={TERM_HELP.asset}
         choices={ASSET_CHOICES}
         value={assetBand}
         onChange={(value) => {

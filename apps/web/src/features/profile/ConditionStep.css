@@ -81,6 +81,55 @@
   color: var(--color-check);
 }
 
+/* 어려운 용어 설명 (눌러서 펼침) */
+.s2-term {
+  font-size: var(--text-sub);
+  color: var(--color-muted);
+}
+
+.s2-term__summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  font-weight: 600;
+  color: var(--color-accent-ink);
+  cursor: pointer;
+  list-style: none;
+}
+
+.s2-term__summary::-webkit-details-marker {
+  display: none;
+}
+
+.s2-term__icon {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 800;
+  font-style: normal;
+  line-height: 1;
+}
+
+.s2-term[open] .s2-term__summary {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.s2-term__answer {
+  margin: 2px 0 4px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--color-icon-bg);
+  color: var(--color-ink);
+  line-height: 1.55;
+}
+
 /* 아래에 붙는 [다음] */
 .s2-bottom {
   position: sticky;
@@ -111,10 +160,43 @@
   }
 }
 
+/* 안내가 있으면 뒤 선택지와 겹쳐 보이지 않게 배경을 더 빨리 채운다 */
+.s2-bottom:has(> .s2-remaining) {
+  padding-top: 18px;
+  background: linear-gradient(to bottom, transparent, var(--color-bg) 16px);
+}
+
+/* [다음] 위: 아직 고르지 않은 질문 안내 (눌러서 그 질문으로 이동) */
+.s2-remaining {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
+  min-height: 44px;
+  margin-bottom: 6px;
+  padding: 0 12px;
+  border: 0;
+  background: none;
+  color: var(--color-check);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
 @media (min-width: 768px) {
   .s2-bottom {
     display: flex;
+    align-items: center;
     justify-content: flex-end;
+    gap: 16px;
+  }
+
+  .s2-remaining {
+    width: auto;
+    margin-bottom: 0;
   }
 
   .s2-bottom .ui-button {

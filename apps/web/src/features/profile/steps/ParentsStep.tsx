@@ -5,6 +5,7 @@ import {
   PARENT_ASSET_CHOICES,
   PARENT_INCOME_CHOICES,
 } from '../../../domains/youth/conditionOptions.ts';
+import { TERM_HELP } from '../../../domains/youth/termHelp.ts';
 import { trackEvent } from '../../../shared/analytics/events.ts';
 import { ConditionStepLayout } from '../ConditionStepLayout.tsx';
 import { updateAnswers, useFlowState } from '../flowStore.ts';
@@ -55,6 +56,7 @@ export function ParentsStep(): JSX.Element {
     >
       <ChipQuestion
         title="가구원 수"
+        help={TERM_HELP.householdSize}
         choices={HOUSEHOLD_SIZE_CHOICES}
         value={householdSize}
         onChange={(value) => {
@@ -64,6 +66,7 @@ export function ParentsStep(): JSX.Element {
       <ChipQuestion
         title="부모님 집 한 달 소득"
         description="세전, 가구 전체"
+        help={TERM_HELP.parentIncome}
         choices={PARENT_INCOME_CHOICES}
         value={parentIncome}
         onChange={(value) => {
