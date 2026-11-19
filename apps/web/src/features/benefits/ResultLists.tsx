@@ -136,7 +136,7 @@ export function ResultLists({
           title={`아직 조합 계산 전인 정책 ${String(notReviewed.length)}개`}
           note={notReviewed.some((item) => item.verification_only === true)
             ? '승인한 근거와 확인 범위를 볼 수 있어요. 자격·금액·조합은 확인 전이에요.'
-            : '금액·중복 여부를 검수 중이에요. 정책별 자격 진단은 볼 수 있어요.'}
+            : '금액·중복 여부를 검수 중이에요. 조건별 진단은 아직 없고, 정책마다 전체 자격 진단만 볼 수 있어요.'}
         >
           {notReviewed.map((item) => {
             if (item.review_explanation === undefined) {
@@ -146,7 +146,7 @@ export function ResultLists({
                     {notReviewedName(item, info)}
                   </a>
                   <span className="s3-fold__chips">
-                    <StatusChip status={item.eligibility_summary}>자격 진단</StatusChip>
+                    <StatusChip status={item.eligibility_summary}>전체 자격 진단</StatusChip>
                   </span>
                 </li>
               );
@@ -158,7 +158,7 @@ export function ResultLists({
                 </a>
                 <span>검증용 · 조합/자격/금액 확정 전</span>
                 <span className="s3-fold__chips">
-                  <StatusChip status={item.eligibility_summary}>자격 진단</StatusChip>
+                  <StatusChip status={item.eligibility_summary}>전체 자격 진단</StatusChip>
                 </span>
                 {item.review_scope !== undefined ? <span>확인 범위: {item.review_scope}</span> : null}
                 <PolicyExplanation policy={item.review_explanation} aiGenerated={aiGenerated} />

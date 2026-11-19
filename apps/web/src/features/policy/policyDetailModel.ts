@@ -109,3 +109,20 @@ export function policyStatusInResult(
   }
   return null;
 }
+
+/** 원문 인용을 접어 둘 기준 글자 수. 이보다 길면 앞부분만 보이고 [원문 전체 보기]로 펼친다 */
+export const QUOTE_PREVIEW_LIMIT = 140;
+
+/**
+ * 긴 원문 인용의 앞부분. 원문은 바꾸지 않고 화면에서만 줄인다.
+ * 기준보다 짧으면 null(그대로 보여 준다). 가능하면 띄어쓰기에서 끊는다.
+ */
+export function quotePreview(quote: string, limit = QUOTE_PREVIEW_LIMIT): string | null {
+  const text = quote.trim();
+  if (text.length <= limit) {
+    return null;
+  }
+  const cut = text.slice(0, limit - 20);
+  const space = cut.lastIndexOf(' ');
+  return `${(space > cut.length * 0.6 ? cut.slice(0, space) : cut).trimEnd()}…`;
+}

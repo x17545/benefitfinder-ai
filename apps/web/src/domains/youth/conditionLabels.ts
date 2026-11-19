@@ -106,9 +106,32 @@ export function conditionLabel(conditionId: string): string {
   return OTHER;
 }
 
-/** 같은 이름이 여러 번 나오면 한 번만 (예: region · location → 지역) */
+/**
+ * 뭉뚱그린 이름. 서로 다른 조건이 이 이름으로 합쳐지면 몇 개인지 함께 보여
+ * '기타 조건' 하나만 남아 조건이 여러 개였다는 사실이 사라지지 않게 한다.
+ * (지역·나이처럼 구체적인 이름은 같은 조건을 다르게 부른 것이라 하나로 둔다)
+ */
+const GENERIC_LABELS: ReadonlySet<string> = new Set([
+  OTHER, '공고 조건', '지원 대상', '자격 요건', '참여 제한', '우대 조건',
+]);
+
+function withCount(label: string, count: number): string {
+  return count > 1 && GENERIC_LABELS.has(label) ? `${label} ${String(count)}개` : label;
+}
+
+/**
+ * 같은 이름이 여러 번 나오면 한 번만 (예: region · location → 지역).
+ * 뭉뚱그린 이름에 서로 다른 조건이 모이면 개수를 붙인다 (예: 기타 조건 2개)
+ */
 export function uniqueConditionLabels(conditionIds: readonly string[]): string[] {
-  return [...new Set(conditionIds.map(conditionLabel))];
+  const groups = new Map<string, Set<string>>();
+  for (const id of conditionIds) {
+    const label = conditionLabel(id);
+    const ids = groups.get(label) ?? new Set<string>();
+    ids.add(id);
+    groups.set(label, ids);
+  }
+  return [...groups].map(([label, ids]) => withCount(label, ids.size));
 }
 
 /**
@@ -162,19 +185,29 @@ export interface ConditionChip<S extends ConditionStatus> {
   key: string;
   label: string;
   status: S;
+  /** 이 칩으로 합친 서버 조건 (상세 화면에는 하나씩 모두 보인다) */
+  conditionIds: string[];
 }
 
-/** 칩 목록: 같은 이름·같은 상태는 하나로 합치고 상태 순서로 정렬한다 */
+/**
+ * 칩 목록: 같은 이름·같은 상태는 하나로 합치고 상태 순서로 정렬한다.
+ * 상태가 다르면 합치지 않으므로 미충족이 충족에 가려지지 않는다.
+ */
 export function conditionChips<S extends ConditionStatus>(
   items: readonly { condition_id: string; status: S }[],
 ): ConditionChip<S>[] {
-  const chips = new Map<string, ConditionChip<S>>();
+  const groups = new Map<string, { base: string; status: S; ids: Set<string> }>();
   for (const item of items) {
-    const label = conditionLabel(item.condition_id);
-    const key = `${item.status}:${label}`;
-    if (!chips.has(key)) {
-      chips.set(key, { key, label, status: item.status });
-    }
+    const base = conditionLabel(item.condition_id);
+    const key = `${item.status}:${base}`;
+    const group = groups.get(key) ?? { base, status: item.status, ids: new Set<string>() };
+    group.ids.add(item.condition_id);
+    groups.set(key, group);
   }
-  return sortByStatus([...chips.values()]);
+  return sortByStatus([...groups].map(([key, { base, status, ids }]) => ({
+    key,
+    label: withCount(base, ids.size),
+    status,
+    conditionIds: [...ids],
+  })));
 }

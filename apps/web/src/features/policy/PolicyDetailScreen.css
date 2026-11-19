@@ -146,6 +146,23 @@
   color: var(--color-muted);
 }
 
+/* 긴 원문 인용 [원문 전체 보기] / [접기] */
+.s5-quote__toggle {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  margin-left: 6px;
+  padding: 0 2px;
+  border: 0;
+  background: none;
+  color: var(--color-accent-ink);
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
 .s5-link {
   color: var(--color-ink);
   font-weight: 700;

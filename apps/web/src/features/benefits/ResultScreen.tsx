@@ -540,7 +540,7 @@ function NextSteps({ closedCount, reviewCount, notEligibleCount, onOpenFold }: N
           <li>
             <button type="button" className="s3-next__item" onClick={() => { onOpenFold('notReviewed'); }}>
               <b>검수 중인 정책 {reviewCount}개 살펴보기</b>
-              <span>금액은 아직 계산 전이지만 정책별 자격 진단은 볼 수 있어요</span>
+              <span>금액은 아직 계산 전이에요. 정책마다 전체 자격 진단만 볼 수 있어요</span>
             </button>
           </li>
         ) : null}

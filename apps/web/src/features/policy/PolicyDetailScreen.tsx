@@ -3,7 +3,6 @@ import type { JSX } from 'react';
 import { CONDITION_STEPS, goBack, paths } from '../../app/router.ts';
 import {
   conditionLabel,
-  evidenceLocationLabel,
   readableReason,
   sortByStatus,
   uniqueConditionLabels,
@@ -37,6 +36,7 @@ import {
 import type { ResultPolicyStatus } from './policyDetailModel.ts';
 import { usePolicyDetail } from './usePolicyDetail.ts';
 import { ApplicationGuide } from './ApplicationGuide.tsx';
+import { EvidenceQuote } from './EvidenceQuote.tsx';
 import './PolicyDetailScreen.css';
 
 interface PolicyDetailScreenProps {
@@ -182,10 +182,7 @@ function PolicyDetail({ benefit, isSample, mine, serviceDiagnosis, resultStatus,
                     <li key={condition.condition_id} className="s5-condition">
                       <StatusChip status={condition.status}>{conditionLabel(condition.condition_id)}</StatusChip>
                       {condition.evidence.map((item, index) => (
-                        <blockquote key={`${item.source.url}-${String(index)}`} className="s5-quote">
-                          <QuoteWhere location={item.location} />
-                          {item.quote}
-                        </blockquote>
+                        <EvidenceQuote key={`${item.source.url}-${String(index)}`} quote={item.quote} location={item.location} />
                       ))}
                     </li>
                   ))}
@@ -208,7 +205,7 @@ function PolicyDetail({ benefit, isSample, mine, serviceDiagnosis, resultStatus,
             <section className="ui-card s5-card">
               <h2 className="s5-card__title">가상 정책의 공개 기준</h2>
               {benefit.eligibility_conditions.flatMap((condition) => condition.evidence.map((item, index) => (
-                <blockquote key={`${condition.id}-${String(index)}`} className="s5-quote">{item.quote}</blockquote>
+                <EvidenceQuote key={`${condition.id}-${String(index)}`} quote={item.quote} />
               )))}
             </section>
           ) : null}
@@ -253,10 +250,7 @@ function PolicyDetail({ benefit, isSample, mine, serviceDiagnosis, resultStatus,
                       {conflictName(conflict.policy_id)} ›
                     </a>
                     {conflict.evidence.map((item) => (
-                      <blockquote key={`${item.location ?? ''}${item.quote}`} className="s5-quote">
-                        <QuoteWhere location={item.location} />
-                        {item.quote}
-                      </blockquote>
+                      <EvidenceQuote key={`${item.location ?? ''}${item.quote}`} quote={item.quote} location={item.location} />
                     ))}
                   </li>
                 ))}
@@ -339,12 +333,6 @@ function PolicyDetail({ benefit, isSample, mine, serviceDiagnosis, resultStatus,
   );
 }
 
-/** 원문 인용 위치. 사람이 읽을 수 없는 내부 위치(chars:…)는 숨긴다 */
-function QuoteWhere({ location }: { location: string | null | undefined }): JSX.Element | null {
-  const where = evidenceLocationLabel(location);
-  return where !== null ? <span className="s5-quote__where">「{where}」</span> : null;
-}
-
 /** 조합 밖 목록에서 온 정책: 다시 분석하라고 하지 않고, 결과에서 어떤 상태였는지 알려 준다 */
 function ResultStatusNotice({ status, conditionsHref }: {
   status: NonNullable<ResultPolicyStatus>; conditionsHref: string;
@@ -382,11 +370,13 @@ function ResultStatusNotice({ status, conditionsHref }: {
     case 'notReviewed':
       return (
         <>
-          <h2 className="s5-card__title">아직 검수 중이라 조건별 진단이 없어요</h2>
+          <h2 className="s5-card__title">아직 검수 중이라 전체 자격 진단만 있어요</h2>
           <span className="s5-status-chips">
             <StatusChip status={status.summary}>전체 자격 진단</StatusChip>
           </span>
-          <p className="s5-muted">금액과 중복 여부를 확인하고 있어요. 자세한 조건은 공식 페이지에서 확인해 주세요.</p>
+          <p className="s5-muted">
+            금액과 중복 여부를 확인하고 있어 조건별 진단은 아직 없어요. 자세한 조건은 공식 페이지에서 확인해 주세요.
+          </p>
         </>
       );
   }

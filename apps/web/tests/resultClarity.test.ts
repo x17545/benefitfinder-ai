@@ -1,3 +1,5 @@
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import emptyText from '../../../contracts/fixtures/empty-response.json?raw';
 import resultText from '../../../contracts/fixtures/recommendation-response.json?raw';
@@ -16,7 +18,8 @@ import {
   resetResultViewMemory,
   startResultView,
 } from '../src/features/benefits/resultViewMemory.ts';
-import { policyStatusInResult } from '../src/features/policy/policyDetailModel.ts';
+import { EvidenceQuote } from '../src/features/policy/EvidenceQuote.tsx';
+import { policyStatusInResult, QUOTE_PREVIEW_LIMIT, quotePreview } from '../src/features/policy/policyDetailModel.ts';
 import type { RecommendationResponse } from '../src/shared/api/recommendations.ts';
 
 const ONE_YEAR = { period: '1y', present_value: false } as const;
@@ -69,11 +72,35 @@ describe('조건 이름 (내부 코드 노출 방지)', () => {
       { condition_id: 'region', status: 'not_met' },
     ] as const);
     expect(chips.map((chip) => `${chip.status}:${chip.label}`)).toEqual([
-      'not_met:지역', 'needs_review:기타 조건', 'met:나이',
+      'not_met:지역', 'needs_review:기타 조건 2개', 'met:나이',
     ]);
     expect(sortByStatus([
       { id: 1, status: 'met' }, { id: 2, status: 'needs_review' }, { id: 3, status: 'met' },
     ] as const).map((item) => item.id)).toEqual([2, 1, 3]);
+  });
+});
+
+describe('조건 이름이 겹칠 때 정보가 사라지지 않게', () => {
+  it('서로 다른 조건이 뭉뚱그린 이름으로 합쳐지면 개수를 붙이고, 같은 조건을 다르게 부른 것은 하나로 둔다', () => {
+    expect(uniqueConditionLabels(['eligibility', 'eligibility:1', 'eligibility'])).toEqual(['기타 조건 2개']);
+    expect(uniqueConditionLabels(['youth-audience-manual', 'youth-intern-target', 'selection_region_code']))
+      .toEqual(['지원 대상 2개', '지역']);
+    expect(uniqueConditionLabels(['age', 'age-limit-manual', 'age-19-39'])).toEqual(['나이']);
+  });
+
+  it('상태가 다르면 합치지 않아 미충족이 충족에 가려지지 않고, 합친 조건 식별자를 모두 남긴다', () => {
+    const chips = conditionChips([
+      { condition_id: 'region', status: 'met' },
+      { condition_id: 'selection_region_code', status: 'not_met' },
+      { condition_id: 'location', status: 'not_met' },
+      { condition_id: 'participation-exclusions', status: 'needs_review' },
+      { condition_id: 'condition:duplication', status: 'needs_review' },
+    ] as const);
+    expect(chips.map((chip) => `${chip.status}:${chip.label}`)).toEqual([
+      'not_met:지역', 'needs_review:참여 제한 2개', 'met:지역',
+    ]);
+    expect(chips[0]?.conditionIds).toEqual(['selection_region_code', 'location']);
+    expect(chips[1]?.conditionIds).toEqual(['participation-exclusions', 'condition:duplication']);
   });
 });
 
@@ -92,6 +119,30 @@ describe('원문 위치와 판정 사유', () => {
       .toBe('정책 근거 문서 확인이 필요합니다.');
     expect(readableReason('입력 조건이 없어요.')).toBe('입력 조건이 없어요.');
     expect(readableReason(null)).toBe('');
+  });
+});
+
+describe('긴 원문 근거', () => {
+  const LONG = '신청일 현재 주민등록상 해당 지역에 거주하는 만 19세 이상 34세 이하 무주택 청년으로서 '.repeat(4) + '끝 문장';
+
+  it('짧은 인용은 그대로, 긴 인용은 앞부분만 줄여 보인다', () => {
+    expect(quotePreview('짧은 원문')).toBeNull();
+    const preview = quotePreview(LONG) ?? '';
+    expect(preview.endsWith('…')).toBe(true);
+    expect(preview.length <= QUOTE_PREVIEW_LIMIT).toBe(true);
+    expect(LONG.startsWith(preview.slice(0, -1))).toBe(true);
+  });
+
+  it('긴 인용은 [원문 전체 보기]로 펼칠 수 있고, 내부 위치는 숨긴다', () => {
+    const long = renderToStaticMarkup(createElement(EvidenceQuote, { quote: LONG, location: 'chars:10-900' }));
+    expect(long).toContain('원문 전체 보기');
+    expect(long).toContain('aria-expanded="false"');
+    expect(long).not.toContain('끝 문장');
+    expect(long).not.toContain('chars:');
+    const short = renderToStaticMarkup(createElement(EvidenceQuote, { quote: '짧은 원문', location: 'fields.srngMthdCn' }));
+    expect(short).toContain('「선정 방법」');
+    expect(short).toContain('짧은 원문');
+    expect(short).not.toContain('원문 전체 보기');
   });
 });
 
