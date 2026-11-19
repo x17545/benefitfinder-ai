@@ -42,15 +42,21 @@ AT = datetime(2026, 11, 2, 1, tzinfo=timezone.utc)
 
 
 @contextmanager
-def dedicated_database(base: str, *, legacy: bool = False):
+def dedicated_database(base: str, *, legacy: bool = False, full_schema: bool = False):
     name = "bf_rechecks_" + uuid4().hex + "_test"
     with psycopg.connect(base, autocommit=True) as connection:
         connection.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(name)))
     url = make_conninfo(base, dbname=name)
     try:
         with psycopg.connect(url) as connection:
+            if legacy and full_schema:
+                raise ValueError('legacy_full_schema_conflict')
             for item in NAMES[:-1] if legacy else NAMES:
                 connection.execute((MIGRATIONS / item).read_text())
+            if full_schema:
+                for migration in sorted(MIGRATIONS.glob('*.sql')):
+                    if '0007' <= migration.name[:4] <= '0015':
+                        connection.execute(migration.read_text(encoding='utf-8'))
         yield url
     finally:
         with psycopg.connect(base, autocommit=True) as connection:
@@ -119,7 +125,7 @@ class PolicySourceRechecksPostgresTest(unittest.TestCase):
         cls.base = os.environ.get("F13_TEST_DATABASE_URL", "")
         if not cls.base or not conninfo_to_dict(cls.base).get("dbname", "").endswith("_test"):
             raise ValueError("dedicated_test_database_required")
-        cls.database = dedicated_database(cls.base)
+        cls.database = dedicated_database(cls.base, full_schema=True)
         cls.url = cls.database.__enter__()
 
     @classmethod
@@ -128,7 +134,7 @@ class PolicySourceRechecksPostgresTest(unittest.TestCase):
 
     def setUp(self) -> None:
         with psycopg.connect(self.url) as connection:
-            connection.execute("""TRUNCATE public.policy_recheck_queue,
+            connection.execute("""TRUNCATE public.f12_analysis_sources,public.f12_analysis_tasks,public.policy_recheck_queue,
                 public.policy_catalog_source_links,public.policy_catalog_releases,
                 public.collected_policy_changes,public.collected_policies,public.collected_policy_runs,
                 public.f13_clauses,public.f13_policy_documents RESTART IDENTITY""")
@@ -285,6 +291,10 @@ class PolicySourceRechecksPostgresTest(unittest.TestCase):
                 connection.execute((MIGRATIONS / NAMES[-1]).read_text())
                 self.assertEqual(connection.execute("SELECT review_status,publication_status FROM public.policy_catalog_releases WHERE policy_id='youth:catalog:LEGACY'").fetchone(), ("pending", "retired"))
                 self.assertEqual(connection.execute("SELECT DISTINCT review_status,publication_status FROM public.f13_clauses").fetchall(), [("pending", "retired")])
+            with psycopg.connect(url) as connection:
+                for migration in sorted(MIGRATIONS.glob("*.sql")):
+                    if "0007" <= migration.name[:4] <= "0015":
+                        connection.execute(migration.read_text(encoding="utf-8"))
             self.assertEqual([p.policy_id for p in PostgresPublishedPolicies(url).list_published()], ["youth:catalog:VIRTUAL"])
             item = list_policy_rechecks(url)["items"][0]
             self.assertEqual(item["reason"], "source_unlinked")
@@ -336,7 +346,8 @@ class PolicySourceRechecksPostgresTest(unittest.TestCase):
                     self.assertEqual(main(["policy-catalog", "rechecks", "--output", str(output)]), 0)
                 self.assertEqual(json.loads(stdout.getvalue())["exported_count"], 2)
                 self.assertEqual(len(json.loads(output.read_text())["items"]), 2)
-                self.assertEqual(output.stat().st_mode & 0o777, 0o600)
+                if os.name != "nt":
+                    self.assertEqual(output.stat().st_mode & 0o777, 0o600)
                 self.assertNotIn("fictional-human-reviewer", stdout.getvalue())
                 self.assertNotIn("fictional-test-only", stdout.getvalue() + stderr.getvalue())
             for statement in ("SELECT fields FROM public.collected_policies",

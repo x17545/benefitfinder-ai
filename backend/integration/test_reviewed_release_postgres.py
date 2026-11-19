@@ -38,12 +38,8 @@ MIGRATIONS = ROOT / "backend/migrations/versions"
 class ReviewedReleasePostgresTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.database = dedicated_database(test_database_url())
+        cls.database = dedicated_database(test_database_url(), full_schema=True)
         cls.url = cls.database.__enter__()
-        with psycopg.connect(cls.url) as connection:
-            for name in ("0007_f12_analysis_tasks.sql", "0008_service_catalog.sql",
-                         "0009_gov24_policy_sources.sql", "0010_catalog_explanation_publication.sql"):
-                connection.execute((MIGRATIONS / name).read_text())
 
     @classmethod
     def tearDownClass(cls) -> None:

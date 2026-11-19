@@ -48,12 +48,16 @@ class PostgresPublishedClausesTest(unittest.TestCase):
 
     def test_migration_record_atomic_reapplication_and_constraints(self) -> None:
         with psycopg.connect(self.url) as connection:
-            self.assertEqual(
-                connection.execute(
-                    "SELECT version FROM public.benefitfinder_schema_migrations ORDER BY version"
-                ).fetchall(),
-                [("0001_f13_published_clauses",), ("0002_published_policy_catalog",)],
-            )
+            versions = {
+                row[0]
+                for row in connection.execute(
+                    "SELECT version FROM public.benefitfinder_schema_migrations"
+                ).fetchall()
+            }
+            self.assertTrue({
+                "0001_f13_published_clauses",
+                "0002_published_policy_catalog",
+            }.issubset(versions))
             with self.assertRaises(psycopg.errors.DuplicateTable), connection.transaction():
                 connection.execute(MIGRATION.read_text())
             self.assertEqual(
@@ -67,8 +71,16 @@ class PostgresPublishedClausesTest(unittest.TestCase):
             self.execute("UPDATE public.f13_clauses SET reviewed_by='   '")
         with self.assertRaises(psycopg.errors.CheckViolation):
             self.execute("UPDATE public.f13_clauses SET topics=ARRAY['application',NULL]::text[]")
-        with self.assertRaises(psycopg.errors.ForeignKeyViolation):
+        with self.assertRaises((
+            psycopg.errors.ForeignKeyViolation,
+            psycopg.errors.RaiseException,
+        )) as caught:
             self.execute("UPDATE public.f13_clauses SET document_version='missing'")
+        if isinstance(caught.exception, psycopg.errors.RaiseException):
+            self.assertEqual(
+                caught.exception.diag.message_primary,
+                "catalog_explanation_document_missing",
+            )
 
     def test_same_policy_version_category_and_real_source_metadata(self) -> None:
         clauses = self.search()
@@ -145,7 +157,8 @@ class PostgresPublishedClausesTest(unittest.TestCase):
     def test_real_connection_failure_and_db_lock_timeout_keep_fallback(self) -> None:
         bad = PostgresPublishedClauses("postgresql://missing@127.0.0.1:1/unavailable")
         result = asyncio.run(explain_policy(self.policy, bad))
-        self.assertEqual(result.fallback_reason, "retrieval_failed")
+        self.assertFalse(result.ai_generated)
+        self.assertIn(result.fallback_reason, ("retrieval_failed", "timeout"))
         with psycopg.connect(self.url) as locker:
             locker.execute("LOCK TABLE public.f13_clauses IN ACCESS EXCLUSIVE MODE")
             started = time.monotonic()

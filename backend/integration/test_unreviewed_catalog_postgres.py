@@ -32,7 +32,7 @@ class UnreviewedCatalogPostgresTest(unittest.TestCase):
         cls.url = cls.database.__enter__()
         with psycopg.connect(cls.url) as connection:
             for path in sorted(MIGRATIONS.glob('*.sql')):
-                if '0007' <= path.name[:4] <= '0014':
+                if '0007' <= path.name[:4] <= '0015':
                     connection.execute(path.read_text())
 
     @classmethod
