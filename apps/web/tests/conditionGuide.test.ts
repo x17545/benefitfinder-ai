@@ -55,11 +55,20 @@ describe('어려운 용어 설명', () => {
     expect(html).toContain('주민등록등본');
   });
 
+  it('정책마다 다른 기준(무주택·재산·가구원 수)은 단정하지 않고 정책별 확인을 안내한다', () => {
+    for (const key of ['homeOwnership', 'asset', 'householdSize'] as const) {
+      expect(TERM_HELP[key].answer).toContain('정책마다 달라');
+    }
+    expect(TERM_HELP.homeOwnership.answer).toContain('세대원');
+    expect(TERM_HELP.homeOwnership.answer).toContain('분양권·입주권');
+    expect(TERM_HELP.asset.answer).toContain('빚');
+  });
+
   it('설명은 모두 질문과 한두 문장의 답을 가진다', () => {
     for (const { question, answer } of Object.values(TERM_HELP)) {
       expect(question.endsWith('?')).toBe(true);
       expect(answer.length).toBeGreaterThan(20);
-      expect(answer.length < 120).toBe(true);
+      expect(answer.length < 140).toBe(true);
     }
   });
 });
