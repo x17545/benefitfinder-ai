@@ -29,7 +29,7 @@ describe('남은 질문 안내', () => {
 
   it('하단 [다음] 위에 안내 버튼을 보이고, 질문이 하나뿐이면 보이지 않는다', () => {
     const render = (questions: readonly { id: string; answered: boolean }[]) => renderToStaticMarkup(
-      createElement(ConditionStepLayout, { step: 6, title: '어떻게 살고 있나요?', canNext: false, questions }, null),
+      createElement(ConditionStepLayout, { step: 6, title: '어떻게 살고 있나요?', canNext: false, questions, children: null }),
     );
     const html = render(HOUSING);
     expect(html).toContain('class="s2-remaining"');
