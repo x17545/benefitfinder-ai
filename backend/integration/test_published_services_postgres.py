@@ -59,10 +59,8 @@ class PublishedServicesPostgresTest(unittest.TestCase):
         cls.base = os.environ.get('F13_TEST_DATABASE_URL', '')
         if not cls.base or not conninfo_to_dict(cls.base).get('dbname', '').endswith('_test'):
             raise ValueError('dedicated_test_database_required')
-        cls.database = dedicated_database(cls.base)
+        cls.database = dedicated_database(cls.base, full_schema=True)
         cls.url = cls.database.__enter__()
-        with psycopg.connect(cls.url) as connection:
-            connection.execute(MIGRATION.read_text())
         cls.contracts = service_contracts.F14ServiceApiTests()
         cls.contracts.setUpClass()
 
@@ -72,7 +70,7 @@ class PublishedServicesPostgresTest(unittest.TestCase):
 
     def setUp(self) -> None:
         with psycopg.connect(self.url) as connection:
-            connection.execute('''TRUNCATE public.policy_recheck_queue,public.policy_catalog_source_links,
+            connection.execute('''TRUNCATE public.f12_analysis_sources,public.f12_analysis_tasks,public.policy_recheck_queue,public.policy_catalog_source_links,
                 public.policy_catalog_releases,public.collected_policy_changes,public.collected_policies,
                 public.collected_policy_runs,public.f13_clauses,public.f13_policy_documents RESTART IDENTITY''')
         self.repository = PostgresPublishedServices(self.url)
