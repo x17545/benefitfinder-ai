@@ -84,12 +84,6 @@ function currentDepth(): number {
   return 0;
 }
 
-if (typeof window !== 'undefined') {
-  window.addEventListener('popstate', () => {
-    lastKind = 'pop';
-  });
-}
-
 /** 다른 화면으로 이동한다. replace면 뒤로 가기 기록을 남기지 않는다 */
 export function navigate(path: string, options: { replace?: boolean } = {}): void {
   if (options.replace === true) {
@@ -121,10 +115,15 @@ export function goBack(fallback: string): void {
 
 /** 주소가 바뀔 때 알려 준다 (navigate, 브라우저 뒤로·앞으로) */
 export function subscribeToNavigation(callback: () => void): () => void {
-  window.addEventListener('popstate', callback);
+  // 뒤로·앞으로는 화면을 다시 그리기 전에 표시해 둔다 (결과 화면 복원 판단)
+  function onPop(): void {
+    lastKind = 'pop';
+    callback();
+  }
+  window.addEventListener('popstate', onPop);
   window.addEventListener(NAVIGATE_EVENT, callback);
   return () => {
-    window.removeEventListener('popstate', callback);
+    window.removeEventListener('popstate', onPop);
     window.removeEventListener(NAVIGATE_EVENT, callback);
   };
 }

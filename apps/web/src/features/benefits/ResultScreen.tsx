@@ -105,30 +105,30 @@ export function ResultScreen(): JSX.Element {
   const [restored] = useState(() => startResultView(memoryKey, lastNavigationKind() === 'pop'));
   const rootRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (memoryKey === '') {
+    if (restored.windowY <= 0 && restored.screenTop <= 0) {
       return;
     }
-    const screen = rootRef.current;
     // App이 화면 이동 때 맨 위로 올린 다음에 되살린다
-    const timer = window.setTimeout(() => {
+    const timer = setTimeout(() => {
       if (restored.windowY > 0) {
         window.scrollTo(0, restored.windowY);
       }
-      if (screen !== null && restored.screenTop > 0) {
-        screen.scrollTop = restored.screenTop;
+      if (rootRef.current !== null && restored.screenTop > 0) {
+        rootRef.current.scrollTop = restored.screenTop;
       }
     }, 0);
-    function onScroll(): void {
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [restored]);
+
+  /** 결과 화면 안의 링크(정책 상세 등)를 누르는 순간의 스크롤 위치를 기억한다 */
+  function rememberPosition(): void {
+    if (memoryKey !== '') {
       rememberScroll(memoryKey, window.scrollY, rootRef.current?.scrollTop ?? 0);
     }
-    window.addEventListener('scroll', onScroll, { passive: true });
-    screen?.addEventListener('scroll', onScroll, { passive: true });
-    return () => {
-      window.clearTimeout(timer);
-      window.removeEventListener('scroll', onScroll);
-      screen?.removeEventListener('scroll', onScroll);
-    };
-  }, [memoryKey, restored]);
+  }
+
   const info = policySummaries(result);
   // F14: 돈 말고 받을 수 있는 서비스 수 (현금 총액에는 더하지 않는다)
   const expiredServices = hasExpiredServices(result?.services);
@@ -255,7 +255,7 @@ export function ResultScreen(): JSX.Element {
   }
 
   return (
-    <div className="page-width screen s3" ref={rootRef}>
+    <div className="page-width screen s3" ref={rootRef} onClickCapture={rememberPosition}>
       <ResultTopBar />
 
       <main className="s3-body">
