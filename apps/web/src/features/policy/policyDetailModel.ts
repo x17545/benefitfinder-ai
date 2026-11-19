@@ -76,3 +76,36 @@ export function payoutTimingSummary(amount: NormalizedBenefit['benefit_amount'])
   }
   return amount.type === 'maturity' || amount.pay_timing === 'at_maturity' ? '만기 시 지급' : null;
 }
+
+/** S5에서 조합 진단이 없을 때, 이 정책이 결과의 어느 목록에 있었는지 */
+export type ResultPolicyStatus =
+  | { kind: 'fallback' }
+  | { kind: 'notEligible'; failed: readonly string[] }
+  | { kind: 'closed' }
+  | { kind: 'notReviewed'; summary: ConditionResult['status'] }
+  | null;
+
+/**
+ * 조합(portfolios) 밖의 목록에서 정책을 찾는다. 판정은 서버 값을 그대로 쓰고 새로 계산하지 않는다.
+ * 결과에 없으면 null (지난 분석이거나 다른 조건으로 찾은 정책)
+ */
+export function policyStatusInResult(
+  result: RecommendationResponse, basis: ResultBasis, policyId: string,
+): ResultPolicyStatus {
+  const view = pickView(result, basis.period, basis.present_value);
+  if ((view.fallback_list ?? []).some((item) => item.policy_id === policyId)) {
+    return { kind: 'fallback' };
+  }
+  const notEligible = (view.not_eligible ?? []).find((item) => item.policy_id === policyId);
+  if (notEligible !== undefined) {
+    return { kind: 'notEligible', failed: notEligible.failed };
+  }
+  if ((view.closed_now ?? []).some((item) => item.policy_id === policyId)) {
+    return { kind: 'closed' };
+  }
+  const notReviewed = (view.not_yet_reviewed ?? []).find((item) => item.policy_id === policyId);
+  if (notReviewed !== undefined) {
+    return { kind: 'notReviewed', summary: notReviewed.eligibility_summary };
+  }
+  return null;
+}

@@ -687,3 +687,52 @@
   flex-wrap: wrap;
   gap: 6px;
 }
+
+/* 조합이 0개일 때: 다음에 해 볼 수 있는 것 */
+.s3-next {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.s3-next__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+@media (min-width: 1024px) {
+  .s3-next__list {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.s3-next__item {
+  width: 100%;
+  min-height: 56px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 14px 18px;
+  border: 0;
+  border-radius: var(--radius-card);
+  background: var(--color-card);
+  color: var(--color-ink);
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  word-break: keep-all;
+  cursor: pointer;
+}
+
+.s3-next__item b {
+  font-size: 15px;
+}
+
+.s3-next__item span {
+  font-size: 13px;
+  color: var(--color-muted);
+}

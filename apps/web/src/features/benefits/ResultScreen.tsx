@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { JSX } from 'react';
-import { CONDITION_STEPS, navigate, paths } from '../../app/router.ts';
+import { CONDITION_STEPS, lastNavigationKind, navigate, paths } from '../../app/router.ts';
 import { trackEvent } from '../../shared/analytics/events.ts';
 import { Button } from '../../shared/ui/Button.tsx';
 import { SiteFooter } from '../../shared/ui/SiteFooter.tsx';
@@ -19,6 +19,8 @@ import { PortfolioCard } from './PortfolioCard.tsx';
 import { resultImageAmountBasisNote, saveResultImage } from './resultImage.ts';
 import { ResultLists } from './ResultLists.tsx';
 import { readResultBasis, withResultBasis } from './resultBasis.ts';
+import { foldElementId, rememberFold, rememberScroll, startResultView } from './resultViewMemory.ts';
+import type { FoldId } from './resultViewMemory.ts';
 import { hasExpiredServices } from '../services/serviceModel.ts';
 import '../services/ServicesScreen.css';
 import { pickView, policyName, policySummaries, portfolioLabel } from './resultModel.ts';
@@ -98,6 +100,35 @@ export function ResultScreen(): JSX.Element {
   const [selectedRank, setSelectedRank] = useState(1);
 
   const result = analysis.status === 'done' ? analysis.result : null;
+  // 상세에서 [뒤로]로 돌아온 경우에만 펼친 목록과 스크롤 위치를 되살린다
+  const memoryKey = result?.request_id ?? '';
+  const [restored] = useState(() => startResultView(memoryKey, lastNavigationKind() === 'pop'));
+  const rootRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (memoryKey === '') {
+      return;
+    }
+    const screen = rootRef.current;
+    // App이 화면 이동 때 맨 위로 올린 다음에 되살린다
+    const timer = window.setTimeout(() => {
+      if (restored.windowY > 0) {
+        window.scrollTo(0, restored.windowY);
+      }
+      if (screen !== null && restored.screenTop > 0) {
+        screen.scrollTop = restored.screenTop;
+      }
+    }, 0);
+    function onScroll(): void {
+      rememberScroll(memoryKey, window.scrollY, rootRef.current?.scrollTop ?? 0);
+    }
+    window.addEventListener('scroll', onScroll, { passive: true });
+    screen?.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener('scroll', onScroll);
+      screen?.removeEventListener('scroll', onScroll);
+    };
+  }, [memoryKey, restored]);
   const info = policySummaries(result);
   // F14: 돈 말고 받을 수 있는 서비스 수 (현금 총액에는 더하지 않는다)
   const expiredServices = hasExpiredServices(result?.services);
@@ -163,6 +194,27 @@ export function ResultScreen(): JSX.Element {
     : `${periodShort} 동안 함께 받을 수 있는 최대 금액${pvSuffix}`;
   const fallback = view.fallback_list ?? [];
   const hasPendingReview = (view.not_yet_reviewed?.length ?? 0) > 0;
+  const closedCount = view.closed_now?.length ?? 0;
+  const notEligibleCount = view.not_eligible?.length ?? 0;
+  const reviewCount = view.not_yet_reviewed?.length ?? 0;
+  // 현금 지원은 없지만 볼 목록(검수 전·모집 끝남·조건 안 맞음)이 있는 경우
+  const noCashWithLists = !hasResults(view) && (hasPendingReview || closedCount > 0 || notEligibleCount > 0);
+  // 조합이 0개면 다음에 할 수 있는 일을 안내한다 (S3-E 전체 빈 화면은 따로 안내)
+  const showNextSteps = portfolios.length === 0 && (fallback.length > 0 || noCashWithLists || serviceCount > 0);
+
+  function toggleFold(id: FoldId, open: boolean): void {
+    rememberFold(memoryKey, id, open);
+  }
+
+  function openFold(id: FoldId): void {
+    const element = document.getElementById(foldElementId(id));
+    if (element instanceof HTMLDetailsElement) {
+      element.open = true;
+      rememberFold(memoryKey, id, true);
+      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      element.querySelector('summary')?.focus({ preventScroll: true });
+    }
+  }
 
   // F10: 조합 카드와 지금 고른 조합의 지원금만 그림으로 저장한다 (조건은 넣지 않는다)
   function saveImage(): void {
@@ -203,7 +255,7 @@ export function ResultScreen(): JSX.Element {
   }
 
   return (
-    <div className="page-width screen s3">
+    <div className="page-width screen s3" ref={rootRef}>
       <ResultTopBar />
 
       <main className="s3-body">
@@ -219,8 +271,13 @@ export function ResultScreen(): JSX.Element {
                 ? `함께 받을 수 있는 조합 ${String(portfolios.length)}개를 찾았어요`
                 : `받을 수 있는 지원금 ${String(fallback.length)}개를 찾았어요`}
             </h1>
-          ) : hasPendingReview ? (
-            <h1 className="screen__title">아직 조합 계산 전인 정책</h1>
+          ) : noCashWithLists ? (
+            <>
+              <h1 className="screen__title">지금 바로 받을 수 있는 지원금은 찾지 못했어요</h1>
+              <p className="s2-desc">
+                이 조건으로 금액을 계산할 수 있는 현금 지원이 아직 없어요. 아래 ‘다음에 해 볼 수 있는 것’을 확인해 주세요.
+              </p>
+            </>
           ) : serviceCount > 0 ? (
             <h1 className="screen__title">확인할 수 있는 서비스가 있어요</h1>
           ) : expiredServices ? (
@@ -416,7 +473,17 @@ export function ResultScreen(): JSX.Element {
           </section>
         ) : null}
 
-        <ResultLists view={view} selected={selected} info={info} aiGenerated={result.ai_generated} />
+        {showNextSteps ? (
+          <NextSteps
+            closedCount={closedCount}
+            reviewCount={reviewCount}
+            notEligibleCount={notEligibleCount}
+            onOpenFold={openFold}
+          />
+        ) : null}
+
+        <ResultLists view={view} selected={selected} info={info} aiGenerated={result.ai_generated}
+          openFolds={restored.open} onToggleFold={toggleFold} />
 
         <p className="s3-disclaimer">
           {view.not_yet_reviewed?.some((item) => item.verification_only === true)
@@ -445,6 +512,60 @@ export function ResultScreen(): JSX.Element {
         </div>
       </div> : null}
     </div>
+  );
+}
+
+interface NextStepsProps {
+  closedCount: number;
+  reviewCount: number;
+  notEligibleCount: number;
+  onOpenFold: (id: FoldId) => void;
+}
+
+/** 추천 조합이 0개일 때 '다음에 해 볼 수 있는 것' (서비스 목록 진입은 바로 위 카드가 맡는다) */
+function NextSteps({ closedCount, reviewCount, notEligibleCount, onOpenFold }: NextStepsProps): JSX.Element {
+  return (
+    <section className="s3-next" aria-labelledby="s3-next-title">
+      <h2 className="s3-section__title" id="s3-next-title">다음에 해 볼 수 있는 것</h2>
+      <ul className="s3-next__list">
+        {closedCount > 0 ? (
+          <li>
+            <button type="button" className="s3-next__item" onClick={() => { onOpenFold('closed'); }}>
+              <b>모집이 끝난 정책 {closedCount}개 확인하기</b>
+              <span>다음 모집 때 신청할 수 있는 정책이에요</span>
+            </button>
+          </li>
+        ) : null}
+        {reviewCount > 0 ? (
+          <li>
+            <button type="button" className="s3-next__item" onClick={() => { onOpenFold('notReviewed'); }}>
+              <b>검수 중인 정책 {reviewCount}개 살펴보기</b>
+              <span>금액은 아직 계산 전이지만 정책별 자격 진단은 볼 수 있어요</span>
+            </button>
+          </li>
+        ) : null}
+        {notEligibleCount > 0 ? (
+          <li>
+            <button type="button" className="s3-next__item" onClick={() => { onOpenFold('notEligible'); }}>
+              <b>조건이 맞지 않은 정책 {notEligibleCount}개 이유 보기</b>
+              <span>어떤 조건 때문에 빠졌는지 알 수 있어요</span>
+            </button>
+          </li>
+        ) : null}
+        <li>
+          <a className="s3-next__item" href={paths.conditions(CONDITION_STEPS)}>
+            <b>조건 바꿔서 다시 찾기</b>
+            <span>관심 분야나 지금 상황을 바꾸면 다른 정책이 나올 수 있어요</span>
+          </a>
+        </li>
+        <li>
+          <a className="s3-next__item" href="https://www.youthcenter.go.kr" target="_blank" rel="noopener noreferrer">
+            <b>온통청년에서 더 찾아보기 ↗</b>
+            <span>전국 청년 정책을 직접 검색할 수 있어요</span>
+          </a>
+        </li>
+      </ul>
+    </section>
   );
 }
 

@@ -1,4 +1,5 @@
 import type { JSX } from 'react';
+import { evidenceLocationLabel } from '../../domains/youth/conditionLabels.ts';
 import type { NormalizedBenefit } from '../../shared/api/benefits.ts';
 import { applyPeriod } from './policyDetailModel.ts';
 
@@ -6,9 +7,10 @@ type Guide = NonNullable<NormalizedBenefit['application_guide']>;
 type Excerpt = NonNullable<Guide['method']>;
 
 function Citation({ item }: { item: Excerpt }): JSX.Element {
+  const where = evidenceLocationLabel(item.location);
   return (
     <blockquote className="s5-quote">
-      <span className="s5-quote__where">「{item.location}」</span>
+      {where !== null ? <span className="s5-quote__where">「{where}」</span> : null}
       <span className="s5-guide-quote">{item.quote}</span>
     </blockquote>
   );
