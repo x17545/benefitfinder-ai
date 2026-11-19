@@ -1,5 +1,7 @@
 """Offline input, failure, immutable artifacts and daily ordering contracts."""
 
+import os
+
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 import json
@@ -89,9 +91,10 @@ class PolicyAnalysisPipelineTest(unittest.TestCase):
         self.assertEqual(summary['documents'], 1)
         self.assertEqual(len(digest), 64)
         directory = self.root / reference
-        self.assertEqual(directory.stat().st_mode & 0o777, 0o700)
-        for path in directory.iterdir():
-            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+        if os.name != 'nt':
+            self.assertEqual(directory.stat().st_mode & 0o777, 0o700)
+            for path in directory.iterdir():
+                self.assertEqual(path.stat().st_mode & 0o777, 0o600)
         trace = (directory / 'trace.jsonl').read_text()
         self.assertEqual(json.loads(trace), {'tool': 'fetch_document', 'outcome': 'ok', 'elapsed_ms': 1})
         self.assertNotIn('가상 정책', trace)
@@ -110,7 +113,12 @@ class PolicyAnalysisPipelineTest(unittest.TestCase):
 
     def test_artifact_directory_cannot_escape_through_symlink(self):
         with TemporaryDirectory() as outside:
-            (self.root / 'f12-analysis').symlink_to(outside)
+            try:
+                (self.root / 'f12-analysis').symlink_to(outside, target_is_directory=True)
+            except OSError as error:
+                if os.name == 'nt' and getattr(error, 'winerror', None) == 1314:
+                    self.skipTest('Windows symlink privilege unavailable')
+                raise
             files = PolicyAnalysisFiles(self.root, lambda *_: None)
             with self.assertRaisesRegex(ValueError, 'f12_artifact_failed'):
                 files.start(claim())

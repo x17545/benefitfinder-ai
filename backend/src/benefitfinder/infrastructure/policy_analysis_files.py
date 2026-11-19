@@ -23,7 +23,8 @@ def _encode(value: object) -> bytes:
 
 def _create(path: Path, value: object) -> None:
     with path.open('xb') as handle:
-        os.fchmod(handle.fileno(), 0o600)
+        if os.name != 'nt':
+            os.fchmod(handle.fileno(), 0o600)
         handle.write(_encode(value))
         handle.flush()
         os.fsync(handle.fileno())
@@ -55,7 +56,8 @@ class PolicyAnalysisFiles:
             _create(directory / 'input.json', {'format_version': 1, **claim.input.payload()})
             # Create the trace before any call; even zero-tool failures have a record.
             with (directory / 'trace.jsonl').open('xb') as handle:
-                os.fchmod(handle.fileno(), 0o600)
+                if os.name != 'nt':
+                    os.fchmod(handle.fileno(), 0o600)
         except (OSError, ValueError):
             raise ValueError('f12_artifact_failed') from None
 
@@ -65,8 +67,13 @@ class PolicyAnalysisFiles:
                 or type(step.elapsed_ms) is not int or not 0 <= step.elapsed_ms <= 3_600_000):
                 raise ValueError
             encoded = json.dumps(asdict(step), separators=(',', ':')).encode() + b'\n'
-            descriptor = os.open(self._directory(claim) / 'trace.jsonl',
-                                 os.O_WRONLY | os.O_APPEND | os.O_NOFOLLOW)
+            trace_path = self._directory(claim) / 'trace.jsonl'
+            if os.name == 'nt' and trace_path.is_symlink():
+                raise ValueError('f12_artifact_failed')
+            flags = os.O_WRONLY | os.O_APPEND
+            if os.name != 'nt':
+                flags |= os.O_NOFOLLOW
+            descriptor = os.open(trace_path, flags)
             with os.fdopen(descriptor, 'ab') as handle:
                 if os.fstat(handle.fileno()).st_size > 65_536:
                     raise ValueError
