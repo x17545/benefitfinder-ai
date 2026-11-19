@@ -65,3 +65,16 @@ psql "$DATABASE_URL" -X --set=ON_ERROR_STOP=1 --single-transaction \
 `versions/0012_official_document_sources.sql`은 0011 이후 명시적으로 적용한다. 기존 수집·승인 연결·F12 원천에 `official_documents`를 추가한다. 승인·게시·원본 이력은 보존하며 자동 게시·DDL은 없다. 쓰기 잠금 순서를 `gov24` → `official_documents` → `youthcenter` → 정책/행으로 맞춘다. [공식 HTML·PDF 수집과 검수 연결](../src/benefitfinder/infrastructure/database/OFFICIAL_DOCUMENTS.md)을 확인하고 저장 모델 담당자의 리뷰를 받는다.
 
 `versions/0014_unreviewed_catalog.sql`은 0013 이후 명시적으로 적용한다. 미검수 게시물은 검수 승인과 분리하며 원천 변경 시 철회한다. 기존 서버는 미검수 상태를 읽지 못하므로 서버 코드 배포가 필요하다. 테스트 DB 검증과 운영 변경 절차를 따른다.
+
+## 정책 카탈로그 리비전 캐시 (0015)
+
+0015_policy_catalog_revision.sql은 0014 이후 관리자가 명시적으로 적용한다.
+
+- 게시 정책 INSERT, UPDATE, DELETE, TRUNCATE 시 리비전 증가
+- 변경 사항과 리비전은 동일한 트랜잭션에서 처리
+- 기존 게시 정책 및 검수 데이터는 변경하지 않음
+- 운영 DB 백업 및 마이그레이션 적용 여부 확인 필수
+- 읽기 전용 계정에 policy_catalog_revision SELECT 권한 필요
+- 마이그레이션 적용 및 권한 확인 후 새 백엔드 배포
+- 서버 시작 시 자동 DDL 실행 금지
+- 이미 적용된 0015 마이그레이션 재실행 금지

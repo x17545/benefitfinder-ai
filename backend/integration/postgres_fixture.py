@@ -16,6 +16,7 @@ MIGRATION = (
 )
 CHECKED_AT = datetime(2026, 11, 7, 1, 30, tzinfo=timezone.utc)
 CATALOG_MIGRATION = MIGRATION.with_name("0002_published_policy_catalog.sql")
+REVISION_MIGRATION = MIGRATION.with_name("0015_policy_catalog_revision.sql")
 
 
 def test_database_url() -> str:
@@ -30,7 +31,7 @@ def test_database_url() -> str:
     return url
 
 
-def migrate_test_database(url: str) -> None:
+def migrate_test_database(url: str, *, require_revision: bool = False) -> None:
     """Apply once, recording the version, in the same explicit atomic transaction."""
     with psycopg.connect(url) as connection:
         installed = connection.execute(
@@ -51,6 +52,19 @@ def migrate_test_database(url: str) -> None:
             ("0002_published_policy_catalog",),
         ).fetchone() is None:
             connection.execute(CATALOG_MIGRATION.read_text())
+
+        if require_revision:
+            if connection.execute(
+                "SELECT 1 FROM public.benefitfinder_schema_migrations WHERE version=%s",
+                ("0014_unreviewed_catalog",),
+            ).fetchone() is None:
+                raise ValueError("revision_migration_requires_0014")
+
+            if connection.execute(
+                "SELECT 1 FROM public.benefitfinder_schema_migrations WHERE version=%s",
+                ("0015_policy_catalog_revision",),
+            ).fetchone() is None:
+                connection.execute(REVISION_MIGRATION.read_text(encoding="utf-8"))
 
 
 def seed_test_database(url: str) -> None:

@@ -13,12 +13,12 @@ import psycopg
 from fastapi.testclient import TestClient
 from psycopg.types.json import Jsonb
 
-from backend.integration.postgres_fixture import migrate_test_database, test_database_url
+from backend.integration.postgres_fixture import test_database_url
+from backend.integration.test_policy_source_rechecks_postgres import dedicated_database
 from backend.tests.catalog_fixtures import release_data, source_text
 from backend.tests.maturity_fixtures import maturity_release
 from backend.tests.test_published_catalog import validator
 from benefitfinder.application.base_rates import BaseRateObservation
-from benefitfinder.application.published_policies import PolicyCatalogUnavailable
 from benefitfinder.bootstrap import create_app
 from benefitfinder.infrastructure.database.repositories.published_policies import (
     PostgresPublishedPolicies,
@@ -44,12 +44,16 @@ class FixedRates:
 class MaturityPoliciesPostgresTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.url = test_database_url()
-        migrate_test_database(cls.url)
+        cls.database = dedicated_database(test_database_url(), full_schema=True)
+        cls.url = cls.database.__enter__()
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls.database.__exit__(None, None, None)
 
     def setUp(self) -> None:
         with psycopg.connect(self.url) as connection:
-            connection.execute("TRUNCATE public.policy_catalog_releases")
+            connection.execute("DELETE FROM public.policy_catalog_releases")
         self.repository = PostgresPublishedPolicies(self.url)
 
     def publish(self, data: dict[str, Any], text: str) -> tuple[CatalogRecord, str]:
@@ -285,31 +289,50 @@ class MaturityPoliciesPostgresTest(unittest.TestCase):
         self.assertEqual(retained[0].policy_id, MATURITY_ID)
         self.assertEqual(retained[0].maturity_accruals, ACCRUAL_SCHEDULE)
 
-    def test_stored_accrual_payload_tampering_fails_closed_on_read(self) -> None:
+    def test_stored_accrual_payload_tampering_is_rejected(self) -> None:
         maturity, text = maturity_release("M")
         _, digest = self.publish(maturity, text)
+
         tampered = deepcopy(maturity)
         tampered["maturity_accruals"][0]["amount_won"] = 200_000
         tampered["maturity_accruals"][1]["amount_won"] = 100_000
-        self.assertEqual(sum(item["amount_won"] for item in tampered["maturity_accruals"]), 1_000_000)
+
+        with self.assertRaises(psycopg.errors.RaiseException) as caught:
+            with psycopg.connect(self.url) as connection:
+                connection.execute(
+                    "UPDATE public.policy_catalog_releases "
+                    "SET payload=%s WHERE policy_id=%s",
+                    (
+                        Jsonb(
+                            CatalogRecord.model_validate(tampered).model_dump(
+                                mode="json"
+                            )
+                        ),
+                        MATURITY_ID,
+                    ),
+                )
+
+        self.assertEqual(
+            caught.exception.diag.message_primary,
+            "catalog_release_is_immutable",
+        )
 
         with psycopg.connect(self.url) as connection:
-            connection.execute(
-                "UPDATE public.policy_catalog_releases SET payload=%s WHERE policy_id=%s",
-                (Jsonb(CatalogRecord.model_validate(tampered).model_dump(mode="json")), MATURITY_ID),
-            )
-            approved = connection.execute(
-                "SELECT approved_sha256 FROM public.policy_catalog_releases WHERE policy_id=%s",
+            stored = connection.execute(
+                "SELECT payload, approved_sha256 "
+                "FROM public.policy_catalog_releases WHERE policy_id=%s",
                 (MATURITY_ID,),
-            ).fetchone()[0]
-        self.assertEqual(approved, digest)
+            ).fetchone()
 
-        with self.assertRaises(PolicyCatalogUnavailable):
-            self.repository.list_published()
-        with TestClient(create_app(policy_database_url=self.url)) as client:
-            response = client.post("/api/v1/recommendations", json=self.request_payload())
-        self.assertEqual(response.status_code, 503, response.text)
-        self.assertEqual(response.json()["code"], "dependency_unavailable")
+        self.assertEqual(stored[1], digest)
+        self.assertEqual(
+            stored[0]["maturity_accruals"],
+            maturity["maturity_accruals"],
+        )
+
+        published = self.repository.list_published()
+        self.assertEqual(len(published), 1)
+        self.assertEqual(published[0].maturity_accruals, ACCRUAL_SCHEDULE)
 
 
 if __name__ == "__main__":

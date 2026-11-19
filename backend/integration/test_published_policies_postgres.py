@@ -13,7 +13,8 @@ from fastapi.testclient import TestClient
 from psycopg.conninfo import make_conninfo
 from psycopg.types.json import Jsonb
 
-from backend.integration.postgres_fixture import migrate_test_database, test_database_url
+from backend.integration.postgres_fixture import test_database_url
+from backend.integration.test_policy_source_rechecks_postgres import dedicated_database
 from backend.tests.catalog_fixtures import release_data, source_text
 from benefitfinder.application.published_policies import PolicyCatalogUnavailable
 from benefitfinder.bootstrap import create_app
@@ -27,12 +28,18 @@ from benefitfinder.infrastructure.policy_catalog_records import CatalogRecord, r
 class PublishedPoliciesPostgresTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.url = test_database_url()
-        migrate_test_database(cls.url)
+        cls.database = dedicated_database(test_database_url(), full_schema=True)
+        cls.url = cls.database.__enter__()
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls.database.__exit__(None, None, None)
 
     def setUp(self):
         with psycopg.connect(self.url) as connection:
-            connection.execute("TRUNCATE public.policy_catalog_releases")
+            connection.execute(
+                "DELETE FROM public.policy_catalog_releases"
+            )
         self.repository = PostgresPublishedPolicies(self.url)
 
     def publish(self, data):
@@ -80,13 +87,18 @@ class PublishedPoliciesPostgresTest(unittest.TestCase):
                         (review, publication),
                     )
                 self.assertEqual(self.repository.list_published(), ())
-        with psycopg.connect(self.url) as connection:
-            connection.execute(
-                "UPDATE public.policy_catalog_releases SET review_status='approved',publication_status='published',approved_sha256=%s",
-                ("0" * 64,),
-            )
-        with self.assertRaises(PolicyCatalogUnavailable):
-            self.repository.list_published()
+        with self.assertRaisesRegex(
+            psycopg.errors.RaiseException,
+            "catalog_release_is_immutable",
+        ):
+            with psycopg.connect(self.url) as connection:
+                connection.execute(
+                    "UPDATE public.policy_catalog_releases "
+                    "SET review_status='approved',publication_status='published',approved_sha256=%s",
+                    ("0" * 64,),
+                )
+
+        self.assertEqual(self.repository.list_published(), ())
 
     def test_version_rollover_and_duplicate_failure_are_atomic(self):
         self.publish(release_data())
@@ -137,7 +149,12 @@ class PublishedPoliciesPostgresTest(unittest.TestCase):
             ("UPDATE public.policy_catalog_releases SET document_version='other'", ()),
         ]
         for sql, params in mutations:
-            with self.subTest(sql=sql), self.assertRaises(psycopg.errors.CheckViolation):
+            expected_error = (
+                psycopg.errors.RaiseException
+                if "SET payload=" in sql or "SET document_version=" in sql
+                else psycopg.errors.CheckViolation
+            )
+            with self.subTest(sql=sql), self.assertRaises(expected_error):
                 with psycopg.connect(self.url) as connection:
                     connection.execute(sql, params)
         self.assertEqual(
@@ -158,6 +175,7 @@ class PublishedPoliciesPostgresTest(unittest.TestCase):
                 )
             owner.execute("GRANT USAGE ON SCHEMA public TO catalog_test_reader")
             owner.execute("GRANT SELECT ON public.policy_catalog_releases TO catalog_test_reader")
+            owner.execute("GRANT SELECT ON public.policy_catalog_revision TO catalog_test_reader")
         url = make_conninfo(self.url, user="catalog_test_reader", password="fictional-test-only")
         self.assertEqual(len(PostgresPublishedPolicies(url).list_published()), 1)
         with self.assertRaises(psycopg.errors.InsufficientPrivilege):

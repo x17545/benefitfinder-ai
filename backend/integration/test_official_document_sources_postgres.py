@@ -120,7 +120,7 @@ class OfficialDocumentSourcesPostgresTest(unittest.TestCase):
         cls.database = dedicated_database(cls.base)
         cls.url = cls.database.__enter__()
         with psycopg.connect(cls.url) as connection:
-            for name in (*POST_0006_MIGRATIONS, SOURCE_MIGRATION):
+            for name in (*POST_0006_MIGRATIONS, SOURCE_MIGRATION, '0013_ai_catalog_review.sql', '0014_unreviewed_catalog.sql', '0015_policy_catalog_revision.sql'):
                 connection.execute((MIGRATIONS / name).read_text())
 
     @classmethod
