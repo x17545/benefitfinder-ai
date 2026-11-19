@@ -13,7 +13,8 @@ import psycopg
 from fastapi.testclient import TestClient
 from psycopg.types.json import Jsonb
 
-from backend.integration.postgres_fixture import migrate_test_database, test_database_url
+from backend.integration.postgres_fixture import test_database_url
+from backend.integration.test_policy_source_rechecks_postgres import dedicated_database
 from backend.tests.catalog_fixtures import release_data, source_text
 from backend.tests.maturity_fixtures import maturity_release
 from backend.tests.test_published_catalog import validator
@@ -43,8 +44,12 @@ class FixedRates:
 class MaturityPoliciesPostgresTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.url = test_database_url()
-        migrate_test_database(cls.url, require_revision=True)
+        cls.database = dedicated_database(test_database_url(), full_schema=True)
+        cls.url = cls.database.__enter__()
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls.database.__exit__(None, None, None)
 
     def setUp(self) -> None:
         with psycopg.connect(self.url) as connection:

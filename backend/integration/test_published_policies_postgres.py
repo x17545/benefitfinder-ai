@@ -13,7 +13,8 @@ from fastapi.testclient import TestClient
 from psycopg.conninfo import make_conninfo
 from psycopg.types.json import Jsonb
 
-from backend.integration.postgres_fixture import migrate_test_database, test_database_url
+from backend.integration.postgres_fixture import test_database_url
+from backend.integration.test_policy_source_rechecks_postgres import dedicated_database
 from backend.tests.catalog_fixtures import release_data, source_text
 from benefitfinder.application.published_policies import PolicyCatalogUnavailable
 from benefitfinder.bootstrap import create_app
@@ -27,8 +28,12 @@ from benefitfinder.infrastructure.policy_catalog_records import CatalogRecord, r
 class PublishedPoliciesPostgresTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.url = test_database_url()
-        migrate_test_database(cls.url, require_revision=True)
+        cls.database = dedicated_database(test_database_url(), full_schema=True)
+        cls.url = cls.database.__enter__()
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls.database.__exit__(None, None, None)
 
     def setUp(self):
         with psycopg.connect(self.url) as connection:
