@@ -12,6 +12,7 @@ import { clearMyData } from '../profile/clearMyData.ts';
 import { useFlowState } from '../profile/flowStore.ts';
 import { ServiceValueBasis } from './ServiceValueBasis.tsx';
 import { hasExpiredServices } from './serviceModel.ts';
+import { useServiceSnapshot } from './useServiceSnapshot.ts';
 import './ServicesScreen.css';
 
 /** S6 돈 말고 받을 수 있는 도움 (기획서 4.7-1). 주소 /services */
@@ -23,7 +24,9 @@ export function ServicesScreen(): JSX.Element {
   const entries = result?.services ?? [];
   const expiredServices = hasExpiredServices(entries);
   const total = result?.services_total_won ?? null;
-  const virtualData = result?.virtual_data === true || (analysis.status === 'done' && analysis.isSample);
+  const isSample = analysis.status === 'done' && analysis.isSample;
+  const virtualData = result?.virtual_data === true || isSample;
+  const { status, retry } = useServiceSnapshot(expiredServices || isSample ? null : result);
 
   return (
     <div className="page-width screen">
@@ -35,7 +38,7 @@ export function ServicesScreen(): JSX.Element {
         }}
       />
       <main className="screen__body s6-body">
-        {virtualData && entries.length > 0 && !expiredServices ? (
+        {virtualData && entries.length > 0 && !expiredServices && status === 'current' ? (
           <p className="s6-dev-note">가상 서비스 목록이에요. 실제로 받을 수 있는 서비스가 아니에요.</p>
         ) : null}
 
@@ -53,13 +56,27 @@ export function ServicesScreen(): JSX.Element {
               조건 고르기
             </a>
           </section>
-        ) : expiredServices ? (
+        ) : expiredServices || status === 'changed' ? (
           <section className="ui-card s6-card">
-            <h2 className="s6-card__title">서비스 모집 일정을 다시 확인해 주세요</h2>
-            <p className="s6-muted">지난 분석에 마감된 서비스가 있어요.</p>
+            <h2 className="s6-card__title">{expiredServices
+              ? '서비스 모집 일정을 다시 확인해 주세요'
+              : '서비스 정보를 다시 확인해 주세요'}</h2>
+            <p className="s6-muted">{expiredServices
+              ? '지난 분석에 마감된 서비스가 있어요.'
+              : '지난 분석에 포함된 서비스가 내려갔거나 모집 정보·환산 기준이 바뀌었어요.'}</p>
             <a className="ui-button ui-button--primary" href={paths.conditions(CONDITION_STEPS)}>
               조건 확인하고 다시 분석하기
             </a>
+          </section>
+        ) : status === 'checking' ? (
+          <section className="ui-card s6-card" role="status">
+            <p className="s6-muted">현재 서비스 정보를 확인하고 있어요.</p>
+          </section>
+        ) : status === 'unavailable' ? (
+          <section className="ui-card s6-card">
+            <h2 className="s6-card__title">현재 서비스 정보를 확인하지 못했어요</h2>
+            <p className="s6-muted">모집 정보와 환산액을 보려면 다시 확인해 주세요.</p>
+            <button type="button" className="ui-button ui-button--primary" onClick={retry}>다시 시도</button>
           </section>
         ) : entries.length === 0 ? (
           <section className="ui-card s6-card">

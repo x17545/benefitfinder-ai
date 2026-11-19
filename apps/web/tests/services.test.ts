@@ -5,7 +5,9 @@ import legacyText from '../../../contracts/fixtures/empty-response.json?raw';
 import { isNormalizedBenefit } from '../src/shared/api/benefits.ts';
 import { isRecommendationResponse } from '../src/shared/api/recommendations.ts';
 import { isService } from '../src/shared/api/serviceValidation.ts';
-import { findServiceForDetail, hasExpiredServices, valueBasisText } from '../src/features/services/serviceModel.ts';
+import {
+  findServiceForDetail, hasExpiredServices, matchesServiceSnapshot, valueBasisText,
+} from '../src/features/services/serviceModel.ts';
 
 const parsedResult: unknown = JSON.parse(resultText);
 const parsedDetail: unknown = JSON.parse(detailText);
@@ -74,5 +76,26 @@ describe('F14 server response validation', () => {
     const rows = [{ ...priced, application: { ...priced.application, ends_on: '2026-11-12' } }, unknown];
     expect(hasExpiredServices(rows, new Date('2026-11-12T14:59:59Z'))).toBe(false);
     expect(hasExpiredServices(rows, new Date('2026-11-12T15:00:00Z'))).toBe(true);
+  });
+
+  it('requires the current source, recruitment and pricing evidence to match the saved service', () => {
+    expect(matchesServiceSnapshot(priced, detail)).toBe(true);
+    expect(matchesServiceSnapshot(priced, { ...detail, id: 'other' })).toBe(false);
+    expect(matchesServiceSnapshot(priced, {
+      ...detail, source: { ...detail.source, document_version: 'new' },
+    })).toBe(false);
+    expect(matchesServiceSnapshot(priced, {
+      ...detail, application: { ...detail.application, status: 'closed' },
+    })).toBe(false);
+    expect(matchesServiceSnapshot(priced, {
+      ...detail, service: { ...priced.service, unit_value_won: 30_000, estimated_value_won: 90_000 },
+    })).toBe(false);
+    expect(matchesServiceSnapshot(priced, {
+      ...detail, service: { ...priced.service, value_checked_at: '2026-11-12' },
+    })).toBe(false);
+    expect(matchesServiceSnapshot(unknown, {
+      ...detail, id: unknown.policy_id, source: unknown.source,
+      application: unknown.application, service: unknown.service,
+    })).toBe(true);
   });
 });
