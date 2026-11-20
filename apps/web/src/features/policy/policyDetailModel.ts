@@ -7,6 +7,33 @@ import { pickView } from '../benefits/resultModel.ts';
 import type { PortfolioPolicy } from '../benefits/resultModel.ts';
 
 export type ConditionResult = PortfolioPolicy['eligibility'][number];
+/**
+ * 공식 원문의 보존용 구간과 금액 계산 근거를 일반 자격 조건에서 분리한다.
+ * 서버 판정 결과와 원문 근거는 변경하지 않는다.
+ */
+export function partitionPolicyEvidence(
+  conditions: readonly ConditionResult[],
+): {
+  eligibility: ConditionResult[];
+  officialTerms: ConditionResult[];
+  calculationEvidence: ConditionResult[];
+} {
+  const eligibility: ConditionResult[] = [];
+  const officialTerms: ConditionResult[] = [];
+  const calculationEvidence: ConditionResult[] = [];
+
+  for (const condition of conditions) {
+    if (/^official_source_terms_[0-9]+$/.test(condition.condition_id)) {
+      officialTerms.push(condition);
+    } else if (condition.condition_id === 'calculated_component') {
+      calculationEvidence.push(condition);
+    } else {
+      eligibility.push(condition);
+    }
+  }
+
+  return { eligibility, officialTerms, calculationEvidence };
+}
 
 /** 같은 선택 기준·문서 버전·자료 종류의 분석만 상세에 연결한다. */
 export function findMyPolicyResult(
