@@ -49,6 +49,38 @@ describe('S5 정책 상세 글자', () => {
     expect(payoutTimingSummary(null)).toBeNull();
   });
 
+  it('개별 추천도 출처와 문서 버전이 일치할 때만 진단을 연결한다', () => {
+    const fixture = structuredClone(result);
+    const basis = { period: '2y', present_value: true } as const;
+    const view = fixture.results['2y'].pv_on;
+    const matching = { ...benefit, id: 'youth:catalog:A', virtual_data: false };
+    const eligibility = [condition('age', 'met'), condition('income', 'needs_review')];
+
+    fixture.virtual_data = false;
+    view.portfolios = [];
+    view.fallback_list = [{
+      policy_id: matching.id,
+      amount_in_period_won: 1_000_000,
+      eligibility,
+      source: matching.source,
+      reason: '개별 추천',
+    }];
+
+    expect(findMyPolicyResult(fixture, matching, basis, false, false))
+      .toMatchObject({ policy_id: matching.id, eligibility });
+
+    const changedSource = {
+      ...matching,
+      source: { ...matching.source, url: 'https://different.example/policy' },
+    };
+    expect(findMyPolicyResult(fixture, changedSource, basis, false, false)).toBeNull();
+
+    const changedVersion = {
+      ...matching,
+      source: { ...matching.source, document_version: 'different-version' },
+    };
+    expect(findMyPolicyResult(fixture, changedVersion, basis, false, false)).toBeNull();
+  });
   it('같은 선택 기준과 정책 버전의 진단·설명만 연결한다', () => {
     const fixture = structuredClone(result);
     const basis = { period: '2y', present_value: true } as const;

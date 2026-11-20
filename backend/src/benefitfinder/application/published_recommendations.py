@@ -240,6 +240,8 @@ def map_published_response(
                 result["fallback_list"] = [
                     {
                         "policy_id": key,
+                        "eligibility": deepcopy(diagnosis[key]),
+                        "source": deepcopy(details[key]["source"]),
                         "amount_in_period_won": amounts[key],
                         **({} if individual_only else metadata(period, [key])),
                         "reason": (

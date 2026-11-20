@@ -190,6 +190,7 @@ class PublishedCatalogApiTest(unittest.TestCase):
         view = data["results"]["1y"]["pv_off"]
         self.assertEqual(data["view"], "fallback_list")
         self.assertEqual([p["policy_id"] for p in view["fallback_list"]], ["youth:catalog:A"])
+        self.assertEqual(view["fallback_list"][0]["eligibility"][0]["condition_id"], "age")
         self.assertEqual([p["policy_id"] for p in view["closed_now"]], ["youth:catalog:C"])
         self.assertEqual(len(view["not_yet_reviewed"]), 2)
         self.assertEqual(
