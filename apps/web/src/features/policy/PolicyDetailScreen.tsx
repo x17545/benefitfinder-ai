@@ -30,6 +30,7 @@ import {
   applyPeriod,
   diagnosisSummary,
   findMyPolicyResult,
+  partitionPolicyEvidence,
   payoutTimingSummary,
   policyStatusInResult,
 } from './policyDetailModel.ts';
@@ -142,7 +143,8 @@ function PolicyDetail({ benefit, isSample, mine, serviceDiagnosis, resultStatus,
   const rawDiagnosis = service !== null ? serviceDiagnosis : mine?.eligibility ?? null;
   // 미충족 → 확인 필요 → 충족 순서로 보여 준다
   const diagnosis = rawDiagnosis !== null ? sortByStatus(rawDiagnosis) : null;
-  const reviewItems = diagnosis?.filter((item) => item.status === 'needs_review') ?? [];
+  const groupedDiagnosis = diagnosis !== null ? partitionPolicyEvidence(diagnosis) : null;
+  const reviewItems = groupedDiagnosis?.eligibility.filter((item) => item.status === 'needs_review') ?? [];
   const serviceValue = service?.estimated_value_won ?? null;
   const payoutTiming = payoutTimingSummary(benefit.benefit_amount);
 
@@ -176,17 +178,49 @@ function PolicyDetail({ benefit, isSample, mine, serviceDiagnosis, resultStatus,
           <section className="ui-card s5-card">
             {diagnosis !== null ? (
               <>
-                <h2 className="s5-card__title">{diagnosisSummary(diagnosis)}</h2>
-                <ul className="s5-conditions">
-                  {diagnosis.map((condition) => (
-                    <li key={condition.condition_id} className="s5-condition">
-                      <StatusChip status={condition.status}>{conditionLabel(condition.condition_id)}</StatusChip>
-                      {condition.evidence.map((item, index) => (
-                        <EvidenceQuote key={`${item.source.url}-${String(index)}`} quote={item.quote} location={item.location} />
+                {groupedDiagnosis !== null && groupedDiagnosis.eligibility.length > 0 ? (
+                  <>
+                    <h2 className="s5-card__title">{diagnosisSummary(groupedDiagnosis.eligibility)}</h2>
+                    <ul className="s5-conditions">
+                      {groupedDiagnosis.eligibility.map((condition) => (
+                        <li key={condition.condition_id} className="s5-condition">
+                          <StatusChip status={condition.status}>{conditionLabel(condition.condition_id)}</StatusChip>
+                          {condition.evidence.map((item, index) => (
+                            <EvidenceQuote key={`${item.source.url}-${String(index)}`} quote={item.quote} location={item.location} />
+                          ))}
+                        </li>
                       ))}
-                    </li>
-                  ))}
-                </ul>
+                    </ul>
+                  </>
+                ) : (
+                  <h2 className="s5-card__title">공식 신청 기준 확인이 필요해요</h2>
+                )}
+                {groupedDiagnosis !== null && groupedDiagnosis.officialTerms.length > 0 ? (
+                  <details className="s5-evidence-group">
+                    <summary>공식 안내 및 유의사항 · 원문 {groupedDiagnosis.officialTerms.length}개 구간</summary>
+                    <p className="s5-muted">아래 자료는 공식 안내문의 원문 구간이며 독립적인 자격 조건 {groupedDiagnosis.officialTerms.length}개를 의미하지 않아요. 신청 자격은 공식 기관에서 확인해야 해요.</p>
+                    {groupedDiagnosis.officialTerms.map((condition) => (
+                      <div key={condition.condition_id} className="s5-condition">
+                        {condition.evidence.map((item, index) => (
+                          <EvidenceQuote key={`${item.source.url}-${String(index)}`} quote={item.quote} location={item.location} />
+                        ))}
+                      </div>
+                    ))}
+                  </details>
+                ) : null}
+                {groupedDiagnosis !== null && groupedDiagnosis.calculationEvidence.length > 0 ? (
+                  <details className="s5-evidence-group">
+                    <summary>지원금 계산 근거 · {groupedDiagnosis.calculationEvidence.length}개 항목</summary>
+                    <p className="s5-muted">이 금액은 자격 충족이나 실제 지급이 확정되었다는 의미가 아니에요.</p>
+                    {groupedDiagnosis.calculationEvidence.map((condition) => (
+                      <div key={condition.condition_id} className="s5-condition">
+                        {condition.evidence.map((item, index) => (
+                          <EvidenceQuote key={`${item.source.url}-${String(index)}`} quote={item.quote} location={item.location} />
+                        ))}
+                      </div>
+                    ))}
+                  </details>
+                ) : null}
               </>
             ) : resultStatus !== null ? (
               <ResultStatusNotice status={resultStatus} conditionsHref={conditionsHref} />
@@ -280,7 +314,7 @@ function PolicyDetail({ benefit, isSample, mine, serviceDiagnosis, resultStatus,
                   </ol>
                 </>
               ) : (
-                <p className="s5-muted">없어요</p>
+                <p className="s5-muted">{groupedDiagnosis !== null && (groupedDiagnosis.officialTerms.length > 0 || groupedDiagnosis.calculationEvidence.length > 0) ? '추가로 자동 판정할 수 있는 개별 조건은 없어요. 위의 공식 안내와 계산 근거는 신청 전에 확인해 주세요.' : '없어요'}</p>
               )}
             </section>
           ) : null}
