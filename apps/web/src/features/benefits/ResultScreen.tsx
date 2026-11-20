@@ -23,7 +23,7 @@ import { foldElementId, rememberFold, rememberScroll, startResultView } from './
 import type { FoldId } from './resultViewMemory.ts';
 import { hasExpiredServices } from '../services/serviceModel.ts';
 import '../services/ServicesScreen.css';
-import { pickView, policyName, policySummaries, portfolioLabel } from './resultModel.ts';
+import { eligibilityDisplayStatus, pickView, policyName, policySummaries, portfolioEligibilityStatus, portfolioLabel } from './resultModel.ts';
 import type { ResultView } from './resultModel.ts';
 import './ResultScreen.css';
 
@@ -268,8 +268,14 @@ export function ResultScreen(): JSX.Element {
           {hasResults(view) ? (
             <h1 className="screen__title">
               {portfolios.length > 0
-                ? `함께 받을 수 있는 조합 ${String(portfolios.length)}개를 찾았어요`
-                : `받을 수 있는 지원금 ${String(fallback.length)}개를 찾았어요`}
+                ? (portfolios.every((portfolio) => portfolioEligibilityStatus(portfolio.policies) === 'met')
+                    ? `입력 조건상 충족한 예상 조합 ${String(portfolios.length)}개를 찾았어요`
+                    : `자격 확인이 필요한 예상 조합 ${String(portfolios.length)}개를 찾았어요`)
+                : fallback.some((item) => eligibilityDisplayStatus(item.eligibility) === 'not_met')
+                  ? `신청 조건을 다시 확인해야 하는 지원금 ${String(fallback.length)}개를 찾았어요`
+                  : fallback.every((item) => eligibilityDisplayStatus(item.eligibility) === 'met')
+                    ? `입력 조건상 충족한 지원금 ${String(fallback.length)}개를 찾았어요`
+                    : `자격 확인이 필요한 지원금 ${String(fallback.length)}개를 찾았어요`}
             </h1>
           ) : noCashWithLists ? (
             <>
@@ -289,6 +295,11 @@ export function ResultScreen(): JSX.Element {
           <section className="s3-hero" aria-label="추천 조합 요약">
             <p className="s3-hero__label">{heroLabel}</p>
             <p className="s3-hero__total">{formatManWon(top.total_won)}</p>
+            {portfolioEligibilityStatus(top.policies) !== 'met' ? (
+              <p className="s3-hero__note" role="note">
+                자격 미확인 정책이 포함된 조건부 예상액이에요. 실제 수급 가능 여부를 확인해야 해요.
+              </p>
+            ) : null}
             {top.amount_breakdown !== undefined ? (
               <AmountBreakdown value={top.amount_breakdown} variant="hero" />
             ) : null}
@@ -435,7 +446,7 @@ export function ResultScreen(): JSX.Element {
 
         {portfolios.length === 0 && fallback.length > 0 ? (
           <section className="s3-section">
-            <p className="s2-desc">함께 묶을 수 있는 정책이 없어서, 받을 수 있는 지원금을 하나씩 보여 드려요.</p>
+            <p className="s2-desc">함께 묶을 수 있는 정책이 없어 개별 예상 지원금을 보여 드려요. 실제 신청 자격과 지급 여부는 공식 기준을 확인해야 해요.</p>
             <FallbackList items={fallback} info={info}
               virtualData={analysis.isSample || result.virtual_data === true} />
           </section>
