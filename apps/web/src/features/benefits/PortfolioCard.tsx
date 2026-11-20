@@ -1,7 +1,7 @@
 import type { JSX } from 'react';
 import { AmountBreakdown } from './AmountBreakdown.tsx';
 import { formatManWon } from './format.ts';
-import { policyName, portfolioLabel } from './resultModel.ts';
+import { policyName, portfolioEligibilityStatus, portfolioLabel } from './resultModel.ts';
 import type { PolicySummaries, Portfolio } from './resultModel.ts';
 
 const BAR_COLORS = ['var(--color-bar-1)', 'var(--color-bar-2)', 'var(--color-bar-3)'];
@@ -32,6 +32,9 @@ export function PortfolioCard({ portfolio, topTotal, selected, onSelect, info }:
         {portfolioLabel(portfolio.rank)}
       </span>
       <span className="s3-combo__total">{formatManWon(portfolio.total_won)}</span>
+      {portfolioEligibilityStatus(portfolio.policies) !== 'met' ? (
+        <span className="s3-combo__check">자격 확인 필요 · 조건부 예상 총액</span>
+      ) : null}
       {portfolio.amount_breakdown !== undefined ? (
         <AmountBreakdown value={portfolio.amount_breakdown} variant="compact" />
       ) : null}

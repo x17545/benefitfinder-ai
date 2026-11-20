@@ -3,7 +3,7 @@ import { paths } from '../../app/router.ts';
 import { trackEvent } from '../../shared/analytics/events.ts';
 import { AmountBreakdown } from './AmountBreakdown.tsx';
 import { formatManWon, recruitTag, recruitmentState } from './format.ts';
-import { policyName } from './resultModel.ts';
+import { eligibilityDisplayStatus, policyName } from './resultModel.ts';
 import type { PolicySummaries, ResultView } from './resultModel.ts';
 
 type FallbackItem = NonNullable<ResultView['fallback_list']>[number];
@@ -46,6 +46,13 @@ export function FallbackList({ items, info, virtualData }: FallbackListProps): J
                   {item.amount_in_period_won !== null && item.amount_in_period_won !== undefined
                     ? formatManWon(item.amount_in_period_won)
                     : '금액 확인 필요'}
+                  <span className="s3-policy__summary">
+                    {eligibilityDisplayStatus(item.eligibility) === 'met'
+                      ? '입력 조건상 충족 · 예상 금액'
+                      : eligibilityDisplayStatus(item.eligibility) === 'not_met'
+                        ? '미충족 조건 있음 · 금액은 참고용'
+                        : '자격 충족 시 예상 금액 · 확인 필요'}
+                  </span>
                   {tag !== null ? <span className={`s3-tag s3-tag--${tag.tone}`}>{tag.label}</span> : null}
                 </span>
               </span>
