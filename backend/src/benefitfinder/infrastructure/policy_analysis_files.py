@@ -30,6 +30,92 @@ def _create(path: Path, value: object) -> None:
         os.fsync(handle.fileno())
 
 
+def _open_trace_append(path: Path) -> int:
+    if os.name != 'nt':
+        return os.open(path, os.O_WRONLY | os.O_APPEND | os.O_NOFOLLOW)
+
+    import ctypes
+    from ctypes import wintypes
+    import msvcrt
+
+    class FileAttributeTagInfo(ctypes.Structure):
+        _fields_ = [
+            ('FileAttributes', wintypes.DWORD),
+            ('ReparseTag', wintypes.DWORD),
+        ]
+
+    class ByHandleFileInformation(ctypes.Structure):
+        _fields_ = [
+            ('dwFileAttributes', wintypes.DWORD),
+            ('ftCreationTime', wintypes.FILETIME),
+            ('ftLastAccessTime', wintypes.FILETIME),
+            ('ftLastWriteTime', wintypes.FILETIME),
+            ('dwVolumeSerialNumber', wintypes.DWORD),
+            ('nFileSizeHigh', wintypes.DWORD),
+            ('nFileSizeLow', wintypes.DWORD),
+            ('nNumberOfLinks', wintypes.DWORD),
+            ('nFileIndexHigh', wintypes.DWORD),
+            ('nFileIndexLow', wintypes.DWORD),
+        ]
+
+    kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
+    create_file = kernel32.CreateFileW
+    create_file.argtypes = (
+        wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD,
+        ctypes.c_void_p, wintypes.DWORD, wintypes.DWORD,
+        wintypes.HANDLE,
+    )
+    create_file.restype = wintypes.HANDLE
+
+    get_info = kernel32.GetFileInformationByHandleEx
+    get_info.argtypes = (
+        wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD,
+    )
+    get_info.restype = wintypes.BOOL
+
+    get_file_info = kernel32.GetFileInformationByHandle
+    get_file_info.argtypes = (
+        wintypes.HANDLE, ctypes.POINTER(ByHandleFileInformation),
+    )
+    get_file_info.restype = wintypes.BOOL
+
+    close_handle = kernel32.CloseHandle
+    close_handle.argtypes = (wintypes.HANDLE,)
+    close_handle.restype = wintypes.BOOL
+
+    # FILE_APPEND_DATA, FILE_SHARE_READ, OPEN_EXISTING,
+    # FILE_FLAG_OPEN_REPARSE_POINT.
+    handle = create_file(str(path), 0x0004, 0x0001, None,
+                         3, 0x00200000, None)
+    if handle == ctypes.c_void_p(-1).value:
+        raise ctypes.WinError(ctypes.get_last_error())
+
+    try:
+        info = FileAttributeTagInfo()
+        if not get_info(handle, 9, ctypes.byref(info), ctypes.sizeof(info)):
+            raise ctypes.WinError(ctypes.get_last_error())
+
+        # Reject reparse points and directories before writing anything.
+        if info.FileAttributes & (0x0400 | 0x0010):
+            raise OSError('unsafe_trace_file')
+
+        file_info = ByHandleFileInformation()
+        if not get_file_info(handle, ctypes.byref(file_info)):
+            raise ctypes.WinError(ctypes.get_last_error())
+
+        # Require a single hard-link name for this trace file.
+        if file_info.nNumberOfLinks != 1:
+            raise OSError('unsafe_trace_hardlink')
+
+        descriptor = msvcrt.open_osfhandle(
+            handle, os.O_APPEND | os.O_BINARY,
+        )
+        handle = None  # The CRT now owns the Windows handle.
+        return descriptor
+    finally:
+        if handle is not None:
+            close_handle(handle)
+
 class PolicyAnalysisFiles:
     def __init__(self, data_dir: Path,
                  write_reviews: Callable[[Path, AnalysisClaim, PolicyAnalysisResult], None],
@@ -68,12 +154,7 @@ class PolicyAnalysisFiles:
                 raise ValueError
             encoded = json.dumps(asdict(step), separators=(',', ':')).encode() + b'\n'
             trace_path = self._directory(claim) / 'trace.jsonl'
-            if os.name == 'nt' and trace_path.is_symlink():
-                raise ValueError('f12_artifact_failed')
-            flags = os.O_WRONLY | os.O_APPEND
-            if os.name != 'nt':
-                flags |= os.O_NOFOLLOW
-            descriptor = os.open(trace_path, flags)
+            descriptor = _open_trace_append(trace_path)
             with os.fdopen(descriptor, 'ab') as handle:
                 if os.fstat(handle.fileno()).st_size > 65_536:
                     raise ValueError

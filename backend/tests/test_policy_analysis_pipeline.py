@@ -124,6 +124,72 @@ class PolicyAnalysisPipelineTest(unittest.TestCase):
                 files.start(claim())
             self.assertEqual(list(Path(outside).iterdir()), [])
 
+
+    def test_trace_append_handle_preserves_content_and_rejects_unsafe_targets(self):
+        from benefitfinder.infrastructure.policy_analysis_files import _open_trace_append
+
+        trace = self.root / 'trace-append.jsonl'
+        trace.write_bytes(b'original' + bytes([10]))
+
+        for payload in (b'first' + bytes([10]), b'second' + bytes([10])):
+            descriptor = _open_trace_append(trace)
+            with os.fdopen(descriptor, 'ab') as handle:
+                handle.write(payload)
+
+        self.assertEqual(
+            trace.read_bytes(),
+            b'original' + bytes([10]) + b'first' + bytes([10]) + b'second' + bytes([10]),
+        )
+
+        missing = self.root / 'missing-trace.jsonl'
+        with self.assertRaises(OSError):
+            _open_trace_append(missing)
+        self.assertFalse(missing.exists())
+
+        directory = self.root / 'trace-directory'
+        directory.mkdir()
+        with self.assertRaises(OSError):
+            _open_trace_append(directory)
+
+
+    def test_trace_append_rejects_windows_hardlink(self):
+        if os.name != 'nt':
+            self.skipTest('Windows-specific hard-link protection')
+
+        from benefitfinder.infrastructure.policy_analysis_files import _open_trace_append
+
+        outside = self.root / 'outside-hardlink.txt'
+        outside.write_bytes(b'unchanged')
+        link = self.root / 'linked-hardlink.jsonl'
+        os.link(outside, link)
+
+        self.assertTrue(os.path.samefile(outside, link))
+        with self.assertRaises(OSError):
+            descriptor = _open_trace_append(link)
+            os.close(descriptor)
+
+        self.assertEqual(outside.read_bytes(), b'unchanged')
+
+    def test_trace_append_rejects_symlink_without_touching_target(self):
+        from benefitfinder.infrastructure.policy_analysis_files import _open_trace_append
+
+        outside = self.root / 'outside-trace.txt'
+        outside.write_bytes(b'unchanged')
+        link = self.root / 'linked-trace.jsonl'
+
+        try:
+            link.symlink_to(outside)
+        except (OSError, NotImplementedError) as error:
+            if os.name == 'nt' and getattr(error, 'winerror', None) == 1314:
+                self.skipTest('Windows symlink privilege unavailable')
+            raise
+
+        with self.assertRaises(OSError):
+            descriptor = _open_trace_append(link)
+            os.close(descriptor)
+
+        self.assertEqual(outside.read_bytes(), b'unchanged')
+
     def test_failed_analysis_retries_without_claiming_review_readiness_and_keeps_trace(self):
         item = claim()
         tasks = Mock()
