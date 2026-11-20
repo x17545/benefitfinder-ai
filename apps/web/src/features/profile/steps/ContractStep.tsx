@@ -5,6 +5,7 @@ import { ChoiceChip, ChoiceGroup } from '../../../shared/ui/ChoiceChip.tsx';
 import { needsDeposit, needsRent } from '../answerRules.ts';
 import { ConditionStepLayout } from '../ConditionStepLayout.tsx';
 import { updateAnswers, useFlowState } from '../flowStore.ts';
+import { questionElementId } from '../stepQuestions.ts';
 import { ChipQuestion } from './ChipQuestion.tsx';
 
 /** S2-7 집 계약. 월세·전세면 보증금, 월세면 월세 금액도 (보이는 것 모두 필수) */
@@ -31,25 +32,33 @@ export function ContractStep(): JSX.Element {
       title="지금 사는 집 계약은요?"
       description="주거 정책은 보증금·월세 금액에 상한이 있어요"
       canNext={canNext}
+      questions={[
+        { id: 'contract', answered: contractType !== null },
+        ...(showDeposit ? [{ id: 'deposit', answered: depositBand !== null }] : []),
+        ...(showRent ? [{ id: 'rent', answered: rentBand !== null }] : []),
+      ]}
     >
-      <ChoiceGroup label="집 계약" layout="rows">
-        {CONTRACT_CHOICES.map((choice) => (
-          <ChoiceChip
-            key={choice.value}
-            layout="row"
-            selected={contractType === choice.value}
-            onSelect={() => {
-              selectType(choice.value);
-            }}
-          >
-            {choice.label}
-          </ChoiceChip>
-        ))}
-      </ChoiceGroup>
+      <div id={questionElementId('contract')}>
+        <ChoiceGroup label="집 계약" layout="rows">
+          {CONTRACT_CHOICES.map((choice) => (
+            <ChoiceChip
+              key={choice.value}
+              layout="row"
+              selected={contractType === choice.value}
+              onSelect={() => {
+                selectType(choice.value);
+              }}
+            >
+              {choice.label}
+            </ChoiceChip>
+          ))}
+        </ChoiceGroup>
+      </div>
 
       {showDeposit ? (
         <ChipQuestion
           title="보증금"
+          questionId="deposit"
           choices={DEPOSIT_CHOICES}
           value={depositBand}
           onChange={(value) => {
@@ -61,6 +70,7 @@ export function ContractStep(): JSX.Element {
       {showRent ? (
         <ChipQuestion
           title="월세"
+          questionId="rent"
           choices={RENT_CHOICES}
           value={rentBand}
           onChange={(value) => {

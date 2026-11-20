@@ -4,6 +4,7 @@ import { ChoiceChip, ChoiceGroup } from '../../../shared/ui/ChoiceChip.tsx';
 import { needsMilitary } from '../answerRules.ts';
 import { ConditionStepLayout } from '../ConditionStepLayout.tsx';
 import { updateAnswers, useFlowState } from '../flowStore.ts';
+import { questionElementId } from '../stepQuestions.ts';
 
 /** S2-1 나이 (+ 35세 이상이면 군 복무) */
 export function AgeStep(): JSX.Element {
@@ -14,8 +15,17 @@ export function AgeStep(): JSX.Element {
   const canNext = age !== null && (!showMilitary || military !== null);
 
   return (
-    <ConditionStepLayout step={1} title="나이가 어떻게 되나요?" description="만 나이로 적어 주세요" canNext={canNext}>
-      <div className="s2-number">
+    <ConditionStepLayout
+      step={1}
+      title="나이가 어떻게 되나요?"
+      description="만 나이로 적어 주세요"
+      canNext={canNext}
+      questions={showMilitary ? [
+        { id: 'age', answered: age !== null },
+        { id: 'military', answered: military !== null },
+      ] : []}
+    >
+      <div className="s2-number" id={questionElementId('age')}>
         <input
           type="text"
           inputMode="numeric"
@@ -39,7 +49,7 @@ export function AgeStep(): JSX.Element {
       ) : null}
 
       {showMilitary ? (
-        <section className="s2-sub">
+        <section className="s2-sub" id={questionElementId('military')}>
           <h2 className="s2-sub__title">군 복무를 마쳤나요?</h2>
           <p className="s2-sub__desc">
             복무한 기간만큼 나이 기준을 늘려 주는 정책이 있어요 (연장 폭과 상한은 정책 공고마다 다르고, 공고에

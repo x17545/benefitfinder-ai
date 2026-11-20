@@ -194,6 +194,8 @@
 .ui-footer__links {
   display: flex;
   flex-wrap: wrap;
+  /* 오른쪽 안내가 여러 줄이어도 [내 정보 지우기] 버튼이 링크와 같은 줄 높이에 오게 */
+  align-items: flex-start;
   gap: 4px 14px;
 }
 
@@ -209,7 +211,7 @@
   border: 0;
   background: none;
   color: inherit;
-  font-size: inherit;
+  font: inherit;
   text-decoration: underline;
   text-underline-offset: 3px;
   cursor: pointer;
