@@ -146,6 +146,23 @@
   color: var(--color-muted);
 }
 
+/* 긴 원문 인용 [원문 전체 보기] / [접기] */
+.s5-quote__toggle {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  margin-left: 6px;
+  padding: 0 2px;
+  border: 0;
+  background: none;
+  color: var(--color-accent-ink);
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
 .s5-link {
   color: var(--color-ink);
   font-weight: 700;
@@ -175,6 +192,29 @@
   flex-direction: column;
   gap: 6px;
   line-height: 1.6;
+}
+
+/* 확인이 필요한 것: 조건 이름을 위에, 사유를 아래에 */
+.s5-review li {
+  padding-left: 2px;
+}
+
+.s5-review li b {
+  display: block;
+}
+
+.s5-review li span {
+  display: block;
+  color: var(--color-muted);
+  font-size: var(--text-sub);
+  word-break: keep-all;
+}
+
+/* 조합 밖 정책의 상태 칩 (조건 안 맞음 · 검수 전) */
+.s5-status-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .s5-source {

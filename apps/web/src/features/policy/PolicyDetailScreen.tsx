@@ -1,7 +1,12 @@
 import { useEffect, useRef } from 'react';
 import type { JSX } from 'react';
-import { CONDITION_STEPS, navigate, paths } from '../../app/router.ts';
-import { conditionLabel } from '../../domains/youth/conditionLabels.ts';
+import { CONDITION_STEPS, goBack, paths } from '../../app/router.ts';
+import {
+  conditionLabel,
+  readableReason,
+  sortByStatus,
+  uniqueConditionLabels,
+} from '../../domains/youth/conditionLabels.ts';
 import type { NormalizedBenefit } from '../../shared/api/benefits.ts';
 import { trackEvent } from '../../shared/analytics/events.ts';
 import { SiteFooter } from '../../shared/ui/SiteFooter.tsx';
@@ -25,10 +30,14 @@ import {
   applyPeriod,
   diagnosisSummary,
   findMyPolicyResult,
+  partitionPolicyEvidence,
   payoutTimingSummary,
+  policyStatusInResult,
 } from './policyDetailModel.ts';
+import type { ResultPolicyStatus } from './policyDetailModel.ts';
 import { usePolicyDetail } from './usePolicyDetail.ts';
 import { ApplicationGuide } from './ApplicationGuide.tsx';
+import { EvidenceQuote } from './EvidenceQuote.tsx';
 import './PolicyDetailScreen.css';
 
 interface PolicyDetailScreenProps {
@@ -50,6 +59,9 @@ export function PolicyDetailScreen({ policyId }: PolicyDetailScreenProps): JSX.E
     ? findServiceForDetail(result, state.benefit, analysis.status === 'done' && analysis.isSample)
     : null;
   const conditionsHref = consent ? paths.conditions(result !== null ? CONDITION_STEPS : 1) : paths.start;
+  // 조합 밖(개별 지원금·조건 안 맞음·모집 끝남·검수 전) 목록에서 온 정책이면 그에 맞게 안내한다
+  const resultStatus = result !== null && mine === null && serviceDiagnosis === null
+    ? policyStatusInResult(result, basis, policyId) : null;
 
   const title = state.status === 'ok' ? state.benefit.title : '정책 상세';
 
@@ -64,12 +76,12 @@ export function PolicyDetailScreen({ policyId }: PolicyDetailScreenProps): JSX.E
   return (
     <div className="page-width screen">
       <TopBar title={title} onBack={() => {
-        if (window.history.length > 1) window.history.back();
-        else navigate(result !== null ? withResultBasis(paths.result, basis) : paths.start);
+        goBack(result !== null ? withResultBasis(paths.result, basis) : paths.start);
       }} />
       {state.status === 'ok' ? (
         <PolicyDetail benefit={state.benefit} isSample={state.isSample} mine={mine}
           serviceDiagnosis={serviceDiagnosis?.eligibility ?? null}
+          resultStatus={resultStatus}
           hasAnalysis={result !== null} conditionsHref={conditionsHref} aiGenerated={result?.ai_generated ?? false}
           info={policySummaries(result)} />
       ) : (
@@ -110,13 +122,14 @@ interface PolicyDetailProps {
   isSample: boolean;
   mine: PortfolioPolicy | null;
   serviceDiagnosis: RecommendedService['eligibility'] | null;
+  resultStatus: ResultPolicyStatus;
   hasAnalysis: boolean;
   conditionsHref: string;
   aiGenerated: boolean;
   info: PolicySummaries;
 }
 
-function PolicyDetail({ benefit, isSample, mine, serviceDiagnosis, hasAnalysis, conditionsHref, aiGenerated, info }: PolicyDetailProps): JSX.Element {
+function PolicyDetail({ benefit, isSample, mine, serviceDiagnosis, resultStatus, hasAnalysis, conditionsHref, aiGenerated, info }: PolicyDetailProps): JSX.Element {
   const service = benefit.service ?? null;
   const virtualData = isSample || benefit.virtual_data === true;
   const now = new Date();
@@ -127,8 +140,11 @@ function PolicyDetail({ benefit, isSample, mine, serviceDiagnosis, hasAnalysis, 
   const applyUrl = applicationUrl ?? benefit.source.url;
   const actualApplicationLink = !virtualData && benefit.virtual_data !== true && applicationUrl !== null;
   const conflicts = benefit.conflicts ?? [];
-  const diagnosis = service !== null ? serviceDiagnosis : mine?.eligibility ?? null;
-  const reviewItems = diagnosis?.filter((item) => item.status === 'needs_review') ?? [];
+  const rawDiagnosis = service !== null ? serviceDiagnosis : mine?.eligibility ?? null;
+  // 미충족 → 확인 필요 → 충족 순서로 보여 준다
+  const diagnosis = rawDiagnosis !== null ? sortByStatus(rawDiagnosis) : null;
+  const groupedDiagnosis = diagnosis !== null ? partitionPolicyEvidence(diagnosis) : null;
+  const reviewItems = groupedDiagnosis?.eligibility.filter((item) => item.status === 'needs_review') ?? [];
   const serviceValue = service?.estimated_value_won ?? null;
   const payoutTiming = payoutTimingSummary(benefit.benefit_amount);
 
@@ -162,21 +178,52 @@ function PolicyDetail({ benefit, isSample, mine, serviceDiagnosis, hasAnalysis, 
           <section className="ui-card s5-card">
             {diagnosis !== null ? (
               <>
-                <h2 className="s5-card__title">{diagnosisSummary(diagnosis)}</h2>
-                <ul className="s5-conditions">
-                  {diagnosis.map((condition) => (
-                    <li key={condition.condition_id} className="s5-condition">
-                      <StatusChip status={condition.status}>{conditionLabel(condition.condition_id)}</StatusChip>
-                      {condition.evidence.map((item, index) => (
-                        <blockquote key={`${item.source.url}-${String(index)}`} className="s5-quote">
-                          {item.location !== undefined ? <span className="s5-quote__where">「{item.location}」</span> : null}
-                          {item.quote}
-                        </blockquote>
+                {groupedDiagnosis !== null && groupedDiagnosis.eligibility.length > 0 ? (
+                  <>
+                    <h2 className="s5-card__title">{diagnosisSummary(groupedDiagnosis.eligibility)}</h2>
+                    <ul className="s5-conditions">
+                      {groupedDiagnosis.eligibility.map((condition) => (
+                        <li key={condition.condition_id} className="s5-condition">
+                          <StatusChip status={condition.status}>{conditionLabel(condition.condition_id)}</StatusChip>
+                          {condition.evidence.map((item, index) => (
+                            <EvidenceQuote key={`${item.source.url}-${String(index)}`} quote={item.quote} location={item.location} />
+                          ))}
+                        </li>
                       ))}
-                    </li>
-                  ))}
-                </ul>
+                    </ul>
+                  </>
+                ) : (
+                  <h2 className="s5-card__title">공식 신청 기준 확인이 필요해요</h2>
+                )}
+                {groupedDiagnosis !== null && groupedDiagnosis.officialTerms.length > 0 ? (
+                  <details className="s5-evidence-group">
+                    <summary>공식 안내 및 유의사항 · 원문 {groupedDiagnosis.officialTerms.length}개 구간</summary>
+                    <p className="s5-muted">아래 자료는 공식 안내문의 원문 구간이며 독립적인 자격 조건 {groupedDiagnosis.officialTerms.length}개를 의미하지 않아요. 신청 자격은 공식 기관에서 확인해야 해요.</p>
+                    {groupedDiagnosis.officialTerms.map((condition) => (
+                      <div key={condition.condition_id} className="s5-condition">
+                        {condition.evidence.map((item, index) => (
+                          <EvidenceQuote key={`${item.source.url}-${String(index)}`} quote={item.quote} location={item.location} />
+                        ))}
+                      </div>
+                    ))}
+                  </details>
+                ) : null}
+                {groupedDiagnosis !== null && groupedDiagnosis.calculationEvidence.length > 0 ? (
+                  <details className="s5-evidence-group">
+                    <summary>지원금 계산 근거 · {groupedDiagnosis.calculationEvidence.length}개 항목</summary>
+                    <p className="s5-muted">이 금액은 자격 충족이나 실제 지급이 확정되었다는 의미가 아니에요.</p>
+                    {groupedDiagnosis.calculationEvidence.map((condition) => (
+                      <div key={condition.condition_id} className="s5-condition">
+                        {condition.evidence.map((item, index) => (
+                          <EvidenceQuote key={`${item.source.url}-${String(index)}`} quote={item.quote} location={item.location} />
+                        ))}
+                      </div>
+                    ))}
+                  </details>
+                ) : null}
               </>
+            ) : resultStatus !== null ? (
+              <ResultStatusNotice status={resultStatus} conditionsHref={conditionsHref} />
             ) : (
               <>
                 <h2 className="s5-card__title">{hasAnalysis ? '이 정책의 현재 진단을 확인할 수 없어요' : '내 조건을 고르면 자격을 진단해 드려요'}</h2>
@@ -192,7 +239,7 @@ function PolicyDetail({ benefit, isSample, mine, serviceDiagnosis, hasAnalysis, 
             <section className="ui-card s5-card">
               <h2 className="s5-card__title">가상 정책의 공개 기준</h2>
               {benefit.eligibility_conditions.flatMap((condition) => condition.evidence.map((item, index) => (
-                <blockquote key={`${condition.id}-${String(index)}`} className="s5-quote">{item.quote}</blockquote>
+                <EvidenceQuote key={`${condition.id}-${String(index)}`} quote={item.quote} />
               )))}
             </section>
           ) : null}
@@ -237,10 +284,7 @@ function PolicyDetail({ benefit, isSample, mine, serviceDiagnosis, hasAnalysis, 
                       {conflictName(conflict.policy_id)} ›
                     </a>
                     {conflict.evidence.map((item) => (
-                      <blockquote key={`${item.location ?? ''}${item.quote}`} className="s5-quote">
-                        {item.location !== undefined ? <span className="s5-quote__where">「{item.location}」</span> : null}
-                        {item.quote}
-                      </blockquote>
+                      <EvidenceQuote key={`${item.location ?? ''}${item.quote}`} quote={item.quote} location={item.location} />
                     ))}
                   </li>
                 ))}
@@ -255,16 +299,22 @@ function PolicyDetail({ benefit, isSample, mine, serviceDiagnosis, hasAnalysis, 
             <section className="ui-card s5-card s5-card--sub">
               <h2 className="s5-card__title">확인이 필요한 것</h2>
               {reviewItems.length > 0 ? (
-                <ul className="s5-review">
-                  {reviewItems.map((item) => (
-                    <li key={item.condition_id}>
-                      <b>{conditionLabel(item.condition_id)}</b>:{' '}
-                      {item.reason !== '' ? item.reason : '입력하지 않았거나 공식 기준이 불명확해요'}
-                    </li>
-                  ))}
-                </ul>
+                <>
+                  <p className="s5-muted">신청 전에 아래 {reviewItems.length}가지를 공고나 신청 기관에서 확인해 주세요.</p>
+                  <ol className="s5-review">
+                    {reviewItems.map((item) => {
+                      const reason = readableReason(item.reason);
+                      return (
+                        <li key={item.condition_id}>
+                          <b>{conditionLabel(item.condition_id)}</b>
+                          <span>{reason !== '' ? reason : '입력하지 않았거나 공식 기준이 불명확해요'}</span>
+                        </li>
+                      );
+                    })}
+                  </ol>
+                </>
               ) : (
-                <p className="s5-muted">없어요</p>
+                <p className="s5-muted">{groupedDiagnosis !== null && (groupedDiagnosis.officialTerms.length > 0 || groupedDiagnosis.calculationEvidence.length > 0) ? '추가로 자동 판정할 수 있는 개별 조건은 없어요. 위의 공식 안내와 계산 근거는 신청 전에 확인해 주세요.' : '없어요'}</p>
               )}
             </section>
           ) : null}
@@ -315,4 +365,53 @@ function PolicyDetail({ benefit, isSample, mine, serviceDiagnosis, hasAnalysis, 
       </div>
     </>
   );
+}
+
+/** 조합 밖 목록에서 온 정책: 다시 분석하라고 하지 않고, 결과에서 어떤 상태였는지 알려 준다 */
+function ResultStatusNotice({ status, conditionsHref }: {
+  status: NonNullable<ResultPolicyStatus>; conditionsHref: string;
+}): JSX.Element {
+  switch (status.kind) {
+    case 'fallback':
+      return (
+        <>
+          <h2 className="s5-card__title">금액은 계산했지만, 조건별 진단은 없어요</h2>
+          <p className="s5-muted">
+            함께 묶을 정책이 없어 하나씩 보여 드린 지원금이에요. 자격 조건은 아래 신청 방법과 공식 페이지에서 확인해 주세요.
+          </p>
+        </>
+      );
+    case 'notEligible':
+      return (
+        <>
+          <h2 className="s5-card__title">입력한 조건과 맞지 않는 항목이 있어요</h2>
+          <span className="s5-status-chips">
+            {uniqueConditionLabels(status.failed).map((label) => (
+              <StatusChip key={label} status="not_met">{label}</StatusChip>
+            ))}
+          </span>
+          <p className="s5-muted">조건을 잘못 고르셨다면 고친 뒤 다시 찾아볼 수 있어요.</p>
+          <a className="ui-button ui-button--secondary" href={conditionsHref}>조건 수정</a>
+        </>
+      );
+    case 'closed':
+      return (
+        <>
+          <h2 className="s5-card__title">지금은 모집이 끝난 정책이에요</h2>
+          <p className="s5-muted">다음 모집이 열리면 조건을 다시 확인해 주세요.</p>
+        </>
+      );
+    case 'notReviewed':
+      return (
+        <>
+          <h2 className="s5-card__title">아직 검수 중이라 전체 자격 진단만 있어요</h2>
+          <span className="s5-status-chips">
+            <StatusChip status={status.summary}>전체 자격 진단</StatusChip>
+          </span>
+          <p className="s5-muted">
+            금액과 중복 여부를 확인하고 있어 조건별 진단은 아직 없어요. 자세한 조건은 공식 페이지에서 확인해 주세요.
+          </p>
+        </>
+      );
+  }
 }
