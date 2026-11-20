@@ -3,7 +3,7 @@
 from datetime import datetime, timedelta, timezone
 import re
 
-from benefitfinder.infrastructure.ai_catalog_review import _verify_real_source
+from benefitfinder.infrastructure.ai_catalog_review import _verify_real_source, project_youthcenter_source
 from benefitfinder.infrastructure.policy_catalog_records import CatalogRecord, record_hash, validate_source_text
 from benefitfinder.infrastructure.service_catalog_records import (
     ServiceCatalogRecord, service_record_hash, validate_service_sources,
@@ -119,3 +119,56 @@ def retire_unreviewed(database_url: str, entries: list[tuple[CatalogRecord | Ser
             result = connection.execute("UPDATE public.policy_catalog_releases SET publication_status='retired' WHERE policy_id=%s AND document_version=%s AND approved_sha256=%s AND review_type='unreviewed' AND publication_status='published'", (record.benefit.id, record.benefit.source.document_version, digest))
             if result.rowcount != 1:
                 raise ValueError('unreviewed_release_not_current')
+
+
+_PUBLISHED_UNREVIEWED_SERVICES = """
+    SELECT release.payload, collected.fields, collected.material_sha256,
+           collected.missing_detected_at
+      FROM public.policy_catalog_releases AS release
+      LEFT JOIN public.collected_policies AS collected
+        ON collected.source = 'youthcenter'
+       AND collected.external_id = release.payload->'collection_sources'->0->>'external_id'
+     WHERE release.publication_status = 'published'
+       AND release.review_type = 'unreviewed'
+       AND release.payload->>'kind' = 'service'
+     ORDER BY release.policy_id
+"""
+
+
+def load_published_unreviewed_services(
+    connection,
+) -> tuple[list[tuple[ServiceCatalogRecord, str]], list[dict[str, str]]]:
+    """Rebuild the exact (record, source) pairs of the published unreviewed services.
+
+    Read-only. The source is the same ``project_youthcenter_source`` projection
+    that publication verified, so each pair can be retired as-is. Records whose
+    source is missing, marked missing, or no longer the bound generation are
+    returned as ``skipped`` with a reason instead of being guessed.
+    """
+    entries: list[tuple[ServiceCatalogRecord, str]] = []
+    skipped: list[dict[str, str]] = []
+    for payload, fields, material, missing_at in connection.execute(
+        _PUBLISHED_UNREVIEWED_SERVICES
+    ).fetchall():
+        record = ServiceCatalogRecord.model_validate(payload)
+        bindings = record.collection_sources
+        reason = None
+        if len(bindings) != 1 or bindings[0].source != 'youthcenter':
+            reason = 'unsupported_collection_source'
+        elif fields is None:
+            reason = 'collected_source_missing'
+        elif missing_at is not None:
+            reason = 'collected_source_marked_missing'
+        elif material != bindings[0].material_sha256:
+            reason = 'collected_source_changed'
+        if reason is not None:
+            skipped.append({'policy_id': record.benefit.id, 'reason': reason})
+            continue
+        source = project_youthcenter_source(fields)
+        try:
+            validate_unreviewed(record, source)
+        except ValueError:
+            skipped.append({'policy_id': record.benefit.id, 'reason': 'source_projection_mismatch'})
+            continue
+        entries.append((record, source))
+    return entries, skipped
