@@ -12,12 +12,23 @@ from benefitfinder.infrastructure.service_catalog_records import (
     ServiceCatalogRecord,
     validate_service_sources,
 )
-from benefitfinder.ingestion.service_source_facts import bind_service_source_facts
+from benefitfinder.ingestion.service_source_facts import bind_service_source_facts as _bind_payload
 
 from backend.tests.service_catalog_fixtures import (
     service_release_data,
     service_source_text,
 )
+
+def bind_service_source_facts(value: ServiceCatalogRecord, source_text: str, *, regions):
+    """Test adapter: the binder works on JSON payloads; callers validate the model."""
+    facts = _bind_payload(value.model_dump(mode="json"), source_text, regions=regions)
+    return SimpleNamespace(
+        record=ServiceCatalogRecord.model_validate(facts.payload),
+        added_condition_ids=facts.added_condition_ids,
+        closed=facts.closed,
+        changed=facts.changed,
+    )
+
 
 POLICY_NO = "20990101005400000001"
 REGIONS = (
@@ -216,7 +227,7 @@ class ServiceSourceFactsTest(unittest.TestCase):
         virtual = ServiceCatalogRecord.model_validate(service_release_data(price=False))
         facts = bind_service_source_facts(virtual, service_source_text(), regions=REGIONS)
 
-        self.assertIs(facts.record, virtual)
+        self.assertEqual(facts.record, virtual)
         self.assertFalse(facts.changed)
 
 

@@ -828,14 +828,15 @@ def service_source_facts_command(args: argparse.Namespace) -> int:
         regions = OfficialRegionCatalog().get_regions()
         before, after, summary = [], [], []
         for record, source in entries:
-            facts = bind_service_source_facts(record, source, regions=regions)
+            facts = bind_service_source_facts(record.model_dump(mode='json'), source, regions=regions)
             summary.append({'policy_id': record.benefit.id, 'title': record.benefit.title,
                             'changed': facts.changed, 'added_conditions': list(facts.added_condition_ids),
                             'closed': facts.closed})
             if facts.changed:
-                validate_service_sources(facts.record, source, None)
+                bound = ServiceCatalogRecord.model_validate(facts.payload)
+                validate_service_sources(bound, source, None)
                 before.append((record, source))
-                after.append((facts.record, source))
+                after.append((bound, source))
         if args.output is not None:
             args.output.mkdir(mode=0o700, parents=True, exist_ok=False)
             if before:

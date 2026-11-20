@@ -8,19 +8,20 @@ keeps every existing condition, and marks an explicitly closed application
 (``aplyPrdSeCd=0057003``) as closed. A changed record gets the
 ``:source-facts-v1`` document version so it can be published as a new release
 beside the retired original instead of conflicting with it. It reads no network
-or database; the caller supplies the official region catalogue and publishes the
-result separately.
+or database; the caller supplies the official region catalogue, validates the
+returned payload as a service catalogue record, and publishes it separately.
 """
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import re
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from typing import Any
 
 from benefitfinder.application.region_options import RegionOption
-from benefitfinder.infrastructure.service_catalog_records import ServiceCatalogRecord
 from benefitfinder.ingestion.source_eligibility import (
     compile_source_restrictions,
     projection_values,
@@ -52,7 +53,7 @@ def _replace_source(value: object, old: dict, new: dict) -> object:
 
 @dataclass(frozen=True)
 class ServiceSourceFacts:
-    record: ServiceCatalogRecord
+    payload: dict[str, Any]
     added_condition_ids: tuple[str, ...]
     closed: bool
 
@@ -62,24 +63,30 @@ class ServiceSourceFacts:
 
 
 def bind_service_source_facts(
-    record: ServiceCatalogRecord,
+    payload: Mapping[str, Any],
     source_text: str,
     *,
     regions: Sequence[RegionOption],
 ) -> ServiceSourceFacts:
-    """Return the record with proven residence/age rules and closed status added."""
+    """Return a service payload with proven residence/age rules and closed status added.
 
-    unchanged = ServiceSourceFacts(record, (), False)
-    if record.benefit.virtual_data:
+    ``payload`` is a JSON dump of one service catalogue record; the input is never
+    mutated. An unchanged result returns an equal copy of the input.
+    """
+
+    data = copy.deepcopy(dict(payload))
+    unchanged = ServiceSourceFacts(copy.deepcopy(data), (), False)
+    if data.get("kind") != "service":
+        raise ValueError("service_source_facts_requires_service_record")
+    benefit = data["benefit"]
+    if benefit.get("virtual_data"):
         return unchanged
-    bindings = record.collection_sources
-    if len(bindings) != 1 or bindings[0].source != "youthcenter":
+    bindings = data.get("collection_sources") or []
+    if len(bindings) != 1 or bindings[0].get("source") != "youthcenter":
         return unchanged
-    if hashlib.sha256(source_text.encode("utf-8")).hexdigest() != record.source_sha256:
+    if hashlib.sha256(source_text.encode("utf-8")).hexdigest() != data.get("source_sha256"):
         raise ValueError("source_hash_mismatch")
 
-    data = record.model_dump(mode="json")
-    benefit = data["benefit"]
     existing_rules = data["conditions"]
     has_region = any(
         rule.get("kind") == "selection" and rule.get("field") in _REGION_FIELDS
@@ -89,7 +96,7 @@ def bind_service_source_facts(
     used_ids = {condition["id"] for condition in benefit["eligibility_conditions"]}
 
     conditions, rules = compile_source_restrictions(
-        source_text, benefit["source"], regions=regions
+        source_text, dict(benefit["source"]), regions=regions
     )
     added: list[str] = []
     for condition, rule in zip(conditions, rules, strict=True):
@@ -119,6 +126,5 @@ def bind_service_source_facts(
         return unchanged
     old_source = dict(benefit["source"])
     new_source = {**old_source, "document_version": _source_facts_version(
-        old_source["document_version"], bindings[0].material_sha256)}
-    data = _replace_source(data, old_source, new_source)
-    return ServiceSourceFacts(ServiceCatalogRecord.model_validate(data), tuple(added), closed)
+        old_source["document_version"], bindings[0]["material_sha256"])}
+    return ServiceSourceFacts(_replace_source(data, old_source, new_source), tuple(added), closed)
