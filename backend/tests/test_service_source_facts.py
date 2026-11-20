@@ -78,6 +78,16 @@ def profile(sido: str | None, age: int | None = 25) -> SimpleNamespace:
     return SimpleNamespace(age=age, region_code=None, domain_data=SimpleNamespace(region=region))
 
 
+def _with_version(value, version: str):
+    if isinstance(value, dict):
+        if "document_version" in value and "url" in value:
+            return {**value, "document_version": version}
+        return {key: _with_version(item, version) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_with_version(item, version) for item in value]
+    return value
+
+
 def rules_by_id(value: ServiceCatalogRecord) -> dict[str, dict]:
     return {rule.condition_id: rule.model_dump(exclude_none=True) for rule in value.conditions}
 
@@ -162,6 +172,40 @@ class ServiceSourceFactsTest(unittest.TestCase):
         facts = bind_service_source_facts(ServiceCatalogRecord.model_validate(data), text, regions=REGIONS)
 
         self.assertFalse(facts.changed)
+
+    def test_changed_record_gets_source_facts_version_everywhere(self) -> None:
+        text = projection(zipCd="48120,48170")
+        facts = bind_service_source_facts(record(text), text, regions=REGIONS)
+
+        version = "sha256:" + "a" * 64 + ":source-facts-v1"
+        benefit = facts.record.benefit
+        self.assertEqual(benefit.source.document_version, version)
+        evidence = list(facts.record.service_evidence) + [
+            item for condition in benefit.eligibility_conditions for item in condition.evidence
+        ]
+        self.assertTrue(all(item.source.document_version == version for item in evidence))
+
+    def test_decider_version_is_rebound_to_source_facts_version(self) -> None:
+        text = projection(zipCd="48120,48170")
+        data = record(text).model_dump(mode="json")
+        decider = "sha256:" + "a" * 64 + ":decider-v3"
+        data = _with_version(data, decider)
+        facts = bind_service_source_facts(ServiceCatalogRecord.model_validate(data), text, regions=REGIONS)
+
+        self.assertEqual(facts.record.benefit.source.document_version,
+                         "sha256:" + "a" * 64 + ":source-facts-v1")
+
+    def test_unexpected_document_version_is_rejected(self) -> None:
+        text = projection(zipCd="48120,48170")
+        data = _with_version(record(text).model_dump(mode="json"), "sha256:" + "b" * 64)
+        with self.assertRaisesRegex(ValueError, "unsupported_document_version"):
+            bind_service_source_facts(ServiceCatalogRecord.model_validate(data), text, regions=REGIONS)
+
+    def test_unchanged_record_keeps_its_version(self) -> None:
+        text = projection(zipCd="41110,41130,48120,48170")
+        facts = bind_service_source_facts(record(text), text, regions=REGIONS)
+
+        self.assertEqual(facts.record.benefit.source.document_version, "sha256:" + "a" * 64)
 
     def test_source_hash_mismatch_is_rejected(self) -> None:
         text = projection(zipCd="48120,48170")

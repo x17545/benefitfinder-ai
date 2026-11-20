@@ -5,14 +5,17 @@ structured residence (``zipCd``) and age fields can be missing from it. Without 
 residence rule the S6 service list cannot exclude a service limited to another
 region. This step adds only executable rules that the source projection proves,
 keeps every existing condition, and marks an explicitly closed application
-(``aplyPrdSeCd=0057003``) as closed. It reads no network or database; the
-caller supplies the official region catalogue and publishes the result
-separately.
+(``aplyPrdSeCd=0057003``) as closed. A changed record gets the
+``:source-facts-v1`` document version so it can be published as a new release
+beside the retired original instead of conflicting with it. It reads no network
+or database; the caller supplies the official region catalogue and publishes the
+result separately.
 """
 
 from __future__ import annotations
 
 import hashlib
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -25,6 +28,26 @@ from benefitfinder.ingestion.source_eligibility import (
 
 CLOSED_APPLICATION_CODE = "0057003"
 _REGION_FIELDS = frozenset({"region_code", "domain_data.region.sido_code"})
+SOURCE_FACTS_SUFFIX = ":source-facts-v1"
+
+
+def _source_facts_version(current: str, material_sha256: str) -> str:
+    base = "sha256:" + material_sha256
+    if current == base + SOURCE_FACTS_SUFFIX:
+        raise ValueError("service_source_facts_already_bound")
+    if not re.fullmatch(re.escape(base) + r"(?::decider-v3)?", current):
+        raise ValueError("service_source_facts_unsupported_document_version")
+    return base + SOURCE_FACTS_SUFFIX
+
+
+def _replace_source(value: object, old: dict, new: dict) -> object:
+    if isinstance(value, dict):
+        if value == old:
+            return new.copy()
+        return {key: _replace_source(item, old, new) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_replace_source(item, old, new) for item in value]
+    return value
 
 
 @dataclass(frozen=True)
@@ -94,4 +117,8 @@ def bind_service_source_facts(
 
     if not added and not closed:
         return unchanged
+    old_source = dict(benefit["source"])
+    new_source = {**old_source, "document_version": _source_facts_version(
+        old_source["document_version"], bindings[0].material_sha256)}
+    data = _replace_source(data, old_source, new_source)
     return ServiceSourceFacts(ServiceCatalogRecord.model_validate(data), tuple(added), closed)
