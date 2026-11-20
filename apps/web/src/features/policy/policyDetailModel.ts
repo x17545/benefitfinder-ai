@@ -15,9 +15,17 @@ export function findMyPolicyResult(
 ): PortfolioPolicy | null {
   if ((isSample || benefit.virtual_data === true) !== (sampleAnalysis || result.virtual_data === true)) return null;
   const view = pickView(result, basis.period, basis.present_value);
-  return view.portfolios.flatMap((portfolio) => portfolio.policies).find((policy) =>
+  const inPortfolio = view.portfolios.flatMap((portfolio) => portfolio.policies).find((policy) =>
     policy.policy_id === benefit.id && policy.source.url === benefit.source.url &&
-    policy.source.document_version === benefit.source.document_version) ?? null;
+    policy.source.document_version === benefit.source.document_version);
+  if (inPortfolio !== undefined) return inPortfolio;
+
+  const fallback = (view.fallback_list ?? []).find((item) =>
+    item.policy_id === benefit.id && item.source?.url === benefit.source.url &&
+    item.source?.document_version === benefit.source.document_version);
+
+  if (fallback?.source === undefined || fallback.eligibility === undefined) return null;
+  return { ...fallback, source: fallback.source, eligibility: fallback.eligibility };
 }
 
 /** 문구 S5-SUM: "조건 3개 중 2개 충족, 1개 확인 필요" */
