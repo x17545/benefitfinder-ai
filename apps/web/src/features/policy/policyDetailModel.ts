@@ -76,3 +76,53 @@ export function payoutTimingSummary(amount: NormalizedBenefit['benefit_amount'])
   }
   return amount.type === 'maturity' || amount.pay_timing === 'at_maturity' ? '만기 시 지급' : null;
 }
+
+/** S5에서 조합 진단이 없을 때, 이 정책이 결과의 어느 목록에 있었는지 */
+export type ResultPolicyStatus =
+  | { kind: 'fallback' }
+  | { kind: 'notEligible'; failed: readonly string[] }
+  | { kind: 'closed' }
+  | { kind: 'notReviewed'; summary: ConditionResult['status'] }
+  | null;
+
+/**
+ * 조합(portfolios) 밖의 목록에서 정책을 찾는다. 판정은 서버 값을 그대로 쓰고 새로 계산하지 않는다.
+ * 결과에 없으면 null (지난 분석이거나 다른 조건으로 찾은 정책)
+ */
+export function policyStatusInResult(
+  result: RecommendationResponse, basis: ResultBasis, policyId: string,
+): ResultPolicyStatus {
+  const view = pickView(result, basis.period, basis.present_value);
+  if ((view.fallback_list ?? []).some((item) => item.policy_id === policyId)) {
+    return { kind: 'fallback' };
+  }
+  const notEligible = (view.not_eligible ?? []).find((item) => item.policy_id === policyId);
+  if (notEligible !== undefined) {
+    return { kind: 'notEligible', failed: notEligible.failed };
+  }
+  if ((view.closed_now ?? []).some((item) => item.policy_id === policyId)) {
+    return { kind: 'closed' };
+  }
+  const notReviewed = (view.not_yet_reviewed ?? []).find((item) => item.policy_id === policyId);
+  if (notReviewed !== undefined) {
+    return { kind: 'notReviewed', summary: notReviewed.eligibility_summary };
+  }
+  return null;
+}
+
+/** 원문 인용을 접어 둘 기준 글자 수. 이보다 길면 앞부분만 보이고 [원문 전체 보기]로 펼친다 */
+export const QUOTE_PREVIEW_LIMIT = 140;
+
+/**
+ * 긴 원문 인용의 앞부분. 원문은 바꾸지 않고 화면에서만 줄인다.
+ * 기준보다 짧으면 null(그대로 보여 준다). 가능하면 띄어쓰기에서 끊는다.
+ */
+export function quotePreview(quote: string, limit = QUOTE_PREVIEW_LIMIT): string | null {
+  const text = quote.trim();
+  if (text.length <= limit) {
+    return null;
+  }
+  const cut = text.slice(0, limit - 20);
+  const space = cut.lastIndexOf(' ');
+  return `${(space > cut.length * 0.6 ? cut.slice(0, space) : cut).trimEnd()}…`;
+}
