@@ -1,6 +1,8 @@
 """Explicit, source-bound publication of unreviewed catalog records."""
 
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+import hashlib
 import re
 
 from benefitfinder.infrastructure.ai_catalog_review import _verify_real_source, project_youthcenter_source
@@ -121,9 +123,41 @@ def retire_unreviewed(database_url: str, entries: list[tuple[CatalogRecord | Ser
                 raise ValueError('unreviewed_release_not_current')
 
 
+
+def retire_unreviewed_releases(database_url: str, releases: list[tuple[str, str, str]]) -> None:
+    """Retire only exact current unreviewed releases by policy, version and approved hash.
+
+    Unlike ``retire_unreviewed`` this needs no source text, so a release whose original
+    source projection can no longer be rebuilt can still be retired. It changes a row
+    only when all three values match a published unreviewed release, and the whole
+    batch rolls back on any mismatch.
+    """
+    ids = [policy_id for policy_id, _, _ in releases]
+    if (not 1 <= len(releases) <= 50 or len(set(ids)) != len(ids)
+            or any(type(v) is not str or not v for item in releases for v in item)
+            or any(re.fullmatch(r'[0-9a-f]{64}', digest) is None for _, _, digest in releases)):
+        raise ValueError('invalid_unreviewed_release_batch')
+    import psycopg
+
+    with psycopg.connect(database_url, connect_timeout=2) as connection:
+        connection.execute("SET LOCAL statement_timeout = '5s'")
+        connection.execute("SET LOCAL lock_timeout = '500ms'")
+        for name in ('gov24', 'official_documents', 'youthcenter'):
+            connection.execute('SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))', ('benefitfinder:collected_policy_generations:' + name,))
+        for policy_id, version, digest in sorted(releases):
+            connection.execute('SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))', (policy_id,))
+            result = connection.execute(
+                "UPDATE public.policy_catalog_releases SET publication_status='retired' "
+                "WHERE policy_id=%s AND document_version=%s AND approved_sha256=%s "
+                "AND review_type='unreviewed' AND publication_status='published'",
+                (policy_id, version, digest),
+            )
+            if result.rowcount != 1:
+                raise ValueError('unreviewed_release_not_current')
+
 _PUBLISHED_UNREVIEWED_SERVICES = """
-    SELECT release.payload, collected.fields, collected.material_sha256,
-           collected.missing_detected_at
+    SELECT release.payload, release.approved_sha256, collected.fields,
+           collected.material_sha256, collected.missing_detected_at
       FROM public.policy_catalog_releases AS release
       LEFT JOIN public.collected_policies AS collected
         ON collected.source = 'youthcenter'
@@ -135,25 +169,54 @@ _PUBLISHED_UNREVIEWED_SERVICES = """
 """
 
 
+@dataclass(frozen=True)
+class PublishedService:
+    """One published unreviewed service and the current source projection of its policy.
+
+    ``rebased`` is true when the projection differs from the one hashed at publication
+    (for example after a projection format change) but still contains every exact
+    citation of the record. Such a record can be retired only by its approved hash and
+    must be re-hashed against ``source`` before a new version is published.
+    """
+
+    record: ServiceCatalogRecord
+    source: str
+    approved_sha256: str
+    rebased: bool
+
+
+def _citations(record: ServiceCatalogRecord) -> list:
+    evidence = list(record.service_evidence)
+    evidence += [item for clause in record.explanation_clauses or [] for item in [clause.evidence]]
+    evidence += [item for condition in record.benefit.eligibility_conditions for item in condition.evidence]
+    evidence += [item for conflict in record.benefit.conflicts for item in conflict.evidence]
+    if record.benefit.application_guide is not None:
+        evidence += record.benefit.application_guide.citations()
+    return evidence
+
+
 def load_published_unreviewed_services(
     connection,
-) -> tuple[list[tuple[ServiceCatalogRecord, str]], list[dict[str, str]]]:
-    """Rebuild the exact (record, source) pairs of the published unreviewed services.
+) -> tuple[list[PublishedService], list[dict[str, str]]]:
+    """Rebuild the published unreviewed services with their current source projection.
 
-    Read-only. The source is the same ``project_youthcenter_source`` projection
-    that publication verified, so each pair can be retired as-is. Records whose
-    source is missing, marked missing, or no longer the bound generation are
-    returned as ``skipped`` with a reason instead of being guessed.
+    Read-only. A record is returned only when its payload still hashes to the approved
+    digest and its source is the bound, present generation. Anything else is returned
+    as ``skipped`` with a reason instead of being guessed.
     """
-    entries: list[tuple[ServiceCatalogRecord, str]] = []
+    services: list[PublishedService] = []
     skipped: list[dict[str, str]] = []
-    for payload, fields, material, missing_at in connection.execute(
+    for payload, approved, fields, material, missing_at in connection.execute(
         _PUBLISHED_UNREVIEWED_SERVICES
     ).fetchall():
         record = ServiceCatalogRecord.model_validate(payload)
         bindings = record.collection_sources
         reason = None
-        if len(bindings) != 1 or bindings[0].source != 'youthcenter':
+        if service_record_hash(record) != approved:
+            reason = 'approved_hash_mismatch'
+        elif record.price is not None or record.benefit.virtual_data or record.f12_review is not None:
+            reason = 'unsupported_unreviewed_service'
+        elif len(bindings) != 1 or bindings[0].source != 'youthcenter':
             reason = 'unsupported_collection_source'
         elif fields is None:
             reason = 'collected_source_missing'
@@ -165,10 +228,11 @@ def load_published_unreviewed_services(
             skipped.append({'policy_id': record.benefit.id, 'reason': reason})
             continue
         source = project_youthcenter_source(fields)
-        try:
+        if hashlib.sha256(source.encode('utf-8')).hexdigest() == record.source_sha256:
             validate_unreviewed(record, source)
-        except ValueError:
-            skipped.append({'policy_id': record.benefit.id, 'reason': 'source_projection_mismatch'})
-            continue
-        entries.append((record, source))
-    return entries, skipped
+            services.append(PublishedService(record, source, approved, False))
+        elif all(item.quote in source for item in _citations(record)):
+            services.append(PublishedService(record, source, approved, True))
+        else:
+            skipped.append({'policy_id': record.benefit.id, 'reason': 'source_quotes_missing'})
+    return services, skipped
