@@ -453,3 +453,46 @@ def compile_source_eligibility(
     if len({condition["id"] for condition in conditions}) != len(conditions):
         raise ValueError("source_eligibility_duplicate_condition_id")
     return conditions, rules
+
+
+def projection_values(text: str) -> dict[str, str]:
+    """Return fields that appear exactly once in one OnTong Youth projection."""
+
+    fields_by_name: dict[str, list[_Field]] = {}
+    for field in _fields(text):
+        fields_by_name.setdefault(field.name, []).append(field)
+    return {
+        name: fields[0].value
+        for name, fields in fields_by_name.items()
+        if len(fields) == 1
+    }
+
+
+def compile_source_restrictions(
+    text: str,
+    source: dict[str, str],
+    *,
+    regions: Sequence[RegionOption] = (),
+) -> tuple[list[dict], list[dict]]:
+    """Compile only the executable age and residence rules of one projection.
+
+    This is the subset that a separately written record (for example a service
+    record) can add without replacing its own conditions. Nationwide, unknown,
+    mixed, or partial coverage returns no rule, exactly as in
+    ``compile_source_eligibility``. Evidence offsets point into ``text``.
+    """
+
+    fields_by_name: dict[str, list[_Field]] = {}
+    for field in _fields(text):
+        fields_by_name.setdefault(field.name, []).append(field)
+
+    conditions: list[dict] = []
+    rules: list[dict] = []
+    for candidate in (_compile_age(fields_by_name), _compile_region(fields_by_name, regions)):
+        if candidate is None or candidate.condition is None or candidate.rule is None:
+            continue
+        condition = candidate.condition.copy()
+        condition["evidence"] = _evidence(candidate.fields, source)
+        conditions.append(condition)
+        rules.append(dict(candidate.rule))
+    return conditions, rules
