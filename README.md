@@ -90,7 +90,7 @@ flowchart LR
 | --- | --- | --- |
 | 웹과 API | 공식 지역 선택 → 13단계 입력 → 조합·상황 변화(S4)·상세(S5)·서비스(S6). 입력·결과 탭 복원, 조건 기억하기·삭제, PNG 저장. 기본 로컬 실행의 가상 결과는 화면과 이미지에 표시 | 실제 사용자 테스트와 환경별 동작 확인 |
 | 정책 계산·설명 | 배포 환경은 [게시 현금 정책 카탈로그](backend/src/benefitfinder/infrastructure/database/POLICY_CATALOG.md)로 계산. F13은 [게시 조항과 선택적 모델](backend/src/benefitfinder/api/README.md#f13-설명-실행) 사용. [게시 서비스 카탈로그](backend/src/benefitfinder/infrastructure/database/SERVICE_CATALOG.md)의 환산액은 현금 조합과 분리 | 미확인 자격·중복수혜·지급 조건 검수와 계산 가능 정책 확대 |
-| 수집·검수 도구 | [F08 통합 갱신](backend/src/benefitfinder/jobs/DAILY_REFRESH.md), [수집본 DB 인계](backend/src/benefitfinder/infrastructure/database/COLLECTED_POLICIES.md), [F12 분석 큐](backend/src/benefitfinder/infrastructure/database/F12_ANALYSIS.md)와 [입력 자동 준비](backend/src/benefitfinder/infrastructure/database/F12_PREPARATION.md). 정형 우선 분석·모델 없는 원천 적재·코드 기반 계산용 게시 구현 | 일일 운영 스케줄·알림 도착 확인, 남은 미검수·보류 자료 처리 |
+| 수집·검수 도구 | [F08 통합 갱신](backend/src/benefitfinder/jobs/DAILY_REFRESH.md), [수집본 DB 인계](backend/src/benefitfinder/infrastructure/database/COLLECTED_POLICIES.md), [F12 분석 큐](backend/src/benefitfinder/infrastructure/database/F12_ANALYSIS.md)와 [입력 자동 준비](backend/src/benefitfinder/infrastructure/database/F12_PREPARATION.md). 정형 우선 분석·모델 없는 원천 적재·코드 기반 계산용 게시 구현 | Render Cron 03:00 KST 실행·Discord 알림 확인 완료, 미검수·보류 자료 처리는 후속 |
 
 F11 이용 통계는 명세의 17개 이벤트를 기존 백엔드를 통해 GA4로 전달하도록 연결했다. 사용자 조건·URL 원문은 제외하고 통계용 쿠키·브라우저 저장소 없이 임시 식별자를 사용한다. 기본 설정은 꺼짐이며, 실제 조장 계정 수신과 팀원 보기 권한은 [통계 설정 안내](backend/src/benefitfinder/infrastructure/ANALYTICS.md)에 따라 별도 확인한다.
 
@@ -137,7 +137,7 @@ F11 이용 통계는 명세의 17개 이벤트를 기존 백엔드를 통해 GA4
 
 </details>
 
-**자동 갱신 확인** (F08, 목표 03:00 KST): [정책·금리 통합 실행·스케줄 안내](backend/src/benefitfinder/jobs/DAILY_REFRESH.md)를 따른다. 현재 CI는 매일 수집하는 스케줄러가 아니다. 마지막 수집 성공본과 실패 이력은 실행 문서에 기록하며, 알림 도착·운영 스케줄 등록은 별도 확인한다.
+**자동 갱신 확인** (F08, 목표 03:00 KST): [정책·금리 통합 실행·스케줄 안내](backend/src/benefitfinder/jobs/DAILY_REFRESH.md)를 따른다. GitHub CI는 일일 수집 스케줄러가 아니다. Render Cron에서 2026-11-18~20 매일 03:00 KST 예약 실행 성공과 Discord 정책·기준금리 갱신 알림을 확인했다. [운영 증빙](docs/team_collaboration/README.md#2-배포-및-운영-vercelrender)을 참고한다. F12 Agent의 운영 자동 실행은 별도 검증이 필요하다.
 
 **AI Agent 실행 기록 확인** (F12): [추출·검수·평가 CLI](backend/src/benefitfinder/jobs/README.md)를 따른다. 공유 가상 회귀와 실제 E4B 검증 요약은 관련 PR에 남기며, 실제 공고·검수·결과·로그는 로컬 `data/`에만 둔다. 제출용으로는 원문/개인정보를 제거한 실행 순서와 성공·실패 요약을 따로 확인한다.
 
@@ -153,8 +153,8 @@ F11 이용 통계는 명세의 17개 이벤트를 기존 백엔드를 통해 GA4
 | 이름 | 역할 | 기여 요약 (본인 작성) | 대표 커밋·PR·문서 |
 | --- | --- | --- | --- |
 | 양승현 (조장) | 통합·배포 / 백엔드 | 백엔드 아키텍처 의존성 오류 해결, LLM 제공자 연동 및 F08 Windows 호환성 개선, Vercel·Render 배포 연동 설정, 통합 테스트 오류 수정 및 PR 병합 관리 | [PR #12](https://github.com/x17545/benefitfinder-ai/pull/12), [PR #21](https://github.com/x17545/benefitfinder-ai/pull/21), [PR #56](https://github.com/x17545/benefitfinder-ai/pull/56), [커밋 a6f70c9](https://github.com/x17545/benefitfinder-ai/commit/a6f70c9) |
-| 이현서 | 기획 / 화면 설계 | 주제 발전(놓친 혜택 찾기 → 최적 지원금 조합)과 문제·타깃 정의, 기획서와 기능 명세 v2.0·v3.0 작성(13단계 조건 선택, 조합 비교·상황 변화 화면, AI 기술 요소 F12~F14, 구현 현황 표). 클릭 시안·화면 설계서와 사용자 테스트 설계, 배포 사이트 흐름 점검과 기획서 대비 구현 비교 | [PR #1](https://github.com/x17545/benefitfinder-ai/pull/1) · [PR #13](https://github.com/x17545/benefitfinder-ai/pull/13) · [PR #81](https://github.com/x17545/benefitfinder-ai/pull/81) · [기획서](https://github.com/x17545/benefitfinder-ai/blob/main/docs/product/PROJECT_PLAN.md) · [기능 명세](https://github.com/x17545/benefitfinder-ai/blob/main/docs/product/REQUIREMENTS.md) · [시안](https://github.com/x17545/benefitfinder-ai/blob/main/docs/prototype/index.html) · [배포 점검·구현 비교](https://github.com/x17545/benefitfinder-ai/blob/docs/deploy-check-20261115/docs/product/DEPLOY_CHECK.md) |
-| 김하정 | 디자인 / 프론트엔드 | 화면 디자인과 웹 화면 구현(시작·조건 입력·결과·상세·상황 변화·서비스·안내 페이지), 배포 사이트 PC·모바일 점검 및 보완 | [#7](https://github.com/x17545/benefitfinder-ai/pull/7) · [#22](https://github.com/x17545/benefitfinder-ai/pull/22) · [#28](https://github.com/x17545/benefitfinder-ai/pull/28) · [#31](https://github.com/x17545/benefitfinder-ai/pull/31) · [#54](https://github.com/x17545/benefitfinder-ai/pull/54) |
+| 이현서 | 기획 / 화면 설계 | 주제 발전(놓친 혜택 찾기 → 최적 지원금 조합)과 문제·타깃 정의, 기획서와 기능 명세 v2.0·v3.0 작성(13단계 조건 선택, 조합 비교·상황 변화 화면, AI 기술 요소 F12~F14, 구현 현황 표). 클릭 시안·화면 설계서와 사용자 테스트 설계, 배포 사이트 흐름 점검과 기획서 대비 구현 비교 | [PR #1](https://github.com/x17545/benefitfinder-ai/pull/1) · [PR #13](https://github.com/x17545/benefitfinder-ai/pull/13) · [PR #81](https://github.com/x17545/benefitfinder-ai/pull/81) · [기획서](https://github.com/x17545/benefitfinder-ai/blob/main/docs/product/PROJECT_PLAN.md) · [기능 명세](https://github.com/x17545/benefitfinder-ai/blob/main/docs/product/REQUIREMENTS.md) · [시안](https://github.com/x17545/benefitfinder-ai/blob/main/docs/prototype/index.html) · [배포 점검·구현 비교](https://github.com/x17545/benefitfinder-ai/blob/main/docs/product/DEPLOY_CHECK.md) |
+| 김하정 | 디자인 / 프론트엔드 | 화면 디자인과 웹 화면 구현(시작·조건 입력·결과·상세·상황 변화·서비스·안내 페이지), 배포 사이트 PC·모바일 점검 및 보완, 최종 제출용 팀 협업·배포·기능 테스트 증빙자료 정리 | [PR #7](https://github.com/x17545/benefitfinder-ai/pull/7), [PR #22](https://github.com/x17545/benefitfinder-ai/pull/22), [PR #28](https://github.com/x17545/benefitfinder-ai/pull/28), [PR #31](https://github.com/x17545/benefitfinder-ai/pull/31), [PR #54](https://github.com/x17545/benefitfinder-ai/pull/54), [PR #88](https://github.com/x17545/benefitfinder-ai/pull/88), [PR #89](https://github.com/x17545/benefitfinder-ai/pull/89), [PR #93](https://github.com/x17545/benefitfinder-ai/pull/93), [증빙자료](docs/team_collaboration/README.md) |
 | 윤정찬 | 원천 데이터 수집·적재 | 온통청년 청년정책 API 수집·원본 보관·버전 비교 구현, 공고 HTML·PDF 텍스트 변환(notice-text-v1) 추가, 실제 수집본 비교로 키워드 순서 변경에 따른 재검수 오탐을 찾아 수정(취업·주거 해시 변경 296→8건), 수집·적재·DB PR(#39~#49) 직접 실행 리뷰, ECOS 기준금리·온통청년 3,957건·보조금24 82건 실제 수집→PostgreSQL 적재 검증, 보조금24 10,942건 조사로 취업·주거 분류값과 수집 대상 매핑 정리 | [PR #8](https://github.com/x17545/benefitfinder-ai/pull/8), [PR #33](https://github.com/x17545/benefitfinder-ai/pull/33), [PR #52](https://github.com/x17545/benefitfinder-ai/pull/52), [PR #53](https://github.com/x17545/benefitfinder-ai/pull/53), [수집 문서](backend/src/benefitfinder/ingestion/README.md) |
 | 탁서윤 | 데이터 정제·AI / 자동화 | 중복 수혜 규칙 정제·검수와 원문 변경 시 재검수 처리, F12 원문 분석 Agent·문맥 보존·추출 품질 평가·검수 큐, F13 게시 근거 기반 맞춤 설명·실패 시 기본 문구 전환, F08 정책·기준금리 통합 갱신·재시도·실패 알림, Decider 정형 우선 배치 추출·원공고 기반 계산 게시 경로 구현 | [PR #9](https://github.com/x17545/benefitfinder-ai/pull/9), [PR #14](https://github.com/x17545/benefitfinder-ai/pull/14), [PR #16](https://github.com/x17545/benefitfinder-ai/pull/16), [PR #40](https://github.com/x17545/benefitfinder-ai/pull/40), [PR #69](https://github.com/x17545/benefitfinder-ai/pull/69), [분석·평가 문서](docs/development/DECIDER_PIPELINE.md), [자동 갱신 문서](backend/src/benefitfinder/jobs/DAILY_REFRESH.md) |
 
@@ -168,7 +168,7 @@ F11 이용 통계는 명세의 17개 이벤트를 기존 백엔드를 통해 GA4
 | 서버 | Python 3.12, FastAPI, Pydantic |
 | DB | PostgreSQL. 게시 정책·규칙·근거 조회, 코드 판정·계산과 F13 조항 조회에 사용 |
 | AI | 정형값은 코드 처리, [Decider 본문 추출](docs/development/DECIDER_PIPELINE.md)은 로컬 검증. 자격·금액 계산은 코드가 수행하며 [선택적 설명 모델](backend/src/benefitfinder/api/README.md#f13-설명-실행) 실패 시 기본 문구로 복귀 |
-| 자동화 | F08 정책·금리 통합 실행·재시도·웹훅과 03:00 KST Linux systemd/macOS launchd 설정 생성. 운영 등록·실제 API/알림 도착은 후속 |
+| 자동화 | F08 정책·금리 통합 실행·재시도·웹훅과 03:00 KST Linux systemd/macOS launchd 설정 생성. Render Cron 운영 등록·실제 정책 및 기준금리 갱신·Discord 알림 도착을 2026-11-18~20 기록으로 확인. F12 운영 자동 실행은 미검증 |
 | 데이터 | 온통청년 수집·ECOS 기준금리 수동 갱신/DB 조회 구현. 보조금24 선택 ID의 API·DB·F12 연결 구현. 실제 매핑·운영 갱신은 후속 |
 | 개발 도구 | uv, pnpm, GitHub Actions CI |
 | 배포 | Vercel 웹·Render API 연동. [배포 서비스](https://benefitfinder-ai.vercel.app/)와 운영 DB의 실제 정책 응답 확인 기록 제공 |
@@ -199,7 +199,7 @@ DB·LLM 키 없이 실행한다. `pip`·`npm`·`npx` 대신 uv·pnpm을 사용�
 
 - 기능별 구현·확인 방법: [구현 현황 표](docs/product/REQUIREMENTS.md#14-구현-현황-표)
 - 사용자 테스트: 제출용 참여 인원·지표는 미등록. [관찰·피드백 기록 양식](docs/product/USER_TEST.md#6-피드백과-반영-기록-제출용)
-- 대표 화면: 제출용 캡처 미등록
+- 대표 화면: [기능별 테스트 화면과 배포·협업 증빙자료](docs/team_collaboration/README.md)
 
 ## 개발 시작점
 

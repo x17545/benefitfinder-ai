@@ -301,7 +301,7 @@ describe('period-specific empty results', () => {
   it('shows the maturity fallback breakdown and explains the PV exclusion', async () => {
     screen.result = fixture(maturityText);
     const nominal = await renderResult();
-    expect(nominal).toContain('받을 수 있는 지원금 1개를 찾았어요');
+    expect(nominal).toContain('자격 확인이 필요한 지원금 1개를 찾았어요');
     expect(nominal).toContain('현금 지급 예정');
     expect(nominal).toContain('만기 전 예상 적립');
     expect(nominal).toContain('30만 원');
@@ -313,6 +313,51 @@ describe('period-specific empty results', () => {
     expect(presentValue).toContain('현재가치 합계와 순위에는 만기 전 예상 적립액을 넣지 않았어요.');
   });
 
+  it('marks fallback eligibility as unconfirmed when diagnosis is missing', async () => {
+    screen.result = fixture(maturityText);
+    const html = await renderResult();
+    expect(html).toContain('자격 확인이 필요한 지원금 1개를 찾았어요');
+    expect(html).toContain('자격 충족 시 예상 금액 · 확인 필요');
+    expect(html).not.toContain('받을 수 있는 지원금 1개를 찾았어요');
+  });
+
+  it('labels a fully met fallback as input-condition matched', async () => {
+    const result = fixture(maturityText);
+    const item = result.results['1y'].pv_off.fallback_list?.[0];
+    if (item === undefined) throw new Error('fallback fixture missing');
+    item.eligibility = [{ condition_id: 'age', status: 'met', reason: '테스트', evidence: [] }];
+    screen.result = result;
+    const html = await renderResult();
+    expect(html).toContain('입력 조건상 충족한 지원금 1개를 찾았어요');
+    expect(html).toContain('입력 조건상 충족 · 예상 금액');
+  });
+
+  it('shows a conditional total warning when a portfolio needs review', async () => {
+    const result = fixture(fixtureText);
+    const portfolio = result.results['1y'].pv_off.portfolios[0];
+    if (portfolio === undefined) throw new Error('portfolio fixture missing');
+    for (const policy of portfolio.policies) {
+      policy.eligibility = [{ condition_id: 'age', status: 'needs_review', reason: '테스트', evidence: [] }];
+    }
+    screen.result = result;
+    const html = await renderResult();
+    expect(html).toContain('자격 확인이 필요한 예상 조합');
+    const hero = html.match(/aria-label="추천 조합 요약"[\s\S]*?<\/section>/)?.[0] ?? '';
+    expect(hero).toContain('자격 미확인 정책이 포함된 조건부 예상액');
+  });
+
+  it('does not warn about unconfirmed eligibility when all portfolio conditions are met', async () => {
+    const result = fixture(fixtureText);
+    for (const portfolio of result.results['1y'].pv_off.portfolios) {
+      for (const policy of portfolio.policies) {
+        policy.eligibility = [{ condition_id: 'age', status: 'met', reason: '테스트', evidence: [] }];
+      }
+    }
+    screen.result = result;
+    const html = await renderResult();
+    expect(html).toContain('입력 조건상 충족한 예상 조합');
+    expect(html).not.toContain('자격 미확인 정책이 포함된 조건부 예상액');
+  });
   it('shows the portfolio hero breakdown next to the existing total', async () => {
     const result = fixture(fixtureText);
     const portfolio = result.results['1y'].pv_off.portfolios[0];

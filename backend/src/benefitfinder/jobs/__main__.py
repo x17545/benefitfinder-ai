@@ -749,6 +749,26 @@ def ai_catalog_command(args: argparse.Namespace) -> int:
 
 def unreviewed_catalog_command(args: argparse.Namespace) -> int:
     """Handle a manifest without inventing review metadata."""
+    if args.catalog_action == 'retire-exact':
+        from benefitfinder.infrastructure.unreviewed_catalog import retire_unreviewed_releases
+        try:
+            releases = json.loads(args.releases.read_text(encoding='utf-8'))
+            if not isinstance(releases, list) or any(
+                not isinstance(item, dict) or set(item) != {'policy_id', 'document_version', 'approved_sha256'}
+                for item in releases
+            ):
+                raise ValueError('invalid_unreviewed_releases_file')
+            database_url = os.environ.get('POLICY_PUBLISH_DATABASE_URL', '')
+            if not database_url:
+                raise ValueError('missing_publish_database_url')
+            retire_unreviewed_releases(database_url, [
+                (item['policy_id'], item['document_version'], item['approved_sha256']) for item in releases
+            ])
+        except Exception:
+            print('미검수 게시본 철회 실패: 철회 목록과 현재 게시 상태·DB 설정을 확인하세요.', file=sys.stderr)
+            return 2
+        print(json.dumps({'action': 'retire-exact', 'count': len(releases)}))
+        return 0
     try:
         manifest = json.loads(args.manifest.read_text(encoding='utf-8'))
         if not isinstance(manifest, list) or not 1 <= len(manifest) <= 50:
@@ -772,6 +792,94 @@ def unreviewed_catalog_command(args: argparse.Namespace) -> int:
         print('미검수 카탈로그 처리 실패: 입력·원천·DB 상태를 확인하세요.', file=sys.stderr)
         return 2
     print(json.dumps({'action': args.catalog_action, 'count': len(entries)}))
+    return 0
+
+
+def service_source_facts_command(args: argparse.Namespace) -> int:
+    """Add proven residence/age rules and closed status to service records offline.
+
+    Input is an ``unreviewed-catalog`` manifest, or ``--from-database`` to rebuild the
+    published unreviewed services read-only. For changed records only, writes
+    ``before/releases.json`` (exact current releases for ``unreviewed-catalog
+    retire-exact``) and ``after/manifest.json`` (new versions for ``unreviewed-catalog
+    publish``) under ``--output``. A record whose publication-time projection can no
+    longer be rebuilt is re-hashed against the current projection only when every
+    citation is still present. It never writes the database.
+    """
+    import hashlib
+
+    from benefitfinder.infrastructure.region_codes import OfficialRegionCatalog
+    from benefitfinder.ingestion.service_source_facts import bind_service_source_facts
+
+    try:
+        skipped: list[dict[str, str]] = []
+        loaded: list[tuple] = []  # (record, source, approved_sha256, rebased)
+        if args.from_database:
+            import psycopg
+            from benefitfinder.infrastructure.unreviewed_catalog import load_published_unreviewed_services
+
+            database_url = os.environ.get(args.database_url_env, '').strip()
+            if not database_url:
+                raise ValueError('missing_service_facts_database_url')
+            with psycopg.connect(database_url, connect_timeout=10,
+                                 options='-c default_transaction_read_only=on') as connection:
+                services, skipped = load_published_unreviewed_services(connection)
+            loaded = [(item.record, item.source, item.approved_sha256, item.rebased) for item in services]
+        else:
+            manifest = json.loads(args.manifest.read_text(encoding='utf-8'))
+            if not isinstance(manifest, list) or not 1 <= len(manifest) <= 50:
+                raise ValueError('invalid_service_facts_manifest')
+            for item in manifest:
+                if not isinstance(item, dict) or set(item) != {'input', 'source'}:
+                    raise ValueError('invalid_service_facts_entry')
+                data = json.loads((args.manifest.parent / item['input']).read_text(encoding='utf-8'))
+                if data.get('kind') != 'service':
+                    raise ValueError('service_facts_requires_service_record')
+                record = ServiceCatalogRecord.model_validate(data)
+                source = (args.manifest.parent / item['source']).read_text(encoding='utf-8')
+                validate_service_sources(record, source, None)
+                loaded.append((record, source, service_record_hash(record), False))
+        if not 1 <= len(loaded) <= 50:
+            raise ValueError('service_facts_batch_size')
+        regions = OfficialRegionCatalog().get_regions()
+        before, after, summary = [], [], []
+        for record, source, approved, rebased in loaded:
+            payload = record.model_dump(mode='json')
+            if rebased:
+                payload['source_sha256'] = hashlib.sha256(source.encode('utf-8')).hexdigest()
+            facts = bind_service_source_facts(payload, source, regions=regions)
+            summary.append({'policy_id': record.benefit.id, 'title': record.benefit.title,
+                            'changed': facts.changed, 'rebased': rebased,
+                            'added_conditions': list(facts.added_condition_ids), 'closed': facts.closed})
+            if facts.changed:
+                bound = ServiceCatalogRecord.model_validate(facts.payload)
+                validate_service_sources(bound, source, None)
+                before.append({'policy_id': record.benefit.id,
+                               'document_version': record.benefit.source.document_version,
+                               'approved_sha256': approved})
+                after.append((bound, source))
+        if args.output is not None:
+            args.output.mkdir(mode=0o700, parents=True, exist_ok=False)
+            if after:
+                (args.output / 'before').mkdir(mode=0o700)
+                (args.output / 'before' / 'releases.json').write_text(
+                    json.dumps(before, indent=2), encoding='utf-8')
+                directory = args.output / 'after'
+                directory.mkdir(mode=0o700)
+                manifest = []
+                for index, (bound, source) in enumerate(after):
+                    name = f'{index:03d}'
+                    (directory / f'{name}.json').write_text(
+                        json.dumps(bound.model_dump(mode='json'), ensure_ascii=False, indent=2),
+                        encoding='utf-8')
+                    (directory / f'{name}.source.txt').write_text(source, encoding='utf-8')
+                    manifest.append({'input': f'{name}.json', 'source': f'{name}.source.txt'})
+                (directory / 'manifest.json').write_text(json.dumps(manifest, indent=2), encoding='utf-8')
+    except Exception:
+        print('서비스 원천 조건 연결 실패: 입력·원천·지역 목록·DB 설정과 새 출력 경로를 확인하세요.', file=sys.stderr)
+        return 2
+    print(json.dumps({'count': len(summary), 'changed': len(after), 'skipped': skipped,
+                      'records': summary}, ensure_ascii=False))
     return 0
 
 
@@ -1581,6 +1689,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     for action in ('validate', 'publish', 'retire'):
         command = unreviewed_actions.add_parser(action)
         command.add_argument('--manifest', type=Path, required=True)
+    retire_exact = unreviewed_actions.add_parser(
+        'retire-exact', help='정책·문서 버전·승인 해시가 정확히 일치하는 미검수 게시본만 철회')
+    retire_exact.add_argument('--releases', type=Path, required=True)
+    service_facts = commands.add_parser(
+        'service-source-facts', help='서비스 기록에 원천 지역·연령 조건과 마감 상태를 오프라인으로 연결')
+    service_facts_input = service_facts.add_mutually_exclusive_group(required=True)
+    service_facts_input.add_argument('--manifest', type=Path)
+    service_facts_input.add_argument('--from-database', action='store_true',
+                                     help='게시 중인 미검수 서비스를 읽기 전용으로 다시 구성')
+    service_facts.add_argument('--database-url-env', default='POLICY_PUBLISH_DATABASE_URL')
+    service_facts.add_argument('--output', type=Path, help='생략하면 미리보기 요약만 출력')
     catalog = commands.add_parser("policy-catalog", help="검수된 정책 카탈로그 검증·명시적 게시")
     catalog_actions = catalog.add_subparsers(dest="catalog_action", required=True)
     for action in ("validate", "publish"):
@@ -1629,6 +1748,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return ai_catalog_command(args)
     if args.command == 'unreviewed-catalog':
         return unreviewed_catalog_command(args)
+    if args.command == 'service-source-facts':
+        return service_source_facts_command(args)
     if args.command == 'service-catalog':
         return service_catalog_command(args)
     if args.command == "refresh-data":

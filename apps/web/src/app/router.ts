@@ -69,22 +69,61 @@ export function parseRoute(pathname: string): Route {
 
 const NAVIGATE_EVENT = 'app:navigate';
 
+/** 이 탭에서 앱 안으로 몇 번 들어왔는지 history.state에 적는다 (뒤로 가기 판단용) */
+const DEPTH_KEY = 'bfDepth';
+
+export type NavigationKind = 'load' | 'push' | 'replace' | 'pop';
+let lastKind: NavigationKind = 'load';
+
+function currentDepth(): number {
+  const state: unknown = typeof window === 'undefined' ? null : window.history.state;
+  if (typeof state === 'object' && state !== null && DEPTH_KEY in state) {
+    const depth = (state as Record<string, unknown>)[DEPTH_KEY];
+    return typeof depth === 'number' && Number.isFinite(depth) ? depth : 0;
+  }
+  return 0;
+}
+
 /** 다른 화면으로 이동한다. replace면 뒤로 가기 기록을 남기지 않는다 */
 export function navigate(path: string, options: { replace?: boolean } = {}): void {
   if (options.replace === true) {
-    window.history.replaceState(null, '', path);
+    lastKind = 'replace';
+    window.history.replaceState({ [DEPTH_KEY]: currentDepth() }, '', path);
   } else {
-    window.history.pushState(null, '', path);
+    lastKind = 'push';
+    window.history.pushState({ [DEPTH_KEY]: currentDepth() + 1 }, '', path);
   }
   window.dispatchEvent(new Event(NAVIGATE_EVENT));
 }
 
+/** 마지막 화면 이동이 뒤로·앞으로(pop)였는지. 결과 화면의 펼침·스크롤 복원에 쓴다 */
+export function lastNavigationKind(): NavigationKind {
+  return lastKind;
+}
+
+/**
+ * 상단 [뒤로]. 이 앱 안에서 넘어온 화면이면 브라우저 뒤로 가기,
+ * 공유 링크 등으로 바로 들어왔으면 사이트 밖으로 나가지 않고 fallback 화면으로 간다.
+ */
+export function goBack(fallback: string): void {
+  if (currentDepth() > 0) {
+    window.history.back();
+    return;
+  }
+  navigate(fallback, { replace: true });
+}
+
 /** 주소가 바뀔 때 알려 준다 (navigate, 브라우저 뒤로·앞으로) */
 export function subscribeToNavigation(callback: () => void): () => void {
-  window.addEventListener('popstate', callback);
+  // 뒤로·앞으로는 화면을 다시 그리기 전에 표시해 둔다 (결과 화면 복원 판단)
+  function onPop(): void {
+    lastKind = 'pop';
+    callback();
+  }
+  window.addEventListener('popstate', onPop);
   window.addEventListener(NAVIGATE_EVENT, callback);
   return () => {
-    window.removeEventListener('popstate', callback);
+    window.removeEventListener('popstate', onPop);
     window.removeEventListener(NAVIGATE_EVENT, callback);
   };
 }

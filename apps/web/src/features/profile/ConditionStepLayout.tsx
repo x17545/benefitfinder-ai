@@ -5,6 +5,8 @@ import { trackEvent } from '../../shared/analytics/events.ts';
 import { Button } from '../../shared/ui/Button.tsx';
 import { StepProgress } from '../../shared/ui/StepProgress.tsx';
 import { TopBar } from '../../shared/ui/TopBar.tsx';
+import { firstUnanswered, questionElementId, remainingQuestionsHint } from './stepQuestions.ts';
+import type { StepQuestion } from './stepQuestions.ts';
 import './ConditionStep.css';
 
 interface ConditionStepLayoutProps {
@@ -21,6 +23,8 @@ interface ConditionStepLayoutProps {
   nextLabel?: string;
   /** 기본은 다음 단계로 이동 */
   onNext?: () => void;
+  /** 한 화면에 질문이 여러 개일 때 각 질문의 답 여부. 남은 질문 안내에 쓴다 */
+  questions?: readonly StepQuestion[];
   children: ReactNode;
 }
 
@@ -33,6 +37,7 @@ export function ConditionStepLayout({
   topExtra,
   nextLabel = '다음',
   onNext,
+  questions = [],
   children,
 }: ConditionStepLayoutProps): JSX.Element {
   function goBack(): void {
@@ -49,6 +54,20 @@ export function ConditionStepLayout({
       return;
     }
     navigate(step < CONDITION_STEPS ? paths.conditions(step + 1) : paths.loading);
+  }
+
+  const remainingHint = remainingQuestionsHint(questions, canNext);
+
+  /** 처음으로 답하지 않은 질문으로 이동하고 첫 선택지에 초점을 둔다 */
+  function goToRemaining(): void {
+    const target = firstUnanswered(questions);
+    const element = target === undefined ? null : document.getElementById(questionElementId(target.id));
+    if (element === null) {
+      return;
+    }
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    element.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'center' });
+    element.querySelector<HTMLElement>('input, button, select')?.focus({ preventScroll: true });
   }
 
   return (
@@ -79,6 +98,11 @@ export function ConditionStepLayout({
       </main>
 
       <div className="s2-bottom">
+        {remainingHint !== null ? (
+          <button type="button" className="s2-remaining" onClick={goToRemaining}>
+            {remainingHint} <span aria-hidden="true">↓</span>
+          </button>
+        ) : null}
         <Button size="large" block disabled={!canNext} onClick={goNext}>
           {nextLabel}
         </Button>

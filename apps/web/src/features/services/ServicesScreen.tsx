@@ -1,6 +1,6 @@
 import type { JSX } from 'react';
-import { CONDITION_STEPS, navigate, paths } from '../../app/router.ts';
-import { conditionLabel } from '../../domains/youth/conditionLabels.ts';
+import { CONDITION_STEPS, goBack, paths } from '../../app/router.ts';
+import { conditionChips } from '../../domains/youth/conditionLabels.ts';
 import type { RecommendedService } from '../../shared/api/generated/recommendation-response.ts';
 import { SiteFooter } from '../../shared/ui/SiteFooter.tsx';
 import { StatusChip } from '../../shared/ui/StatusChip.tsx';
@@ -33,8 +33,7 @@ export function ServicesScreen(): JSX.Element {
       <TopBar
         title="돈 말고 받을 수 있는 도움"
         onBack={() => {
-          if (window.history.length > 1) window.history.back();
-          else navigate(result !== null ? withResultBasis(paths.result, basis) : paths.start);
+          goBack(result !== null ? withResultBasis(paths.result, basis) : paths.start);
         }}
       />
       <main className="screen__body s6-body">
@@ -165,9 +164,9 @@ function ServiceRow({ entry, detailHref, virtualData }: ServiceRowProps): JSX.El
 
       {entry.eligibility.length > 0 ? (
         <span className="s6-row__chips">
-          {entry.eligibility.map((condition) => (
-            <StatusChip key={condition.condition_id} status={condition.status}>
-              {conditionLabel(condition.condition_id)}
+          {conditionChips(entry.eligibility).map((chip) => (
+            <StatusChip key={chip.key} status={chip.status}>
+              {chip.label}
             </StatusChip>
           ))}
         </span>

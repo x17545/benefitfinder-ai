@@ -1,5 +1,5 @@
 import type { JSX } from 'react';
-import { conditionLabel } from '../../domains/youth/conditionLabels.ts';
+import { conditionChips } from '../../domains/youth/conditionLabels.ts';
 import { trackEvent } from '../../shared/analytics/events.ts';
 import { StatusChip } from '../../shared/ui/StatusChip.tsx';
 import { AmountBreakdown } from './AmountBreakdown.tsx';
@@ -87,9 +87,9 @@ export function PolicyCard({ policy, info, rank, aiGenerated, detailHref, virtua
 
         {policy.eligibility.length > 0 ? (
           <span className="s3-policy__chips">
-            {policy.eligibility.map((condition) => (
-              <StatusChip key={condition.condition_id} status={condition.status}>
-                {conditionLabel(condition.condition_id)}
+            {conditionChips(policy.eligibility).map((chip) => (
+              <StatusChip key={chip.key} status={chip.status}>
+                {chip.label}
               </StatusChip>
             ))}
           </span>

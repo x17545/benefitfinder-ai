@@ -787,6 +787,15 @@
           ],
           "minimum": 0
         },
+        "eligibility": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/condition_result"
+          }
+        },
+        "source": {
+          "$ref": "common.schema.json#/$defs/source"
+        },
         "reason": {
           "type": "string",
           "minLength": 1

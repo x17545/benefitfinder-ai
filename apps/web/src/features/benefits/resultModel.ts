@@ -8,6 +8,47 @@ export type ResultView = RecommendationResponse['results']['1y']['pv_off'];
 export type Portfolio = ResultView['portfolios'][number];
 export type PortfolioPolicy = Portfolio['policies'][number];
 export type PolicySummaries = ReadonlyMap<string, PolicySummary>;
+export type EligibilityDisplayStatus = 'met' | 'needs_review' | 'not_met' | 'unknown';
+
+type EligibilityStatusItem = {
+  status: 'met' | 'needs_review' | 'not_met';
+};
+
+/** 정책의 입력 조건 판정 상태. 진단 누락은 자격 충족으로 간주하지 않는다. */
+export function eligibilityDisplayStatus(
+  conditions: readonly EligibilityStatusItem[] | null | undefined,
+): EligibilityDisplayStatus {
+  if (conditions?.some((condition) => condition.status === 'not_met')) {
+    return 'not_met';
+  }
+  if (conditions?.some((condition) => condition.status === 'needs_review')) {
+    return 'needs_review';
+  }
+  if (!conditions || conditions.length === 0) {
+    return 'unknown';
+  }
+  return 'met';
+}
+
+/** 조합의 모든 정책을 확인해야 조합 전체를 충족으로 표시할 수 있다. */
+export function portfolioEligibilityStatus(
+  policies: readonly { eligibility?: readonly EligibilityStatusItem[] | null }[],
+): EligibilityDisplayStatus {
+  if (policies.length === 0) {
+    return 'unknown';
+  }
+  const statuses = policies.map((policy) => eligibilityDisplayStatus(policy.eligibility));
+  if (statuses.includes('not_met')) {
+    return 'not_met';
+  }
+  if (statuses.includes('needs_review')) {
+    return 'needs_review';
+  }
+  if (statuses.includes('unknown')) {
+    return 'unknown';
+  }
+  return 'met';
+}
 
 type ExcludedItem = NonNullable<ResultView['excluded']>[number];
 export interface PortfolioExclusion {

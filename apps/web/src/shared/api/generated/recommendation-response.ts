@@ -514,6 +514,8 @@ export interface ExcludedItem {
 export interface FallbackItem {
   policy_id: string;
   amount_in_period_won?: number | null;
+  eligibility?: ConditionResult[];
+  source?: Source;
   reason?: string;
   amount_breakdown?: AmountBreakdown;
 }

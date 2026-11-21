@@ -1,17 +1,13 @@
 import type { JSX } from 'react';
 import type { NormalizedBenefit } from '../../shared/api/benefits.ts';
+import { EvidenceQuote } from './EvidenceQuote.tsx';
 import { applyPeriod } from './policyDetailModel.ts';
 
 type Guide = NonNullable<NormalizedBenefit['application_guide']>;
 type Excerpt = NonNullable<Guide['method']>;
 
 function Citation({ item }: { item: Excerpt }): JSX.Element {
-  return (
-    <blockquote className="s5-quote">
-      <span className="s5-quote__where">「{item.location}」</span>
-      <span className="s5-guide-quote">{item.quote}</span>
-    </blockquote>
-  );
+  return <EvidenceQuote quote={item.quote} location={item.location} textClassName="s5-guide-quote" />;
 }
 
 /** 승인한 원문만 표시한다. 운영 기관과 접수 기관은 서로 추정하지 않는다. */
