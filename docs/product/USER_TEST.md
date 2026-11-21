@@ -1,7 +1,7 @@
 # 사용자 테스트 진행안과 설문
 
 > 목적: docs/product/REQUIREMENTS.md 8.6 성공 기준 중 이해도와 만족도, 입력 시간을 확인하고, 고칠 곳을 찾는다.
-> 현행 기준: [docs/product/REQUIREMENTS.md](REQUIREMENTS.md) v3.0, 기획서 [PROJECT_PLAN.md](PROJECT_PLAN.md)
+> 현행 기준: [docs/product/REQUIREMENTS.md](REQUIREMENTS.md) v3.0, 기획서 [PROJECT_PLAN.md](PROJECT_PLAN.md), 구글 폼 설문 기록 [USER_TEST_SURVEY.md](USER_TEST_SURVEY.md)
 > 평가 기준 G5(실사용자 5명 이상 피드백)와 G7(테스터 이름·연락처 비공개)의 제출 기록을 이 문서에 남긴다. 기록할 곳은 5장(참여자)과 6장(피드백과 반영)이다.
 > 취업·주거 혜택에 F01~F14와 13단계를 적용해 평가한다. 다른 분류는 확장 대상으로 분리하고 MVP 실패로 세지 않는다.
 
