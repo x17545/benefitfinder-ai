@@ -74,6 +74,15 @@ AI 혜택 코치(BenefitFinder AI) 팀이 역할을 나누어 함께 개발하�
 
 단위 테스트 성공을 운영 환경에서 실제 AI 모델이 실행되었다는 증빙으로 사용하지 않는다.
 
+### F12 Agent·F13 RAG 실제 모델 실행 증빙 (2026-11-21)
+
+[**F12·F13 실제 모델 실행 검증 기록**](AI_REAL_MODEL_VERIFICATION_2026-11-21.md)에 탁서윤님이 제공한 로컬 Ollama 실행 및 비식별 Trace 증빙을 정리했다.
+
+- **F12 Agent:** 가상 문서 1건을 대상으로 실제 모델 실행, 모델 턴 14회, Trace 14단계, 최종 `needs_review` 확인
+- **F13 RAG:** 로컬 PostgreSQL 가상 조항 2건 조회, 모델 프롬프트 근거 연결, AI 생성 설명과 API 응답의 출처 확인
+- **원본 증빙:** [F12·F13 실행 로그 및 화면](real_ai_evidence/)
+- **검증 범위:** 로컬 실제 모델 실행 증빙이며 운영 DB·운영 배포 환경에서의 전체 검증을 의미하지 않음
+
 ## 3. 기능별 테스트 화면 (배포 사이트)
 
 배포 사이트 [benefitfinder-ai.vercel.app](https://benefitfinder-ai.vercel.app/)에서 주요 기능을 직접 실행하고 캡처했습니다. (2026-11-20)
