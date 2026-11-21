@@ -90,7 +90,7 @@ flowchart LR
 | --- | --- | --- |
 | 웹과 API | 공식 지역 선택 → 13단계 입력 → 조합·상황 변화(S4)·상세(S5)·서비스(S6). 입력·결과 탭 복원, 조건 기억하기·삭제, PNG 저장. 기본 로컬 실행의 가상 결과는 화면과 이미지에 표시 | 실제 사용자 테스트와 환경별 동작 확인 |
 | 정책 계산·설명 | 배포 환경은 [게시 현금 정책 카탈로그](backend/src/benefitfinder/infrastructure/database/POLICY_CATALOG.md)로 계산. F13은 [게시 조항과 선택적 모델](backend/src/benefitfinder/api/README.md#f13-설명-실행) 사용. [게시 서비스 카탈로그](backend/src/benefitfinder/infrastructure/database/SERVICE_CATALOG.md)의 환산액은 현금 조합과 분리 | 미확인 자격·중복수혜·지급 조건 검수와 계산 가능 정책 확대 |
-| 수집·검수 도구 | [F08 통합 갱신](backend/src/benefitfinder/jobs/DAILY_REFRESH.md), [수집본 DB 인계](backend/src/benefitfinder/infrastructure/database/COLLECTED_POLICIES.md), [F12 분석 큐](backend/src/benefitfinder/infrastructure/database/F12_ANALYSIS.md)와 [입력 자동 준비](backend/src/benefitfinder/infrastructure/database/F12_PREPARATION.md). 정형 우선 분석·모델 없는 원천 적재·코드 기반 계산용 게시 구현 | 일일 운영 스케줄·알림 도착 확인, 남은 미검수·보류 자료 처리 |
+| 수집·검수 도구 | [F08 통합 갱신](backend/src/benefitfinder/jobs/DAILY_REFRESH.md), [수집본 DB 인계](backend/src/benefitfinder/infrastructure/database/COLLECTED_POLICIES.md), [F12 분석 큐](backend/src/benefitfinder/infrastructure/database/F12_ANALYSIS.md)와 [입력 자동 준비](backend/src/benefitfinder/infrastructure/database/F12_PREPARATION.md). 정형 우선 분석·모델 없는 원천 적재·코드 기반 계산용 게시 구현 | Render Cron 03:00 KST 실행·Discord 알림 확인 완료, 미검수·보류 자료 처리는 후속 |
 
 F11 이용 통계는 명세의 17개 이벤트를 기존 백엔드를 통해 GA4로 전달하도록 연결했다. 사용자 조건·URL 원문은 제외하고 통계용 쿠키·브라우저 저장소 없이 임시 식별자를 사용한다. 기본 설정은 꺼짐이며, 실제 조장 계정 수신과 팀원 보기 권한은 [통계 설정 안내](backend/src/benefitfinder/infrastructure/ANALYTICS.md)에 따라 별도 확인한다.
 
@@ -137,7 +137,7 @@ F11 이용 통계는 명세의 17개 이벤트를 기존 백엔드를 통해 GA4
 
 </details>
 
-**자동 갱신 확인** (F08, 목표 03:00 KST): [정책·금리 통합 실행·스케줄 안내](backend/src/benefitfinder/jobs/DAILY_REFRESH.md)를 따른다. 현재 CI는 매일 수집하는 스케줄러가 아니다. 마지막 수집 성공본과 실패 이력은 실행 문서에 기록하며, 알림 도착·운영 스케줄 등록은 별도 확인한다.
+**자동 갱신 확인** (F08, 목표 03:00 KST): [정책·금리 통합 실행·스케줄 안내](backend/src/benefitfinder/jobs/DAILY_REFRESH.md)를 따른다. GitHub CI는 일일 수집 스케줄러가 아니다. Render Cron에서 2026-11-18~20 매일 03:00 KST 예약 실행 성공과 Discord 정책·기준금리 갱신 알림을 확인했다. [운영 증빙](docs/team_collaboration/README.md#2-배포-및-운영-vercelrender)을 참고한다. F12 Agent의 운영 자동 실행은 별도 검증이 필요하다.
 
 **AI Agent 실행 기록 확인** (F12): [추출·검수·평가 CLI](backend/src/benefitfinder/jobs/README.md)를 따른다. 공유 가상 회귀와 실제 E4B 검증 요약은 관련 PR에 남기며, 실제 공고·검수·결과·로그는 로컬 `data/`에만 둔다. 제출용으로는 원문/개인정보를 제거한 실행 순서와 성공·실패 요약을 따로 확인한다.
 
@@ -168,7 +168,7 @@ F11 이용 통계는 명세의 17개 이벤트를 기존 백엔드를 통해 GA4
 | 서버 | Python 3.12, FastAPI, Pydantic |
 | DB | PostgreSQL. 게시 정책·규칙·근거 조회, 코드 판정·계산과 F13 조항 조회에 사용 |
 | AI | 정형값은 코드 처리, [Decider 본문 추출](docs/development/DECIDER_PIPELINE.md)은 로컬 검증. 자격·금액 계산은 코드가 수행하며 [선택적 설명 모델](backend/src/benefitfinder/api/README.md#f13-설명-실행) 실패 시 기본 문구로 복귀 |
-| 자동화 | F08 정책·금리 통합 실행·재시도·웹훅과 03:00 KST Linux systemd/macOS launchd 설정 생성. 운영 등록·실제 API/알림 도착은 후속 |
+| 자동화 | F08 정책·금리 통합 실행·재시도·웹훅과 03:00 KST Linux systemd/macOS launchd 설정 생성. Render Cron 운영 등록·실제 정책 및 기준금리 갱신·Discord 알림 도착을 2026-11-18~20 기록으로 확인. F12 운영 자동 실행은 미검증 |
 | 데이터 | 온통청년 수집·ECOS 기준금리 수동 갱신/DB 조회 구현. 보조금24 선택 ID의 API·DB·F12 연결 구현. 실제 매핑·운영 갱신은 후속 |
 | 개발 도구 | uv, pnpm, GitHub Actions CI |
 | 배포 | Vercel 웹·Render API 연동. [배포 서비스](https://benefitfinder-ai.vercel.app/)와 운영 DB의 실제 정책 응답 확인 기록 제공 |
