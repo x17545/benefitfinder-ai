@@ -1,0 +1,14 @@
+{"tool":"fetch_document","outcome":"shown","elapsed_ms":0}
+{"tool":"extract_rule","outcome":"needs_review","elapsed_ms":0}
+{"tool":"check_missing","outcome":"missing","elapsed_ms":1}
+{"tool":"extract_rule","outcome":"needs_review","elapsed_ms":4}
+{"tool":"extract_rule","outcome":"needs_review","elapsed_ms":3}
+{"tool":"save_candidate","outcome":"invalid","elapsed_ms":0}
+{"tool":"check_missing","outcome":"missing","elapsed_ms":0}
+{"tool":"extract_rule","outcome":"needs_review","elapsed_ms":4}
+{"tool":"save_candidate","outcome":"invalid","elapsed_ms":0}
+{"tool":"check_missing","outcome":"missing","elapsed_ms":0}
+{"tool":"extract_rule","outcome":"duplicate","elapsed_ms":4}
+{"tool":"extract_rule","outcome":"duplicate","elapsed_ms":2}
+{"tool":"check_missing","outcome":"not_found","elapsed_ms":0}
+{"tool":"save_candidate","outcome":"needs_review","elapsed_ms":0}

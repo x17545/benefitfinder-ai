@@ -1,0 +1,34 @@
+{
+  "feature": "F12",
+  "execution": "local_synthetic_document",
+  "started_at": "2026-11-21T12:27:57+09:00",
+  "source_commit": "085d16199c6106c399cf919d1c827a478383661b",
+  "model": "gemma4:e4b",
+  "model_digest": "eb2177adf7646d15faead94fdad6d3e170dc8015653418a3b7d5d52a6380be5b",
+  "model_transport": "local_ollama",
+  "database_connection_used": false,
+  "synthetic_document_count": 1,
+  "status": "needs_review",
+  "tools_offered_to_model": [
+    "fetch_document",
+    "find_clauses",
+    "lookup_policy",
+    "extract_rule",
+    "check_missing",
+    "save_candidate"
+  ],
+  "model_turns": 14,
+  "trace_steps": 14,
+  "candidate_counts": {
+    "eligibility": 1,
+    "amount": 1,
+    "payment_timing": 0,
+    "other_evidence": 2,
+    "overlap_rules": 0
+  },
+  "missing_field_counts": {
+    "overlap": 1,
+    "timing": 1
+  },
+  "trace_sha256": "ef026aa5e197bc369f2c26c2cef8d834928e2652553ca55c6bc9e02c74403808"
+}
