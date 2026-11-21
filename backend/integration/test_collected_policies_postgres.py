@@ -219,6 +219,33 @@ class PostgresCollectedPolicyTests(unittest.TestCase):
             ).fetchall()
         return documents, clauses, catalog
 
+    def test_merge_of_complete_snapshot_rejects_a_concurrent_generation(self) -> None:
+        first_at = self.checked_at + timedelta(hours=1)
+        a = self._record("A", "a-v1", completed_at=first_at)
+        first = self._batch((a,), first_at)
+        self.repository.save(first)
+        b = self._record("B", "b-v1", completed_at=first_at)
+        second = self._batch((a, b), first_at + timedelta(minutes=1))
+        self.repository.save(second)
+        c = self._record("C", "c-v1", completed_at=first_at)
+        stale = self._batch((a, c), first_at + timedelta(minutes=2))
+        with self.assertRaisesRegex(CollectedPolicyStoreError, "collected_policy_run_conflict"):
+            self.repository.save(stale, expected_previous_run_id=first.run_id)
+        with psycopg.connect(self.url) as connection:
+            self.assertEqual(connection.execute(
+                "SELECT external_id FROM public.collected_policies "
+                "WHERE missing_detected_at IS NULL ORDER BY external_id"
+            ).fetchall(), [("A",), ("B",)])
+            self.assertEqual(connection.execute(
+                "SELECT count(*) FROM public.collected_policy_runs WHERE run_id=%s", (stale.run_id,)
+            ).fetchone()[0], 0)
+        fresh = self._batch((a, b, c), first_at + timedelta(minutes=3))
+        self._assert_result(self.repository.save(fresh, expected_previous_run_id=second.run_id),
+                            new=1, changed=0, unchanged=2, missing=0)
+        self._assert_result(self.repository.save(fresh, expected_previous_run_id=first.run_id),
+                            new=1, changed=0, unchanged=2, missing=0, replayed=True)
+        self.assertEqual(self._published_snapshot(), self.published_snapshot)
+
     def test_db_diff_updates_unchanged_metadata_and_replays_without_rollback(self) -> None:
         first_at = datetime(2026, 11, 12, 1, 0, tzinfo=timezone.utc)
         first = self._batch(
