@@ -154,7 +154,7 @@ F11 이용 통계는 명세의 17개 이벤트를 기존 백엔드를 통해 GA4
 | --- | --- | --- | --- |
 | 양승현 (조장) | 통합·배포 / 백엔드 | 백엔드 아키텍처 의존성 오류 해결, LLM 제공자 연동 및 F08 Windows 호환성 개선, Vercel·Render 배포 연동 설정, 통합 테스트 오류 수정 및 PR 병합 관리 | [PR #12](https://github.com/x17545/benefitfinder-ai/pull/12), [PR #21](https://github.com/x17545/benefitfinder-ai/pull/21), [PR #56](https://github.com/x17545/benefitfinder-ai/pull/56), [커밋 a6f70c9](https://github.com/x17545/benefitfinder-ai/commit/a6f70c9) |
 | 이현서 | 기획 / 화면 설계 | | |
-| 김하정 | 디자인 / 프론트엔드 | 화면 디자인과 웹 화면 구현(시작·조건 입력·결과·상세·상황 변화·서비스·안내 페이지), 배포 사이트 PC·모바일 점검 및 보완 | [PR #7](https://github.com/x17545/benefitfinder-ai/pull/7), [PR #22](https://github.com/x17545/benefitfinder-ai/pull/22), [PR #28](https://github.com/x17545/benefitfinder-ai/pull/28), [PR #31](https://github.com/x17545/benefitfinder-ai/pull/31), [PR #54](https://github.com/x17545/benefitfinder-ai/pull/54), [PR #88](https://github.com/x17545/benefitfinder-ai/pull/88), [PR #89](https://github.com/x17545/benefitfinder-ai/pull/89) |
+| 김하정 | 디자인 / 프론트엔드 | 화면 디자인과 웹 화면 구현(시작·조건 입력·결과·상세·상황 변화·서비스·안내 페이지), 배포 사이트 PC·모바일 점검 및 보완, 최종 제출용 팀 협업·배포·기능 테스트 증빙자료 정리 | [PR #7](https://github.com/x17545/benefitfinder-ai/pull/7), [PR #22](https://github.com/x17545/benefitfinder-ai/pull/22), [PR #28](https://github.com/x17545/benefitfinder-ai/pull/28), [PR #31](https://github.com/x17545/benefitfinder-ai/pull/31), [PR #54](https://github.com/x17545/benefitfinder-ai/pull/54), [PR #88](https://github.com/x17545/benefitfinder-ai/pull/88), [PR #89](https://github.com/x17545/benefitfinder-ai/pull/89), [PR #93](https://github.com/x17545/benefitfinder-ai/pull/93), [증빙자료](docs/team_collaboration/README.md) |
 | 윤정찬 | 원천 데이터 수집·적재 | 온통청년 청년정책 API 수집·원본 보관·버전 비교 구현, 공고 HTML·PDF 텍스트 변환(notice-text-v1) 추가, 실제 수집본 비교로 키워드 순서 변경에 따른 재검수 오탐을 찾아 수정(취업·주거 해시 변경 296→8건), 수집·적재·DB PR(#39~#49) 직접 실행 리뷰, ECOS 기준금리·온통청년 3,957건·보조금24 82건 실제 수집→PostgreSQL 적재 검증, 보조금24 10,942건 조사로 취업·주거 분류값과 수집 대상 매핑 정리 | [PR #8](https://github.com/x17545/benefitfinder-ai/pull/8), [PR #33](https://github.com/x17545/benefitfinder-ai/pull/33), [PR #52](https://github.com/x17545/benefitfinder-ai/pull/52), [PR #53](https://github.com/x17545/benefitfinder-ai/pull/53), [수집 문서](backend/src/benefitfinder/ingestion/README.md) |
 | 탁서윤 | 데이터 정제·AI / 자동화 | 중복 수혜 규칙 정제·검수와 원문 변경 시 재검수 처리, F12 원문 분석 Agent·문맥 보존·추출 품질 평가·검수 큐, F13 게시 근거 기반 맞춤 설명·실패 시 기본 문구 전환, F08 정책·기준금리 통합 갱신·재시도·실패 알림, Decider 정형 우선 배치 추출·원공고 기반 계산 게시 경로 구현 | [PR #9](https://github.com/x17545/benefitfinder-ai/pull/9), [PR #14](https://github.com/x17545/benefitfinder-ai/pull/14), [PR #16](https://github.com/x17545/benefitfinder-ai/pull/16), [PR #40](https://github.com/x17545/benefitfinder-ai/pull/40), [PR #69](https://github.com/x17545/benefitfinder-ai/pull/69), [분석·평가 문서](docs/development/DECIDER_PIPELINE.md), [자동 갱신 문서](backend/src/benefitfinder/jobs/DAILY_REFRESH.md) |
 
@@ -199,7 +199,7 @@ DB·LLM 키 없이 실행한다. `pip`·`npm`·`npx` 대신 uv·pnpm을 사용�
 
 - 기능별 구현·확인 방법: [구현 현황 표](docs/product/REQUIREMENTS.md#14-구현-현황-표)
 - 사용자 테스트: 제출용 참여 인원·지표는 미등록. [관찰·피드백 기록 양식](docs/product/USER_TEST.md#6-피드백과-반영-기록-제출용)
-- 대표 화면: 제출용 캡처 미등록
+- 대표 화면: [기능별 테스트 화면과 배포·협업 증빙자료](docs/team_collaboration/README.md)
 
 ## 개발 시작점
 
