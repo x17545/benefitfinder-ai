@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import logging
+from time import perf_counter
+
 import psycopg
 from psycopg.conninfo import conninfo_to_dict
 
@@ -43,6 +46,9 @@ class PostgresAnalysisUsage:
 
     def reserve(self) -> int:
         """Atomically consume one shared daily admission and return what remains."""
+        logger = logging.getLogger("benefitfinder.analysis_usage")
+        started = perf_counter()
+        stage = "connect"
         try:
             # The UPSERT is one transaction: release the row lock on the server
             # without waiting for the client to receive the result and send COMMIT.
@@ -53,8 +59,13 @@ class PostgresAnalysisUsage:
                 options=_CONNECTION_OPTIONS,
                 application_name=_APPLICATION_NAME,
             ) as connection:
+                stage = "query"
                 row = connection.execute(_RESERVE_SQL, (DAILY_ANALYSIS_LIMIT,)).fetchone()
-        except (TimeoutError, psycopg.Error, OSError):
+        except (TimeoutError, psycopg.Error, OSError) as error:
+            logger.warning(
+                "analysis_usage status=failed operation=reserve stage=%s error_type=%s elapsed_ms=%.1f",
+                stage, type(error).__name__, (perf_counter() - started) * 1000,
+            )
             raise AnalysisUsageUnavailable(_UNAVAILABLE) from None
 
         if row is None:
@@ -66,6 +77,9 @@ class PostgresAnalysisUsage:
 
     def remaining(self) -> int:
         """Read the current shared daily allowance without consuming it."""
+        logger = logging.getLogger("benefitfinder.analysis_usage")
+        started = perf_counter()
+        stage = "connect"
         try:
             with psycopg.connect(
                 self._database_url,
@@ -73,8 +87,13 @@ class PostgresAnalysisUsage:
                 options=_CONNECTION_OPTIONS,
                 application_name=_APPLICATION_NAME,
             ) as connection:
+                stage = "query"
                 row = connection.execute(_REMAINING_SQL).fetchone()
-        except (TimeoutError, psycopg.Error, OSError):
+        except (TimeoutError, psycopg.Error, OSError) as error:
+            logger.warning(
+                "analysis_usage status=failed operation=remaining stage=%s error_type=%s elapsed_ms=%.1f",
+                stage, type(error).__name__, (perf_counter() - started) * 1000,
+            )
             raise AnalysisUsageUnavailable(_UNAVAILABLE) from None
 
         if row is None:
