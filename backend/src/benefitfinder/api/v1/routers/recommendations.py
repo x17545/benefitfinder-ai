@@ -1,6 +1,5 @@
 """청년 정책 추천 API 라우터."""
 
-import asyncio
 from collections.abc import Callable
 from typing import Any
 
@@ -62,7 +61,7 @@ async def create_recommendations(
     await reserve_analysis(http_request)
 
     async def analyze(progress):
-        annual_rate = await asyncio.to_thread(http_request.app.state.read_discount_rate)
+        annual_rate = await http_request.state.analysis_lease.run_in_thread(http_request.app.state.read_discount_rate)
         return await run_recommendation(
             request,
             calculate=recommendation_service,
@@ -71,6 +70,7 @@ async def create_recommendations(
             explainer=recommendation_explainer,
             progress=progress,
             example_details=http_request.app.state.example_benefits,
+            run_in_thread=http_request.state.analysis_lease.run_in_thread,
         )
 
     return await analysis_response(

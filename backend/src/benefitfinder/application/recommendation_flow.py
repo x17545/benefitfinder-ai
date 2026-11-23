@@ -24,7 +24,10 @@ async def run_recommendation(
     explainer: RecommendationExplainer,
     progress: Progress,
     example_details: Mapping[str, dict[str, Any]],
+    run_in_thread: Callable[..., Any] | None = None,
 ) -> dict[str, Any]:
+    thread_runner = run_in_thread if run_in_thread is not None else asyncio.to_thread
+
     step, label = "analyze_recommendations", "내 조건과 함께 받을 수 있는 조합 계산"
     progress({"step": step, "state": "running", "label": label})
 
@@ -48,12 +51,12 @@ async def run_recommendation(
             )
         return response, policies
 
-    response, policies = await asyncio.to_thread(calculation_response)
+    response, policies = await thread_runner(calculation_response)
     progress({"step": step, "state": "done", "label": label})
 
     step, label = "search_services", "이용할 수 있는 서비스 확인"
     progress({"step": step, "state": "running", "label": label})
-    service_result = dict(await asyncio.to_thread(services.recommend, request.domain, request.profile))
+    service_result = dict(await thread_runner(services.recommend, request.domain, request.profile))
     service_virtual_data = service_result.pop("virtual_data", False)
     response["virtual_data"] = bool(response.get("virtual_data") or service_virtual_data)
     response.update(service_result)

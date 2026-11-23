@@ -83,6 +83,26 @@ async def within_analysis_budget(
         raise HTTPException(status_code=503, detail="calculation_limit_exceeded") from None
 
 
+class _LeaseClosingStream:
+    """Close the request lease even if the SSE iterator never starts."""
+
+    def __init__(self, iterator, lease):
+        self._iterator = iterator
+        self._lease = lease
+
+    async def __aiter__(self):
+        try:
+            async for item in self._iterator:
+                yield item
+        finally:
+            await self.aclose()
+
+    async def aclose(self):
+        try:
+            await self._iterator.aclose()
+        finally:
+            self._lease.close()
+
 async def analysis_response(
     request: Request, analyze: Analysis, *, stream: bool,
 ) -> Response:
@@ -94,6 +114,8 @@ async def analysis_response(
             return JSONResponse(await run(lambda _: None))
         except Exception as error:
             return await public_failure(request, error)
+        finally:
+            request.state.analysis_lease.close()
 
     async def events():
         queue: asyncio.Queue[str] = asyncio.Queue()
@@ -127,11 +149,14 @@ async def analysis_response(
                     return
         finally:
             task.cancel()
-            with suppress(asyncio.CancelledError):
-                await task
+            try:
+                with suppress(asyncio.CancelledError):
+                    await task
+            finally:
+                request.state.analysis_lease.close()
 
     return StreamingResponse(
-        events(),
+        _LeaseClosingStream(events(), request.state.analysis_lease),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-store",

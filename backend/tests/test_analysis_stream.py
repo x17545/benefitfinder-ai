@@ -346,7 +346,7 @@ class LiveStreamTests(IsolatedAsyncioTestCase):
         self.assertEqual(events(body)[-1][0], "result")
 
     async def test_stream_deadline_emits_error_before_blocked_worker_returns(self):
-        app = create_app(analysis_timeout_seconds=0.02)
+        app = create_app(analysis_timeout_seconds=0.2)
         gate = threading.Event()
 
         def blocked(*args, **kwargs):

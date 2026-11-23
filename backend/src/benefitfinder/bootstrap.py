@@ -47,6 +47,8 @@ from benefitfinder.application.published_services import PublishedServiceReposit
 from benefitfinder.application.service_meta import ReadServiceMetadata
 from benefitfinder.application.base_rates import BaseRateRepository, BaseRateUnavailable
 from benefitfinder.application.response_mapper import MVP_DATA_UPDATED_AT
+from contextlib import asynccontextmanager
+from benefitfinder.application.analysis_concurrency import AnalysisConcurrencyBusy, AnalysisConcurrencyGuard
 from benefitfinder.application.analysis_usage import (
     AnalysisUsage,
     AnalysisUsageUnavailable,
@@ -216,7 +218,15 @@ def create_app(
         explanation_generator,
         timeout_seconds=explanation_timeout_seconds,
     )
+    @asynccontextmanager
+    async def analysis_lifespan(app: FastAPI):
+        try:
+            yield
+        finally:
+            app.state.analysis_concurrency.shutdown()
+
     app = FastAPI(
+        lifespan=analysis_lifespan,
         title="BenefitFinder API",
         description="Youth employment/housing benefit API (bootstrap).",
         version="0.1.0",
@@ -298,6 +308,17 @@ def create_app(
             "dependency_unavailable", "정책 자료를 조회할 수 없습니다. 잠시 후 다시 시도해 주세요.",
         ))
 
+    @app.exception_handler(AnalysisConcurrencyBusy)
+    async def analysis_busy_handler(
+        request: Request, exc: AnalysisConcurrencyBusy
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=503,
+            content=error_body(
+                "analysis_busy",
+                "현재 분석 요청이 많습니다. 잠시 후 다시 시도해 주세요.",
+            ),
+        )
     @app.exception_handler(CalculationLimitExceeded)
     async def calculation_exception_handler(request: Request, exc: CalculationLimitExceeded) -> JSONResponse:
         return JSONResponse(status_code=503, content=error_body(
@@ -393,6 +414,8 @@ def create_app(
         example_updated_at=local_cash.updated_at if local_cash is not None else MVP_DATA_UPDATED_AT,
         service_repository=service_repository,
     )
+
+    app.state.analysis_concurrency = AnalysisConcurrencyGuard(max_concurrent=1)
 
     app.state.analysis_timeout_seconds = analysis_timeout_seconds
 
