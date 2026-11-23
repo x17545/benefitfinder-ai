@@ -4,7 +4,7 @@
 
 > 코디세이 AI 네이티브 Final Project · 5인 팀
 
-[서비스 체험](https://benefitfinder-ai.vercel.app/) · [프로젝트 흐름](#프로젝트-흐름-한눈에-보기) · [로컬 실행](#로컬-실행) · [팀 역할](#팀원-역할과-기여) · [결과](#결과) · [평가자 안내](#평가자-안내) · [문서 지도](docs/README.md)
+[서비스 체험](https://benefitfinder-ai.vercel.app/) · [프로젝트 흐름](#프로젝트-흐름-한눈에-보기) · [프로젝트 구조 지도](https://x17545.github.io/benefitfinder-ai/) · [로컬 실행](#로컬-실행) · [팀 역할](#팀원-역할과-기여) · [결과](#결과) · [평가자 안내](#평가자-안내) · [문서 지도](docs/README.md)
 
 ## 프로젝트 흐름 한눈에 보기
 
@@ -98,14 +98,13 @@ F11 이용 통계는 명세의 17개 이벤트를 기존 백엔드를 통해 GA4
 
 ## 평가자 안내
 
-아래 주소에서 배포된 앱을 확인할 수 있다. 목표 기능과 현재 구현·운영 검증은 [현재 개발 상태](#현재-개발-상태)와 [문서 지도](docs/README.md#구현-상태)에서 구분한다. 시연 영상·발표 자료는 등록 여부를 따로 표시하며, 클릭 시안은 실제 앱의 기능 검증과 구분한다.
+아래 주소에서 배포된 앱을 확인할 수 있다. 목표 기능과 현재 구현·운영 검증은 [현재 개발 상태](#현재-개발-상태)와 [문서 지도](docs/README.md#구현-상태)에서 구분한다. 클릭 시안은 실제 앱의 기능 검증과 구분한다.
 
 | 항목 | 내용 |
 | --- | --- |
 | 배포 URL | [**benefitfinder-ai.vercel.app**](https://benefitfinder-ai.vercel.app/) |
 | 접속 방법 | 로그인·회원가입 없이 위 주소로 바로 접속한다. 평가 전용 계정은 필요 없다 |
 | 서비스 유지 | 결과 안내를 받을 때까지 유지한다 |
-| 시연 영상 (3분 이내) | 미등록 |
 | 기획서 | [docs/product/PROJECT_PLAN.md](docs/product/PROJECT_PLAN.md) |
 | 기능 요구 명세서 | [docs/product/REQUIREMENTS.md](docs/product/REQUIREMENTS.md) (12장 시스템 아키텍처, 13장 AI 활용 명세, 14장 구현 현황 표) |
 | 사용자 피드백 기록 | [docs/product/USER_TEST.md](docs/product/USER_TEST.md) 5장·6장 |

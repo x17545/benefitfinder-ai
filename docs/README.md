@@ -37,6 +37,26 @@
 
 명시적인 사용자 요청과 합의된 회의 결정을 먼저 반영한다. 같은 주제에 설명이 다르면 위 기준 문서를 확인하고 관련 문서를 함께 고친다. 서로 다른 주제의 충돌이나 미확정 항목은 담당자에게 확인한다. 파일 날짜가 최신이라는 이유만으로 기능·계약·기술 결정을 덮어쓰지 않는다.
 
+## 코드 구조 지도
+
+[Floorplan 공유본 HTML](floorplan/index.html)을 내려받아 브라우저에서 열면 추천, 공식 지역 조회, 정책 자료 준비 흐름을 따라갈 수 있다. 지도 개요의 `Repositories`에 지도 작성 기준 커밋이 표시된다.
+
+지도를 갱신할 때는 최신 `main`을 기준으로 별도 작업 브랜치에서 floorplan 스킬로 지도를 갱신하고 아래 명령으로 공유본을 만든다. HTML의 줄 끝 공백을 정리한 뒤 브라우저가 스크립트를 실행할 수 있도록 콘텐츠 보안 정책의 해시를 다시 계산한다.
+
+```sh
+node floorplan/serve.mjs --export docs/floorplan/index.html --include flows
+node --input-type=module <<'JS'
+import { readFileSync, writeFileSync } from 'node:fs';
+import { withPolicy } from './floorplan/page-safety.mjs';
+
+const file = 'docs/floorplan/index.html';
+const html = readFileSync(file, 'utf8').replace(/[ \t]+$/gm, '');
+writeFileSync(file, withPolicy(html, 'export'));
+JS
+```
+
+공유본 변경을 PR로 검토한다. 저장소 관리자는 처음에 `Settings → Pages → Source`를 `GitHub Actions`로 설정하고, PR 병합 후 `Actions → Deploy floorplan to GitHub Pages → Run workflow`에서 `main`을 선택해 배포한다. [배포 워크플로](../.github/workflows/floorplan-pages.yml)는 지도 폴더만 게시한다.
+
 ## 구현 상태
 
 AI 독립 검수는 [별도 카탈로그 배치 경로](../backend/src/benefitfinder/infrastructure/database/POLICY_CATALOG.md#ai-독립-검수-배치-0013)로 구현한다. 작성·검수 ID와 모델·판정·원천/레코드 해시를 남기며 기존 사람 승인 경로는 유지한다. 실제 정책 검수와 운영 반영은 별도로 확인한다.
