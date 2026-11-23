@@ -2,7 +2,8 @@ import type { JSX } from 'react';
 import { paths } from '../../app/router.ts';
 import { trackEvent } from '../../shared/analytics/events.ts';
 import { AmountBreakdown } from './AmountBreakdown.tsx';
-import { formatManWon, recruitTag, recruitmentState } from './format.ts';
+import { applyLink } from './applyLink.ts';
+import { formatManWon, recruitTag } from './format.ts';
 import { eligibilityDisplayStatus, policyName } from './resultModel.ts';
 import type { PolicySummaries, ResultView } from './resultModel.ts';
 
@@ -21,15 +22,9 @@ export function FallbackList({ items, info, virtualData }: FallbackListProps): J
       {items.map((item) => {
         const benefit = info.get(item.policy_id)?.card;
         const now = new Date();
-        const applicationState = benefit !== undefined ? recruitmentState(benefit.application, now) : null;
         const tag = benefit !== undefined ? recruitTag(benefit.application, now) : null;
-        const actionUrl = benefit === undefined || benefit.virtual_data === true
-          ? null
-          : applicationState === 'open'
-            ? benefit.application.url ?? benefit.source.url
-            : benefit.source.url;
-        const actualApplicationLink = !virtualData && actionUrl !== null && applicationState === 'open' &&
-          benefit?.application.url != null;
+        // 응답 전체가 가상이어도 링크는 기존처럼 보이고, 이용 기록만 남기지 않는다
+        const action = applyLink(benefit, false, now);
         return (
           <article key={item.policy_id} className="s3-policy">
             <a className="s3-policy__main" href={paths.policy(item.policy_id)}>
@@ -67,12 +62,12 @@ export function FallbackList({ items, info, virtualData }: FallbackListProps): J
               <a className="ui-button ui-button--secondary" href={paths.policy(item.policy_id)}>
                 자세히 보기
               </a>
-              {actionUrl !== null ? (
-                <a className="ui-button ui-button--primary" href={actionUrl} target="_blank" rel="noopener noreferrer"
-                  onClick={actualApplicationLink ? () => {
+              {action !== null ? (
+                <a className="ui-button ui-button--primary" href={action.url} target="_blank" rel="noopener noreferrer"
+                  onClick={action.isApplication && !virtualData ? () => {
                     trackEvent({ name: 'apply_click', policy_id: item.policy_id, from: 'result', rank: null });
                   } : undefined}>
-                  {applicationState === 'open' ? '신청하러 가기 ↗' : '공식 페이지 보기 ↗'}
+                  {action.label}
                 </a>
               ) : null}
             </div>

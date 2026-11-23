@@ -6,6 +6,7 @@ import { SiteFooter } from '../../shared/ui/SiteFooter.tsx';
 import { StatusChip } from '../../shared/ui/StatusChip.tsx';
 import { TopBar } from '../../shared/ui/TopBar.tsx';
 import { useAnalysis } from '../benefits/analysisStore.ts';
+import { applyLink } from '../benefits/applyLink.ts';
 import { formatManWon, recruitTag } from '../benefits/format.ts';
 import { readResultBasis, withResultBasis } from '../benefits/resultBasis.ts';
 import { clearMyData } from '../profile/clearMyData.ts';
@@ -126,6 +127,7 @@ function ServiceRow({ entry, detailHref, virtualData }: ServiceRowProps): JSX.El
   const value = entry.service.estimated_value_won;
   const tag = recruitTag(entry.application);
   const housing = entry.categories.includes('housing');
+  const action = applyLink(entry, virtualData);
 
   return (
     <li className="s6-row">
@@ -180,6 +182,16 @@ function ServiceRow({ entry, detailHref, virtualData }: ServiceRowProps): JSX.El
       ) : (
         <p className="s6-small">시중 가격 근거를 찾지 못해 금액으로 바꾸지 않았어요. 합계에서도 뺐어요.</p>
       )}
+
+      {/* 사용자 테스트: 목록에서 바로 신청 페이지로 가고 싶다는 의견 */}
+      <div className="s6-row__actions">
+        <a className="ui-button ui-button--secondary" href={detailHref}>자세히 보기</a>
+        {action !== null ? (
+          <a className="ui-button ui-button--primary" href={action.url} target="_blank" rel="noopener noreferrer">
+            {action.label}
+          </a>
+        ) : null}
+      </div>
     </li>
   );
 }

@@ -38,8 +38,10 @@ export function ParentsStep(): JSX.Element {
     );
   }
 
+  // 사용자 테스트: 부모님 소득·재산을 몰라 답하기 어렵거나 민감하다는 의견이 가장 많았다.
+  // 선택 질문이고, 모르거나 답하기 싫으면 넘어가도 결과를 볼 수 있다는 점을 먼저 알린다.
   const description =
-    "일부 정책은 부모님(원가구) 소득·재산을 봐요. 모르면 '확인 필요'로 표시돼요" +
+    "선택 질문이에요. 일부 정책만 부모님(원가구) 소득·재산을 봐요. 모르면 '모름'을 고르거나 건너뛰어도 결과를 볼 수 있고, 그 조건은 '확인 필요'로 표시돼요" +
     (age !== null && age >= PARENT_AGE_NOTE_FROM ? '. 만 30세 이상이면 안 보는 정책도 있어요' : '');
 
   return (
@@ -75,12 +77,19 @@ export function ParentsStep(): JSX.Element {
       />
       <ChipQuestion
         title="부모님 재산"
+        help={TERM_HELP.parentAsset}
         choices={PARENT_ASSET_CHOICES}
         value={parentAsset}
         onChange={(value) => {
           updateAnswers({ parentAsset: value, parentsSkipped: false });
         }}
       />
+      <div className="s2-skip-box">
+        <p>답하기 어렵거나 원하지 않으면 건너뛰어도 괜찮아요.</p>
+        <button type="button" className="ui-button ui-button--secondary" onClick={skip}>
+          부모님 정보 없이 다음으로
+        </button>
+      </div>
       <PrivacyNote>부모님 정보는 자격 계산에만 써요. 서버에서는 계산이 끝나면 바로 폐기하고, 저장하거나 AI로 보내지 않아요.</PrivacyNote>
     </ConditionStepLayout>
   );

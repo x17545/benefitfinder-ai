@@ -139,6 +139,29 @@
   color: var(--color-check);
 }
 
+.s4-badge--same {
+  background: var(--color-ok-soft);
+  color: var(--color-ok);
+}
+
+/* 오류 카드의 [다시 시도] · [결과로 돌아가기] */
+.s4-actions {
+  align-self: stretch;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.s4-actions > * {
+  flex: 1 1 160px;
+}
+
+@media (min-width: 768px) {
+  .s4-actions > * {
+    flex: 0 0 200px;
+  }
+}
+
 .s4-policy {
   color: var(--color-ink);
   font-size: 17px;

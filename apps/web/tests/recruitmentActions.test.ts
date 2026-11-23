@@ -105,6 +105,15 @@ describe.each([
     expect(html).not.toContain(`href="${APPLICATION_URL}"`);
   });
 
+  it('labels an open policy without an application address as the official page', () => {
+    const html = render(summary({
+      status: 'open', starts_on: '2026-11-13', ends_on: '2026-11-27', url: null,
+    }));
+    expect(html).toContain('공식 페이지 보기 ↗');
+    expect(html).toContain(`href="${SOURCE_URL}"`);
+    expect(html).not.toContain('신청하러 가기');
+  });
+
   it('does not infer an application action when policy information is missing', () => {
     const html = render(undefined);
     expect(html).not.toContain('신청하러 가기');

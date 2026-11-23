@@ -45,7 +45,6 @@ export function HousingStep(): JSX.Element {
 
       <ChipQuestion
         title="내 이름(또는 배우자)으로 된 집이 있나요?"
-        description="분양권·입주권도 포함이에요"
         questionId="homeOwnership"
         help={TERM_HELP.homeOwnership}
         choices={HOME_OWNERSHIP_CHOICES}

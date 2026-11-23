@@ -10,6 +10,7 @@ import {
   SCHOOL_CHOICES,
   SPECIAL_CHOICES,
 } from '../../domains/youth/conditionOptions.ts';
+import { TERM_HELP } from '../../domains/youth/termHelp.ts';
 import { updateAnswers, useFlowState } from './flowStore.ts';
 import { AgeStep } from './steps/AgeStep.tsx';
 import { ConfirmStep } from './steps/ConfirmStep.tsx';
@@ -21,6 +22,7 @@ import { ParentsStep } from './steps/ParentsStep.tsx';
 import { PrivacyNote } from './steps/PrivacyNote.tsx';
 import { RegionStep } from './steps/RegionStep.tsx';
 import { SingleChoiceStep } from './steps/SingleChoiceStep.tsx';
+import { TermHelp } from './steps/TermHelp.tsx';
 
 interface ConditionScreenProps {
   step: number;
@@ -114,6 +116,7 @@ export function ConditionScreen({ step }: ConditionScreenProps): JSX.Element {
             updateAnswers({ special: values });
           }}
         >
+          <TermHelp {...TERM_HELP.special} />
           <PrivacyNote>이 정보는 자격 계산에만 써요. 서버에서는 계산이 끝나면 바로 폐기하고 저장하지 않아요</PrivacyNote>
         </MultiChoiceStep>
       );

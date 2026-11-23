@@ -146,6 +146,27 @@
   font-size: 17px;
 }
 
+.s6-row__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.s6-row__actions > * {
+  flex: 1;
+  padding-inline: 10px;
+  white-space: nowrap;
+}
+
+@media (min-width: 768px) {
+  .s6-row__actions {
+    justify-content: flex-end;
+  }
+
+  .s6-row__actions > * {
+    flex: 0 0 160px;
+  }
+}
+
 .s6-row__chips {
   display: flex;
   flex-wrap: wrap;
