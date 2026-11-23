@@ -18,6 +18,7 @@ ErrorCode = Literal[
     "internal_error",
     "daily_limit_exceeded",
     "calculation_limit_exceeded",
+    "analysis_busy",
 ]
 
 

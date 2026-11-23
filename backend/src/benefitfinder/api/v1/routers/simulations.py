@@ -1,6 +1,5 @@
 """S4 HTTP adapter. All policy math stays outside the router."""
 
-import asyncio
 from collections.abc import Callable
 from typing import Any
 
@@ -36,7 +35,7 @@ async def create_simulation(
 
     async def analyze(progress):
         try:
-            return await asyncio.to_thread(
+            return await http_request.state.analysis_lease.run_in_thread(
                 simulate,
                 profile=request.profile,
                 scenario=request.scenario,
