@@ -4,7 +4,7 @@
 
 > 코디세이 AI 네이티브 Final Project · 5인 팀
 
-[서비스 체험](https://benefitfinder-ai.vercel.app/) · [프로젝트 흐름](#프로젝트-흐름-한눈에-보기) · [프로젝트 구조 지도](https://x17545.github.io/benefitfinder-ai/) · [로컬 실행](#로컬-실행) · [팀 역할](#팀원-역할과-기여) · [결과](#결과) · [평가자 안내](#평가자-안내) · [문서 지도](docs/README.md)
+[서비스 체험](https://benefitfinder-ai.vercel.app/) · [시연 영상](#시연-영상) · [프로젝트 흐름](#프로젝트-흐름-한눈에-보기) · [프로젝트 구조 지도](https://x17545.github.io/benefitfinder-ai/) · [로컬 실행](#로컬-실행) · [팀 역할](#팀원-역할과-기여) · [결과](#결과) · [평가자 안내](#평가자-안내) · [문서 지도](docs/README.md)
 
 ## 프로젝트 흐름 한눈에 보기
 
@@ -103,6 +103,7 @@ F11 이용 통계는 명세의 17개 이벤트를 기존 백엔드를 통해 GA4
 | 항목 | 내용 |
 | --- | --- |
 | 배포 URL | [**benefitfinder-ai.vercel.app**](https://benefitfinder-ai.vercel.app/) |
+| 시연 영상 | [1분 데모 재생](#시연-영상) |
 | 접속 방법 | 로그인·회원가입 없이 위 주소로 바로 접속한다. 평가 전용 계정은 필요 없다 |
 | 서비스 유지 | 결과 안내를 받을 때까지 유지한다 |
 | 기획서 | [docs/product/PROJECT_PLAN.md](docs/product/PROJECT_PLAN.md) |
@@ -110,6 +111,12 @@ F11 이용 통계는 명세의 17개 이벤트를 기존 백엔드를 통해 GA4
 | 사용자 피드백 기록 | [docs/product/USER_TEST.md](docs/product/USER_TEST.md) 5장·6장 |
 | 발표 자료 | 미등록 |
 | 프로젝트 진행 기록 | [기능 명세 변경 이력](docs/product/REQUIREMENTS.md#115-변경-이력) |
+
+### 시연 영상
+
+한국어 내레이션과 자막으로 13단계 조건 입력, 조합 비교, 취업 전후 지원금 비교, 공식 신청 안내를 1분 동안 시연한다. 조합 비교 장면에는 가상 정책 예제임을 표시했다.
+
+https://github.com/user-attachments/assets/7730d9e1-7152-426c-8f95-3b7689fa9bd5
 
 ### 평가자 테스트 방법
 
