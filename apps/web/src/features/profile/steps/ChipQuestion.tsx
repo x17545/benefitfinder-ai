@@ -32,7 +32,7 @@ export function ChipQuestion<T extends string | number>({
     <section className="s2-sub" id={questionId === undefined ? undefined : questionElementId(questionId)}>
       <h2 className="s2-sub__title">{title}</h2>
       {description !== undefined ? <p className="s2-sub__desc">{description}</p> : null}
-      {help !== undefined ? <TermHelp question={help.question} answer={help.answer} /> : null}
+      {help !== undefined ? <TermHelp term={help.term} short={help.short} answer={help.answer} /> : null}
       <ChoiceGroup label={title}>
         {choices.map((choice) => (
           <ChoiceChip

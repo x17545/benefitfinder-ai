@@ -4,6 +4,7 @@ import { refreshServiceMeta } from '../../shared/api/serviceMetaStore.ts';
 import type {
   ChangeSimulationRequest,
   ChangeSimulationResult,
+  SimulationErrorReason,
   SimulationOutcome,
   SimulationScenario,
 } from '../../shared/api/simulations.ts';
@@ -14,7 +15,7 @@ export type SimulationState =
   /** isSample: 개발용 가상 결과로 본 것 */
   | { status: 'ok'; result: ChangeSimulationResult; isSample: boolean }
   | { status: 'limit' }
-  | { status: 'error' };
+  | { status: 'error'; reason: SimulationErrorReason };
 
 /** 서버 결과를 화면 상태로. 개발 서버에서 계산 기능이 없으면 가상 결과를 쓴다 */
 export function toSimulationState(scenario: SimulationScenario, outcome: SimulationOutcome): SimulationState {
@@ -25,7 +26,10 @@ export function toSimulationState(scenario: SimulationScenario, outcome: Simulat
     return outcome;
   }
   const sample = outcome.status === 'notAvailable' ? devSampleSimulation(scenario) : null;
-  return sample !== null ? { status: 'ok', result: sample, isSample: true } : { status: 'error' };
+  if (sample !== null) {
+    return { status: 'ok', result: sample, isSample: true };
+  }
+  return { status: 'error', reason: outcome.status === 'error' ? outcome.reason ?? 'server' : 'server' };
 }
 
 /** 상황 칩을 바꿀 때마다 서버에 다시 계산을 요청한다 (기획서 4.6-1) */
@@ -52,11 +56,11 @@ export function useSimulation(request: ChangeSimulationRequest | null): { state:
     // StrictMode의 setup-cleanup-setup과 빠른 상황 변경에서 전송 전 예약을 취소한다.
     const dispatch = window.setTimeout(() => {
       deadline = window.setTimeout(() => {
-        finish({ status: 'error' });
+        finish({ status: 'error', reason: 'slow' });
         controller.abort();
       }, 60_000);
       void postSimulation(parsed, fetch, controller.signal).then(
-        finish, () => finish({ status: 'error' }),
+        finish, () => finish({ status: 'error', reason: 'network' }),
       );
     }, 0);
     return () => {

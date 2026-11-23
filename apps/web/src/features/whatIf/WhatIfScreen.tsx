@@ -17,7 +17,9 @@ import { missingSteps } from '../profile/answerRules.ts';
 import { clearMyData } from '../profile/clearMyData.ts';
 import { useFlowState } from '../profile/flowStore.ts';
 import { toRecommendationRequest } from '../profile/toRequest.ts';
-import { manText, netChange, periodShort, rateBarWidth, rateSentence, SCENARIO_CHIPS, signedMan } from './whatIfModel.ts';
+import {
+  isUnchanged, manText, netChange, periodShort, rateBarWidth, rateSentence, SCENARIO_CHIPS, signedMan, SIMULATION_ERROR_COPY,
+} from './whatIfModel.ts';
 import { useSimulation } from './useSimulation.ts';
 import './WhatIfScreen.css';
 
@@ -50,6 +52,7 @@ export function WhatIfScreen(): JSX.Element {
         }
       : null;
   const { state, retry } = useSimulation(request);
+  const resultHref = withResultBasis(paths.result, basis);
 
   return (
     <div className="page-width screen">
@@ -97,7 +100,7 @@ export function WhatIfScreen(): JSX.Element {
             ) : null}
             {!alreadyAlone && state.status === 'loading' ? (
               <section className="ui-card s4-card" aria-live="polite">
-                <p className="s4-muted">바뀐 조건으로 다시 계산하고 있어요</p>
+                <p className="s4-muted">바뀐 조건으로 다시 계산하고 있어요. 보통 10~20초 걸려요.</p>
               </section>
             ) : null}
             {!alreadyAlone && state.status === 'limit' ? (
@@ -107,12 +110,22 @@ export function WhatIfScreen(): JSX.Element {
               </section>
             ) : null}
             {!alreadyAlone && state.status === 'error' ? (
-              <section className="ui-card s4-card">
-                <h2 className="s4-card__title">계산하지 못했어요</h2>
-                <p className="s4-muted">잠시 후 다시 시도해 주세요. 고른 조건은 그대로 남아 있어요.</p>
-                <button type="button" className="ui-button ui-button--primary" onClick={retry}>
-                  다시 시도
-                </button>
+              <section className="ui-card s4-card s4-card--error" role="alert">
+                <span className="s4-badge s4-badge--warn">! 오류</span>
+                <h2 className="s4-card__title">{SIMULATION_ERROR_COPY[state.reason].title}</h2>
+                <p className="s4-muted">
+                  바뀌는 혜택이 없다는 뜻이 아니에요. {SIMULATION_ERROR_COPY[state.reason].description} 고른 조건은 그대로 남아 있어요.
+                </p>
+                <div className="s4-actions">
+                  {state.reason === 'input' ? (
+                    <a className="ui-button ui-button--primary" href={paths.conditions(CONDITION_STEPS)}>조건 확인하기</a>
+                  ) : (
+                    <button type="button" className="ui-button ui-button--primary" onClick={retry}>
+                      다시 시도
+                    </button>
+                  )}
+                  <a className="ui-button ui-button--secondary" href={resultHref}>결과로 돌아가기</a>
+                </div>
               </section>
             ) : null}
             {!alreadyAlone && state.status === 'ok' ? (
@@ -143,6 +156,7 @@ export function SimulationResult({ result, isSample, presentValue, info = new Ma
   const rate = result.effective_marginal_rate;
   const barWidth = rateBarWidth(rate);
   const detailBasis = { period: result.basis_period, present_value: !isSample && presentValue };
+  const unchanged = isUnchanged(result);
 
   function name(id: string): string {
     return (isSample ? devSampleBenefit(id)?.title : undefined) ?? policyName(id, info);
@@ -158,6 +172,17 @@ export function SimulationResult({ result, isSample, presentValue, info = new Ma
 
       {!isSample && presentValue ? (
         <p className="s4-note">현재가치 합계와 순위에는 만기 전 예상 적립액을 넣지 않았어요.</p>
+      ) : null}
+
+      {/* 계산은 끝났고 바뀌는 것이 없을 때: 오류와 헷갈리지 않게 맨 위에 결론을 먼저 보인다 */}
+      {unchanged ? (
+        <section className="ui-card s4-card s4-card--same" aria-live="polite">
+          <span className="s4-badge s4-badge--same">✓ 계산 완료</span>
+          <h2 className="s4-card__title">이 상황에서는 바뀌는 지원금이 없어요</h2>
+          <p className="s4-muted">
+            끊기거나 새로 받는 정책이 없고, 추천 조합 금액도 {formatManWon(result.before_total_won)} 그대로예요.
+          </p>
+        </section>
       ) : null}
 
       <div className="s4-grid">
@@ -274,9 +299,9 @@ export function SimulationResult({ result, isSample, presentValue, info = new Ma
           </section>
         ))}
 
-        {lost.length === 0 && gained.length === 0 ? (
+        {lost.length === 0 && gained.length === 0 && !unchanged ? (
           <section className="ui-card s4-card">
-            <p className="s4-muted">이 상황에서는 끊기거나 새로 받는 정책이 없어요.</p>
+            <p className="s4-muted">끊기거나 새로 받는 정책은 없고, 금액만 달라져요.</p>
           </section>
         ) : null}
 

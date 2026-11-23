@@ -81,19 +81,21 @@
   color: var(--color-check);
 }
 
-/* 어려운 용어 설명 (눌러서 펼침) */
+/* 어려운 용어 설명: 한 줄 뜻은 늘 보이고 [자세히]로 펼침 */
 .s2-term {
+  border-radius: 12px;
+  background: var(--color-icon-bg);
   font-size: var(--text-sub);
-  color: var(--color-muted);
+  color: var(--color-ink);
 }
 
 .s2-term__summary {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 36px;
-  font-weight: 600;
-  color: var(--color-accent-ink);
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 14px;
+  line-height: 1.5;
   cursor: pointer;
   list-style: none;
 }
@@ -108,25 +110,46 @@
   flex: none;
   width: 18px;
   height: 18px;
-  border: 1.5px solid currentColor;
+  margin-top: 1px;
+  border: 1.5px solid var(--color-accent-ink);
   border-radius: 50%;
+  color: var(--color-accent-ink);
   font-size: 11px;
   font-weight: 800;
-  font-style: normal;
   line-height: 1;
 }
 
-.s2-term[open] .s2-term__summary {
+.s2-term__short {
+  flex: 1;
+  min-width: 0;
+}
+
+.s2-term__short b {
+  margin-right: 4px;
+  color: var(--color-accent-ink);
+}
+
+.s2-term__more {
+  flex: none;
+  font-weight: 700;
+  color: var(--color-accent-ink);
   text-decoration: underline;
   text-underline-offset: 3px;
 }
 
+.s2-term__close,
+.s2-term[open] .s2-term__open {
+  display: none;
+}
+
+.s2-term[open] .s2-term__close {
+  display: inline;
+}
+
 .s2-term__answer {
-  margin: 2px 0 4px;
-  padding: 10px 14px;
-  border-radius: 12px;
-  background: var(--color-icon-bg);
-  color: var(--color-ink);
+  margin: 0;
+  padding: 0 14px 12px 40px;
+  color: var(--color-muted);
   line-height: 1.55;
 }
 
@@ -292,6 +315,24 @@
   text-decoration: underline;
   text-underline-offset: 3px;
   cursor: pointer;
+}
+
+/* 12단계 본문 건너뛰기 (상단 [건너뛰기]가 작아 잘 안 보여 함께 둔다) */
+.s2-skip-box {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  padding: 14px 16px;
+  border: 1.5px dashed var(--color-line);
+  border-radius: 14px;
+}
+
+.s2-skip-box p {
+  margin: 0;
+  font-size: var(--text-sub);
+  color: var(--color-muted);
 }
 
 /* 13단계 요약 */

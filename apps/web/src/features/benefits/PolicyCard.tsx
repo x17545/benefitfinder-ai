@@ -3,7 +3,8 @@ import { conditionChips } from '../../domains/youth/conditionLabels.ts';
 import { trackEvent } from '../../shared/analytics/events.ts';
 import { StatusChip } from '../../shared/ui/StatusChip.tsx';
 import { AmountBreakdown } from './AmountBreakdown.tsx';
-import { formatManWon, isStale, monthDay, recruitTag, recruitmentState, sourceName } from './format.ts';
+import { applyLink } from './applyLink.ts';
+import { formatManWon, isStale, monthDay, recruitTag, sourceName } from './format.ts';
 import { PolicyExplanation } from './PolicyExplanation.tsx';
 import { policyName } from './resultModel.ts';
 import type { PolicySummaries, PortfolioPolicy } from './resultModel.ts';
@@ -47,19 +48,12 @@ export function PolicyCard({ policy, info, rank, aiGenerated, detailHref, virtua
   const matchingBenefit = benefit?.source.url === policy.source.url &&
     benefit.source.document_version === policy.source.document_version ? benefit : undefined;
   const now = new Date();
-  const applicationState = matchingBenefit !== undefined ? recruitmentState(matchingBenefit.application, now) : null;
   const tag = matchingBenefit !== undefined ? recruitTag(matchingBenefit.application, now) : null;
   const amount = policy.amount_in_period_won;
   const original = policy.original_amount_won;
   const showOriginal =
     amount !== null && amount !== undefined && original !== null && original !== undefined && original !== amount;
-  const actionUrl = matchingBenefit === undefined || virtualData || matchingBenefit.virtual_data === true
-    ? null
-    : applicationState === 'open'
-      ? matchingBenefit.application.url ?? matchingBenefit.source.url
-      : matchingBenefit.source.url;
-  const actualApplicationLink = actionUrl !== null && applicationState === 'open' &&
-    matchingBenefit?.application.url != null;
+  const action = applyLink(matchingBenefit, virtualData, now);
 
   return (
     <article className="s3-policy">
@@ -109,11 +103,11 @@ export function PolicyCard({ policy, info, rank, aiGenerated, detailHref, virtua
         <a className="ui-button ui-button--secondary" href={detailHref}>
           자세히 보기
         </a>
-        {actionUrl !== null ? <a className="ui-button ui-button--primary" href={actionUrl} target="_blank" rel="noopener noreferrer"
-          onClick={actualApplicationLink ? () => {
+        {action !== null ? <a className="ui-button ui-button--primary" href={action.url} target="_blank" rel="noopener noreferrer"
+          onClick={action.isApplication ? () => {
             trackEvent({ name: 'apply_click', policy_id: policy.policy_id, from: 'result', rank });
           } : undefined}>
-          {applicationState === 'open' ? '신청하러 가기 ↗' : '공식 페이지 보기 ↗'}
+          {action.label}
         </a> : null}
       </div>
     </article>
