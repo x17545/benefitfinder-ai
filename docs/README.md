@@ -31,7 +31,7 @@
 | 이름·코드·기록·개인정보 처리 규칙 | [코딩 컨벤션](development/CONVENTIONS.md) | 설계·Git 명령은 해당 기준 문서 참조 |
 | 브랜치·main 동기화·충돌·커밋·푸시·PR | [Git 작업 절차](development/GIT_WORKFLOW.md) | 허용 접두어, PR 전 main 병합 필수 |
 | 검사 범위·에이전트 연결·GitHub 설정 | [저장소 운영 안내](development/REPOSITORY_SETTINGS.md) | 원격 보호 설정은 현재 미적용 |
-| 사용자 관찰·설문·결과 기록 | [사용자 테스트](product/USER_TEST.md) | 성공 기준은 기능 명세 8장 참조 |
+| 사용자 관찰·설문·결과 기록 | [사용자 테스트](product/USER_TEST.md), [설문조사](product/USER_TEST_SURVEY.md) | 성공 기준은 기능 명세 8장 참조. 설문 문항·대상·개인정보 수집 여부는 설문조사 문서 |
 | 배포 사이트 점검·기획 대비 구현 비교 | [배포 점검 기록](product/DEPLOY_CHECK.md) | 점검한 날의 관찰 기록과 현재 상태를 구분. 개선 제안은 미반영 |
 | 작업 전 필수 행동 | [AGENTS.md](../AGENTS.md)와 수정 경로의 하위 지침 | 위 상세 기준으로 연결하는 공용 진입점 |
 
