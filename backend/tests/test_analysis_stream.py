@@ -154,6 +154,25 @@ class AnalysisStreamTests(TestCase):
         self.assertEqual(events(stream.text)[-1][1]["code"], "dependency_unavailable")
         self.assertNotIn("PRIVATE", plain.text + stream.text)
 
+    def test_simulation_unavailable_basis_returns_safe_503(self):
+        app = create_app()
+
+        def unavailable(*args, **kwargs):
+            raise ValueError("unavailable_simulation_basis")
+
+        app.state.simulation_service = unavailable
+
+        with TestClient(app) as client:
+            response = client.post("/api/v1/simulations", json=SIMULATION)
+
+        self.assertEqual(response.status_code, 503)
+        body = response.json()
+        self.assertEqual(body["code"], "dependency_unavailable")
+        self.assertTrue(body["request_id"])
+        self.assertTrue(body["message"])
+        self.assertEqual(set(body), {"request_id", "code", "message"})
+        self.assertNotIn("unavailable_simulation_basis", response.text)
+
     def test_json_recommendation_and_simulation_deadlines(self):
         for path, payload, attribute in (
             ("recommendations", PAYLOAD, "recommendation_service"),
