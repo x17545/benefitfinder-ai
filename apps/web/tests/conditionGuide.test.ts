@@ -51,8 +51,12 @@ describe('어려운 용어 설명', () => {
     }));
     expect(html).toContain('id="s2-q-householdHead"');
     expect(html).toContain('<details class="s2-term">');
-    expect(html).toContain('세대주가 뭐예요?');
-    expect(html).toContain('주민등록등본');
+    // 한 줄 뜻은 summary 안에 있어 펼치지 않아도 보이고, 자세한 설명은 펼침 안에 있다
+    const summary = html.match(/<summary[\s\S]*?<\/summary>/)?.[0] ?? '';
+    expect(summary).toContain('<b>세대주</b>');
+    expect(summary).toContain(TERM_HELP.householdHead.short);
+    expect(summary).toContain('자세히');
+    expect(html).toContain('정부24에서 등본을 떼 보면');
   });
 
   it('정책마다 다른 기준(무주택·재산·가구원 수)은 단정하지 않고 정책별 확인을 안내한다', () => {
@@ -64,11 +68,18 @@ describe('어려운 용어 설명', () => {
     expect(TERM_HELP.asset.answer).toContain('빚');
   });
 
-  it('설명은 모두 질문과 한두 문장의 답을 가진다', () => {
-    for (const { question, answer } of Object.values(TERM_HELP)) {
-      expect(question.endsWith('?')).toBe(true);
+  it('설명은 모두 짧은 한 줄 뜻과 한두 문장의 자세한 설명을 가진다', () => {
+    for (const { term, short, answer } of Object.values(TERM_HELP)) {
+      expect(term.length).toBeGreaterThan(1);
+      expect(short.length < 60).toBe(true);
       expect(answer.length).toBeGreaterThan(20);
       expect(answer.length < 140).toBe(true);
     }
+  });
+
+  it('사용자 테스트에서 어렵다고 한 부모님 재산과 특수 조건에도 설명이 있다', () => {
+    expect(TERM_HELP.parentAsset.short).toContain('몰라도');
+    expect(TERM_HELP.parentAsset.answer).toContain('확인 필요');
+    expect(TERM_HELP.special.term).toContain('차상위');
   });
 });

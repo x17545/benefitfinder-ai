@@ -50,13 +50,42 @@ export function isSimulationResult(value: unknown): value is ChangeSimulationRes
   );
 }
 
+/**
+ * 계산 실패 이유. 사용자 테스트에서 오류와 '바뀌는 혜택 없음'을 구분하지 못했다는 의견이 있어 나눠 안내한다.
+ * busy: 서버가 정책 자료를 잠시 쓸 수 없음(503 dependency_unavailable 등),
+ * slow: 계산 시간 한도를 넘음(503 calculation_limit_exceeded, 화면의 60초 대기 초과),
+ * network: 인터넷 연결 실패, input: 입력 조건을 계산할 수 없음(400·422), server: 그 밖의 오류·잘못된 응답
+ */
+export type SimulationErrorReason = 'busy' | 'slow' | 'network' | 'input' | 'server';
+
 export type SimulationOutcome =
   | { status: 'ok'; result: ChangeSimulationResult }
   /** 하루 사용 상한 (HTTP 429) */
   | { status: 'limit' }
   /** 서버에 계산 기능이 없음 (HTTP 404) */
   | { status: 'notAvailable' }
-  | { status: 'error' };
+  | { status: 'error'; reason?: SimulationErrorReason };
+
+/** 실패 응답의 오류 코드(contracts/v1 ErrorResponse.code)로 이유를 고른다 */
+async function errorReason(response: Response): Promise<SimulationErrorReason> {
+  let code: unknown;
+  try {
+    const body: unknown = await response.json();
+    code = isRecord(body) ? body.code : null;
+  } catch {
+    code = null;
+  }
+  if (code === 'calculation_limit_exceeded') {
+    return 'slow';
+  }
+  if (response.status === 503 || code === 'dependency_unavailable') {
+    return 'busy';
+  }
+  if (response.status === 400 || response.status === 422) {
+    return 'input';
+  }
+  return 'server';
+}
 
 /** POST /api/v1/simulations */
 export async function postSimulation(
@@ -78,13 +107,14 @@ export async function postSimulation(
       return { status: 'notAvailable' };
     }
     if (!response.ok) {
-      return { status: 'error' };
+      return { status: 'error', reason: await errorReason(response) };
     }
     const body: unknown = await response.json();
     return isSimulationResult(body) && body.scenario === request.scenario &&
       body.basis_period === (request.options?.period ?? '1y')
-      ? { status: 'ok', result: body } : { status: 'error' };
-  } catch {
-    return { status: 'error' };
+      ? { status: 'ok', result: body } : { status: 'error', reason: 'server' };
+  } catch (error) {
+    // fetch 자체가 실패하면 연결 문제(TypeError), 응답 본문을 읽다 실패하면 서버 응답 문제
+    return { status: 'error', reason: error instanceof TypeError ? 'network' : 'server' };
   }
 }

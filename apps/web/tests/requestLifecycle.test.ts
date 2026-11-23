@@ -120,7 +120,7 @@ describe('simulation request lifetime', () => {
     await vi.advanceTimersByTimeAsync(60_000);
     expect(signal.aborted).toBe(true);
     expect(screen.updates).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ state: { status: 'error' } }),
+      expect.objectContaining({ state: { status: 'error', reason: 'slow' } }),
     );
     finish?.({ status: 'limit' });
     await Promise.resolve();
@@ -132,7 +132,7 @@ describe('simulation request lifetime', () => {
     setup(await effect('employed'));
     await vi.advanceTimersByTimeAsync(0);
     expect(screen.updates).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ state: { status: 'error' } }),
+      expect.objectContaining({ state: { status: 'error', reason: 'network' } }),
     );
   });
 
