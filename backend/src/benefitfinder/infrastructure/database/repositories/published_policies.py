@@ -41,6 +41,15 @@ FROM public.policy_catalog_revision
 WHERE singleton = true
 """
 
+
+def _connect_with_timeout_retry(**kwargs: Any) -> Any:
+    """Retry a catalog DB connection once on connection timeout only."""
+    try:
+        return psycopg.connect(**kwargs)
+    except psycopg.errors.ConnectionTimeout:
+        return psycopg.connect(**kwargs)
+
+
 class PostgresPublishedPolicies:
     def __init__(self, database_url: str) -> None:
         try:
@@ -118,8 +127,8 @@ class PostgresPublishedPolicies:
 
         with self._cache_lock:
             try:
-                with psycopg.connect(
-                    self._database_url,
+                with _connect_with_timeout_retry(
+                    conninfo=self._database_url,
                     connect_timeout=2,
                     options="-c default_transaction_read_only=on "
                     "-c statement_timeout=5000 "
