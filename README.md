@@ -108,7 +108,9 @@ F11 이용 통계는 명세의 17개 이벤트를 기존 백엔드를 통해 GA4
 | 서비스 유지 | 결과 안내를 받을 때까지 유지한다 |
 | 기획서 | [docs/product/PROJECT_PLAN.md](docs/product/PROJECT_PLAN.md) |
 | 기능 요구 명세서 | [docs/product/REQUIREMENTS.md](docs/product/REQUIREMENTS.md) (12장 시스템 아키텍처, 13장 AI 활용 명세, 14장 구현 현황 표) |
-| 사용자 피드백 기록 | [docs/product/USER_TEST.md](docs/product/USER_TEST.md) 5장·6장 |
+| 사용자 테스트 결과 | [사용자 테스트 보고서](docs/product/USER_TEST.md) 4장~6장 (설문 응답 53건) |
+| 사용자 피드백 반영 | [피드백 반영 및 검증 기록](docs/team_collaboration/USER_FEEDBACK_VERIFICATION.md) |
+| 미병합 개발 사항 | [PR #80·#86 개발 성과 및 검증 한계](docs/team_collaboration/README.md#4-미병합-개발-사항-및-향후-개선-계획) |
 | 발표 자료 | [혜택코치 AI 최종 발표자료 (16장)](https://x17545.github.io/benefitfinder-ai/presentation/) |
 | 프로젝트 진행 기록 | [기능 명세 변경 이력](docs/product/REQUIREMENTS.md#115-변경-이력) |
 
@@ -201,10 +203,14 @@ DB·LLM 키 없이 실행한다. `pip`·`npm`·`npx` 대신 uv·pnpm을 사용�
 
 정형 우선 분석은 실제 정책 2건의 동일 로컬 실행 비교에서 입력 토큰 19,053 → 1,379(92.8% 감소), 분석 시간 11.926초 → 1.330초를 기록했다. 전체 정책의 성능이나 유료 API 청구액 측정과 구분하며, [비교 조건·재현 방법](docs/development/DECIDER_PIPELINE.md#코드와-모델의-역할-분리로-줄인-분석량)을 함께 제공한다.
 
+2026-11-18 담당자의 후속 운영 반영 기록에서는 계산용 정책 280건, 운영 카탈로그 1,443건이 보고되었다. 기존에 배포된 계산 경로를 활용한 데이터 반영 성과이며, PR #80의 신규 코드가 병합·배포되었다는 의미는 아니다. 일부 AI 추출 금액의 독립적인 정확성 검증과 웹 실비 입력 연동은 남아 있다. [후속 운영 반영 및 검증 한계](docs/team_collaboration/README.md#43-pr-80--공식-공고-실비-추출-및-정책-데이터-적재-개선)를 참고한다.
+
 실사용자 평가와 제출 자료는 운영 데이터·자동 검사 결과와 별도로 기록한다.
 
 - 기능별 구현·확인 방법: [구현 현황 표](docs/product/REQUIREMENTS.md#14-구현-현황-표)
-- 사용자 테스트: 제출용 참여 인원·지표는 미등록. [관찰·피드백 기록 양식](docs/product/USER_TEST.md#6-피드백과-반영-기록-제출용)
+- 사용자 테스트: 2026-11-20~23 설문 응답 53건을 수집하였다. 유효 테스터는 49명이며, 입력 시간 중앙값은 1~2분으로 목표(3분 이하)를 충족하였다. 이해도는 75.0%(목표 80%), 기존 방식 대비 유용성은 3.83점(목표 4점)으로 개선 과제가 남았다. [사용자 테스트 결과](docs/product/USER_TEST.md)
+- 사용자 피드백: 접수된 개선 의견의 반영 여부와 검증 결과를 구분하여 기록하였다. 개선 후 재설문은 수행하지 않았으므로 개선 이후의 지표 상승을 주장하지 않는다. [피드백 반영 및 검증 기록](docs/team_collaboration/USER_FEEDBACK_VERIFICATION.md)
+- 미병합 개발 사항: PR #86의 Windows F12 호환성·보안 개선과 PR #80의 공식 공고 실비 추출·데이터 적재 개선은 코드 미병합 상태이다. 실제 개발 성과와 운영 데이터 반영 범위, 남은 검증 사항을 구분한다. [미병합 개발 사항 및 향후 개선 계획](docs/team_collaboration/README.md#4-미병합-개발-사항-및-향후-개선-계획)
 - 대표 화면: [기능별 테스트 화면과 배포·협업 증빙자료](docs/team_collaboration/README.md)
 
 ## 개발 시작점

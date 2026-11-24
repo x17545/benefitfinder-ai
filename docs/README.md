@@ -12,6 +12,7 @@
 | 기능 구현·리뷰 | [작업 지침](../AGENTS.md) → [기능·수락 조건](product/REQUIREMENTS.md#5-기능-상세-요구사항) → [설계](architecture/ARCHITECTURE.md)·[계약](../contracts/README.md) → 모듈 README·하위 지침 |
 | 정책 수집·AI 분석 | [데이터 준비](architecture/POLICY_DATA_PIPELINE.md) → [수집·정규화](../backend/src/benefitfinder/ingestion/README.md)·[AI](../backend/src/benefitfinder/ai/README.md) → [실행 명령](../backend/src/benefitfinder/jobs/README.md)·[로컬 보관](../data/README.md) |
 | 시연·평가 준비 | [평가자 안내](../README.md#평가자-안내) → [기획서](product/PROJECT_PLAN.md) → [기능별 확인 방법](product/REQUIREMENTS.md#14-구현-현황-표)·[사용자 테스트](product/USER_TEST.md) |
+| 최종 개발·검증 증빙 | [팀 협업 및 서비스 증빙](team_collaboration/README.md) · [사용자 피드백 반영 기록](team_collaboration/USER_FEEDBACK_VERIFICATION.md) · [미병합 개발 사항 및 향후 개선 계획](team_collaboration/README.md#4-미병합-개발-사항-및-향후-개선-계획) |
 
 리뷰 시 [검사 범위](development/REPOSITORY_SETTINGS.md#3-현재-공통-검사의-범위)를, 구현 시 [코딩 컨벤션](development/CONVENTIONS.md)을 함께 확인한다. 문서만 편집할 때는 관련 기준과 수정 경로의 지침부터 읽는다.
 
