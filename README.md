@@ -4,7 +4,7 @@
 
 > 코디세이 AI 네이티브 Final Project · 5인 팀
 
-[서비스 체험](https://benefitfinder-ai.vercel.app/) · [시연 영상](#시연-영상) · [프로젝트 흐름](#프로젝트-흐름-한눈에-보기) · [프로젝트 구조 지도](https://x17545.github.io/benefitfinder-ai/) · [로컬 실행](#로컬-실행) · [팀 역할](#팀원-역할과-기여) · [결과](#결과) · [평가자 안내](#평가자-안내) · [문서 지도](docs/README.md)
+[서비스 체험](https://benefitfinder-ai.vercel.app/) · [시연 영상](#시연-영상) · [발표 자료](https://x17545.github.io/benefitfinder-ai/presentation/) · [프로젝트 흐름](#프로젝트-흐름-한눈에-보기) · [프로젝트 구조 지도](https://x17545.github.io/benefitfinder-ai/) · [로컬 실행](#로컬-실행) · [팀 역할](#팀원-역할과-기여) · [결과](#결과) · [평가자 안내](#평가자-안내) · [문서 지도](docs/README.md)
 
 ## 프로젝트 흐름 한눈에 보기
 
@@ -109,7 +109,7 @@ F11 이용 통계는 명세의 17개 이벤트를 기존 백엔드를 통해 GA4
 | 기획서 | [docs/product/PROJECT_PLAN.md](docs/product/PROJECT_PLAN.md) |
 | 기능 요구 명세서 | [docs/product/REQUIREMENTS.md](docs/product/REQUIREMENTS.md) (12장 시스템 아키텍처, 13장 AI 활용 명세, 14장 구현 현황 표) |
 | 사용자 피드백 기록 | [docs/product/USER_TEST.md](docs/product/USER_TEST.md) 5장·6장 |
-| 발표 자료 | 미등록 |
+| 발표 자료 | [혜택코치 AI 최종 발표자료 (16장)](https://x17545.github.io/benefitfinder-ai/presentation/) |
 | 프로젝트 진행 기록 | [기능 명세 변경 이력](docs/product/REQUIREMENTS.md#115-변경-이력) |
 
 ### 시연 영상
