@@ -111,7 +111,7 @@ F11 이용 통계는 명세의 17개 이벤트를 기존 백엔드를 통해 GA4
 | 사용자 테스트 결과 | [사용자 테스트 보고서](docs/product/USER_TEST.md) 4장~6장 (설문 응답 53건) |
 | 사용자 피드백 반영 | [피드백 반영 및 검증 기록](docs/team_collaboration/USER_FEEDBACK_VERIFICATION.md) |
 | 미병합 개발 사항 | [PR #80·#86 개발 성과 및 검증 한계](docs/team_collaboration/README.md#4-미병합-개발-사항-및-향후-개선-계획) |
-| 발표 자료 | [혜택코치 AI 최종 발표자료 (16장)](https://x17545.github.io/benefitfinder-ai/presentation/) |
+| 발표 자료 | [혜택코치 AI 최종 발표자료 (17장)](https://x17545.github.io/benefitfinder-ai/presentation/) |
 | 프로젝트 진행 기록 | [기능 명세 변경 이력](docs/product/REQUIREMENTS.md#115-변경-이력) |
 
 ### 시연 영상
