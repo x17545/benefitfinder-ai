@@ -5,6 +5,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
   pages: write
   id-token: write
 
@@ -30,6 +31,34 @@ jobs:
         uses: actions/upload-pages-artifact@v4
         with:
           path: docs/floorplan
+      - name: Wait for Pages artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          for attempt in $(seq 1 12); do
+            echo "Checking Pages artifact (attempt ${attempt}/12)"
+
+            if count=$(gh api \
+              "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts" \
+              --paginate \
+              --jq '.artifacts[] | select(.name == "github-pages" and .expired == false) | .id'); then
+
+              if [[ -n "$count" ]]; then
+                echo "Pages artifact is ready: ${count}"
+                exit 0
+              fi
+            fi
+
+            if [[ "$attempt" -lt 12 ]]; then
+              sleep 5
+            fi
+          done
+
+          echo "::error::GitHub Pages artifact was not available after 12 attempts."
+          exit 1
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
