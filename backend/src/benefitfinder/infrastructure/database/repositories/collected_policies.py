@@ -74,7 +74,16 @@ class PostgresCollectedPolicies:
             raise ValueError("invalid_collected_policy_database_url") from None
         self._database_url = database_url
 
-    def save(self, batch: CollectedPolicyBatch) -> CollectionImportResult:
+    def save(
+        self, batch: CollectedPolicyBatch, *, expected_previous_run_id: str | None = None,
+    ) -> CollectionImportResult:
+        """Save a generation, optionally rejecting a changed snapshot used for a merge.
+
+        A caller adding documents to a complete existing generation supplies the
+        run ID it read. The check happens under the normal source locks before
+        any staging or invalidation, preventing concurrent additions being lost.
+        An already committed identical run remains an idempotent replay.
+        """
         try:
             fingerprint = batch.fingerprint()
             incoming_chunks = _incoming_record_chunks(batch)
@@ -119,7 +128,7 @@ class PostgresCollectedPolicies:
 
                 latest = connection.execute(
                     """
-                    SELECT completed_at
+                    SELECT run_id, completed_at
                     FROM public.collected_policy_runs
                     WHERE source = %s
                     ORDER BY completed_at DESC
@@ -127,7 +136,11 @@ class PostgresCollectedPolicies:
                     """,
                     (batch.source_name,),
                 ).fetchone()
-                if latest is not None and batch.completed_at <= latest[0]:
+                if expected_previous_run_id is not None and (
+                    latest is None or latest[0] != expected_previous_run_id
+                ):
+                    raise CollectedPolicyStoreError(_CONFLICT)
+                if latest is not None and batch.completed_at <= latest[1]:
                     raise CollectedPolicyStoreError(_REGRESSED)
 
                 # Stage the already-validated generation once. The app performs no
